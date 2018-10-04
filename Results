@@ -1,0 +1,59 @@
+Use Jupyter Lab, has advanced functionality, is supposed to replace simple notebooks; most importantly: Has tab-based layout
+Maybe not, there is also VariableInspector for normal notebooks
+Use this extension/build on it
+Talked to Robin, he only used JS within the notebook, did not write extension
+Suggested mpld3, JS framework to create interactive matplotlib plots
+Next: Figure out what is possible, play around and try to combine all the different stuff I found.
+Found: Interaction with Python (varInspector): Show and delete variables
+       Content floating around not bound to cells (varInspector)
+       Loading custom css (css_selector/zen mode?)
+       Interactive plots (Altair, mpld3, d3.js)
+Now fit this stuff together in order to achieve what I want
+Start off by writing own first Hello World extension, expand it using JavaScript
+
+Q: What can be done when 'cloning' the tutorial? Extensions would need to be installed (i.e. copied I hope) and config files would need to be copied
+
+Base URL (append /lab to get to lab)
+%%javascript
+alert(Jupyter.notebook.base_url)
+
+Created first Hello World Extension that shows alerts on Button Press
+Now trying to figure out, how to process a reply from the kernel: WARNING: BADLY DOCUMENTED
+Worked, but be careful with other extensions that might make it result in an Error (idk why). 
+Found out, how to run Python code within JS: Jupyter.notebook.kernel.execute(cmd, { iopub: { output: code_exec_callback } }, { silent: false }); // cmd is command, code_exec_callback is the function that will handle the output
+
+
+Now try to access Neo objects and log them to console
+Run python script from JS: Works by making kernel execute it before.
+Next step: Register as event, does not work so far; Problem was that I used the wrong reference, works easily
+Can now log neo objects to console and also descend into them to find children
+!Will need to find a way to access them by remembering their position, not by creating a new alias and thus reference to them
+No need to create aliases at all. Just recalculate everytime or save into dict. 
+Should probably remember position as string (not reference because this would prevent garbage collection) for every item that is displayed in list or dict in order to be able to work with them. Then either parse string and use or use as string (when passing from JS to kernel it's needed as string anyway)
+
+Then manipulate Neo objects from JS
+Deleting is possible, not so difficult, just call 'del x'
+Can now also delete interactively in reaction to what happened (e.g. certain number of objects available)
+Usual interaction with Python objects is possible as well, e.g. appending to list etc.
+Thus now able to manipulate the Python environment in any way I want
+!!Read more about Messaging interface and what it can do
+
+!!Make Python Script a Kernel Extension???
+First find out, if this is possible at all (HBP???)
+
+Then play with CSS and display stuff on the side
+Currently doing CSS tutorial, but #site selector in style.css contains width, that could shrink the space available to code area
+'#' selects by id!!!, . by class='' attribute, : is pseudoclass, :: pseudo-element, @ conditionals, without type (e.g. p is all paragraphs)
+Finished tutorial
+When specifying correct path, I can now load custom css in the JS extension
+
+Displaying stuff on the side requires adding HTML elements, trying to load an HTML file into this. If this will not work, I need to do this in JS which is rather tedious
+Inserting HTML files works as well, just need to find the right link for the files! Correct link is "/nbextensions/<extension_name>/xxx.yyy"
+Can now show HTML on the right side, insert more using JS, can also show neo objects and their children etc.
+!Need to be able to detect all neo objects (in lists etc, all children)
+!Need to make sure that content on the right side stays there and does not slide down below the notebook stuff
+!Own scroll bar for content on the right
+!Make stuff prettier (some kind of enumeration with indentation), clickable (e.g. to del this object)
+--Should have everything that's really important. Now probably need to learn a bit more about JS/jquery/requireJS and HTML basics
+
+Afterwards bring that stuff together, make interaction with neo objects possible on click (delete, slice, reorganize etc.)

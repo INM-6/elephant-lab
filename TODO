@@ -1,0 +1,3 @@
+Daten rueckgeben anders als JSON? Für Plots!
+Messaging System im Hintergrund? ZeroMQ?
+überlegen Kernel-Erweiterungen Speed => nötig? Versuchen, ohne; Wenn nicht klappt, dann ggf. mit
