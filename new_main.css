@@ -1,0 +1,23 @@
+#site {
+  float: left;
+  display: inline;
+  width: 70%;
+}
+#header{
+  width: 70%;
+}
+#header-container, #menubar-container{
+  width: 100%;
+}
+#new_content {
+  float: left;
+  display: inline;
+  width: 100%;}
+
+.bar {
+  fill: steelblue;
+}
+ 
+.bar:hover {
+  fill: orange;
+}

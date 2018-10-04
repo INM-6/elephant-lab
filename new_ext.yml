@@ -1,0 +1,18 @@
+Type: Jupyter Notebook Extension
+Compatibility: 4.x, 5.x
+Name: New Ext
+Main: main.js
+Description: My super duper extension
+Parameters:
+- name: new_ext.config
+  description: Number of dupers to create
+  library: 'test.py'
+  test: 'print(testfunc())'
+  input_type: json_object
+  default: |
+           {
+            library: 'test.py',
+            delete_cmd_prefix: 'del ',
+            delete_cmd_postfix: '',
+            varRefreshCmd: 'print(testfunc())'
+     }
