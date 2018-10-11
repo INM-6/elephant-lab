@@ -57,3 +57,8 @@ Can now show HTML on the right side, insert more using JS, can also show neo obj
 --Should have everything that's really important. Now probably need to learn a bit more about JS/jquery/requireJS and HTML basics
 
 Afterwards bring that stuff together, make interaction with neo objects possible on click (delete, slice, reorganize etc.)
+
+Porting Code to Jupyter Lab now, because progress is good, HBP will need to catch up, I will not write for outdated stuff.
+https://media.readthedocs.org/pdf/jupyterlab/latest/jupyterlab.pdf#chapter.31
+Following the tutorial above for creating an extension in JLab
+Also using varInspector source code to check the correct API
