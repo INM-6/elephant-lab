@@ -1,3 +1,10 @@
 Daten rueckgeben anders als JSON? Für Plots!
 Messaging System im Hintergrund? ZeroMQ?
 überlegen Kernel-Erweiterungen Speed => nötig? Versuchen, ohne; Wenn nicht klappt, dann ggf. mit
+
+Port
+Kommunikation schöner machen => Plot
+ - ZeroMQ
+	- Array mit D3 plotten
+	- Pythonplot (matplotlib), dann anzeigen
+        => Performance, wie funktioniert's überhaupt
