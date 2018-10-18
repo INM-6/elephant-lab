@@ -60,5 +60,35 @@ Afterwards bring that stuff together, make interaction with neo objects possible
 
 Porting Code to Jupyter Lab now, because progress is good, HBP will need to catch up, I will not write for outdated stuff.
 https://media.readthedocs.org/pdf/jupyterlab/latest/jupyterlab.pdf#chapter.31
+https://jupyterlab.readthedocs.io/en/stable/developer/xkcd_extension_tutorial.html
 Following the tutorial above for creating an extension in JLab
 Also using varInspector source code to check the correct API
+( https://github.com/lckr/jupyterlab-variableInspector (MIT License) )
+
+Structure: 
+	- Imports: import { XXX } from '@jupyterlab/yyy';
+	- needs to export a variable extension (dict-like) that has id, requires and activate
+	- requires tells all the requirements that are passed to activate
+	- Signature of activate method has to match the requirements, additionally first parameter is jupyterlab app itself (application shell, needed e.g. for creating tabs and registering new commands)
+	- Main part is in activate (program entry point), can do anything there, mostly connecting to Phosphor signals to which I can then react because only very few stuff needs to be executed only once on start, most stuff needed when certain events occur (and thus signals are sent)
+
+The API is a bit different, finally found API documentation: http://jupyterlab.github.io/jupyterlab
+
+Uses Phosphor everywhere, need to connect to signals instead of registering events
+
+NotebookActions provides information (sends signal) about codecell execution, CodeConsole for console
+
+NotebookTracker sends signal for new notebook tabs (ConsoleTracker for Console)
+
+xxxPanel.session provides kernel with which I can do requestExecute!
+Note: Format for Request: http://jupyterlab.github.io/jupyterlab/services/interfaces/kernelmessage.iexecuterequest.html
+Code:
+					let future: Kernel.IFuture = session.kernel.requestExecute(request);
+
+					future.onIOPub = ( ( msg: KernelMessage.IIOPubMessage ) =>
+						{ ioCallback( msg );});
+					// Tells future to call ioCallback on IOPub
+
+Open new tab by creating new Phosphor widget, adding to main area and activating by its id
+
+Adding actions to CommandPalette is possible by calling palette.addItem(xxx);
