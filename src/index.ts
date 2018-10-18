@@ -26,10 +26,26 @@ const extension: JupyterLabPlugin<void> = {
 	requires: [ICommandPalette, INotebookTracker],
 	activate: 
 	(app: JupyterLab, palette: ICommandPalette, consoles: INotebookTracker) => {
+			
+		console.log('JupyterLab extension neo_elephant is activated!');
+		let widget: Widget = new Widget();
+		widget.id = 'neo_elephant';
+		widget.title.label = 'Visualization';
+		widget.title.closable = true;
+		let var_place = document.createElement('div');
+		var_place.setAttribute("id", "neo_ele_vars");
+		widget.node.appendChild(var_place);
+
 
 		function ioCallback(msg: KernelMessage.IIOPubMessage): void {
 			if(msg.header.msg_type == 'stream' && msg.content.name == 'stdout'){
 				console.log("Stdout: ", msg.content.text);
+				let text = document.createTextNode(msg.content.text as string);
+				let old_text = var_place.childNodes[0];
+				if(old_text != null){
+					var_place.removeChild(old_text);
+				}
+				var_place.appendChild(text);
 			}
 		}
 
@@ -65,12 +81,12 @@ const extension: JupyterLabPlugin<void> = {
 		
 		});
 
-		console.log('JupyterLab extension neo_elephant is activated!');
-		console.log('ICommandPalette:', palette);
-		let widget: Widget = new Widget();
-		widget.id = 'neo_elephant';
-		widget.title.label = 'Visualization';
-		widget.title.closable = true;
+		// Adding content to my tab
+		let new_content = document.createElement('div');
+		let text = document.createTextNode("This a text.");
+		new_content.appendChild(text);
+		widget.node.appendChild(new_content);
+
 		const command: string = 'neo:open';
 
 		app.commands.addCommand(command, {
@@ -87,5 +103,9 @@ const extension: JupyterLabPlugin<void> = {
 
 	}
 };
+
+//function add_text(text: string, parent_elem: any){
+	//let new_content = document.createElement('div');
+//}
 
 export default extension;

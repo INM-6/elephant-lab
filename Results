@@ -92,3 +92,7 @@ Code:
 Open new tab by creating new Phosphor widget, adding to main area and activating by its id
 
 Adding actions to CommandPalette is possible by calling palette.addItem(xxx);
+
+Adding information to the new tab is not a problem, just plain JavaScript/Typescript and append to tab as child.
+I created a new div in which I will keep all the variables stuff and which I can style accordingly. 
+Importand note: Set id in order to be able to access everything without trouble and from css.
