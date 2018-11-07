@@ -8,3 +8,6 @@ Kommunikation schöner machen => Plot
 	- Array mit D3 plotten
 	- Pythonplot (matplotlib), dann anzeigen
         => Performance, wie funktioniert's überhaupt
+
+Variable Inspector changes whenever a new notebook comes into focus!
+Need to implement this as well!
