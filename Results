@@ -96,3 +96,9 @@ Adding actions to CommandPalette is possible by calling palette.addItem(xxx);
 Adding information to the new tab is not a problem, just plain JavaScript/Typescript and append to tab as child.
 I created a new div in which I will keep all the variables stuff and which I can style accordingly. 
 Importand note: Set id in order to be able to access everything without trouble and from css.
+
+Took me a long time to find out how to send raw data.
+Looked through jupyterlab.github.io/jupyterlab, Github issues of JupyterLab and jupyter_client, because documentation said 'use jupyter_client.session.Session', of course jupyterlab, ipython and jupyter_client documentation. Found a github issue that told me to look at ipython source (https://stackoverflow.com/questions/33845775/send-json-data-to-jupyter-notebook-frontend-via-comm   ,  github issue from lab or client or stackoverflow). Finally found something https://www.npmjs.com/package/@jupyterlab/services
+c = Comm(target_name='test2', data={}) works, sending like this:
+c.send("Hello", buffers=XXX) Problem: Nothing seems to support the buffer protocol => List of objects!!!
+c.send("Hello", buffers=[np.array([1,2,3,4,5])]) works!
