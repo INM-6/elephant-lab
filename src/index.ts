@@ -64,8 +64,12 @@ const extension: JupyterLabPlugin<void> = {
 						return;
 					}
 					comm.onMsg = (msg:any) => {
-						console.log("MEEESSSAAAGGEEE ", msg.buffers[0]);
-						console.log(new Float64Array(msg.buffers[0].buffer));
+						var c = msg.buffers[0].buffer;
+						c;
+						console.log("Message received");
+						//console.log(c[0]);
+						//console.log("MEEESSSAAAGGEEE ", msg.buffers[0]);
+						//console.log(new Float32Array(msg.buffers[0].buffer));
 					};
 					comm.onClose = (msg:any) => {};
 				});
