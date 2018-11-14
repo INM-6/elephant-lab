@@ -14,7 +14,97 @@ import {
 	KernelMessage, Kernel
 } from '@jupyterlab/services';
 
+import * as d3 from 'd3';
+
 import '../style/index.css';
+
+/*
+
+   		var load_css = function() {
+			//$('#site').css({width: '70%'});
+			console.log("HEEEERE");
+        		var link = document.createElement("link");
+        		link.type = "text/css";
+        		link.rel = "stylesheet";
+        		link.href = require.toUrl("/nbextensions/new_ext/new_main.css");
+        		document.getElementsByTagName("head")[0].appendChild(link);
+			console.log("HEREEEEEE");
+			console.log(link);
+			$("body").append('<div><div id="content" style="display:inline-block;width=30%;"><p>Text</p></div></div>');
+			$.get("/nbextensions/new_ext/new_main.html", function (data) {$("#content").append(data);console.log("A "+ data);});
+			//$('#content').load("./../nbextensions/new_ext/new_main.html", function( response, status, xhr ) {console.log(xhr.statusText + " " +response);});
+    		};
+
+		var showd3 = function(d3){
+			console.log("D3 "+d3.version);
+			var data = [150, 230, 180, 90];
+
+			var svg = d3.select("#content")
+            		.append("svg")
+            		.attr("width", 300)
+            		.attr("height", 200);
+ 			svg.selectAll(".bar")
+				.data(data)
+  				.enter()
+  				.append("rect")
+  				.attr({
+    					class : "bar",
+    					width : function(d) {return d;},
+    					height: "40",
+    					y : function(d, i) {return i*50 + 10;},
+    					x : "10"
+   				});
+			console.log("D3 finished");
+		};
+		var updateplot = function(d3){
+			//require.config({
+			 // paths: {
+			 //     d3: '//cdnjs.cloudflare.com/ajax/libs/d3/3.4.8/d3.min'
+			 // }
+			//});
+			//require(["d3"], function(d3) {console.log("D3 loaded: "+d3.version);});
+			console.log("D3 "+d3.version);
+			var data = [10, 100, 190];
+
+			var svg = d3.select("#content");
+ 			var bars = svg.selectAll(".bar")
+				.data(data);
+			//bars.attr("class", "update");
+			// Remove unnecessary bars if data became less
+  			bars.exit().remove();
+			// Add new bars that might be needed additionally
+			bars.enter()
+  				.append("rect")
+  				.attr({
+    					class : "bar",
+    					width : function(d) {return d;},
+    					height: "40",
+    					y : function(d, i) {return i*50 + 10;},
+    					x : "10"
+   				});
+				//.merge(bars)
+				//	.data(function(d){return d;});
+			bars.transition()
+				.duration(0)
+				// Update all attributes
+  				.attr({
+    					class : "bar",
+    					width : function(d) {return d;},
+    					height: "40",
+    					y : function(d, i) {return i*50 + 10;},
+    					x : "10"
+   				});
+			console.log("D3 finished");
+		};
+
+		/*var updateplot = function(d3){
+			var data = [10, 100, 10, 100];
+			var svg = d3.select("#content").transition();
+			svg.selectAll(".bar")
+				.data(data)
+				.enter();
+		};*/
+
 
 
 /**
