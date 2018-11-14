@@ -108,3 +108,6 @@ https://ipywidgets.readthedocs.io/en/latest/embedding.html => Ipywidgets might b
 Problem with mpld3 is: No longer maintained
 Vispy to early stage, maybe also too much for this "small" project
 Bokeh probably requires its own server to run in the background
+
+IpyWidgets:
+- Tutorial: https://ipywidgets.readthedocs.io/en/stable/examples/Widget%20Custom.html => Combine this with the xkcd extension and try
