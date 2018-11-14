@@ -104,7 +104,7 @@ c.send("Hello", buffers=XXX) Problem: Nothing seems to support the buffer protoc
 c.send("Hello", buffers=[np.array([1,2,3,4,5])]) works!
 
 Visualization:
-https://ipywidgets.readthedocs.io/en/latest/embedding.html => Ipywidgets might be a choice or webagg for matplotlib (matplotlib.org embedding webagg sgskip)
+https://ipywidgets.readthedocs.io/en/latest/embedding.html => Ipywidgets might be a choice or webagg for matplotlib (https://matplotlib.org/gallery/user_interfaces/embedding_webagg_sgskip.html)
 Problem with mpld3 is: No longer maintained
 Vispy to early stage, maybe also too much for this "small" project
 Bokeh probably requires its own server to run in the background
