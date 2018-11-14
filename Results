@@ -102,3 +102,9 @@ Looked through jupyterlab.github.io/jupyterlab, Github issues of JupyterLab and 
 c = Comm(target_name='test2', data={}) works, sending like this:
 c.send("Hello", buffers=XXX) Problem: Nothing seems to support the buffer protocol => List of objects!!!
 c.send("Hello", buffers=[np.array([1,2,3,4,5])]) works!
+
+Visualization:
+https://ipywidgets.readthedocs.io/en/latest/embedding.html => Ipywidgets might be a choice or webagg for matplotlib (matplotlib.org embedding webagg sgskip)
+Problem with mpld3 is: No longer maintained
+Vispy to early stage, maybe also too much for this "small" project
+Bokeh probably requires its own server to run in the background
