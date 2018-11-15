@@ -30,6 +30,7 @@
     "watch": "tsc -w"
   },
   "dependencies": {
+    "@jupyter-widgets/base": "^1.2.2",
     "@jupyterlab/application": "^0.19.1",
     "@jupyterlab/apputils": "^0.19.1",
     "@jupyterlab/console": "^0.19.1",
