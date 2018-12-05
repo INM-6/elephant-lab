@@ -13,19 +13,6 @@ import {
 import {
 	KernelMessage, Kernel
 } from '@jupyterlab/services';
-<<<<<<< HEAD
-import * as CodeMirror from 'codemirror';
-import 'codemirror/lib/codemirror.css';
-import 'codemirror/mode/python/python';
-
-import {
-    WidgetManager
-} from './manager';
-
-import {
-	IJupyterWidgetRegistry
-} from '@jupyter-widgets/base'; 
-//import * as d3 from 'd3';
 
 import {
 	OutputArea, OutputAreaModel
@@ -44,9 +31,9 @@ import '../style/index.css';
 const extension: JupyterLabPlugin<void> = {
 	id: 'neo_elephant',
 	autoStart: true,
-	requires: [ICommandPalette, INotebookTracker, IJupyterWidgetRegistry, IRenderMimeRegistry],
+	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry],
 	activate: 
-	(app: JupyterLab, palette: ICommandPalette, consoles: INotebookTracker, widgets, rendermime) => {
+	(app: JupyterLab, palette: ICommandPalette, consoles: INotebookTracker, rendermime) => {
 			
 		console.log('JupyterLab extension neo_elephant is activated!');
 		let widget: Widget = new Widget();
