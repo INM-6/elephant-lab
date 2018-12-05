@@ -14,6 +14,11 @@ import {
 	KernelMessage, Kernel
 } from '@jupyterlab/services';
 
+// Note: SimplifiedOutputArea seems to simply behave like 
+// the regular OutputAreas inside the notebook
+// Currently trying to use regular OutputAreas
+// because they *might* have more features
+// In caseof problems, use Simplified
 import {
 	OutputArea, OutputAreaModel
 } from '@jupyterlab/outputarea';
@@ -87,13 +92,17 @@ const extension: JupyterLabPlugin<void> = {
 					comm.onClose = (msg:any) => {};
 				});
 
-
+				let plot_code = 
+`import matplotlib.pyplot as plt
+plt.plot([1,2,3], [4,5,6])
+plt.show()
+`
 				// OutputArea
 				let model = new OutputAreaModel({trusted: true});
 				let outarea = new OutputArea({rendermime, model});
 				console.log(outarea);
 				widget.addWidget(outarea);
-				OutputArea.execute("print('abc')", outarea, session);
+				OutputArea.execute(plot_code, outarea, session);
 
 
 				// Initialize function that returns variable list
