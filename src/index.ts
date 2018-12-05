@@ -27,6 +27,14 @@ import {
 } from '@jupyter-widgets/base'; 
 //import * as d3 from 'd3';
 
+import {
+	OutputArea, OutputAreaModel
+} from '@jupyterlab/outputarea';
+
+import {
+	IRenderMimeRegistry
+} from '@jupyterlab/rendermime';
+
 import '../style/index.css';
 
 
@@ -36,9 +44,9 @@ import '../style/index.css';
 const extension: JupyterLabPlugin<void> = {
 	id: 'neo_elephant',
 	autoStart: true,
-	requires: [ICommandPalette, INotebookTracker, IJupyterWidgetRegistry],
+	requires: [ICommandPalette, INotebookTracker, IJupyterWidgetRegistry, IRenderMimeRegistry],
 	activate: 
-	(app: JupyterLab, palette: ICommandPalette, consoles: INotebookTracker, widgets) => {
+	(app: JupyterLab, palette: ICommandPalette, consoles: INotebookTracker, widgets, rendermime) => {
 			
 		console.log('JupyterLab extension neo_elephant is activated!');
 		let widget: Widget = new Widget();
@@ -94,7 +102,10 @@ const extension: JupyterLabPlugin<void> = {
 
 
 				// OutputArea
-				
+				let model = new OutputAreaModel({trusted: true});
+				let outarea = new OutputArea({rendermime, model});
+				console.log(outarea);
+
 
 
 				// Initialize function that returns variable list
