@@ -2,7 +2,7 @@ import {
 	ICommandPalette, IClientSession
 } from '@jupyterlab/apputils';
 import {
-	Widget
+	 Panel
 } from '@phosphor/widgets';
 import {
 	INotebookTracker, NotebookActions
@@ -36,7 +36,7 @@ const extension: JupyterLabPlugin<void> = {
 	(app: JupyterLab, palette: ICommandPalette, consoles: INotebookTracker, rendermime) => {
 			
 		console.log('JupyterLab extension neo_elephant is activated!');
-		let widget: Widget = new Widget();
+		let widget: Panel = new Panel();
 		widget.id = 'neo_elephant';
 		widget.title.label = 'Visualization';
 		widget.title.closable = true;
@@ -92,7 +92,8 @@ const extension: JupyterLabPlugin<void> = {
 				let model = new OutputAreaModel({trusted: true});
 				let outarea = new OutputArea({rendermime, model});
 				console.log(outarea);
-
+				widget.addWidget(outarea);
+				OutputArea.execute("print('abc')", outarea, session);
 
 
 				// Initialize function that returns variable list
