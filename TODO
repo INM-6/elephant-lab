@@ -27,6 +27,9 @@ Receiver in Python set up at the beginning and send comms from TS to this? So Py
 // For IPyWidgets alone:
 //Attach when attachin tab, not before. => Everythin global so can be accessed later
 
+Check "compatibility" with other extensions (eg. ipympl), if all the toolbars are shown in my plots as welll
+Get multiple plots on one tab
+
 Plan a concept to enable modularity
 Lok for good Python plotting libraries (ask others)
 Find out user requirements, so I can actually implement a good GUI
