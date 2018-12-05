@@ -112,3 +112,15 @@ Bokeh probably requires its own server to run in the background
 Ipywidgets:
 - relies on ipywidgets and 'jupyter labextension install @jupyter-widgets/jupyterlab-manager'
 - Tutorial: https://ipywidgets.readthedocs.io/en/stable/examples/Widget%20Custom.html => Combine this with the xkcd extension and try
+- found examples on github for embedding: https://github.com/jupyter-widgets/ipywidgets/tree/master/examples/web3
+- Tried, but could not get it to run, problem might be "No provider for IJupyterWidgetRegistry" but I only notices this message later; else no error message is known to me, it just did not show up
+- CodeMirror Cell showing the executed code could be embedded easily
+
+Tried to use plotly, but quickly found it to be too difficult, probably does not provide the API I need.
+
+OutputArea:
+- using OutputArea class from @jupyterlab/outputarea does everything I need
+- Can show plots that would be shown in regular output in new tab
+- So I can basically use any plotting framework compatible with JupyterLab
+- If anything else would be needed, I would *probably* have to copy data over to JS/TS anyway. Or at least it would not work trivially.
+- Best and very easy solution (Took me less than 4 hours from idea to running implementation) 05.12.2018
