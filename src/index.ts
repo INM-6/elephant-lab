@@ -13,7 +13,6 @@ import {
 import {
 	KernelMessage, Kernel
 } from '@jupyterlab/services';
-
 import * as CodeMirror from 'codemirror';
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/mode/python/python';
