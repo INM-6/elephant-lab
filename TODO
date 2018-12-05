@@ -14,3 +14,6 @@ Need to implement this as well!
 Receiver in Python set up at the beginning and send comms from TS to this? So Python itself could react, not always sending strings of code (check this: https://jupyter-notebook.readthedocs.io/en/stable/comms.html)
 
 Check RAM usage!
+
+
+Attach when attachin tab, not before. => Everythin global so can be accessed later

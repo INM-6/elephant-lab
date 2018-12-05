@@ -14,7 +14,15 @@ import {
 	KernelMessage, Kernel
 } from '@jupyterlab/services';
 
-import * as d3 from 'd3';
+import * as CodeMirror from 'codemirror';
+import 'codemirror/lib/codemirror.css';
+import 'codemirror/mode/python/python';
+
+import {
+    WidgetManager
+} from './manager';
+
+//import * as d3 from 'd3';
 
 import '../style/index.css';
 
@@ -106,7 +114,6 @@ import '../style/index.css';
 		};*/
 
 
-
 /**
  * Initialization data for the neo_elephant extension.
  */
@@ -126,6 +133,17 @@ const extension: JupyterLabPlugin<void> = {
 		var_place.setAttribute("id", "neo_ele_vars");
 		widget.node.appendChild(var_place);
 
+		/*		// Setup for ipywidgets
+		let jupyter_area = document.createElement('div');
+		let input_area = document.createElement('div');
+		let widget_area = document.createElement('div');
+		input_area.setAttribute("class", "inputarea");
+		widget_area.setAttribute("class", "widgetarea");
+		jupyter_area.appendChild(input_area);
+		jupyter_area.appendChild(widget_area);*/
+
+
+
 		function ioCallback(msg: KernelMessage.IIOPubMessage): void {
 			console.log("Got return from Kernel");
 			console.log(msg);
@@ -142,12 +160,102 @@ const extension: JupyterLabPlugin<void> = {
 
 		consoles.widgetAdded.connect((sender, consolePanel) => {
 
+			               if (!widget.isAttached) {
+                                        app.shell.addToMainArea(widget);
+                                }
+                                app.shell.activateById(widget.id);
+
+			
 			var session: IClientSession = consolePanel.session;
 			console.log("Session.ready: ", session.ready);
 
 			session.ready.then(() => {session.kernel.ready.then(() => {
 				//let array = Object.getOwnPropertyNames(session);
 				//console.log(array);
+
+				// Setup for ipywidgets
+				let jupyter_area = document.createElement('div');
+				let widget_text = document.createTextNode("Hierunter sollte das Widget stehen");
+				jupyter_area.appendChild(widget_text);
+        	        	let input_area = document.createElement('div');
+                		let widget_area = document.createElement('div');
+             	   		input_area.setAttribute("class", "inputarea");
+                		widget_area.setAttribute("class", "widgetarea");
+                		jupyter_area.appendChild(input_area);
+				jupyter_area.appendChild(widget_area);
+				widget.node.appendChild(jupyter_area);
+				//widget_area.appendChild(document.createTextNode("Widget-Bereich"));
+
+
+
+				let widget_code =
+`from ipywidgets import IntSlider, Text, VBox
+from IPython.display import display
+
+s = IntSlider(max=200, value=100)
+t = Text()
+
+def update_text(change=None):
+    t.value = str(s.value ** 2)
+
+s.observe(update_text, names='value')
+update_text()
+display(VBox([s, t]));`
+				//let inputarea = document.getElementsByClassName('inputarea')[0] as HTMLElement;
+				let editor = CodeMirror(input_area, {
+                    			value: widget_code,
+                    			mode: 'python',
+                    			tabSize: 4,
+                    			showCursorWhenSelecting: true,
+                    			viewportMargin: Infinity,
+                    			readOnly: true
+					});
+				console.log(editor);
+				//let widgetarea = document.getElementsByClassName("widgetarea")[0] as HTMLElement;
+					console.log(widget_area);
+					let manager = new WidgetManager(session.kernel, widget_area);
+					console.log(manager);
+
+
+					/*	let widget_request = session.kernel.requestExecute({ code: widget_code });
+                		widget_request.onIOPub = (msg:any) => {
+				// If we have a display message, display the widget.
+					console.log("WIDGET ACTIVATED");
+					console.log(msg);
+					//if(msg.content.type == 'display_data'){
+					//	manager.display_view(msg, 
+					};*/
+
+					let execution = session.kernel.requestExecute({ code: widget_code });
+        execution.onIOPub = (msg:any) => {
+            // If we have a display message, display the widget.
+            if (KernelMessage.isDisplayDataMsg(msg)) {
+                let widgetData: any = msg.content.data['application/vnd.jupyter.widget-view+json'];
+                if (widgetData !== undefined && widgetData.version_major === 2) {
+			console.log("Trying to build model");	
+			let model = manager.get_model(widgetData.model_id);
+			console.log(model);
+			//console.log(model.get('_view_name');
+			//console.log(manager.loadClass(model.get('_view_name'), model.get('_view_module'), model.get('_view_module_version'));
+		    if (model !== undefined) {
+		    	//@ts-ignore
+			model.then(model => {
+				console.log(model.get('_view_name'));
+				console.log("In here");
+				console.log(manager.create_view(model));
+				let view = manager.create_view(model);
+				console.log(view);
+				view.then(view => {
+				//manager.display_view(msg, view, {});
+				//return Promise.resolve(view).then((view) => {Widget.attach(view, this.el);});
+				});
+				//manager.display_model(msg, model);
+				console.log("Afterwards");
+                        });
+                    }
+                }
+            }
+};
 
 				session.kernel.registerCommTarget('test2', (comm:any, commMsg:any):any => {
 					if(commMsg.content.target_name !== 'test2'){
@@ -166,12 +274,12 @@ const extension: JupyterLabPlugin<void> = {
 
 				// Initialize function that returns variable list
 				let code: string;
-				fetch('packages/python/test.py').then(response => {
+				/*fetch('packages/python/test.py').then(response => {
 					console.log("Reading code: ", response)
 					return response.json();
 				}).then(data => {
 					code = data;
-				});
+					});*/
 
 				code = 
 `import json
