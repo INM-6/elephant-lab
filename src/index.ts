@@ -21,7 +21,9 @@ import 'codemirror/mode/python/python';
 import {
     WidgetManager
 } from './manager';
-
+import {
+	IJupyterWidgetRegistry
+} from '@jupyter-widgets/base'; 
 //import * as d3 from 'd3';
 
 import '../style/index.css';
@@ -120,9 +122,9 @@ import '../style/index.css';
 const extension: JupyterLabPlugin<void> = {
 	id: 'neo_elephant',
 	autoStart: true,
-	requires: [ICommandPalette, INotebookTracker],
+	requires: [ICommandPalette, INotebookTracker, IJupyterWidgetRegistry],
 	activate: 
-	(app: JupyterLab, palette: ICommandPalette, consoles: INotebookTracker) => {
+	(app: JupyterLab, palette: ICommandPalette, consoles: INotebookTracker, widgets) => {
 			
 		console.log('JupyterLab extension neo_elephant is activated!');
 		let widget: Widget = new Widget();
@@ -172,6 +174,35 @@ const extension: JupyterLabPlugin<void> = {
 			session.ready.then(() => {session.kernel.ready.then(() => {
 				//let array = Object.getOwnPropertyNames(session);
 				//console.log(array);
+				//
+				//////////////////////////////////////////
+				// IPyWidgets
+				var HelloView = widgets.DOMWidgetModel.extend({
+    		
+					render: function() {
+
+						let var_place = document.createElement('div');
+						var_place.setAttribute("id", "neo_ele_vars_333");
+						let var_place2 = document.createElement('p');
+						var_place2.setAttribute("id", "neo_ele_vars222");
+						var_place.appendChild(var_place2);
+						let text = document.createTextNode("AAAAAAAAAAAAAAAA");
+						var_place2.appendChild(text);
+
+						this.el = var_place;
+						widget.node.appendChild(var_place);
+						console.log("HEEEERERERERE");
+						//.textContent = "AAAAAAABBBBBBBCCCCCCDDDDD";
+        }
+			});
+				var HelloShow = HelloView();
+				widgets.registerWidget(HelloShow);
+				HelloShow.render();
+				widget.node.appendChild(HelloShow);
+				console.log(widget.node);
+				console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+
+				////////////////////////////////////////////
 
 				// Setup for ipywidgets
 				let jupyter_area = document.createElement('div');
