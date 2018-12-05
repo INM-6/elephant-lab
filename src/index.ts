@@ -97,12 +97,18 @@ const extension: JupyterLabPlugin<void> = {
 plt.plot([1,2,3], [4,5,6])
 plt.show()
 `
+				console.log(plot_code);
+				let neo_plot =
+`import matplotlib.pyplot as plt
+plt.plot(range(len(ew_block.segments[0].analogsignals[0])), ew_block.segments[0].analogsignals[0])
+plt.show();
+`
 				// OutputArea
 				let model = new OutputAreaModel({trusted: true});
 				let outarea = new OutputArea({rendermime, model});
 				console.log(outarea);
 				widget.addWidget(outarea);
-				OutputArea.execute(plot_code, outarea, session);
+				OutputArea.execute(neo_plot, outarea, session);
 
 
 				// Initialize function that returns variable list
@@ -158,6 +164,9 @@ def testfunc():
 				NotebookActions.executed.connect(() => {
 
 					console.log("Cell executed"); 
+
+					// Plot analogsignal (test)
+					OutputArea.execute(neo_plot, outarea, session);
 
 					let request: KernelMessage.IExecuteRequest = {
 						code: "print(testfunc())",
