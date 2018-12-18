@@ -111,6 +111,14 @@ plt.show();
 				OutputArea.execute(neo_plot, outarea, session);
 
 
+                 // OutputArea
+       let model2 = new OutputAreaModel({trusted: true});
+       let outarea2 = new OutputArea({rendermime, model: model2});
+        console.log(outarea2);
+        widget.addWidget(outarea2);
+        OutputArea.execute(plot_code, outarea2, session);
+
+
 				// Initialize function that returns variable list
 				let code: string;
 				/*fetch('packages/python/test.py').then(response => {
