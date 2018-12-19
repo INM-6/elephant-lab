@@ -125,3 +125,4 @@ OutputArea:
 - If anything else would be needed, I would *probably* have to copy data over to JS/TS anyway. Or at least it would not work trivially.
 - Best and very easy solution (Took me less than 4 hours from idea to running implementation) 05.12.2018
 - Easily add multiple plots, just the same 4 lines
+- Styling via css is possible by setting ids and/or classes and importing css files

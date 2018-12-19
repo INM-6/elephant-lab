@@ -109,7 +109,8 @@ plt.show();
 				console.log(outarea);
 				widget.addWidget(outarea);
 				OutputArea.execute(neo_plot, outarea, session);
-
+				outarea.id = "jup_vis_out_id";
+				//console.log(outarea.id);
 
                  // OutputArea
        let model2 = new OutputAreaModel({trusted: true});
@@ -117,7 +118,7 @@ plt.show();
         console.log(outarea2);
         widget.addWidget(outarea2);
         OutputArea.execute(plot_code, outarea2, session);
-
+			outarea2.id = "jup_vis_out_id2"
 
 				// Initialize function that returns variable list
 				let code: string;
