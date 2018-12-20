@@ -31,5 +31,8 @@ Check "compatibility" with other extensions (eg. ipympl), if all the toolbars ar
 Get multiple plots on one tab
 
 Plan a concept to enable modularity
-Lok for good Python plotting libraries (ask others)
+- OOP => Manager class that registers everythin, Communicator class that handles kernel communication, Tab class that shows stuff, Extension (index.ts) that instantiates the others
+- Manager: Whenever new widget is added (consoles.widgetAdded) save the widget, when new widget is in focus switch to this OR always remain bound to first active notebook and allow multiple tabs
+ 
+Look for good Python plotting libraries (ask others)
 Find out user requirements, so I can actually implement a good GUI
