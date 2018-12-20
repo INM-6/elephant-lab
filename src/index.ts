@@ -1,14 +1,17 @@
 import {
-	ICommandPalette, IClientSession
+	ICommandPalette, IClientSession, InstanceTracker
 } from '@jupyterlab/apputils';
 import {
-	 Panel
+	 Panel, Widget
 } from '@phosphor/widgets';
+import {
+  JSONExt
+} from '@phosphor/coreutils';
 import {
 	INotebookTracker, NotebookActions
 } from '@jupyterlab/notebook';
 import {
-	JupyterLab, JupyterLabPlugin
+	JupyterLab, JupyterLabPlugin, ILayoutRestorer
 } from '@jupyterlab/application';
 import {
 	KernelMessage, Kernel
@@ -40,9 +43,9 @@ import '../style/index.css';
 const extension: JupyterLabPlugin<void> = {
 	id: 'neo_elephant',
 	autoStart: true,
-	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry],
+	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer],
 	activate: 
-	(app: JupyterLab, palette: ICommandPalette, consoles: INotebookTracker, rendermime) => {	
+	(app: JupyterLab, palette: ICommandPalette, consoles: INotebookTracker, rendermime, restorer: ILayoutRestorer) => {	
 		console.log('JupyterLab extension neo_elephant is activated!');
 		
 		// Initialize new Tab in which everything will be displayed
@@ -53,7 +56,7 @@ const extension: JupyterLabPlugin<void> = {
 		consoles.widgetAdded.connect((sender, consolePanel) => {
 
 			// Show tab if it was not yet shown
-			attachTab(widget, app);
+			attachTab(widget, app, tracker);
 
 			var session: IClientSession = consolePanel.session;
 			console.log("Session.ready: ", session.ready);
@@ -97,8 +100,16 @@ const extension: JupyterLabPlugin<void> = {
 
 		// Place command into CommandPalette
 		// This command will open the tab			let widget = initializeTab(app);
-		createCommand('neo:open', widget, app, palette);
+		let command = 'neo:open';
+		
+		let tracker = new InstanceTracker<Widget>({ namespace: 'neo_jup_vis' });
+  		restorer.restore(tracker, {
+    	command,
+    	args: () => JSONExt.emptyObject,
+    	name: () => 'neo_jup_vis'
+		});
 
+		createCommand(command, widget, app, palette, tracker);
 	}
 };
 
@@ -136,19 +147,23 @@ function initializeTab(app: JupyterLab){
 	return widget;
 }
 
-function attachTab(widget: Panel, app: JupyterLab){
+function attachTab(widget: Panel, app: JupyterLab, tracker: InstanceTracker<Widget>){
 	// Attach tab if not yet attached
 	if (!widget.isAttached) {
 		app.shell.addToMainArea(widget);
 	}
+	if (!tracker.has(widget)) {
+		// Track the state of the widget for later restoration
+		tracker.add(widget);
+  }
 	app.shell.activateById(widget.id);
 }
 
-function createCommand(command: string, widget: Panel, app: JupyterLab, palette: ICommandPalette){
+function createCommand(command: string, widget: Panel, app: JupyterLab, palette: ICommandPalette, tracker: InstanceTracker<Widget>){
 	app.commands.addCommand(command, {
 		label: 'Visualize neo and elephant',
 		execute: () => {
-			attachTab(widget, app)
+			attachTab(widget, app, tracker)
 		}
 	});
 	palette.addItem({command, category: 'Tutorial'});
