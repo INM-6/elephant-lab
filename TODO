@@ -36,3 +36,15 @@ Plan a concept to enable modularity
  
 Look for good Python plotting libraries (ask others)
 Find out user requirements, so I can actually implement a good GUI
+
+Long run:
+General: TypeScript code structure, expand Viziphant functionality for use, GUI (tree of neo objects that can be multiselected usw.); Afterwards work with live data (s. Google Keep)
+- Only very few plots in single tab for the moment => predefine their look using CSS, no need to change everything and thus style from Python
+NOW:
+- Check out Viziphant by Robin
+- Remove hardcoded values from proof of concept, generate neo structure
+- Create Viziphant plots (rasterplot by Robin) from SpikeTrains, plot all AnalogSignals into 1 plot (or grouped by segment, let user select segment)
+- Viziphant "megaplot" that combines lfp, event and spikes (rasterplot) into single plot
+- Then use that in Jupyphant
+- in parallel: Clean TypeScript structure
+- Create neo tree with multi-select, create plots according to what is selected there
