@@ -40,6 +40,7 @@ Find out user requirements, so I can actually implement a good GUI
 Long run:
 General: TypeScript code structure, expand Viziphant functionality for use, GUI (tree of neo objects that can be multiselected usw.); Afterwards work with live data (s. Google Keep)
 - Only very few plots in single tab for the moment => predefine their look using CSS, no need to change everything and thus style from Python
+	- Reactive plots? Clicking on this field shows something else? => HoloViews (Tableau as examples)
 NOW:
 - Check out Viziphant by Robin
 - Remove hardcoded values from proof of concept, generate neo structure
