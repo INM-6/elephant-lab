@@ -4,11 +4,12 @@ import {
 import {
 	 Panel, Widget
 } from '@phosphor/widgets';
+//@ts-ignore
 import {
   JSONExt
 } from '@phosphor/coreutils';
 import {
-	INotebookTracker, NotebookActions
+	INotebookTracker, NotebookActions, NotebookPanel
 } from '@jupyterlab/notebook';
 import {
 	JupyterLab, JupyterLabPlugin, ILayoutRestorer
@@ -47,13 +48,31 @@ const extension: JupyterLabPlugin<void> = {
 	(lab_: JupyterLab, palette_: ICommandPalette, consoles_: INotebookTracker, rendermime_, restorer_: ILayoutRestorer) => {	
 		console.log('JupyterLab extension neo_elephant is activated!');
 
-		
 		const lab: JupyterLab = lab_;
 		const palette: ICommandPalette = palette_;
+		//@ts-ignore
 		const consoles: INotebookTracker = consoles_;
 		const rendermime: IRenderMimeRegistry = rendermime_;
+		//@ts-ignore
 		const restorer: ILayoutRestorer = restorer_;
+		var myPanels: NotebookPanel[] = [];
+		var myVisTabs: Panel[] = [];
+		
+		// Place command into CommandPalette
+		// This command will open the tab			let widget = initializeTab(lab);
+		let command = 'neo:open';
 
+		// Track and restore my tabs, needs to work together with restoration of main area
+		// When Main Area is restored, I need to get all available Notebooks and Consoles
+		// and then check all of them and connect each tab to the right one
+		let tracker = new InstanceTracker<Widget>({ namespace: 'neo_jup_vis' });
+  	//restorer.restore(tracker, {
+		//	command,
+		//	args: () => JSONExt.emptyObject,
+		//	name: () => 'neo_jup_vis'
+		//});
+
+		createCommand(command);
 		
 		// Adds an OutputArea to the tab 'widget'
 		function createOutput(session: IClientSession, tab: Panel, cls: string[], id: string, code: string): OutputArea{
@@ -89,26 +108,26 @@ const extension: JupyterLabPlugin<void> = {
 			return widget;
 		}
 
-		function attachTab(widget: Panel, tracker: InstanceTracker<Widget>){
+		function attachTab(tab: Panel, tracker: InstanceTracker<Widget>){
 			// Attach tab if not yet attached
-			if (!widget.isAttached) {
-				lab.shell.addToRightArea(widget);
+			if (!tab.isAttached) {
+				lab.shell.addToRightArea(tab);
 			}
-			if (!tracker.has(widget)) {
+			if (!tracker.has(tab)) {
 				// Track the state of the widget for later restoration
-				tracker.add(widget);
+				tracker.add(tab);
 			}
-			lab.shell.activateById(widget.id);
+			lab.shell.activateById(tab.id);
 		}
 
-		function createCommand(command: string, widget: Panel, tracker: InstanceTracker<Widget>){
+		function createCommand(command: string){
 			lab.commands.addCommand(command, {
 				label: 'Visualize neo and elephant',
 				execute: () => {
-					attachTab(widget, tracker)
+					newTab();
 				}
 			});
-			palette.addItem({command, category: 'Tutorial'});
+			palette.addItem({command, category: 'NeuroScience'});
 		}
 
 		function ioCallback(msg: KernelMessage.IIOPubMessage): void {
@@ -160,21 +179,33 @@ const extension: JupyterLabPlugin<void> = {
 		}
 	
 		/********************************************************************************************************************************/
-		// Initialize new Tab in which everything will be displayed
-		// Will be moved to Tab constructor
-		let tab = initializeTab();
 
 		// Dummy code, might be needed to initialize in the beginning
 		lab.restored.then((layout) => {
 			//let newtab = initializeTab();
 		});
-		// Register event to react on new tab
-		consoles.widgetAdded.connect((sender, consolePanel) => {
 
+		// Function to react on command to visualize
+		function newTab() {
+
+			// lab.shell.currentWidget is too general, now reducing down to NotebookPanels from NotebookTracker
+			var newPanel: NotebookPanel = consoles.currentWidget;
+			let index = myPanels.indexOf(newPanel);
+			if(index != -1){
+				attachTab(myVisTabs[index], tracker);
+				return;
+			}
+			// Initialize new Tab in which everything will be displayed
+			// Will be moved to Tab constructor
+			let tab = initializeTab();
+			// These are known now (TODO: Need to make this a dict, not use same index!!!)
+			myVisTabs.push(tab);
+			myPanels.push(newPanel);
 			// Show tab if it was not yet shown
 			attachTab(tab, tracker);
 
-			var session: IClientSession = consolePanel.session;
+
+			var session: IClientSession = newPanel.session;
 			console.log("Session.ready: ", session.ready);
 
 			// If session is available in the notebook
@@ -193,8 +224,11 @@ const extension: JupyterLabPlugin<void> = {
 				executeCode(pythonCode['testfunc'], session);
 
 				// React to codecell execution, update variable list
-				NotebookActions.executed.connect(() => {
-
+				NotebookActions.executed.connect((sender, exec_data) => {
+					// Only react if codecell from watched notebook was executed
+					if(exec_data.notebook != newPanel.content){
+						return;
+					}
 					console.log("Cell executed"); 
 
 					// Plot analogsignal (test)
@@ -209,23 +243,11 @@ const extension: JupyterLabPlugin<void> = {
 			
 			console.log("Connected to currently active Notebook");
 		
-		});
+			// Add some random text, nothing useful here
+			addTextToPanel(tab, 'This is a text');
+		}
 		
-		// Add some random text, nothing useful here
-		addTextToPanel(tab, 'This is a text');
 
-		// Place command into CommandPalette
-		// This command will open the tab			let widget = initializeTab(lab);
-		let command = 'neo:open';
-		
-		let tracker = new InstanceTracker<Widget>({ namespace: 'neo_jup_vis' });
-  		restorer.restore(tracker, {
-    	command,
-    	args: () => JSONExt.emptyObject,
-    	name: () => 'neo_jup_vis'
-		});
-
-		createCommand(command, tab, tracker);
 	}
 };
 
