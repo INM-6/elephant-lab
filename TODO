@@ -50,3 +50,4 @@ NOW:
 - in parallel: Clean TypeScript structure
 - Create neo tree with multi-select, create plots according to what is selected there
 - Restorer needs to bring together my restored tabs and restored notebooks
+- React upon change of current widget and foreground the corresponding visualization // Currently left out for debugging purposes

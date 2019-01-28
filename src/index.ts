@@ -215,14 +215,14 @@ const extension: JupyterLabPlugin<void> = {
 				// Register a Comm channel (not needed currently, but might be)
 				registerComm('test2', session);
 
+				// Setup kernel to fulfill my requests
+				executeCode(pythonCode['setupEnv'], session);
+				console.log(pythonCode['setupEnv']);	
 				// Create 2 OutputAreas that will show plots
-				let outarea = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id1', pythonCode['plotCode']);
-				let outarea2 = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id2', pythonCode['neoPlot']);
+				let outarea = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
+				//let outarea2 = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
 
-	
-				// Execute code in kernel
-				executeCode(pythonCode['testfunc'], session);
-
+				console.log("BEFORE REGISTERING");
 				// React to codecell execution, update variable list
 				NotebookActions.executed.connect((sender, exec_data) => {
 					// Only react if codecell from watched notebook was executed
@@ -232,13 +232,13 @@ const extension: JupyterLabPlugin<void> = {
 					console.log("Cell executed"); 
 
 					// Plot analogsignal (test)
-					OutputArea.execute(pythonCode['neoPlot'], outarea, session);
-					OutputArea.execute(pythonCode['plotCode'], outarea2, session);
+					//OutputArea.execute(pythonCode['neoPlot'], outarea2, session);
+					OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
 
 					// Update list of variables
-					executeCode('print(testfunc())', session, ioCallback);
+					executeCode('print("AC")', session, ioCallback); // print(testfunc())
 				});
-
+				console.log("After registering");
 			});});
 			
 			console.log("Connected to currently active Notebook");
