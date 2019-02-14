@@ -88,7 +88,7 @@ const extension: JupyterLabPlugin<void> = {
 			}
 			return outarea;
 		}
-
+		//@ts-ignore
 		function addTextToPanel(widget: Panel, text: string){
 			// Adding content to my tab
 			let new_content = document.createElement('div');
@@ -129,7 +129,7 @@ const extension: JupyterLabPlugin<void> = {
 			});
 			palette.addItem({command, category: 'NeuroScience'});
 		}
-
+		//@ts-ignore
 		function ioCallback(msg: KernelMessage.IIOPubMessage): void {
 			console.log("Got return from Kernel");
 			console.log(msg);
@@ -161,7 +161,7 @@ const extension: JupyterLabPlugin<void> = {
 				comm.onClose = (msg:any) => {};
 			});
 		}
-
+		//@ts-ignore
 		function executeCode(code: string, session: IClientSession, callback?: any){
 			let request: KernelMessage.IExecuteRequest = {
 				code: code,
@@ -170,7 +170,6 @@ const extension: JupyterLabPlugin<void> = {
 			};
 
 			let future: Kernel.IFuture = session.kernel.requestExecute(request);
-
 			if(callback){
 				future.onIOPub = ( ( msg: KernelMessage.IIOPubMessage ) => {
 					callback( msg );
@@ -214,9 +213,9 @@ const extension: JupyterLabPlugin<void> = {
 
 				// Register a Comm channel (not needed currently, but might be)
 				registerComm('test2', session);
-
+				
 				// Setup kernel to fulfill my requests
-				executeCode(pythonCode['setupEnv'], session);
+				executeCode(pythonCode['setupEnv'], session, console.log);
 				console.log(pythonCode['setupEnv']);	
 				// Create 2 OutputAreas that will show plots
 				let outarea = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
@@ -236,7 +235,7 @@ const extension: JupyterLabPlugin<void> = {
 					OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
 
 					// Update list of variables
-					executeCode('print("AC")', session, ioCallback); // print(testfunc())
+					//executeCode('print("AC")', session, ioCallback); // print(testfunc())
 				});
 				console.log("After registering");
 			});});
@@ -244,7 +243,7 @@ const extension: JupyterLabPlugin<void> = {
 			console.log("Connected to currently active Notebook");
 		
 			// Add some random text, nothing useful here
-			addTextToPanel(tab, 'This is a text');
+			// addTextToPanel(tab, 'This is a text');
 		}
 		
 
