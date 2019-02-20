@@ -8,15 +8,19 @@ let setup_env =
     # Probably with also import sys and append path, so should be fine usually
     from neo.core.baseneo import BaseNeo
     from neo import Block, SpikeTrain
-		from neo.test.tools import assert_same_sub_schema
-		assert_same_sub_schema = staticmethod(assert_same_sub_schema)
+    from neo.test.tools import assert_same_sub_schema
+    assert_same_sub_schema = staticmethod(assert_same_sub_schema)
     nsm = NamespaceMagics()
     nsm.shell = get_ipython().kernel.shell
-		from viziphant.viziphant.rasterplot import rasterplot
-		rasterplot = staticmethod(rasterplot)
+    from viziphant.viziphant.rasterplot import rasterplot
+    rasterplot = staticmethod(rasterplot)
+    import matplotlib.pyplot as plt
+    from ipywidgets import Output
     def __init__(self):
         self.blocks = []
         self.other_objs = []
+        self.plot = None
+        self.out = self.Output()
         
     def update(self):
         vals = self.nsm.who_ls()
@@ -29,28 +33,32 @@ let setup_env =
         old_objs = self.other_objs[:]
         self.update()
         # Static variable is preserved when running again
-        self.plot = None
         # If already plotted
         # TODO: Check block content as well, this might change!!!
         curr_blocks = self.blocks
-        old_len = len(old_blocks)
-        curr_len = len(curr_blocks)
-        changes = [self.assert_same_sub_schema(old_blocks[i], curr_blocks[i]) for i in range(old_len)] if old_len == curr_len else [False]
+        changes = len(curr_blocks) != len(old_blocks)
         curr_objs = self.other_objs
-        old_len = len(old_objs)
-        curr_len = len(curr_objs)
-        changes_objs = [self.assert_same_sub_schema(old_objs[i], curr_objs[i]) for i in range(old_len)] if old_len == curr_len else [False]
-        if all(changes) and all(changes_objs)\
-            and self.plot is not None and False:
-            return self.plot
+        if len(curr_objs) != len(old_objs):
+            changes = True
+        if not changes:
+            try:
+                [self.assert_same_sub_schema(old_blocks[i], curr_blocks[i]) for i in range(len(old_blocks))]
+                [self.assert_same_sub_schema(old_objs[i], curr_objs[i]) for i in range(len(old_objs))]
+            # TODO: Make more precise in neo
+            except BaseException as e:
+                changes = True
+        if (not changes) and (self.plot is not None) and False:
+            # TODO: Get plot to be displayed again
+            # return self.plot
+            return self.out
         else:
             spiketrains = []
             for bl in curr_blocks:
                 spiketrains.append(bl.list_children_by_class(self.SpikeTrain))
             spiketrains.append([obj for obj in curr_objs if isinstance(obj, self.SpikeTrain)])
-            for row in spiketrains:
-                for i, sptr in enumerate(row):
-                    row[i] = sptr.time_slice(0, 50)
+#             for row in spiketrains:
+#                 for i, sptr in enumerate(row):
+#                     row[i] = sptr.time_slice(0, 50)
             if spiketrains:
                 from matplotlib import rcParams
                 size = rcParams['figure.figsize']
@@ -58,7 +66,9 @@ let setup_env =
                 rcParams['figure.figsize'] = 11.7,8.7
                 self.plot = self.rasterplot(spiketrains, context='paper', markerargs={'animated': True, 'markersize':.1,'marker':'.'})
                 rcParams['figure.figsize'] = size
-        return self.plot
+                with self.out:
+                    display(self.plot)
+        return self.out
 
 
     def testfunc(self):
@@ -81,8 +91,7 @@ let setup_env =
 
         return json.dumps(values)
 
-my_jupyphant_vis_xxx = JupyphantVisualization()
-`;
+my_jupyphant_vis_xxx = JupyphantVisualization()`	
 
 let neo_plot =
 `import matplotlib.pyplot as plt
