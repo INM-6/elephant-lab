@@ -41,15 +41,23 @@ let setup_env =
         curr_len = len(curr_objs)
         changes_objs = [self.assert_same_sub_schema(old_objs[i], curr_objs[i]) for i in range(old_len)] if old_len == curr_len else [False]
         if all(changes) and all(changes_objs)\
-            and self.plot is not None:
+            and self.plot is not None and False:
             return self.plot
         else:
             spiketrains = []
             for bl in curr_blocks:
-                spiketrains.extend(bl.list_children_by_class(self.SpikeTrain))
-            spiketrains.extend([obj for obj in curr_objs if isinstance(obj, self.SpikeTrain)])
+                spiketrains.append(bl.list_children_by_class(self.SpikeTrain))
+            spiketrains.append([obj for obj in curr_objs if isinstance(obj, self.SpikeTrain)])
+            for row in spiketrains:
+                for i, sptr in enumerate(row):
+                    row[i] = sptr.time_slice(0, 50)
             if spiketrains:
-                self.plot = self.rasterplot(spiketrains)  
+                from matplotlib import rcParams
+                size = rcParams['figure.figsize']
+                # figure size in inches
+                rcParams['figure.figsize'] = 11.7,8.7
+                self.plot = self.rasterplot(spiketrains, context='paper', markerargs={'animated': True, 'markersize':.1,'marker':'.'})
+                rcParams['figure.figsize'] = size
         return self.plot
 
 
