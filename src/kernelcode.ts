@@ -153,10 +153,13 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     my_jupyphant_vis_xxx.plot_sptr();
 `;
-
+let lfp_plot = 
+`my_jupyphant_vis_xxx.plot_anasig();
+`
 export const pythonCode = {
 	'neoPlot': neo_plot,
 	'plotCode': plot_code,
 	'setupEnv': setup_env,
-	'rasterPlot': raster_plot
+	'rasterPlot': raster_plot,
+	'lfpPlot': lfp_plot
 };
