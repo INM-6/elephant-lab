@@ -7,7 +7,7 @@ let setup_env =
     # Need to import those actually, need to find out how to do so
     # Probably with also import sys and append path, so should be fine usually
     from neo.core.baseneo import BaseNeo
-    from neo import Block, SpikeTrain
+    from neo import Block, SpikeTrain, AnalogSignal
     from neo.test.tools import assert_same_sub_schema
     assert_same_sub_schema = staticmethod(assert_same_sub_schema)
     nsm = NamespaceMagics()
@@ -65,9 +65,52 @@ let setup_env =
                 # figure size in inches
                 rcParams['figure.figsize'] = 11.7,8.7
                 self.plot = self.rasterplot(spiketrains, context='paper', markerargs={'animated': True, 'markersize':.1,'marker':'.'})
-								rcParams['figure.figsize'] = size
-
+                rcParams['figure.figsize'] = size
+                
         return self.plot
+  
+    def plot_lfp(self, lfps, times, title=None, spacing=5, color=None):
+        '''
+        Plot LFPs.
+        
+        lfps: LFP signals with trial_id as first dimension and sample_id as second dimension.
+    	    		LFP signals must be arranged according to trial ID.
+        times: time stamps of the recorded LFP samples. Must be of same length as second dimenion of lfps
+        title: title of the figure
+        spacing: vertical spacing between two LFP signals
+        color: color to used for plotting
+        '''
+    
+        # Plots lfp signals for each trial
+        for trial_id,lfp in enumerate(lfps):
+            self.plt.plot(times, lfp.magnitude/10000 + trial_id * spacing, color=color)
+            xmin, xmax = times[[0,-1]] # use first and last time stamp for xlim values
+    
+        # Defines plot parameters for x-axis
+        self.plt.xlabel('t ({0})'.format(times.dimensionality), size=16)
+    
+        # Defines plot parameters for y-axis
+        self.plt.ylabel('trials', size=16)
+        ymin, ymax = 0, len(lfps)*spacing
+        self.plt.ylim(ymin-spacing, ymax+spacing)
+        yticks = np.arange(ymin, ymax+1, spacing*10)
+        yticklabels = [str(i) for i in np.arange(0, len(lfps)+1, 10, dtype=int)]
+        self.plt.yticks(yticks, yticklabels)
+        
+        # Adjusts axis
+        self.plt.axis('tight')
+        
+        # Adds the title to the figure
+        self.plt.suptitle(title, size=18)
+        
+    def plot_anasig(self):
+        anasigs = []
+        for bl in self.blocks:
+            anasigs.extend(bl.list_children_by_class(self.AnalogSignal))
+            anasigs.extend([obj for obj in self.other_objs if isinstance(obj, self.AnalogSignal)])
+        self.anasig_plot = None
+        self.plot_lfp(anasigs, times=np.arange(len(anasigs[0]))*pq.s, spacing=150)
+        return self.anasig_plot
 
 
     def testfunc(self):
