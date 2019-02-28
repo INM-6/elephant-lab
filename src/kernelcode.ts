@@ -49,8 +49,8 @@ let setup_env =
                 changes = True
         if (not changes) and (self.plot is not None) and False:
             # TODO: Get plot to be displayed again
-            # return self.plot
-            return self.out
+            return self.plot
+            # return self.out
         else:
             spiketrains = []
             for bl in curr_blocks:
@@ -65,10 +65,9 @@ let setup_env =
                 # figure size in inches
                 rcParams['figure.figsize'] = 11.7,8.7
                 self.plot = self.rasterplot(spiketrains, context='paper', markerargs={'animated': True, 'markersize':.1,'marker':'.'})
-                rcParams['figure.figsize'] = size
-                with self.out:
-                    display(self.plot)
-        return self.out
+								rcParams['figure.figsize'] = size
+
+        return self.plot
 
 
     def testfunc(self):
