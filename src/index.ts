@@ -220,6 +220,10 @@ const extension: JupyterLabPlugin<void> = {
 				// Create 2 OutputAreas that will show plots
 				let outarea = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
 				//let outarea2 = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
+				
+				// Also show plot as soon as being activated
+				// This is what user expects
+				OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
 
 				console.log("BEFORE REGISTERING");
 				// React to codecell execution, update variable list
