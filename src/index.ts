@@ -218,11 +218,13 @@ const extension: JupyterLabPlugin<void> = {
 				executeCode(pythonCode['setupEnv'], session, console.log);
 				console.log(pythonCode['setupEnv']);	
 				// Create 2 OutputAreas that will show plots
+				let outarea_tree = createOutput(session, tab, ['my-outarea-class'], 'jup_vis_out_id2', 'None');
 				let outarea = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
 				let outarea2 = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
 				
 				// Also show plot as soon as being activated
 				// This is what user expects
+				OutputArea.execute(pythonCode['createTree'], outarea_tree, session);
 				OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
 				OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
 
@@ -237,6 +239,7 @@ const extension: JupyterLabPlugin<void> = {
 
 					// Plot analogsignal (test)
 					//OutputArea.execute(pythonCode['neoPlot'], outarea2, session);
+					executeCode(pythonCode['updateTree'], session, (msg:any)=>{});
 					OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
 					OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
 

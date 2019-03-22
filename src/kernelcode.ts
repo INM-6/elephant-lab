@@ -22,11 +22,20 @@ with warnings.catch_warnings():
 `;
 let lfp_plot = 
 `my_jupyphant_vis_xxx.plot_anasig();
-`
+`;
+let create_tree = 
+`from IPython.display import display
+display(my_jupyphant_vis_xxx.create_tree())
+`;
+let update_tree =
+`my_jupyphant_vis_xxx.update_tree();
+`;
 export const pythonCode = {
 	'neoPlot': neo_plot,
 	'plotCode': plot_code,
 	'setupEnv': setup_env,
 	'rasterPlot': raster_plot,
-	'lfpPlot': lfp_plot
+	'lfpPlot': lfp_plot,
+	'createTree': create_tree,
+	'updateTree': update_tree
 };
