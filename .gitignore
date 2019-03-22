@@ -6,3 +6,4 @@ node_modules/
 python/
 src/test.py
 package-lock.json
+*/__pycache__/*
