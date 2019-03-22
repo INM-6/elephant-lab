@@ -133,3 +133,11 @@ Viziphant
 Python-Code:
 - Namespace only takes variables as it seems, so maybe define own class and do everything in there
 - ! using neo.test.tools.assert_same_sub_schema
+- Now moved to own module (2019_03_22), making development easier; Requires importing global namespace (import __main__ or passing globals and locals dict)
+
+TreeView requirements:
+Checkboxes, multiselect, collapse and expand, select custom icon, maybe drag and drop
+=> jstree
+Found working ipywidget for this, ipytree (https://github.com/QuantStack/ipytree) 
+However it is very slow for large numbers of nodes as here. Thus, it needs to be forked and lazy loading implemented
+
