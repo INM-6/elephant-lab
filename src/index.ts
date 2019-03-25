@@ -52,6 +52,7 @@ const extension: JupyterLabPlugin<void> = {
 		const palette: ICommandPalette = palette_;
 		//@ts-ignore
 		const consoles: INotebookTracker = consoles_;
+		//@ts-ignore
 		const rendermime: IRenderMimeRegistry = rendermime_;
 		//@ts-ignore
 		const restorer: ILayoutRestorer = restorer_;
@@ -75,7 +76,7 @@ const extension: JupyterLabPlugin<void> = {
 		createCommand(command);
 		
 		// Adds an OutputArea to the tab 'widget'
-		function createOutput(session: IClientSession, tab: Panel, cls: string[], id: string, code: string): OutputArea{
+		function createOutput(session: IClientSession, rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, code: string): OutputArea{
 			// OutputArea
 			let model = new OutputAreaModel({trusted: true});
 			let outarea = new OutputArea({rendermime, model});
@@ -218,9 +219,9 @@ const extension: JupyterLabPlugin<void> = {
 				executeCode(pythonCode['setupEnv'], session, console.log);
 				console.log(pythonCode['setupEnv']);	
 				// Create 2 OutputAreas that will show plots
-				let outarea_tree = createOutput(session, tab, ['my-outarea-class'], 'jup_vis_out_id2', 'None');
-				let outarea = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
-				let outarea2 = createOutput(session, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
+				let outarea_tree = createOutput(session, newPanel.rendermime, tab, ['my-outarea-class'], 'jup_vis_out_id2', 'None');
+				let outarea = createOutput(session, newPanel.rendermime, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
+				let outarea2 = createOutput(session, newPanel.rendermime, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
 				
 				// Also show plot as soon as being activated
 				// This is what user expects
