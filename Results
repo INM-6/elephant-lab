@@ -140,4 +140,7 @@ Checkboxes, multiselect, collapse and expand, select custom icon, maybe drag and
 => jstree
 Found working ipywidget for this, ipytree (https://github.com/QuantStack/ipytree) 
 However it is very slow for large numbers of nodes as here. Thus, it needs to be forked and lazy loading implemented
-
+Copies tons of memory, hidden in ipywidgets structure, maybe need to do communication manually
+Problem was not that it has to copy too much data, but:
+For every node that was added every single other node had to check whether its items were still correct. This should be done once at the end, not all the time. => Icon update was run Omega(n^2) times instead of O(n)
+New Problem: There is no defined end, so I need to find out how to update the correct items at the correct time
