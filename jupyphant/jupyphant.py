@@ -1,5 +1,6 @@
 # XXX: In general this is bad practice but might be useful for this exact usecase
 import __main__
+import time
 class JupyphantVisualization:
     import json
     from IPython.core.magics.namespace import NamespaceMagics
@@ -15,7 +16,7 @@ class JupyphantVisualization:
     import quantities as pq
     nsm = NamespaceMagics()
     nsm.shell = get_ipython().kernel.shell
-    from viziphant.viziphant.rasterplot import rasterplot
+    from viziphant.rasterplot import rasterplot
     rasterplot = staticmethod(rasterplot)
     import matplotlib.pyplot as plt
     from ipywidgets import Output
@@ -48,11 +49,14 @@ class JupyphantVisualization:
         self.other_objs = [v for v in values.values() if isinstance(v, self.BaseNeo) and not isinstance(v, self.Block)]
 
     def update_tree(self):
+        start = time.time()
         self.update()
+        print("After update", time.time() - start)
         print("Here")
         if self.tree is not None or True:
             print("HERE2")
             nodes = [self.Node(bl.name) for bl in self.blocks]
+            print("Toplevel", time.time() - start)
             print(nodes)
             # self.tree.nodes = nodes
             for i, node in enumerate(nodes):
@@ -66,7 +70,9 @@ class JupyphantVisualization:
                     segs_node.add_node(curr_seg)
                     curr_seg.opened = False
                     self._add_sub_nodes(curr_seg, seg, 'analogsignals', "AnalogSignals")
+                    print("After anasig", time.time() - start)
                     self._add_sub_nodes(curr_seg, seg, 'spiketrains', "SpikeTrains")
+                    print("After sptr", time.time() - start)
 
                 chidxs = self.Node("ChannelIndexes")
                 node.add_node(chidxs)
@@ -80,7 +86,12 @@ class JupyphantVisualization:
                     self._add_sub_nodes(chidx_node, chidx, 'irregularlysampledsignals')
             nodes.extend([self.Node(str(obj.name)) for obj in self.other_objs])
             # print(nodes)
+            print("Calculation finished", time.time() - start)
+            import sys
+            sys.stdout.flush()
+            # Runs asynchronously for Python kernel but blocks output via JS
             self.tree.nodes = nodes
+            print("Rendered", time.time() - start)
         else:
             # Update the tree incrementally, do NOT do the whole neo block at once
             pass

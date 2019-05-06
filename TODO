@@ -52,3 +52,8 @@ NOW:
 - Restorer needs to bring together my restored tabs and restored notebooks
 - React upon change of current widget and foreground the corresponding visualization // Currently left out for debugging purposes
 - Incrementally change plot? As an interactivity wrapper around rasterplot()
+
+Priority: Implementing TreeView selection of neo objects that can be plotted afterwards
+Design: Upper half of the tab is TreeView, maybe search button up top; lower half is plot(s) of data
+Plots: Not decided yet what to do, goal is megaplot that plots everything into 1 plot; selection from TreeView and/or plot and highlight in the other
+Great thing would be: Drag and Drop into CodeCell and have name of signal inserted automatically to correct position
