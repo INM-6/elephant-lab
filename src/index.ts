@@ -228,7 +228,7 @@ const extension: JupyterLabPlugin<void> = {
 				OutputArea.execute(pythonCode['createTree'], outarea_tree, session);
 				OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
 				OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
-
+                executeCode(pythonCode['updateTree'], session, console.log);
 				console.log("BEFORE REGISTERING");
 				// React to codecell execution, update variable list
 				NotebookActions.executed.connect((sender, exec_data) => {
