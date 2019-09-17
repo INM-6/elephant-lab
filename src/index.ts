@@ -1,8 +1,8 @@
 import {
-	ICommandPalette, IClientSession, InstanceTracker
+	ICommandPalette, IClientSession, WidgetTracker
 } from '@jupyterlab/apputils';
 import {
-	 Panel, Widget
+	 Panel
 } from '@phosphor/widgets';
 //@ts-ignore
 import {
@@ -12,10 +12,10 @@ import {
 	INotebookTracker, NotebookActions, NotebookPanel
 } from '@jupyterlab/notebook';
 import {
-	JupyterLab, JupyterLabPlugin, ILayoutRestorer
+	JupyterFrontEnd, JupyterFrontEndPlugin, ILayoutRestorer
 } from '@jupyterlab/application';
 import {
-	KernelMessage, Kernel
+	KernelMessage
 } from '@jupyterlab/services';
 
 // Note: SimplifiedOutputArea seems to simply behave like 
@@ -40,15 +40,15 @@ import '../style/index.css';
 /**
  * Initialization data for the neo_elephant extension.
  */
-const extension: JupyterLabPlugin<void> = {
+const extension: JupyterFrontEndPlugin<void> = {
 	id: 'neo_elephant',
 	autoStart: true,
 	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer],
 	activate: 
-	(lab_: JupyterLab, palette_: ICommandPalette, consoles_: INotebookTracker, rendermime_, restorer_: ILayoutRestorer) => {	
+	(lab_: JupyterFrontEnd, palette_: ICommandPalette, consoles_: INotebookTracker, rendermime_, restorer_: ILayoutRestorer) => {	
 		console.log('JupyterLab extension neo_elephant is activated!');
 
-		const lab: JupyterLab = lab_;
+		const lab: JupyterFrontEnd = lab_;
 		const palette: ICommandPalette = palette_;
 		//@ts-ignore
 		const consoles: INotebookTracker = consoles_;
@@ -66,7 +66,7 @@ const extension: JupyterLabPlugin<void> = {
 		// Track and restore my tabs, needs to work together with restoration of main area
 		// When Main Area is restored, I need to get all available Notebooks and Consoles
 		// and then check all of them and connect each tab to the right one
-		let tracker = new InstanceTracker<Widget>({ namespace: 'neo_jup_vis' });
+		let tracker = new WidgetTracker<Panel>({ namespace: 'neo_jup_vis' });
   	//restorer.restore(tracker, {
 		//	command,
 		//	args: () => JSONExt.emptyObject,
@@ -109,10 +109,10 @@ const extension: JupyterLabPlugin<void> = {
 			return widget;
 		}
 
-		function attachTab(tab: Panel, tracker: InstanceTracker<Widget>){
+		function attachTab(tab: Panel, tracker: WidgetTracker<Panel>){
 			// Attach tab if not yet attached
 			if (!tab.isAttached) {
-				lab.shell.addToRightArea(tab);
+				lab.shell.add(tab);
 			}
 			if (!tracker.has(tab)) {
 				// Track the state of the widget for later restoration
@@ -131,20 +131,20 @@ const extension: JupyterLabPlugin<void> = {
 			palette.addItem({command, category: 'NeuroScience'});
 		}
 		//@ts-ignore
-		function ioCallback(msg: KernelMessage.IIOPubMessage): void {
-			console.log("Got return from Kernel");
-			console.log(msg);
-			if(msg.header.msg_type == 'stream' && msg.content.name == 'stdout'){
-				console.log("Stdout: ", msg.content);
-				let text = document.createTextNode(msg.content.text as string);
-				let var_place = document.getElementById('neo_ele_vars');
-				let old_text = var_place.childNodes[0];
-				if(old_text != null){
-					var_place.removeChild(old_text);
-				}
-				var_place.appendChild(text);
-			}
-		}
+		//		function ioCallback(msg: KernelMessage.IIOPubMessage): void {
+		//	console.log("Got return from Kernel");
+		//	console.log(msg);
+		//	if(msg.header.msg_type == 'stream' && msg.content.name == 'stdout'){
+		//		console.log("Stdout: ", msg.content);
+		//		let text = document.createTextNode(msg.content.text as string);
+		//		let var_place = document.getElementById('neo_ele_vars');
+		//		let old_text = var_place.childNodes[0];
+		//		if(old_text != null){
+		//			var_place.removeChild(old_text);
+		//		}
+		//		var_place.appendChild(text);
+		//	}
+		//}
 
 		function registerComm(name: string, session: IClientSession){
 			session.kernel.registerCommTarget('test2', (comm:any, commMsg:any):any => {
@@ -164,13 +164,13 @@ const extension: JupyterLabPlugin<void> = {
 		}
 		//@ts-ignore
 		function executeCode(code: string, session: IClientSession, callback?: any){
-			let request: KernelMessage.IExecuteRequest = {
+			let request: KernelMessage.IExecuteRequestMsg['content'] = {
 				code: code,
 				stop_on_error: false,
 				store_history: false,
 			};
 
-			let future: Kernel.IFuture = session.kernel.requestExecute(request);
+			let future = session.kernel.requestExecute(request);
 			if(callback){
 				future.onIOPub = ( ( msg: KernelMessage.IIOPubMessage ) => {
 					callback( msg );
@@ -219,9 +219,9 @@ const extension: JupyterLabPlugin<void> = {
 				executeCode(pythonCode['setupEnv'], session, console.log);
 				console.log(pythonCode['setupEnv']);	
 				// Create 2 OutputAreas that will show plots
-				let outarea_tree = createOutput(session, newPanel.rendermime, tab, ['my-outarea-class'], 'jup_vis_out_id2', 'None');
-				let outarea = createOutput(session, newPanel.rendermime, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
-				let outarea2 = createOutput(session, newPanel.rendermime, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
+				let outarea_tree = createOutput(session, newPanel.content.rendermime, tab, ['my-outarea-class'], 'jup_vis_out_id2', 'None');
+				let outarea = createOutput(session, newPanel.content.rendermime, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
+				let outarea2 = createOutput(session, newPanel.content.rendermime, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
 				
 				// Also show plot as soon as being activated
 				// This is what user expects
