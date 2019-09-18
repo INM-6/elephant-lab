@@ -63,17 +63,18 @@ const extension: JupyterFrontEndPlugin<void> = {
 		// This command will open the tab			let widget = initializeTab(lab);
 		let command = 'neo:open';
 
+		createCommand(command);
+
 		// Track and restore my tabs, needs to work together with restoration of main area
 		// When Main Area is restored, I need to get all available Notebooks and Consoles
 		// and then check all of them and connect each tab to the right one
 		let tracker = new WidgetTracker<Panel>({ namespace: 'neo_jup_vis' });
-  	//restorer.restore(tracker, {
-		//	command,
-		//	args: () => JSONExt.emptyObject,
-		//	name: () => 'neo_jup_vis'
-		//});
+  	restorer.restore(tracker, {
+			command,
+			//args: () => JSONExt.emptyObject,
+			name: () => 'neo_jup_vis'
+		});
 
-		createCommand(command);
 		
 		// Adds an OutputArea to the tab 'widget'
 		function createOutput(session: IClientSession, rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, code: string): OutputArea{
@@ -187,9 +188,12 @@ const extension: JupyterFrontEndPlugin<void> = {
 
 		// Function to react on command to visualize
 		function newTab() {
-
 			// lab.shell.currentWidget is too general, now reducing down to NotebookPanels from NotebookTracker
 			var newPanel: NotebookPanel = consoles.currentWidget;
+
+			consoles.restored.then(()=>{
+			newPanel = consoles.currentWidget;
+
 			let index = myPanels.indexOf(newPanel);
 			if(index != -1){
 				attachTab(myVisTabs[index], tracker);
@@ -255,7 +259,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 					//executeCode('print("AC")', session, ioCallback); // print(testfunc())
 				});
 				console.log("After registering");
-			});});
+			});});});
 			
 			console.log("Connected to currently active Notebook");
 		
