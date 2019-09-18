@@ -2,7 +2,7 @@ import {
 	ICommandPalette, IClientSession, WidgetTracker
 } from '@jupyterlab/apputils';
 import {
-	 Panel
+	 SplitPanel, Panel
 } from '@phosphor/widgets';
 //@ts-ignore
 import {
@@ -99,7 +99,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 		}
 
 		function initializeTab(){
-			let widget: Panel = new Panel();
+			let widget: Panel = new SplitPanel({orientation: 'vertical'});
 			widget.id = 'neo_elephant';
 			widget.title.label = 'Visualization';
 			widget.title.closable = true;
@@ -217,18 +217,25 @@ const extension: JupyterFrontEndPlugin<void> = {
 				
 				// Setup kernel to fulfill my requests
 				executeCode(pythonCode['setupEnv'], session, console.log);
-				console.log(pythonCode['setupEnv']);	
+				console.log(pythonCode['setupEnv']);
+				// Divide Tab in part for TreeView and part for Plots
+				tab.addWidget(new Panel());
+				tab.addWidget(new Panel());
+				tab.widgets[0].node.style.cssText = tab.widgets[0].node.style.cssText + ' overflow-y: scroll;';
+				tab.widgets[1].node.style.cssText = tab.widgets[1].node.style.cssText + ' overflow-y: scroll;';
+				(<SplitPanel>tab).handles[0].style.cssText += " background-color: DarkGrey;";
+				// Create OutputArea that will show TreeView
+				let outarea_tree = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[0], ['my-outarea-class'], 'jup_vis_out_id2', 'None');
 				// Create 2 OutputAreas that will show plots
-				let outarea_tree = createOutput(session, newPanel.content.rendermime, tab, ['my-outarea-class'], 'jup_vis_out_id2', 'None');
-				let outarea = createOutput(session, newPanel.content.rendermime, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
-				let outarea2 = createOutput(session, newPanel.content.rendermime, tab, ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
+				let outarea = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
+				let outarea2 = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
 				
 				// Also show plot as soon as being activated
 				// This is what user expects
 				OutputArea.execute(pythonCode['createTree'], outarea_tree, session);
 				OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
 				OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
-                executeCode(pythonCode['updateTree'], session, console.log);
+				executeCode(pythonCode['updateTree'], session, (msg: any)=>{});
 				console.log("BEFORE REGISTERING");
 				// React to codecell execution, update variable list
 				NotebookActions.executed.connect((sender, exec_data) => {
