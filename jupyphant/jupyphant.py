@@ -33,16 +33,14 @@ class JupyphantVisualization:
         vals = self.nsm.who_ls()
         values = {}
         for v in vals:
-            # XXX This is in general considered bad practice
-            # Neither eval nor importing __main__ should be used
+            # Access objects created within the notebook
+            # XXX Importing __main__ is in general considered bad practice
             # However here the explicit goal is to have access to
             # the surrounding namespace and working with it, thus making this necessary
-            # TODO: It might be possible to just pass globals and locals to the constructor
-            # and pass them to eval here
-            # TODO: It could also be possible to just create the class in the same namespace
-            # I.e. no imports, but running this code directly inside the notebook
+            # TODO: It could be possible to just create the class in the same namespace
+            # I.e. no imports, by running this code directly inside the notebook
             # This requires to have this whole file as a string in the TypeScript code
-            obj = eval("__main__."+v)
+            obj = __main__.__dict__[v]
             if isinstance(obj, (self.BaseNeo, list)):
                 values[v] = obj
         self.blocks = [v for v in values.values() if isinstance(v, self.Block)]
