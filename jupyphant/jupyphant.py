@@ -149,6 +149,7 @@ class JupyphantVisualization:
                 size = rcParams['figure.figsize']
                 # figure size in inches
                 rcParams['figure.figsize'] = 11.7, 8.7
+                rcParams['figure.figsize'] = 5.85, 4.35
                 try:
                     ax = self.plot[0]
                 except TypeError:
