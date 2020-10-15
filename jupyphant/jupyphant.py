@@ -2,6 +2,7 @@
 import __main__
 import time
 class JupyphantVisualization:
+    """Hide stuff inside class; more complicated name"""
     import json
     from IPython.core.magics.namespace import NamespaceMagics
     from IPython import get_ipython

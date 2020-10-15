@@ -44,7 +44,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 	id: 'neo_elephant',
 	autoStart: true,
 	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer],
-	activate: 
+	activate:
 	(lab_: JupyterFrontEnd, palette_: ICommandPalette, consoles_: INotebookTracker, rendermime_, restorer_: ILayoutRestorer) => {	
 		console.log('JupyterLab extension neo_elephant is activated!');
 
@@ -124,7 +124,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 
 		function createCommand(command: string){
 			lab.commands.addCommand(command, {
-				label: 'Visualize neo and elephant',
+				label: 'Jupyphant',
 				execute: () => {
 					newTab();
 				}
@@ -187,6 +187,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 		});
 
 		// Function to react on command to visualize
+		// Called only after the command is clicked from CommandPalette
 		function newTab() {
 			// lab.shell.currentWidget is too general, now reducing down to NotebookPanels from NotebookTracker
 			var newPanel: NotebookPanel = consoles.currentWidget;
@@ -244,6 +245,8 @@ const extension: JupyterFrontEndPlugin<void> = {
 				// React to codecell execution, update variable list
 				NotebookActions.executed.connect((sender, exec_data) => {
 					// Only react if codecell from watched notebook was executed
+					// Maybe check via Session ID or something
+					// Is this a secure check? Is content unique?
 					if(exec_data.notebook != newPanel.content){
 						return;
 					}
