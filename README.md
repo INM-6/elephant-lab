@@ -90,4 +90,10 @@ Additional notes for debugging:
 Usage:
 In the commands menu on the left, a new headline "Neuroscience" appears and below it the command "Jupyphant".
 Clicking on "Jupyphant" opens a new tab within JupyterLab that is connected to the currently opened Notebook.
-It will immediately start displaying the neo object tree and 
+It will immediately start displaying the neo object tree and plots of all AnalogSignals and SpikeTrains
+
+Known problems:
+Installation of @jupyter-widgets/jupyterlab-manager fails following these steps. 
+This causes ipytree widget not to be correctly displayed.
+No solution known known.Later versions of jupyterlab_server fix this bug. However, then dependency issues occur.
+These need to be resolved.
