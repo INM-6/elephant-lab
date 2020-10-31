@@ -10,38 +10,60 @@ Install compatible version of Jupyter Lab using:
 Omit the version numbers to get the latest version for updating the dependencies
 
 ```conda install -c conda-forge python-neo seaborn matplotlib```
+
 ```pip install elephant```
 
-Install viziphant (old version!)
+Install viziphant (old version!) <br>
+
 ```git clone git@github.com:INM-6/viziphant.git```
+
 ```cd viziphant```
+
 ```pip install -e .```
 
 Install ipywidgets
+
 ```conda install -c conda-forge ipywidgets```
+
 ```jupyter labextension install @jupyter-widgets/jupyterlab-manager```
+
 For further information, see https://ipywidgets.readthedocs.io/en/stable/user_install.html
 
 Install ipytree:
 Python package:
+
 ```conda install -c conda-forge ipytree```
+
 Jupyter-Lab extension
+
 ```jupyter labextension install ipytree```
+
 ```jupyter labextension install ipytree```
+
 For further information, see https://github.com/QuantStack/ipytree
 
+
 Install jupyphant itself:
+
 ```git clone git@github.com:INM-6/jupyphant.git```
+
 ```cd jupyphant```
+
 ```pip install -e .```
+
 ```jlpm install```
+
 ```jlpm run build```
+
 ```jupyter labextension install .```
+
 For further information, see https://jupyterlab.readthedocs.io/en/stable/developer/extension_tutorial.html#extension-tutorial
 
 
 Run Jupyterlab with
+
 ```jupyter lab --watch```
+
 so current changes are reflected immediately upon reloading the JupyterLab tab.
 
 Development:
