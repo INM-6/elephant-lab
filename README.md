@@ -81,6 +81,8 @@ JupyterLab extension:
 
 Additional notes for debugging:
 - Outputs of Python Code are printed to the Web Console (Firefox: Ctrl+Shift+K), displayed as JSON objects.
+=> "message type: error" contains errors in execution of Python code<br>
+=> "messsage_type: output" contains information printed in the Python code
 - Errors in activating the extension are displayed there by default as well
 - console.log() in the TypeScript code is a very helpful tool
 
