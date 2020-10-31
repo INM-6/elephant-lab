@@ -6,7 +6,7 @@ Development install, assuming a fresh conda environment:
 
 Required: npm, jupyter-lab (<2.0.0 currently, tested on 1.0.2), ipython, neo, viziphant, seaborn
 Install compatible version of Jupyter Lab using:
-```conda install -c conda-forge jupyterlab=1.0.2 jupyterlab_server=1.0.0```
+```conda install -c conda-forge nodejs jupyterlab=1.0.2 jupyterlab_server=1.0.0```
 Omit the version numbers to get the latest version for updating the dependencies
 
 ```conda install -c conda-forge python-neo seaborn matplotlib```
