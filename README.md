@@ -80,7 +80,9 @@ JupyterLab extension:
 - `package.json` and `tsconfig.json` contain important configs for the extension
 
 Additional notes for debugging:
-- Outputs of Python Code are printed to the Web Console (Firefox: Ctrl+Shift+K), displayed as JSON objects.
+- Outputs of Python Code are printed to the Web Console (Firefox: Ctrl+Shift+K), displayed as JSON objects.<br>
+=> "message type: error" contains errors in execution of Python code<br>
+=> "messsage_type: output" contains information printed in the Python code
 - Errors in activating the extension are displayed there by default as well
 - console.log() in the TypeScript code is a very helpful tool
 
@@ -88,4 +90,10 @@ Additional notes for debugging:
 Usage:
 In the commands menu on the left, a new headline "Neuroscience" appears and below it the command "Jupyphant".
 Clicking on "Jupyphant" opens a new tab within JupyterLab that is connected to the currently opened Notebook.
-It will immediately start displaying the neo object tree and 
+It will immediately start displaying the neo object tree and plots of all AnalogSignals and SpikeTrains
+
+Known problems:
+Installation of @jupyter-widgets/jupyterlab-manager fails following these steps. 
+This causes ipytree widget not to be correctly displayed.
+No solution known known.Later versions of jupyterlab_server fix this bug. However, then dependency issues occur.
+These need to be resolved.
