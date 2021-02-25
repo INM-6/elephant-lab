@@ -8,6 +8,7 @@
  */
 @import '../../@jupyter-widgets/controls/css/widgets.css';
 
+/* Example styling, set width for an id, no such object exists currently */
 #jup_vis_out_id{
 	width: 45%;
 }

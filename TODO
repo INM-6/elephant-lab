@@ -1,59 +1,24 @@
-// Unnecessary because I do not even have to move any data
-//Daten rueckgeben anders als JSON? Für Plots!
-// Done
-//Messaging System im Hintergrund? ZeroMQ?
+// Details of Messaging System? ZeroMQ? Is direct access to it necessary?
 // Probably unnecessary due to not having to move any data, just sending execute requests via high level API
-überlegen Kernel-Erweiterungen Speed => nötig? Versuchen, ohne; Wenn nicht klappt, dann ggf. mit
 
-// Done
-//Port
+Setup a comm channel in the beginning and make Python code listen to comms, instead of sending strings of code to be executed (see also https://jupyter-notebook.readthedocs.io/en/stable/comms.html)
 
-//All done
-Kommunikation schöner machen => Plot
- - ZeroMQ
-	//- Array mit D3 plotten
-	//- Pythonplot (matplotlib), dann anzeigen
-  //      => Performance, wie funktioniert's überhaupt
+Variable Inspector extension changes whenever a new notebook comes into focus! Would be a great feature
+Restore Jupyphant tabs and connect them to the correct notebooks
 
-Variable Inspector changes whenever a new notebook comes into focus!
-Need to implement this as well!
+Check "compatibility" with other extensions (eg. ipympl), if all the toolbars are shown in Jupyphant plots as welll
 
-// Probably obsolete due to usability of IPyWidgets in OutputArea
-Receiver in Python set up at the beginning and send comms from TS to this? So Python itself could react, not always sending strings of code (check this: https://jupyter-notebook.readthedocs.io/en/stable/comms.html)
-
-// Obsolete due to just using the kernel itself
-//Check RAM usage!
-
-// For IPyWidgets alone:
-//Attach when attachin tab, not before. => Everythin global so can be accessed later
-
-Check "compatibility" with other extensions (eg. ipympl), if all the toolbars are shown in my plots as welll
-Get multiple plots on one tab
-
+Clean TypeScript structure
 Plan a concept to enable modularity
-- OOP => Manager class that registers everythin, Communicator class that handles kernel communication, Tab class that shows stuff, Extension (index.ts) that instantiates the others
-- Manager: Whenever new widget is added (consoles.widgetAdded) save the widget, when new widget is in focus switch to this OR always remain bound to first active notebook and allow multiple tabs
+- OOP => Manager class that registers everything, Communicator class that handles kernel communication, Tab class that shows stuff, Extension (index.ts) that instantiates the others
+- Manager: Whenever new notebook is added (consoles.widgetAdded) save the widget, when new widget is in focus switch to this OR always remain bound to first active notebook and allow multiple tabs
  
-Look for good Python plotting libraries (ask others)
-Find out user requirements, so I can actually implement a good GUI
-
-Long run:
-General: TypeScript code structure, expand Viziphant functionality for use, GUI (tree of neo objects that can be multiselected usw., select by annotation/attribute); Afterwards work with live data (s. Google Keep)
-- Only very few plots in single tab for the moment => predefine their look using CSS, no need to change everything and thus style from Python
-	- Reactive plots? Clicking on this field shows something else? => HoloViews (Tableau as examples)
-NOW:
-- Check out Viziphant by Robin
-- Remove hardcoded values from proof of concept, generate neo structure
-- Create Viziphant plots (rasterplot by Robin) from SpikeTrains, plot all AnalogSignals into 1 plot (or grouped by segment, let user select segment)
+Find out user requirements to create a helpful GUI
+- Interactive plots? Clicking on this field shows something else? => HoloViews (Tableau as examples)
 - Viziphant "megaplot" that combines lfp, event and spikes (rasterplot) into single plot
-- Then use that in Jupyphant
-- in parallel: Clean TypeScript structure
-- Create neo tree with multi-select, create plots according to what is selected there
-- Restorer needs to bring together my restored tabs and restored notebooks
-- React upon change of current widget and foreground the corresponding visualization // Currently left out for debugging purposes
-- Incrementally change plot? As an interactivity wrapper around rasterplot()
+- Create neo tree with multi-select (and possibly selection by annotations and attributes), create plots according to what is selected there
+- Great thing would be: Drag and Drop into CodeCell and have name of signal inserted automatically to correct position
 
-Priority: Implementing TreeView selection of neo objects that can be plotted afterwards
-Design: Upper half of the tab is TreeView, maybe search button up top; lower half is plot(s) of data
-Plots: Not decided yet what to do, goal is megaplot that plots everything into 1 plot; selection from TreeView and/or plot and highlight in the other
-Great thing would be: Drag and Drop into CodeCell and have name of signal inserted automatically to correct position
+Incrementally change plot? As an interactivity wrapper around rasterplot()
+
+Enable dealing with live data, e.g. plotting right from Nest simulation
