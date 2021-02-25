@@ -19,6 +19,8 @@ Install viziphant (old version!) <br>
 
 ```cd viziphant```
 
+```git checkout a95186d5137```
+
 ```pip install -e .```
 
 Install ipywidgets
