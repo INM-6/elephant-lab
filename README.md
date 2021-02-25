@@ -4,6 +4,9 @@ A JupyterLab extension for visualizing Neo objects and Elephant results
 
 Development install, assuming a fresh conda environment:
 
+For convenience, env.yml contains a conda environment pre-constructed as described below.
+All other installs (pip, jupyter labextension) need to be done manually.
+
 Required: npm, jupyter-lab (<2.0.0 currently, tested on 1.0.2), ipython, neo, viziphant, seaborn
 Install compatible version of Jupyter Lab using:
 ```conda install -c conda-forge nodejs jupyterlab=1.0.2 jupyterlab_server=1.0.0```
