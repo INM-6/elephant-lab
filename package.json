@@ -54,7 +54,14 @@
     "watch:labextension": "jupyter labextension watch ."
   },
   "dependencies": {
-    "@jupyterlab/application": "^3.1.0"
+    "@jupyterlab/application": "^3.5.0",
+    "@jupyterlab/apputils": "^3.5.0",
+    "@jupyterlab/notebook": "^3.5.0",
+    "@jupyterlab/outputarea": "^3.5.0",
+    "@jupyterlab/rendermime": "^3.5.0",
+    "@jupyterlab/services": "^6.5.0",
+    "@lumino/coreutils": "^1.12.1",
+    "@lumino/widgets": "^1.34.1"
   },
   "devDependencies": {
     "@babel/core": "^7.0.0",
@@ -76,8 +83,8 @@
     "stylelint-config-recommended": "^6.0.0",
     "stylelint-config-standard": "~24.0.0",
     "stylelint-prettier": "^2.0.0",
-    "typescript": "~4.1.3",
-    "ts-jest": "^26.0.0"
+    "ts-jest": "^26.0.0",
+    "typescript": "~4.1.3"
   },
   "sideEffects": [
     "style/*.css",
@@ -87,7 +94,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "jupyterlab": { 
+  "jupyterlab": {
     "extension": true,
     "outputDir": "jupyphant/labextension"
   },
