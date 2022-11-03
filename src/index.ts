@@ -6,7 +6,7 @@ import {
 } from '@jupyterlab/application';
 import {
 	ICommandPalette,
-	IClientSession,
+	ISessionContext,
 	WidgetTracker
 } from '@jupyterlab/apputils';
 import {
@@ -93,7 +93,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 		// Define functions used below
 
 		// Adds an OutputArea to the tab 'widget'
-		function createOutput(session: IClientSession, rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, code: string): OutputArea{
+		function createOutput(session: ISessionContext, rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, code: string): OutputArea{
 			/**
 			  * Creates an OutputArea and executes code, the output of the code is displayed in the OutputArea
 			  *
@@ -218,7 +218,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 		//	}
 		//}
 
-		function registerComm(name: string, session: IClientSession){
+		function registerComm(name: string, context: SessionContext){
 			/**
 			  * Registers a communication channel that allows sending messages
 			  * back and forth between the TypeScript code and the IPython session, i.e., the Python kernel
@@ -228,7 +228,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 			//TODO: Remove hardcoded stuff
 
 			// Registers something like a callback that acts when the kernel sends a message
-			session.kernel.registerCommTarget('test2', (comm:any, commMsg:any):any => {
+			context.session.kernel.registerCommTarget('test2', (comm:any, commMsg:any):any => {
 				// Only react if the message is sent to the channel/target named 'test2'
 				if(commMsg.content.target_name !== 'test2'){
 					return;
@@ -248,7 +248,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 			});
 		}
 		//@ts-ignore: May be unused
-		function executeCode(code: string, session: IClientSession, callback?: any){
+		function executeCode(code: string, context: SessionContext, callback?: any){
 			/**
 			  * Executes Python code in the specified IPython session and executes a callback
 			  * processing the output after finishing the execution
@@ -265,7 +265,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 			};
             console.log("within executeCode: code = " + code)
 			// Request execution, stored as a future
-			let future = session.kernel.requestExecute(request);
+			let future = context.session.kernel.requestExecute(request);
 			// In case a callback function was provided, execute it upon completion of the request
 			if(callback){
 				// When output is published from the request's future
@@ -322,126 +322,127 @@ const extension: JupyterFrontEndPlugin<void> = {
 			// lab.shell.currentWidget is too general, might get any tab that is currently active,
 			// to only get notebook tabs, get current notebook from NotebookTracker
 			// Get most recently active Notebook
-			var newPanel: NotebookPanel = consoles.currentWidget;
+			var newPanel: NotebookPanel = consoles.currentWidget as NotebookPanel;
 
 			// Wait for all notebooks to be restored in case newTab is executed early
 			// This is probably important for restoring the Jupyphant tabs (not yet implemented)
 			consoles.restored.then(()=>{
-			// Get the current notebook
-			// TODO: Why is this done twice? Maybe a scope issue?
-			newPanel = consoles.currentWidget;
+        // Get the current notebook
+        // TODO: Why is this done twice? Maybe a scope issue?
+        var newPanel = consoles.currentWidget as NotebookPanel;
 
-			// If newPanel already has a corresponding Jupyphant tab,
-			// simply show this tab
-			let index = myPanels.indexOf(newPanel);
-			if(index != -1){
-				// Open existing tab in the frontend and bring it to the foreground
-				attachTab(myVisTabs[index], tracker);
-				// Nothing else to do
-				return;
-			}
+        // If newPanel already has a corresponding Jupyphant tab,
+        // simply show this tab
+        let index = myPanels.indexOf(newPanel);
+        if(index != -1){
+          // Open existing tab in the frontend and bring it to the foreground
+          attachTab(myVisTabs[index], tracker);
+          // Nothing else to do
+          return;
+        }
 
-			// Otherwise initialize new tab in which everything will be displayed
-			// TODO: Introduce OOP, Tab class => move this to Tab constructor
-			let tab = initializeTab();
-			// Save the tab and corresponding notebook panel to lists
-			// This indicates that a Jupyphant tab already exists for the notebook
-			// and creates a mapping between the notebook and the tab
-			// TODO: Dict would be a better data structure: newPanel -> tab
-			myVisTabs.push(tab);
-			myPanels.push(newPanel);
-			// Show tab if it was not yet shown; i. e., open in frontend and bring it to the foreground
-			attachTab(tab, tracker);
-
-
-			// Get the IPython session (Python kernel) of the notebook
-			var session: IClientSession = newPanel.session;
-			// Debug output
-			console.log("Session.ready: ", session.ready);
-
-			// If session (kernel) is available in the notebook
-			// And kernel is ready as well
-			session.ready.then(() => {session.kernel.ready.then(() => {
-
-				// Register a Comm channel (not needed currently, but might be)
-				// This enables manually exchanging messages from kernel to extension and back
-				registerComm('test2', session);
-
-				// Setup kernel environment, i. e., activate the jupyphant Python module
-				// in order to be able to execute the Jupyphant Python code
-				// Includes, e. g., imports and creating an object
-				// For details, see kernelcode.ts
-				executeCode(pythonCode['setupEnv'], session, console.log);
-				// Debug output
-				console.log(pythonCode['setupEnv'] + " (from console.log, line 369)");
-
-				// Divide Tab in upper part for TreeView and lower part for Plots
-				tab.addWidget(new Panel());
-				tab.addWidget(new Panel());
-				// Scrollbar in both parts
-				tab.widgets[0].node.style.cssText = tab.widgets[0].node.style.cssText + ' overflow-y: scroll;';
-				tab.widgets[1].node.style.cssText = tab.widgets[1].node.style.cssText + ' overflow-y: scroll;';
-				// Styling
-				(<SplitPanel>tab).handles[0].style.cssText += " background-color: DarkGrey;";
-
-				// Create OutputArea that will show TreeView
-				let outarea_tree = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[0], ['my-outarea-class'], 'jup_vis_out_id2', 'None');
-				// Create 2 OutputAreas that will show plots
-				let outarea = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
-				let outarea2 = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
-
-				// Also show tree and plots immediately upon being activated
-				// This is what user expects
-				// Code is executed and the results displayed in the specified OutputArea
-				OutputArea.execute(pythonCode['createTree'], outarea_tree, session);
-				console.log(pythonCode['createTree'] + " (from console.log, line 390)");
-// 				OutputArea.execute(pythonCode['plotCode'], outarea, session);
-//                 OutputArea.execute(pythonCode['plotCode'], outarea2, session);
-				OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
-				OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
-
-				// This code is executed without output that needs to be displayed
-				// Therefore, no OutputArea is necessary
-				// However, an arbitrary callback can be specified
-				// In this case, the callback does nothing as the code does not produce any output
-				executeCode(pythonCode['updateTree'], session, console.log);
+        // Otherwise initialize new tab in which everything will be displayed
+        // TODO: Introduce OOP, Tab class => move this to Tab constructor
+        let tab = initializeTab();
+        // Save the tab and corresponding notebook panel to lists
+        // This indicates that a Jupyphant tab already exists for the notebook
+        // and creates a mapping between the notebook and the tab
+        // TODO: Dict would be a better data structure: newPanel -> tab
+        myVisTabs.push(tab);
+        myPanels.push(newPanel);
+        // Show tab if it was not yet shown; i. e., open in frontend and bring it to the foreground
+        attachTab(tab, tracker);
 
 
-				// Debug output
-				console.log("BEFORE REGISTERING");
+        // Get the IPython session (Python kernel) of the notebook
+        var session: ISessionContext = newPanel.sessionContext;
+        // Debug output
+        console.log("Session.ready: ", session.ready);
 
-				// Create a listener that waits for any notebook cell to be executed
-				// and reacts by updating the tree and the plots, if the notebook
-				// whose cell was executed is the notebook this Jupyphant tab is connected to
-				// Recall that newPanel is the notebook for which this Jupyphant tab was created
-				NotebookActions.executed.connect((sender, exec_data) => {
-					// Only react if codecell from connected notebook was executed
-					// TODO: Maybe check via Session ID or something
-					// TODO: Is this a secure check? Is content unique?
-					if(exec_data.notebook != newPanel.content){
-						return;
-					}
-					// Debug output
-					console.log("Cell executed");
+        // If session (kernel) is available in the notebook
+        // And kernel is ready as well
+        session.ready.then(() => {
 
-					// Plot analogsignal (test)
-					//OutputArea.execute(pythonCode['neoPlot'], outarea2, session);
+          // Register a Comm channel (not needed currently, but might be)
+          // This enables manually exchanging messages from kernel to extension and back
+          registerComm('test2', session);
 
-//                     OutputArea.execute(pythonCode['plotCode'], outarea, session);
-//                     OutputArea.execute(pythonCode['plotCode'], outarea2, session);
+          // Setup kernel environment, i. e., activate the jupyphant Python module
+          // in order to be able to execute the Jupyphant Python code
+          // Includes, e. g., imports and creating an object
+          // For details, see kernelcode.ts
+          executeCode(pythonCode['setupEnv'], session, console.log);
+          // Debug output
+          console.log(pythonCode['setupEnv'] + " (from console.log, line 369)");
 
-					// Update tree and plots
-					executeCode(pythonCode['updateTree'], session, console.log);
-// 					OutputArea.execute("display(my_jupyphant_vis_xxx.tree)", outarea_tree, session);
-					OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
-					OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
+          // Divide Tab in upper part for TreeView and lower part for Plots
+          tab.addWidget(new Panel());
+          tab.addWidget(new Panel());
+          // Scrollbar in both parts
+          tab.widgets[0].node.style.cssText = tab.widgets[0].node.style.cssText + ' overflow-y: scroll;';
+          tab.widgets[1].node.style.cssText = tab.widgets[1].node.style.cssText + ' overflow-y: scroll;';
+          // Styling
+          (<SplitPanel>tab).handles[0].style.cssText += " background-color: DarkGrey;";
 
-					// Update list of variables (test)
-					//executeCode("print('AC')", session, console.log); // print(testfunc())
-				});
-				// Debug output
-				console.log("After registering");
-			});});});
+          // Create OutputArea that will show TreeView
+          let outarea_tree = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[0], ['my-outarea-class'], 'jup_vis_out_id2', 'None');
+          // Create 2 OutputAreas that will show plots
+          let outarea = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
+          let outarea2 = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
+
+          // Also show tree and plots immediately upon being activated
+          // This is what user expects
+          // Code is executed and the results displayed in the specified OutputArea
+          OutputArea.execute(pythonCode['createTree'], outarea_tree, session);
+          console.log(pythonCode['createTree'] + " (from console.log, line 390)");
+          //OutputArea.execute(pythonCode['plotCode'], outarea, session);
+          //OutputArea.execute(pythonCode['plotCode'], outarea2, session);
+          OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
+          OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
+
+          // This code is executed without output that needs to be displayed
+          // Therefore, no OutputArea is necessary
+          // However, an arbitrary callback can be specified
+          // In this case, the callback does nothing as the code does not produce any output
+          executeCode(pythonCode['updateTree'], session, console.log);
+
+
+          // Debug output
+          console.log("BEFORE REGISTERING");
+
+          // Create a listener that waits for any notebook cell to be executed
+          // and reacts by updating the tree and the plots, if the notebook
+          // whose cell was executed is the notebook this Jupyphant tab is connected to
+          // Recall that newPanel is the notebook for which this Jupyphant tab was created
+          NotebookActions.executed.connect((sender, exec_data) => {
+            // Only react if codecell from connected notebook was executed
+            // TODO: Maybe check via Session ID or something
+            // TODO: Is this a secure check? Is content unique?
+            if(exec_data.notebook != newPanel.content){
+              return;
+            }
+            // Debug output
+            console.log("Cell executed");
+
+            // Plot analogsignal (test)
+            //OutputArea.execute(pythonCode['neoPlot'], outarea2, session);
+
+            //OutputArea.execute(pythonCode['plotCode'], outarea, session);
+            //OuputArea.execute(pythonCode['plotCode'], outarea2, session);
+
+            // Update tree and plots
+            executeCode(pythonCode['updateTree'], session, console.log);
+            //OutputArea.execute("display(my_jupyphant_vis_xxx.tree)", outarea_tree, session);
+            OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
+            OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
+
+            // Update list of variables (test)
+            //executeCode("print('AC')", session, console.log); // print(testfunc())
+          });
+          // Debug output
+          console.log("After registering");
+        });
+			});
 			// Debug output
 			console.log("Connected to currently active Notebook");
 
