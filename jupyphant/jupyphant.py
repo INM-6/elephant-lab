@@ -259,8 +259,7 @@ class JupyphantVisualization:
                 except TypeError:
                     ax = None
                 # Rasterplot using viziphant
-                self.plot = self.rasterplot(spiketrains, key_list=[''], labelkey=0, context='paper',        # added key_list and label key to surpress ValueError due to matplotlib version 3.3, so that number of FixedLocator locations is equal to number of ticklabels
-                                            markerargs={'animated': True, 'markersize': .1, 'marker': '.'})  # , ax=ax)
+                self.plot = self.rasterplot(spiketrains, s=0.1, title="Rasterplot for SpikeTrains")
                 # Reset figsize for later plots
                 rcParams['figure.figsize'] = size
                 # self.fig = self.plt.figure()
@@ -286,11 +285,12 @@ class JupyphantVisualization:
             self.plt.plot(times, lfp.magnitude / 1000 + trial_id * spacing, color=color)
             xmin, xmax = times[[0, -1]]  # use first and last time stamp for xlim values
 
+        self.plt.title("Plotting LFPs for AnalogSignals")
         # Defines plot parameters for x-axis
-        self.plt.xlabel('t ({0})'.format(times.dimensionality), size=16)
+        self.plt.xlabel('Time ({0})'.format(times.dimensionality))
 
         # Defines plot parameters for y-axis
-        self.plt.ylabel('trials', size=16)
+        self.plt.ylabel('trials')
         ymin, ymax = 0, len(lfps) * spacing
         self.plt.ylim(ymin - spacing, ymax + spacing)
         yticks = self.np.arange(ymin, ymax + 1, spacing * 10)
