@@ -37,9 +37,7 @@ let lfp_plot =
 `;
 // Call to the function that initializes the ipytree widget with an empty tree
 let create_tree = 
-`my_setup_greeting1 = "Hello Jupyphant (from create_tree before import)"
-from IPython.display import display
-my_setup_greeting2 = "Hello Jupyphant (from create_tree after import)"
+`from IPython.display import display
 display(my_jupyphant_vis_xxx.create_tree())
 `;
 // Call to the function that updates the ipytree tree view of the neo hierarchy
