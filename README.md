@@ -1,3 +1,5 @@
+![jupyphant_logo2-1](https://user-images.githubusercontent.com/56024817/200008636-a59f5be3-d436-435e-958c-7633760aae26.png)
+
 # jupyphant
 
 [![Github Actions Status](https://github.com/ojoenlanuca/jupyphant/workflows/Build/badge.svg)](https://github.com/ojoenlanuca/jupyphant/actions/workflows/build.yml)[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/ojoenlanuca/jupyphant/main?urlpath=lab)
