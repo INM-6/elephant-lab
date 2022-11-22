@@ -81,6 +81,10 @@ class JupyphantVisualization:
         self.blocks = [v for v in values.values() if isinstance(v, self.Block)]
         # Get all other objects, i.e., neo objects with references independent of a Block
         self.other_objs = [v for v in values.values() if isinstance(v, self.BaseNeo) and not isinstance(v, self.Block)]
+        # TODO: how to treat lists of neo objects or mixed lists?
+        # neo_objs_in_list = [v for v in values.values() if isinstance(v, list) and any(isinstance(v[i], self.BaseNeo) for i in range(len(v)))]
+        # neo_objs_in_list = [ele for l in neo_objs_in_list for ele in l if isinstance(ele, self.BaseNeo) and not isinstance(ele, self.Block)]
+        # self.other_objs.extend(neo_objs_in_list)
 
     def update_tree(self):
         """
@@ -117,11 +121,27 @@ class JupyphantVisualization:
                     curr_seg = self.Node(str(seg.name))
                     segs_node.add_node(curr_seg)
                     curr_seg.opened = False
-                    # Sub-nodes for AnalogSignals and SpikeTrains of the corresponding segment
+                    # Sub-nodes for AnalogSignals, SpikeTrains and Events of the corresponding segment
                     self._add_sub_nodes(curr_seg, seg, 'analogsignals', "AnalogSignals")
                     print("After anasig", time.time() - start)
                     self._add_sub_nodes(curr_seg, seg, 'spiketrains', "SpikeTrains")
                     print("After sptr", time.time() - start)
+                    self._add_sub_nodes(curr_seg, seg, 'events', "Events")
+                    print("After evts", time.time() - start)
+
+                # One Node for each group in the i-th block
+                for j, grp in enumerate(self.blocks[i].groups):
+                    # Name of node is name of group
+                    curr_grp = self.Node(f"Group {j}")
+                    segs_node.add_node(curr_grp)
+                    curr_grp.opened = False
+                    # Sub-nodes for AnalogSignals, SpikeTrains and Events of the corresponding segment
+                    self._add_sub_nodes(curr_grp, grp, 'analogsignals', "AnalogSignals")
+                    print("After anasig", time.time() - start)
+                    self._add_sub_nodes(curr_grp, grp, 'spiketrains', "SpikeTrains")
+                    print("After sptr", time.time() - start)
+                    self._add_sub_nodes(curr_grp, grp, 'events', "Events")
+                    print("After evts", time.time() - start)
 
                 # chidxs = self.Node("ChannelIndexes")
                 # node.add_node(chidxs)
@@ -183,7 +203,18 @@ class JupyphantVisualization:
                 attrs_node = parent
             # Add the sub nodes
             for obj in attr_list:
-                attrs_node.add_node(self.Node(str(obj.name)))
+                if attr.lower() == "analogsignals" or attr.lower() == "spiketrains":
+                    # Add annotations for AnalogSignals/SpikeTrains
+                    annot_node = self.Node("annotations")
+                    annot_node.opened = False
+                    for key, value in obj.annotations.items():
+                        annot_node.add_node(self.Node(f"{key}: {value}"))
+                    anasig_node = self.Node(str(obj.name))
+                    anasig_node.opened = False
+                    anasig_node.add_node(annot_node)
+                    attrs_node.add_node(anasig_node)
+                else:
+                    attrs_node.add_node(self.Node(str(obj.name)))
 
     def create_tree(self):
         """
@@ -192,8 +223,13 @@ class JupyphantVisualization:
         """
         self.tree = None
         # Alternating dark and light stripes for better better visibility
-        self.tree = self.Tree(stripes=True)
+        self.tree = self.Tree(stripes=True, multiple_selection=True)
+        # self.tree.observe(self.on_selected_change(), names='selected_nodes')
         return self.tree
+
+    # callback function for selected nodes
+    def on_selected_change(self):
+        print(f"Callback for selected nodes")
 
     def plot_sptr(self):
         """
