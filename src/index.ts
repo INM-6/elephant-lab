@@ -322,7 +322,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 			// lab.shell.currentWidget is too general, might get any tab that is currently active,
 			// to only get notebook tabs, get current notebook from NotebookTracker
 			// Get most recently active Notebook
-			var newPanel: NotebookPanel = consoles.currentWidget as NotebookPanel;
+			//var newPanel: NotebookPanel = consoles.currentWidget as NotebookPanel; // apparently not needed
 
 			// Wait for all notebooks to be restored in case newTab is executed early
 			// This is probably important for restoring the Jupyphant tabs (not yet implemented)
