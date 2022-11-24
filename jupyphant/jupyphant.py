@@ -53,6 +53,7 @@ class JupyphantVisualization:
         self.out = self.Output()
         self.fig = None
         self.tree = None
+        self.map = {}
 
     def update(self):
         """
@@ -104,7 +105,11 @@ class JupyphantVisualization:
             print("HERE2")
             # Create one tree node per neo block
             # Name of node is name of block
-            nodes = [self.Node(bl.name) for bl in self.blocks]
+            nodes = []
+            for bl in self.blocks:
+                bl_node = self.Node(bl.name)
+                nodes.append(bl_node)
+                self.map[bl_node._id] = bl._id
             print("Toplevel", time.time() - start)
             print(nodes)
             # self.tree.nodes = nodes
@@ -113,12 +118,14 @@ class JupyphantVisualization:
                 # Tree is collapsed in the beginning
                 node.opened = False
                 segs_node = self.Node("Segments")
+                self.map[segs_node._id] = None
                 segs_node.opened = False
                 node.add_node(segs_node)
                 # One node for each segment in the i-th block
                 for seg in self.blocks[i].segments:
                     # Name of node is name of segment
                     curr_seg = self.Node(str(seg.name))
+                    self.map[curr_seg._id] = seg._id
                     segs_node.add_node(curr_seg)
                     curr_seg.opened = False
                     # Sub-nodes for AnalogSignals, SpikeTrains and Events of the corresponding segment
@@ -133,6 +140,7 @@ class JupyphantVisualization:
                 for j, grp in enumerate(self.blocks[i].groups):
                     # Name of node is name of group
                     curr_grp = self.Node(f"Group {j}")
+                    self.map[curr_grp._id] = grp._id
                     segs_node.add_node(curr_grp)
                     curr_grp.opened = False
                     # Sub-nodes for AnalogSignals, SpikeTrains and Events of the corresponding segment
@@ -196,6 +204,7 @@ class JupyphantVisualization:
             if name is not None:
                 # Single node with the passed name
                 attrs_node = self.Node(name)
+                self.map[attrs_node._id] = None
                 attrs_node.opened = False
                 parent.add_node(attrs_node)
             # No in between node, parent object as parent node for sub nodes
@@ -206,10 +215,14 @@ class JupyphantVisualization:
                 if attr.lower() == "analogsignals" or attr.lower() == "spiketrains":
                     # Add annotations for AnalogSignals/SpikeTrains
                     annot_node = self.Node("annotations")
+                    self.map[annot_node._id] = None
                     annot_node.opened = False
                     for key, value in obj.annotations.items():
-                        annot_node.add_node(self.Node(f"{key}: {value}"))
+                        sub_annot_node = self.Node(f"{key}: {value}")
+                        self.map[sub_annot_node._id] = None
+                        annot_node.add_node(sub_annot_node)
                     anasig_node = self.Node(str(obj.name))
+                    self.map[anasig_node._id] = obj._id
                     anasig_node.opened = False
                     anasig_node.add_node(annot_node)
                     attrs_node.add_node(anasig_node)
@@ -231,7 +244,7 @@ class JupyphantVisualization:
     def on_selected_change(self):
         print(f"Callback for selected nodes")
 
-    def plot_sptr(self):
+    def plot_sptr(self, selected_ids=None):
         """
         Rasterplot for spike trains
 
@@ -265,9 +278,12 @@ class JupyphantVisualization:
             except BaseException as e:
                 changes = True
         # Return pre-existing plot if nothing has changed
-        if (not changes) and (self.plot is not None) and False:
+        # print(f'Python Ids of selected nodes {selected_ids} in plot_sptr()')
+        # print(f'{not changes} AND {self.plot is not None} AND {selected_ids is not None} AND False')
+        if (not changes) and (self.plot is not None) and (selected_ids is not None) and False:
             pass
             # TODO: Get plot to be displayed again
+            print('before return pre-existing plot')
             return self.plot
             # return self.fig
         # Otherwise, create new plot
@@ -277,6 +293,10 @@ class JupyphantVisualization:
             for bl in curr_blocks:
                 spiketrains.append(bl.list_children_by_class(self.SpikeTrain))
             spiketrains.append([obj for obj in curr_objs if isinstance(obj, self.SpikeTrain)])
+            if selected_ids is not None:
+                # print(f'selected ids = {selected_ids}')
+                spiketrains = [st for st_list in spiketrains for st in st_list if st._id in selected_ids]
+                # print(f'selected spiketrains to be plotted: {spiketrains}')
             # TODO: Add user-adaptive time slicing
             #             for row in spiketrains:
             #                 for i, sptr in enumerate(row):
