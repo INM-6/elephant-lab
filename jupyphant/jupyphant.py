@@ -3,6 +3,10 @@
 # JupyterLab Python kernel
 import __main__
 import time
+
+import neo.core.baseneo
+
+
 class JupyphantVisualization:
     # All imports are hidden inside the class in order not to pollute the 
     # Python kernel's namespace used by the user of the notebook
@@ -97,73 +101,42 @@ class JupyphantVisualization:
         start = time.time()
         # Update all neo objects
         self.update()
-        print("After update", time.time() - start)
-        print("Here")
+        print(f"After Update: {time.time() - start}")
         # Currently the tree is created from scratch every time
         # TODO: Reuse the existing tree if there is one
         if self.tree is not None or True:
-            print("HERE2")
-            # Create one tree node per neo block
-            # Name of node is name of block
+            print("HERE")
+            # Create one tree node per neo block and name of node is name of block
             nodes = []
             for bl in self.blocks:
                 bl_node = self.Node(bl.name)
+                bl_node.opened = False
+                self._add_sub_nodes(bl_node, bl)
                 nodes.append(bl_node)
                 self.map[bl_node._id] = bl._id
-            print("Toplevel", time.time() - start)
-            print(nodes)
-            # self.tree.nodes = nodes
-            # Create sub-nodes
-            for i, node in enumerate(nodes):
-                # Tree is collapsed in the beginning
-                node.opened = False
-                segs_node = self.Node("Segments")
-                self.map[segs_node._id] = None
-                segs_node.opened = False
-                node.add_node(segs_node)
-                # One node for each segment in the i-th block
-                for seg in self.blocks[i].segments:
-                    # Name of node is name of segment
-                    curr_seg = self.Node(str(seg.name))
-                    self.map[curr_seg._id] = seg._id
-                    segs_node.add_node(curr_seg)
-                    curr_seg.opened = False
-                    # Sub-nodes for AnalogSignals, SpikeTrains and Events of the corresponding segment
-                    self._add_sub_nodes(curr_seg, seg, 'analogsignals', "AnalogSignals")
-                    print("After anasig", time.time() - start)
-                    self._add_sub_nodes(curr_seg, seg, 'spiketrains', "SpikeTrains")
-                    print("After sptr", time.time() - start)
-                    self._add_sub_nodes(curr_seg, seg, 'events', "Events")
-                    print("After evts", time.time() - start)
-
-                # One Node for each group in the i-th block
-                for j, grp in enumerate(self.blocks[i].groups):
-                    # Name of node is name of group
-                    curr_grp = self.Node(f"Group {j}")
-                    self.map[curr_grp._id] = grp._id
-                    segs_node.add_node(curr_grp)
-                    curr_grp.opened = False
-                    # Sub-nodes for AnalogSignals, SpikeTrains and Events of the corresponding segment
-                    self._add_sub_nodes(curr_grp, grp, 'analogsignals', "AnalogSignals")
-                    print("After anasig", time.time() - start)
-                    self._add_sub_nodes(curr_grp, grp, 'spiketrains', "SpikeTrains")
-                    print("After sptr", time.time() - start)
-                    self._add_sub_nodes(curr_grp, grp, 'events', "Events")
-                    print("After evts", time.time() - start)
+            print(f"After Blocks: {time.time() - start}")
+            # print(f"Nodes After Blocks: {nodes}")
 
             # Top-level node for every independent neo object
-            nodes.extend([self.Node(str(obj.name)) for obj in self.other_objs])
-            # print(nodes)
-            print("Calculation finished", time.time() - start)
+            for obj in self.other_objs:
+                obj_node = self.Node(obj.name)
+                obj_node.opened = False
+                self._add_sub_nodes(obj_node, obj)
+                nodes.append(obj_node)
+                self.map[obj_node._id] = obj._id
+            print(f"After Independent: {time.time() - start}")
+            # print(f"Nodes After Independent: {nodes}")
+
+            print(f"Calculation finished: {time.time() - start}")
             import sys
             sys.stdout.flush()
             # Runs asynchronously for Python kernel but blocks output via JS
             self.tree.nodes = nodes
-            print("Rendered", time.time() - start)
+            print(f"Rendered: {time.time() - start}")
         else:
             pass
 
-    def _add_sub_nodes(self, parent, obj, attr, name=None):
+    def _add_sub_nodes(self, parent, obj):
         """
         Adding child objects of a neo container as sub nodes of the tree node 
         that corresponds to the container
@@ -172,47 +145,39 @@ class JupyphantVisualization:
         ----------
         parent : Node
             Parent node of ipytree
-        obj : Neo container
+        obj : Neo container or standard python container i.e. list, dict
             Parent container object
-        attr : str
-            Type of the child objects (e. g., 'AnalogSignal')
-        name : str
-            Optional name of an in-between node (e. g. 'AnalogSignal' in order
-            to create a node between 'parent' and the child object nodes)
         """
-        # get obj.<attr>, for neo containers this is a list of the child objects
-        attr_list = getattr(obj, attr.lower(), None)
-        if attr_list:
-            parent.opened = False
-            # Add node with name as an in between
-            # With all childs as sub nodes
-            if name is not None:
-                # Single node with the passed name
-                attrs_node = self.Node(name)
-                self.map[attrs_node._id] = None
-                attrs_node.opened = False
-                parent.add_node(attrs_node)
-            # No in between node, parent object as parent node for sub nodes
-            else:
-                attrs_node = parent
-            # Add the sub nodes
-            for obj in attr_list:
-                if attr.lower() == "analogsignals" or attr.lower() == "spiketrains":
-                    # Add annotations for AnalogSignals/SpikeTrains
-                    annot_node = self.Node("annotations")
-                    self.map[annot_node._id] = None
-                    annot_node.opened = False
-                    for key, value in obj.annotations.items():
-                        sub_annot_node = self.Node(f"{key}: {value}")
-                        self.map[sub_annot_node._id] = None
-                        annot_node.add_node(sub_annot_node)
-                    anasig_node = self.Node(str(obj.name))
-                    self.map[anasig_node._id] = obj._id
-                    anasig_node.opened = False
-                    anasig_node.add_node(annot_node)
-                    attrs_node.add_node(anasig_node)
+        print(f"parent: {parent}, obj: {obj}")
+        if issubclass(type(obj), neo.core.baseneo.BaseNeo):
+            # iterate over object attributes and create nodes recursively
+            for attr_name, attr_value in obj.__dict__.items():
+                if isinstance(attr_value, (dict, list, neo.core.spiketrainlist.SpikeTrainList)):
+                    attr_node = self.Node(attr_name)
+                    self.map[attr_node._id] = None
+                    attr_node.opened = False
+                    self._add_sub_nodes(attr_node, attr_value)
+                    parent.add_node(attr_node)
                 else:
-                    attrs_node.add_node(self.Node(str(obj.name)))
+                    pass
+        elif isinstance(obj, dict):
+            for key, value in obj.items():
+                sub_dict_node = self.Node(f"{key}: {value}")
+                self.map[sub_dict_node._id] = None
+                sub_dict_node.opened = False
+                parent.add_node(sub_dict_node)
+        elif isinstance(obj, (list, neo.core.spiketrainlist.SpikeTrainList)):
+            for child_obj in obj:
+                if issubclass(type(child_obj), neo.core.baseneo.BaseNeo):
+                    child_node = self.Node(child_obj.name)
+                    child_node.opened = False
+                    self.map[child_node._id] = child_obj._id
+                    self._add_sub_nodes(child_node, child_obj)
+                    parent.add_node(child_node)
+                else:
+                    pass
+        else:
+            print(f"unsupported class/type: {type(obj)}")
 
     def create_tree(self):
         """
