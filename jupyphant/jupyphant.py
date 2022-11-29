@@ -151,21 +151,6 @@ class JupyphantVisualization:
                     self._add_sub_nodes(curr_grp, grp, 'events', "Events")
                     print("After evts", time.time() - start)
 
-                # chidxs = self.Node("ChannelIndexes")
-                # node.add_node(chidxs)
-                # # One node for each ChannelIndex in the i-th block
-                # for chidx in self.blocks[i].channel_indexes:
-                #     # Name of node is name of ChannelIndex
-                #     chidx_node = self.Node(str(chidx.name))
-                #     chidxs.add_node(chidx_node)
-                #     # Sub-nodes for units
-                #     self._add_sub_nodes(chidx_node, chidx, 'units')
-                #     # Sub-nodes of spiketrains per unit
-                #     for unit_node, unit in zip(chidx_node.nodes, chidx.units):
-                #         self._add_sub_nodes(unit_node, unit, 'spiketrains')
-                #     # AnalogSignals and IrregularlySampledSignals
-                #     self._add_sub_nodes(chidx_node, chidx, 'analogsignals')
-                #     self._add_sub_nodes(chidx_node, chidx, 'irregularlysampledsignals')
             # Top-level node for every independent neo object
             nodes.extend([self.Node(str(obj.name)) for obj in self.other_objs])
             # print(nodes)
@@ -239,10 +224,6 @@ class JupyphantVisualization:
         self.tree = self.Tree(stripes=True, multiple_selection=True)
         # self.tree.observe(self.on_selected_change(), names='selected_nodes')
         return self.tree
-
-    # callback function for selected nodes
-    def on_selected_change(self):
-        print(f"Callback for selected nodes")
 
     def plot_sptr(self, selected_ids=None):
         """
