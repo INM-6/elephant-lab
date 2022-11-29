@@ -86,10 +86,10 @@ class JupyphantVisualization:
         self.blocks = [v for v in values.values() if isinstance(v, self.Block)]
         # Get all other objects, i.e., neo objects with references independent of a Block
         self.other_objs = [v for v in values.values() if isinstance(v, self.BaseNeo) and not isinstance(v, self.Block)]
-        # TODO: how to treat lists of neo objects or mixed lists?
-        # neo_objs_in_list = [v for v in values.values() if isinstance(v, list) and any(isinstance(v[i], self.BaseNeo) for i in range(len(v)))]
+        # get lists of neo objects or mixed lists
+        neo_objs_in_list = [v for v in values.values() if isinstance(v, list) and any(isinstance(v[i], self.BaseNeo) for i in range(len(v)))]
         # neo_objs_in_list = [ele for l in neo_objs_in_list for ele in l if isinstance(ele, self.BaseNeo) and not isinstance(ele, self.Block)]
-        # self.other_objs.extend(neo_objs_in_list)
+        self.other_objs.extend(neo_objs_in_list)
 
     def update_tree(self):
         """
@@ -119,11 +119,16 @@ class JupyphantVisualization:
 
             # Top-level node for every independent neo object
             for obj in self.other_objs:
-                obj_node = self.Node(obj.name)
+                if isinstance(obj, list):
+                    obj_node = self.Node("list")
+                    self.map[obj_node._id] = None
+                else:
+                    obj_node = self.Node(obj.name)
+                    self.map[obj_node._id] = obj._id
                 obj_node.opened = False
                 self._add_sub_nodes(obj_node, obj)
                 nodes.append(obj_node)
-                self.map[obj_node._id] = obj._id
+
             print(f"After Independent: {time.time() - start}")
             # print(f"Nodes After Independent: {nodes}")
 
@@ -148,7 +153,7 @@ class JupyphantVisualization:
         obj : Neo container or standard python container i.e. list, dict
             Parent container object
         """
-        print(f"parent: {parent}, obj: {obj}")
+        # print(f"parent: {parent}, obj: {obj}")
         if issubclass(type(obj), neo.core.baseneo.BaseNeo):
             # iterate over object attributes and create nodes recursively
             for attr_name, attr_value in obj.__dict__.items():
