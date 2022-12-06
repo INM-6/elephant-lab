@@ -56,7 +56,12 @@ def on_selected_change(change):
         # for i in range(len(change["new"])):
         #    print(f'{i}. {change["new"][i].name} -> urn_id = {change["new"][i]._id}')
         df_spt, df_evt, df_epc = my_jupyphant_vis_xxx.selected_nodes_to_dataframes(selected_ids=selected_ids)
-        print(f'{df_spt} {df_evt} {df_epc}')
+        if df_spt is not None:
+            display(df_spt)
+        if df_evt is not None:
+            display(df_evt)
+        if df_epc is not None:
+            display(df_epc)
     with output_node_plot:
         IPython.display.clear_output()
         # print(f'Python Ids of selected nodes {selected_ids}')
