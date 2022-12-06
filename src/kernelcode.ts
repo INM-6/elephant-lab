@@ -49,22 +49,24 @@ output_node_info = Output()
 output_node_plot = Output()
 
 def on_selected_change(change):
+    selected_ids = [my_jupyphant_vis_xxx.map[node._id] for node in my_jupyphant_vis_xxx.tree.selected_nodes if my_jupyphant_vis_xxx.map[node._id] is not None]
     with output_node_info:
         IPython.display.clear_output()
-#        print('Some node selected!')
-        for i in range(len(change["new"])):
-            print(f'{i}. {change["new"][i].name} -> urn_id = {change["new"][i]._id}')
+        # print('Some node selected!')
+        # for i in range(len(change["new"])):
+        #    print(f'{i}. {change["new"][i].name} -> urn_id = {change["new"][i]._id}')
+        df_spt, df_evt, df_epc = my_jupyphant_vis_xxx.selected_nodes_to_dataframes(selected_ids=selected_ids)
+        print(f'{df_spt} {df_evt} {df_epc}')
     with output_node_plot:
         IPython.display.clear_output()
-        selected_ids = [my_jupyphant_vis_xxx.map[node._id] for node in my_jupyphant_vis_xxx.tree.selected_nodes if my_jupyphant_vis_xxx.map[node._id] is not None]
-        print(f'Python Ids of selected nodes {selected_ids}')
+        # print(f'Python Ids of selected nodes {selected_ids}')
         my_jupyphant_vis_xxx.plot_sptr(selected_ids=selected_ids)
         plt.show()
-        #print('after plot')
+        # print('after plot')
 
 my_jupyphant_vis_xxx.tree.observe(on_selected_change, names='selected_nodes')
 
-right_side = VBox([Label("Selected Node:"), output_node_info, output_node_plot])
+right_side = VBox([Label("Node Explorer:"), output_node_info, output_node_plot])
 right_side.layout.width = '50%'
 HBox([my_jupyphant_vis_xxx.tree, right_side])
 `;

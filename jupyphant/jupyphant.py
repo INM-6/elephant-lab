@@ -3,7 +3,7 @@
 # JupyterLab Python kernel
 import __main__
 import time
-
+from elephant.pandas_bridge import multi_spiketrains_to_dataframe, multi_events_to_dataframe, multi_epochs_to_dataframe, spiketrain_to_dataframe, event_to_dataframe, epoch_to_dataframe
 
 NEO_ABBREVIATIONS = {"Block": "BLK",
                      "Segment": "SEG",
@@ -44,7 +44,7 @@ class JupyphantVisualization:
     from neo.core.baseneo import BaseNeo
     from neo.core.regionofinterest import RegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
-    from neo import Block, SpikeTrain, AnalogSignal
+    from neo import Block, SpikeTrain, AnalogSignal, Event, Epoch
     from neo.test.tools import assert_same_sub_schema
     assert_same_sub_schema = staticmethod(assert_same_sub_schema)
     import numpy as np
@@ -213,8 +213,46 @@ class JupyphantVisualization:
         self.tree = None
         # Alternating dark and light stripes for better better visibility
         self.tree = self.Tree(stripes=True, multiple_selection=True)
-        # self.tree.observe(self.on_selected_change(), names='selected_nodes')
         return self.tree
+
+    def selected_nodes_to_dataframes(self, selected_ids=None):
+        """
+        Convert the selected tree nodes representing neo objects to 'pandas.DataFrame' objects.
+
+        """
+        spiketrains = []
+        events = []
+        epochs = []
+
+        # Extract all spike trains, event and epochs
+        for bl in self.blocks:
+            spiketrains.append(bl.list_children_by_class(self.SpikeTrain))
+            events.append(bl.list_children_by_class(self.Event))
+            epochs.append(bl.list_children_by_class(self.Epoch))
+
+        spiketrains.append([obj for obj in self.other_objs if isinstance(obj, self.SpikeTrain)])
+        events.append([obj for obj in self.other_objs if isinstance(obj, self.Event)])
+        events.append([obj for obj in self.other_objs if isinstance(obj, self.Epoch)])
+
+        df_spt = []
+        df_evt = []
+        df_epc = []
+
+        if selected_ids is not None:
+            # print(f'selected ids = {selected_ids}')
+            spiketrains = [st for st_list in spiketrains for st in st_list if st._id in selected_ids]
+            events = [ev for ev_list in events for ev in ev_list if ev._id in selected_ids]
+            epochs = [ep for ep_list in epochs for ep in ep_list if ep._id in selected_ids]
+            # print(f"spiketrains: {spiketrains}")
+
+            for st in spiketrains:
+                df_spt.append(spiketrain_to_dataframe(spiketrain=st, parents=False))
+            for evt in events:
+                df_evt.append(event_to_dataframe(event=evt, parents=False))
+            for epc in epochs:
+                df_epc.append(epoch_to_dataframe(epoch=epc, parents=False))
+
+        return df_spt, df_evt, df_epc
 
     def plot_sptr(self, selected_ids=None):
         """
