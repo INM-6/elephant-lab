@@ -385,10 +385,10 @@ const extension: JupyterFrontEndPlugin<void> = {
           (<SplitPanel>tab).handles[0].style.cssText += " background-color: DarkGrey;";
 
           // Create OutputArea that will show TreeView
-          let outarea_tree = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[0], ['my-outarea-class'], 'jup_vis_out_id2', 'None');
+          let outarea_tree = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[0], ['my-outarea-class'], 'jup_vis_out_id1', 'None');
           // Create 2 OutputAreas that will show plots
-          let outarea = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-classs'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
-          let outarea2 = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-classs'], 'jup_vis_out_id2', 'None'); //pythonCode['rasterPlot']);
+          let outarea = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-class'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
+          let outarea2 = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-class'], 'jup_vis_out_id3', 'None'); //pythonCode['rasterPlot']);
 
           // Also show tree and plots immediately upon being activated
           // This is what user expects
