@@ -4,7 +4,23 @@
 import __main__
 import time
 
-import neo.core.baseneo
+
+NEO_ABBREVIATIONS = {"Block": "BLK",
+                     "Segment": "SEG",
+                     "Group": "GRP",
+                     "ChannelView": "CHV",
+                     "IrregularlySampledSignal": "ISS",
+                     "AnalogSignal": "ASG",
+                     "SpikeTrain": "SPT",
+                     "SpikeTrainList": "SPL",
+                     "Epoch": "EPC",
+                     "Event": "EVT",
+                     "ImageSequence": "ISQ",
+                     "RegionOfInterest": "ROI",
+                     "CircularRegionOfInterest": "CRI",
+                     "PolygonRegionOfInterest": "PRI",
+                     "RectangularRegionOfInterest": "RRI",
+                     }
 
 
 class JupyphantVisualization:
@@ -26,6 +42,8 @@ class JupyphantVisualization:
     # Depending on the usage situation, import using 
     # sys.path.append might be necessary
     from neo.core.baseneo import BaseNeo
+    from neo.core.regionofinterest import RegionOfInterest
+    from neo.core.spiketrainlist import SpikeTrainList
     from neo import Block, SpikeTrain, AnalogSignal
     from neo.test.tools import assert_same_sub_schema
     assert_same_sub_schema = staticmethod(assert_same_sub_schema)
@@ -80,12 +98,12 @@ class JupyphantVisualization:
             # Objects are accessed using their name returned by who_ls() and the dict
             obj = __main__.__dict__[v]
             # Select only Neo objects and lists
-            if isinstance(obj, (self.BaseNeo, list)):
+            if isinstance(obj, (self.BaseNeo, list)) or issubclass(type(obj), self.RegionOfInterest):
                 values[v] = obj
         # Get only blocks
         self.blocks = [v for v in values.values() if isinstance(v, self.Block)]
         # Get all other objects, i.e., neo objects with references independent of a Block
-        self.other_objs = [v for v in values.values() if isinstance(v, self.BaseNeo) and not isinstance(v, self.Block)]
+        self.other_objs = [v for v in values.values() if (isinstance(v, self.BaseNeo) or issubclass(type(v), self.RegionOfInterest)) and not isinstance(v, self.Block)]
         # get lists of neo objects or mixed lists
         neo_objs_in_list = [v for v in values.values() if isinstance(v, list) and any(isinstance(v[i], self.BaseNeo) for i in range(len(v)))]
         # neo_objs_in_list = [ele for l in neo_objs_in_list for ele in l if isinstance(ele, self.BaseNeo) and not isinstance(ele, self.Block)]
@@ -109,7 +127,7 @@ class JupyphantVisualization:
             # Create one tree node per neo block and name of node is name of block
             nodes = []
             for bl in self.blocks:
-                bl_node = self.Node(bl.name)
+                bl_node = self.Node(f"{NEO_ABBREVIATIONS[bl.__class__.__name__]}: {bl.name}")
                 bl_node.opened = False
                 self._add_sub_nodes(bl_node, bl)
                 nodes.append(bl_node)
@@ -119,11 +137,14 @@ class JupyphantVisualization:
 
             # Top-level node for every independent neo object
             for obj in self.other_objs:
-                if isinstance(obj, list):
-                    obj_node = self.Node("list")
+                if issubclass(type(obj), self.RegionOfInterest):
+                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}: ")
+                    self.map[obj_node._id] = None
+                elif isinstance(obj, list):
+                    obj_node = self.Node(f"{obj.__class__.__name__}: ")
                     self.map[obj_node._id] = None
                 else:
-                    obj_node = self.Node(obj.name)
+                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}: {obj.name}")
                     self.map[obj_node._id] = obj._id
                 obj_node.opened = False
                 self._add_sub_nodes(obj_node, obj)
@@ -154,10 +175,10 @@ class JupyphantVisualization:
             Parent container object
         """
         # print(f"parent: {parent}, obj: {obj}")
-        if issubclass(type(obj), neo.core.baseneo.BaseNeo):
+        if issubclass(type(obj), (self.BaseNeo, self.RegionOfInterest)):
             # iterate over object attributes and create nodes recursively
             for attr_name, attr_value in obj.__dict__.items():
-                if isinstance(attr_value, (dict, list, neo.core.spiketrainlist.SpikeTrainList)):
+                if isinstance(attr_value, (dict, list, self.SpikeTrainList)):
                     attr_node = self.Node(attr_name)
                     self.map[attr_node._id] = None
                     attr_node.opened = False
@@ -171,10 +192,10 @@ class JupyphantVisualization:
                 self.map[sub_dict_node._id] = None
                 sub_dict_node.opened = False
                 parent.add_node(sub_dict_node)
-        elif isinstance(obj, (list, neo.core.spiketrainlist.SpikeTrainList)):
+        elif isinstance(obj, (list, self.SpikeTrainList)):
             for child_obj in obj:
-                if issubclass(type(child_obj), neo.core.baseneo.BaseNeo):
-                    child_node = self.Node(child_obj.name)
+                if issubclass(type(child_obj), self.BaseNeo):
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]}: {child_obj.name}")
                     child_node.opened = False
                     self.map[child_node._id] = child_obj._id
                     self._add_sub_nodes(child_node, child_obj)
@@ -182,7 +203,7 @@ class JupyphantVisualization:
                 else:
                     pass
         else:
-            print(f"unsupported class/type: {type(obj)}")
+            raise TypeError(f"unsupported class/type: {type(obj)}")
 
     def create_tree(self):
         """
