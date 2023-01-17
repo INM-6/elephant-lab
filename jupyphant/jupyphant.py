@@ -222,7 +222,8 @@ class JupyphantVisualization:
         """
         self.tree = None
         # Alternating dark and light stripes for better better visibility
-        self.tree = self.Tree(stripes=True, multiple_selection=True)
+        self.tree = self.Tree()
+        self.tree.stripes = True
         return self.tree
 
     def selected_nodes_to_dataframes(self, selected_ids=None):
