@@ -49,10 +49,20 @@ class JupyphantVisualization:
     assert_same_sub_schema = staticmethod(assert_same_sub_schema)
     import numpy as np
     import quantities as pq
+    from elephant import statistics, kernels
+    from elephant.conversion import BinnedSpikeTrain
+    from elephant.spike_train_correlation import correlation_coefficient
+    correlation_coefficient = staticmethod(correlation_coefficient)
     # TODO: Use new viziphant for plotting
     # This relies on the initial version of viziphant
     from viziphant.rasterplot import rasterplot
     rasterplot = staticmethod(rasterplot)
+    from viziphant.statistics import plot_isi_histogram, plot_time_histogram, plot_instantaneous_rates_colormesh
+    from viziphant.spike_train_correlation import plot_corrcoef
+    plot_isi_histogram = staticmethod(plot_isi_histogram)
+    plot_time_histogram = staticmethod(plot_time_histogram)
+    plot_instantaneous_rates_colormesh =staticmethod(plot_instantaneous_rates_colormesh)
+    plot_corrcoef = staticmethod(plot_corrcoef)
     import matplotlib.pyplot as plt
     # Widgets used for display
     from ipywidgets import Output
@@ -251,6 +261,39 @@ class JupyphantVisualization:
                 df_epc = multi_epochs_to_dataframe(container=epochs, parents=False)
 
         return df_spt, df_evt, df_epc
+
+    def statistics_of_selected_nodes(self, selected_ids=None):
+        spiketrains = []
+
+        # extract all SpikeTrains from the blocks
+        for bl in self.blocks:
+            spiketrains.append(bl.list_children_by_class(self.SpikeTrain))
+        # extract all SpikeTrains the other (independent) objects
+        spiketrains.append([obj for obj in self.other_objs if isinstance(obj, self.SpikeTrain)])
+
+        if selected_ids is not None:
+            spiketrains = [st for st_list in spiketrains for st in st_list if st._id in selected_ids]
+
+            if len(spiketrains) > 0:
+                # plot ISI
+                axes_isi_histo = self.plot_isi_histogram(spiketrains=spiketrains)
+                # plot time histogram
+                time_histogram = self.statistics.time_histogram(spiketrains, bin_size=0.1 * self.pq.s, output='rate')
+                axes_time_histo = self.plot_time_histogram(histogram=time_histogram)
+                # plot IFR
+                kernel = self.kernels.GaussianKernel(sigma=100 * self.pq.ms)
+                rates = self.statistics.instantaneous_rate(spiketrains, sampling_period=10 * self.pq.ms, kernel=kernel)
+                axes_ifr = self.plot_instantaneous_rates_colormesh(rates)
+                # plot correlation
+                axes_corrcoef = None
+                if len(spiketrains) > 1:
+                    binned_spiketrains = self.BinnedSpikeTrain(spiketrains, bin_size=100 * self.pq.ms)
+                    corrcoef_matrix = self.correlation_coefficient(binned_spiketrains)
+                    axes_corrcoef = self.plot_corrcoef(corrcoef_matrix)
+                    axes_corrcoef.set_xlabel('Neuron')
+                    axes_corrcoef.set_ylabel('Neuron')
+                    axes_corrcoef.set_title("Correlation coefficient matrix")
+                return axes_isi_histo, axes_time_histo, axes_ifr, axes_corrcoef
 
     def plot_sptr(self, selected_ids=None):
         """
