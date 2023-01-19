@@ -127,10 +127,6 @@ const extension: JupyterFrontEndPlugin<void> = {
 			widget.title.label = 'Jupyphant';
 			// Adds the x to close the tab?
 			widget.title.closable = true;
-			// Create a div element that other subelements can be added to and add it to the tab
-			let var_place = document.createElement('div');
-			var_place.setAttribute("id", "neo_ele_vars");
-			widget.node.appendChild(var_place);
 			return widget;
 		}
 
