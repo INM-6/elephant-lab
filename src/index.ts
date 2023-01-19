@@ -113,25 +113,6 @@ const extension: JupyterFrontEndPlugin<void> = {
 			}
 			return outarea;
 		}
-		//@ts-ignore: Unused; only for debugging purposes
-		function addTextToPanel(widget: Panel, text: string){
-			/**
-			  * Adds a new div to a Phosphor Panel (e.g., a JupyterLab tab) that contains some text
-			  * in a TextNode
-			  *
-			  * Parameters:
-			  * widget: Tab which the text will be added to
-			  * text: Text to be added to widget
-			  */
-			// Create div and TextNode
-			let new_content = document.createElement('div');
-			let textField = document.createTextNode(text);
-			// Add div and TextNode into the DOM using DOM manipulation
-			new_content.appendChild(textField);
-			// widget is a DOM object that childs can be added to
-			// like when using HTML
-			widget.node.appendChild(new_content);
-		}
 
 		function initializeTab(){
 			/**
@@ -437,8 +418,6 @@ const extension: JupyterFrontEndPlugin<void> = {
 			// Debug output
 			console.log("Connected to currently active Notebook");
 
-			// Add some random text, nothing useful here (test)
-			// addTextToPanel(tab, 'This is a text');
 		} // end of newTab()
 
 
