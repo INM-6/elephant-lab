@@ -56,7 +56,7 @@ import '../style/index.css';
  */
 const extension: JupyterFrontEndPlugin<void> = {
 	// Metadata, for details see the tutorial linked in README.md
-	id: 'neo_elephant',
+	id: 'Jupyphant',
 	autoStart: true,
 	// What to pass to the activate function
 	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer],
@@ -74,7 +74,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 		 * restorer: Allows to restore the previous state of the extension at startup
 		 */
 		// Debug log
-		console.log('JupyterLab extension neo_elephant is activated!');
+		console.log('JupyterLab extension Jupyphant is activated!');
 
 		// Store references to all tabs containing notebooks
 		var myPanels: NotebookPanel[] = [];
@@ -120,11 +120,11 @@ const extension: JupyterFrontEndPlugin<void> = {
 			  */
 			// Create new Phosphor Panel, i.e., tab within JupyterLab,
 			// with a split view (top part and bottom part)
-			let widget: Panel = new SplitPanel({orientation: 'vertical'});
+			let widget: Panel = new SplitPanel({orientation: 'horizontal'});
 			// Set HTML/DOM id
-			widget.id = 'neo_elephant';
+			widget.id = 'Jupyphant';
 			// Title of the tab
-			widget.title.label = 'Visualization';
+			widget.title.label = 'Jupyphant';
 			// Adds the x to close the tab?
 			widget.title.closable = true;
 			// Create a div element that other subelements can be added to and add it to the tab
