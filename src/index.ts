@@ -63,28 +63,19 @@ const extension: JupyterFrontEndPlugin<void> = {
 	// activate: Function that is called upon startup of the extension
 	// Parameters are passed by the extension framework as specified in 'requires'
 	activate:
-	(lab_: JupyterFrontEnd, palette_: ICommandPalette, consoles_: INotebookTracker, rendermime_, restorer_: ILayoutRestorer) => {
+	(app: JupyterFrontEnd, palette: ICommandPalette, notebook_tracker: INotebookTracker, rendermime, restorer: ILayoutRestorer) => {
 		/**
 		 * Performs the initialization of the extension
 		 * Parameters:
-		 * lab_: Provides access and allows manipulation of the frontend, i.e., tabs and commands, etc. within JupyterLab
-		 * palette_: Provides access to the CommandPalette panel on the left side, allowing to add new commands
+		 * app: Provides access and allows manipulation of the frontend, i.e., tabs and commands, etc. within JupyterLab
+		 * palette: Provides access to the CommandPalette panel on the left side, allowing to add new commands
 		 *           that can be activated on click
-		 * consoles_: Used to track notebooks and their actions, e.g., which one is active
-		 * restorer_: Allows to restore the previous state of the extension at startup
+		 * notebook_tracker: Used to track notebooks and their actions, e.g., which one is active
+		 * restorer: Allows to restore the previous state of the extension at startup
 		 */
 		// Debug log
 		console.log('JupyterLab extension neo_elephant is activated!');
-		// The following statements were used for debugging purposes only
-		// TODO: Remove them
-		const lab: JupyterFrontEnd = lab_;
-		const palette: ICommandPalette = palette_;
-		//@ts-ignore
-		const consoles: INotebookTracker = consoles_;
-		//@ts-ignore
-		const rendermime: IRenderMimeRegistry = rendermime_;
-		//@ts-ignore
-		const restorer: ILayoutRestorer = restorer_;
+
 		// Store references to all tabs containing notebooks
 		var myPanels: NotebookPanel[] = [];
 		// Store references to all tabs created by this extension
@@ -173,7 +164,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 
 			// Attach tab to the frontend if not yet attached
 			if (!tab.isAttached) {
-				lab.shell.add(tab);
+				 app.shell.add(tab);
 			}
 			// Add the tab to the tracker for restoration
 			if (!tracker.has(tab)) {
@@ -181,7 +172,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 				tracker.add(tab);
 			}
 			// Display the tab, bring it to the foreground
-			lab.shell.activateById(tab.id);
+			 app.shell.activateById(tab.id);
 		}
 
 		function createCommand(command: string){
@@ -192,7 +183,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 			  * Clicking 'Jupyphant' in the Commands tab on the left activates the Jupyphant extension
 			  */
 			// Add the specified commant to the commands known by JupyterLab
-			lab.commands.addCommand(command, {
+			 app.commands.addCommand(command, {
 				label: 'Jupyphant',
 				execute: () => {
 					// The newTab function that contains the main code is called from the command
@@ -302,8 +293,8 @@ const extension: JupyterFrontEndPlugin<void> = {
 		// Dummy code, might be needed to initialize in the beginning,
 		// e.g., restore all extension tabs that are linked to Notebook tabs
 		// These Notebook tabs are restored upon starting JupyterLab, once this task is finished,
-		// lab.restored will activate => Then everything that depends on the full startup of JupyterLab can be performed
-		lab.restored.then((layout) => {
+		// app.restored will activate => Then everything that depends on the full startup of JupyterLab can be performed
+		 app.restored.then((layout) => {
 			//let newtab = initializeTab();
 		});
 
@@ -319,17 +310,17 @@ const extension: JupyterFrontEndPlugin<void> = {
 			  * needs to be in the foreground when the command is clicked.
 			  */
 
-			// lab.shell.currentWidget is too general, might get any tab that is currently active,
+			// app.shell.currentWidget is too general, might get any tab that is currently active,
 			// to only get notebook tabs, get current notebook from NotebookTracker
 			// Get most recently active Notebook
-			//var newPanel: NotebookPanel = consoles.currentWidget as NotebookPanel; // apparently not needed
+			//var newPanel: NotebookPanel = notebook_tracker.currentWidget as NotebookPanel; // apparently not needed
 
 			// Wait for all notebooks to be restored in case newTab is executed early
 			// This is probably important for restoring the Jupyphant tabs (not yet implemented)
-			consoles.restored.then(()=>{
+			notebook_tracker.restored.then(()=>{
         // Get the current notebook
         // TODO: Why is this done twice? Maybe a scope issue?
-        var newPanel = consoles.currentWidget as NotebookPanel;
+        var newPanel = notebook_tracker.currentWidget as NotebookPanel;
 
         // If newPanel already has a corresponding Jupyphant tab,
         // simply show this tab
