@@ -261,11 +261,6 @@ const extension: JupyterFrontEndPlugin<void> = {
 			  * needs to be in the foreground when the command is clicked.
 			  */
 
-			// app.shell.currentWidget is too general, might get any tab that is currently active,
-			// to only get notebook tabs, get current notebook from NotebookTracker
-			// Get most recently active Notebook
-			//var newPanel: NotebookPanel = notebook_tracker.currentWidget as NotebookPanel; // apparently not needed
-
 			// Wait for all notebooks to be restored in case newTab is executed early
 			// This is probably important for restoring the Jupyphant tabs (not yet implemented)
 			notebook_tracker.restored.then(()=>{
@@ -313,15 +308,15 @@ const extension: JupyterFrontEndPlugin<void> = {
                     // Includes, e. g., imports and creating an object
                     // For details, see kernelcode.ts
                     executeCode(pythonCode['setupEnv'], session);
-                    // Debug output
-                    console.log(pythonCode['setupEnv'] + " (from console.log, line 369)");
 
                     // Divide Tab in upper part for TreeView and lower part for Plots
                     tab.addWidget(new Panel());
                     tab.addWidget(new Panel());
-                    // Scrollbar in both parts
-                    tab.widgets[0].node.style.cssText = tab.widgets[0].node.style.cssText + ' overflow-y: scroll;';
-                    tab.widgets[1].node.style.cssText = tab.widgets[1].node.style.cssText + ' overflow-y: scroll;';
+                    // Scrollbar in both parts in x and y axis
+                    tab.widgets[0].node.style.cssText = tab.widgets[0].node.style.cssText +
+                                                        ' overflow-x: scroll; overflow-y: scroll;';
+                    tab.widgets[1].node.style.cssText = tab.widgets[1].node.style.cssText +
+                                                        ' overflow-x: scroll; overflow-y: scroll;';
                     // Styling
                     (<SplitPanel>tab).handles[0].style.cssText += " background-color: DarkGrey;";
 
@@ -338,9 +333,6 @@ const extension: JupyterFrontEndPlugin<void> = {
                     // This is what user expects
                     // Code is executed and the results displayed in the specified OutputArea
                     OutputArea.execute(pythonCode['createTree'], outarea_tree, session);
-                    console.log(pythonCode['createTree'] + " (from console.log, line 390)");
-                    //OutputArea.execute(pythonCode['plotCode'], outarea, session);
-                    //OutputArea.execute(pythonCode['plotCode'], outarea2, session);
                     OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
                     OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
 
@@ -368,20 +360,10 @@ const extension: JupyterFrontEndPlugin<void> = {
 			            // Debug output
 			            console.log("Cell executed");
 
-			            // Plot analogsignal (test)
-			            //OutputArea.execute(pythonCode['neoPlot'], outarea2, session);
-
-			            //OutputArea.execute(pythonCode['plotCode'], outarea, session);
-			            //OuputArea.execute(pythonCode['plotCode'], outarea2, session);
-
 			            // Update tree and plots
 			            executeCode(pythonCode['updateTree'], session);
-			            //OutputArea.execute("display(my_jupyphant_vis_xxx.tree)", outarea_tree, session);
 			            OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
 			            OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
-
-			            // Update list of variables (test)
-			            //executeCode("print('AC')", session, console.log); // print(testfunc())
 
 			        }); // end of NotebookActions.executed.connect()
 
@@ -389,7 +371,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 
                 }); // end of session.ready.then()
 
-			});
+			}); // end of notebook_tracker.restored.then()
 
 			console.log("Connected to currently active Notebook");
 
