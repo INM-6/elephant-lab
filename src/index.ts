@@ -94,7 +94,8 @@ const extension: JupyterFrontEndPlugin<void> = {
 			  * session: The IPython session (i.e., the Python kernel) to execute the code in
 			  * rendermime: Required for rendering the output
 			  * tab: The tab the OutputArea is created in
-			  * cls: HTML/DOM classes the OutputArea belongs to; used for styling with CSS and possibly DOM manipulation later on
+			  * cls: HTML/DOM classes the OutputArea belongs to; used for styling with CSS and possibly DOM manipulation
+			          later on
 			  * id: HTML/DOM id of the OutputArea; used for styling with CSS and possibly DOM manipulation later on
 			  * code: The code to be executed in the IPython session
 			  */
@@ -248,35 +249,6 @@ const extension: JupyterFrontEndPlugin<void> = {
 			}
 		}
 
-		/********************************************************************************************************************************/
-		// Place command into CommandPalette, can then be executed by clicking on the corresponding button
-		// This command will open the tab
-		const command: string = 'jupyphant:open';
-		createCommand(command);
-
-		// Track and restore extension's tabs, needs to work together with restoration of main area
-		// When Main Area is restored, it needs to get all available Notebooks and Consoles
-		// and then check all of them and connect each tab to the right one
-		// TODO: This is not yet completed
-		// Tracker has a namespace where everything is saved;
-		// this namespace needs to have the same name as in the last session
-		// to restore the last session
-		let tracker = new WidgetTracker<Panel>({ namespace: 'jupyphant_namespace' });
-		// Restore from corresponding namespace
-  		restorer.restore(tracker, {
-			command,
-			//args: () => JSONExt.emptyObject,
-			name: () => 'jupyphant_namespace'
-		});
-
-		// Dummy code, might be needed to initialize in the beginning,
-		// e.g., restore all extension tabs that are linked to Notebook tabs
-		// These Notebook tabs are restored upon starting JupyterLab, once this task is finished,
-		// app.restored will activate => Then everything that depends on the full startup of JupyterLab can be performed
-		 app.restored.then((layout) => {
-			//let newtab = initializeTab();
-		});
-
 		// Function to react on command 'Jupyphant'
 		// Called only after the command is clicked from CommandPalette
 		function newTab() {
@@ -354,10 +326,13 @@ const extension: JupyterFrontEndPlugin<void> = {
                     (<SplitPanel>tab).handles[0].style.cssText += " background-color: DarkGrey;";
 
                     // Create OutputArea that will show TreeView
-                    let outarea_tree = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[0], ['my-outarea-class'], 'jup_vis_out_id1', 'None');
+                    let outarea_tree = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[0],
+                                                        ['my-outarea-class'], 'jup_vis_out_id1', 'None');
                     // Create 2 OutputAreas that will show plots
-                    let outarea = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-class'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
-                    let outarea2 = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-class'], 'jup_vis_out_id3', 'None'); //pythonCode['rasterPlot']);
+                    let outarea = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[1],
+                                                   ['my-outarea-class'], 'jup_vis_out_id2', 'None'); // for rasterPlot
+                    let outarea2 = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[1],
+                                                    ['my-outarea-class'], 'jup_vis_out_id3', 'None'); // for lfpPlot
 
                     // Also show tree and plots immediately upon being activated
                     // This is what user expects
@@ -410,17 +385,44 @@ const extension: JupyterFrontEndPlugin<void> = {
 
 			        }); // end of NotebookActions.executed.connect()
 
-			        // Debug output
 			        console.log("After registering");
 
                 }); // end of session.ready.then()
 
 			});
 
-			// Debug output
 			console.log("Connected to currently active Notebook");
 
 		} // end of newTab()
+
+/**********************************************************************************************************************/
+		// Place command into CommandPalette, can then be executed by clicking on the corresponding button
+		// This command will open the tab
+		const command: string = 'jupyphant:open';
+		createCommand(command);
+
+		// Track and restore extension's tabs, needs to work together with restoration of main area
+		// When Main Area is restored, it needs to get all available Notebooks and Consoles
+		// and then check all of them and connect each tab to the right one
+		// TODO: This is not yet completed
+		// Tracker has a namespace where everything is saved;
+		// this namespace needs to have the same name as in the last session
+		// to restore the last session
+		let tracker = new WidgetTracker<Panel>({ namespace: 'jupyphant_namespace' });
+		// Restore from corresponding namespace
+  		restorer.restore(tracker, {
+			command,
+			//args: () => JSONExt.emptyObject,
+			name: () => 'jupyphant_namespace'
+		});
+
+		// Dummy code, might be needed to initialize in the beginning,
+		// e.g., restore all extension tabs that are linked to Notebook tabs
+		// These Notebook tabs are restored upon starting JupyterLab, once this task is finished,
+		// app.restored will activate => Then everything that depends on the full startup of JupyterLab can be performed
+		 app.restored.then((layout) => {
+			//let newtab = initializeTab();
+		});
 
 	} // end of activate()
 
