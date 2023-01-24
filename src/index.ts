@@ -124,6 +124,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 			// Create new Phosphor Panel, i.e., tab within JupyterLab,
 			// with a split view (top part and bottom part)
 			let widget: Panel = new SplitPanel({orientation: 'vertical'});
+			widget.addClass('my-jupyphantWidget')
 			// Set HTML/DOM id
 			let dateTime: string = new Date().toLocaleString();
 			widget.id = 'Jupyphant, ' + dateTime;

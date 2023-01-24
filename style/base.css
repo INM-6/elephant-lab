@@ -3,3 +3,11 @@
 
     https://jupyterlab.readthedocs.io/en/stable/developer/css.html
 */
+
+/* Basic style of the Jupyphant-tab */
+.my-jupyphantWidget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: auto;
+}

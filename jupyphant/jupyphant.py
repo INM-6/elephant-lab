@@ -3,7 +3,7 @@
 # JupyterLab Python kernel
 import __main__
 import time
-from elephant.pandas_bridge import multi_spiketrains_to_dataframe, multi_events_to_dataframe, multi_epochs_to_dataframe, spiketrain_to_dataframe, event_to_dataframe, epoch_to_dataframe
+from elephant.pandas_bridge import multi_spiketrains_to_dataframe, multi_events_to_dataframe, multi_epochs_to_dataframe
 
 NEO_ABBREVIATIONS = {"Block": "BLK",
                      "Segment": "SEG",
