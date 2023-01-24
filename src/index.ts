@@ -124,7 +124,8 @@ const extension: JupyterFrontEndPlugin<void> = {
 			// with a split view (top part and bottom part)
 			let widget: Panel = new SplitPanel({orientation: 'vertical'});
 			// Set HTML/DOM id
-			widget.id = 'Jupyphant';
+			let dateTime: string = new Date().toLocaleString();
+			widget.id = 'Jupyphant, ' + dateTime;
 			// Title of the tab
 			widget.title.label = 'Jupyphant';
 			// Adds the x to close the tab?
@@ -248,7 +249,6 @@ const extension: JupyterFrontEndPlugin<void> = {
 		}
 
 		/********************************************************************************************************************************/
-		// let widget = initializeTab(lab);
 		// Place command into CommandPalette, can then be executed by clicking on the corresponding button
 		// This command will open the tab
 		const command: string = 'jupyphant:open';
@@ -261,12 +261,12 @@ const extension: JupyterFrontEndPlugin<void> = {
 		// Tracker has a namespace where everything is saved;
 		// this namespace needs to have the same name as in the last session
 		// to restore the last session
-		let tracker = new WidgetTracker<Panel>({ namespace: 'neo_jup_vis' });
+		let tracker = new WidgetTracker<Panel>({ namespace: 'jupyphant_namespace' });
 		// Restore from corresponding namespace
   		restorer.restore(tracker, {
 			command,
 			//args: () => JSONExt.emptyObject,
-			name: () => 'neo_jup_vis'
+			name: () => 'jupyphant_namespace'
 		});
 
 		// Dummy code, might be needed to initialize in the beginning,
