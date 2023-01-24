@@ -63,7 +63,8 @@ const extension: JupyterFrontEndPlugin<void> = {
 	// activate: Function that is called upon startup of the extension
 	// Parameters are passed by the extension framework as specified in 'requires'
 	activate:
-	(app: JupyterFrontEnd, palette: ICommandPalette, notebook_tracker: INotebookTracker, rendermime, restorer: ILayoutRestorer) => {
+	(app: JupyterFrontEnd, palette: ICommandPalette, notebook_tracker: INotebookTracker, rendermime,
+	restorer: ILayoutRestorer) => {
 		/**
 		 * Performs the initialization of the extension
 		 * Parameters:
@@ -84,7 +85,8 @@ const extension: JupyterFrontEndPlugin<void> = {
 		// Define functions used below
 
 		// Adds an OutputArea to the tab 'widget'
-		function createOutput(session: ISessionContext, rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, code: string): OutputArea{
+		function createOutputArea(session: ISessionContext, rendermime: IRenderMimeRegistry,
+		                          tab: Panel, cls: string[], id: string, code: string): OutputArea{
 			/**
 			  * Creates an OutputArea and executes code, the output of the code is displayed in the OutputArea
 			  *
@@ -105,7 +107,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 			tab.addWidget(outarea);
 			// Execute code and display its output
 			OutputArea.execute(code, outarea, session);
-			console.log("in fct: createOutput -> code = {code}" + code)
+			console.log("in fct: createOutputArea -> code = {code}" + code)
 			// Set HTML/DOM id and classes
 			outarea.id = id;
 			for(let currCls of cls){
@@ -120,7 +122,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 			  */
 			// Create new Phosphor Panel, i.e., tab within JupyterLab,
 			// with a split view (top part and bottom part)
-			let widget: Panel = new SplitPanel({orientation: 'horizontal'});
+			let widget: Panel = new SplitPanel({orientation: 'vertical'});
 			// Set HTML/DOM id
 			widget.id = 'Jupyphant';
 			// Title of the tab
@@ -159,7 +161,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 			  * of the JupyterLab interface.
 			  * Clicking 'Jupyphant' in the Commands tab on the left activates the Jupyphant extension
 			  */
-			// Add the specified commant to the commands known by JupyterLab
+			// Add the specified command to the commands known by JupyterLab
 			 app.commands.addCommand(command, {
 				label: 'Jupyphant',
 				execute: () => {
@@ -194,7 +196,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 			  * session: IPython session (Python kernel) to communicate with
 			  */
 			//TODO: Remove hardcoded stuff
-
+            console.log("Communication channel created")
 			// Registers something like a callback that acts when the kernel sends a message
 			context.session.kernel.registerCommTarget('test2', (comm:any, commMsg:any):any => {
 				// Only react if the message is sent to the channel/target named 'test2'
@@ -249,7 +251,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 		// let widget = initializeTab(lab);
 		// Place command into CommandPalette, can then be executed by clicking on the corresponding button
 		// This command will open the tab
-		let command = 'neo:open';
+		const command: string = 'jupyphant:open';
 		createCommand(command);
 
 		// Track and restore extension's tabs, needs to work together with restoration of main area
@@ -339,7 +341,7 @@ const extension: JupyterFrontEndPlugin<void> = {
           // in order to be able to execute the Jupyphant Python code
           // Includes, e. g., imports and creating an object
           // For details, see kernelcode.ts
-          executeCode(pythonCode['setupEnv'], session, console.log);
+          executeCode(pythonCode['setupEnv'], session);
           // Debug output
           console.log(pythonCode['setupEnv'] + " (from console.log, line 369)");
 
@@ -353,10 +355,10 @@ const extension: JupyterFrontEndPlugin<void> = {
           (<SplitPanel>tab).handles[0].style.cssText += " background-color: DarkGrey;";
 
           // Create OutputArea that will show TreeView
-          let outarea_tree = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[0], ['my-outarea-class'], 'jup_vis_out_id1', 'None');
+          let outarea_tree = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[0], ['my-outarea-class'], 'jup_vis_out_id1', 'None');
           // Create 2 OutputAreas that will show plots
-          let outarea = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-class'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
-          let outarea2 = createOutput(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-class'], 'jup_vis_out_id3', 'None'); //pythonCode['rasterPlot']);
+          let outarea = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-class'], 'jup_vis_out_id2', 'None');// pythonCode['neoPlot']);
+          let outarea2 = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[1], ['my-outarea-class'], 'jup_vis_out_id3', 'None'); //pythonCode['rasterPlot']);
 
           // Also show tree and plots immediately upon being activated
           // This is what user expects
@@ -372,7 +374,7 @@ const extension: JupyterFrontEndPlugin<void> = {
           // Therefore, no OutputArea is necessary
           // However, an arbitrary callback can be specified
           // In this case, the callback does nothing as the code does not produce any output
-          executeCode(pythonCode['updateTree'], session, console.log);
+          executeCode(pythonCode['updateTree'], session);
 
 
           // Debug output
@@ -399,7 +401,7 @@ const extension: JupyterFrontEndPlugin<void> = {
             //OuputArea.execute(pythonCode['plotCode'], outarea2, session);
 
             // Update tree and plots
-            executeCode(pythonCode['updateTree'], session, console.log);
+            executeCode(pythonCode['updateTree'], session);
             //OutputArea.execute("display(my_jupyphant_vis_xxx.tree)", outarea_tree, session);
             OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
             OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
