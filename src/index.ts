@@ -50,6 +50,92 @@ import {
 // Style from css
 import '../style/index.css';
 
+// class JupyphantSplitPanel extends SplitPanel {
+// 	/*
+// 	* Construct a new JupyphantSplitPanel
+// 	*/
+// 	constructor() {
+// 		super();
+//
+// 		this.addClass('my-jupyphantWidget');
+//
+//
+// 	}; // end of constructor()
+//
+// }; // end of JupyphantSplitPanel class
+//
+// /*
+// * Activate the JupyphantSplitPanel extension
+// */
+// function activate(app: JupyterFrontEnd, palette: ICommandPalette, notebook_tracker: INotebookTracker, rendermime,
+// 				  restorer: ILayoutRestorer | null) {
+// 	/**
+// 	 * Performs the initialization of the extension
+// 	 * Parameters:
+// 	 *     app: Provides access and allows manipulation of the frontend, i.e., tabs and commands, etc. within JupyterLab
+// 	 *     palette: Provides access to the CommandPalette panel on the left side, allowing to add new commands
+// 	 *              that can be activated on click
+// 	 *     notebook_tracker: Used to track notebooks and their actions, e.g., which one is active
+// 	 *     restorer: Allows to restore the previous state of the extension at startup
+// 	 */
+//
+//
+// 	console.log('JupyterLab extension Jupyphant is activated!');
+//
+// 	// Declare a widget variable
+// 	let widget: Panel;
+//
+// 	// Store references to all tabs containing notebooks
+// 	var myPanels: NotebookPanel[] = [];
+// 	// Store references to all tabs created by this extension
+// 	var myVisTabs: Panel[] = [];
+//
+// 	// Add an application command: this is placed into CommandPalette and by clicking on the corresponding button
+// 	// this command will open the jupyphant tab
+// 	const command: string = 'jupyphant:open';
+// 	// Add the specified command to the commands known by JupyterLab
+// 	app.commands.addCommand(command, {
+// 	label: 'Jupyphant',
+// 	execute: () => {
+// 		if (!widget || widget.isDisposed) {
+// 			const widget = new JupyphantSplitPanel();
+// 			widget.addClass('my-jupyphantWidget')
+// 			// Set HTML/DOM id
+// 			let dateTime: string = new Date().toLocaleString();
+// 			widget.id = 'Jupyphant, ' + dateTime;
+// 			// Title of the tab
+// 			widget.title.label = 'Jupyphant';
+// 			// Adds the x to close the tab?
+// 			widget.title.closable = true;
+// 		}
+//
+// 		} // end of execute()
+//
+// 	}); // end of app.commands.addCommand()
+//
+// 	// Add the command to the CommandPalette, to make it available on click
+// 	palette.addItem({command, category: 'NeuroScience'});
+//
+//
+//
+// }; // end of activate()
+//
+// /*
+// * Initialization data for the Jupyphant extension
+// */
+// const extension: JupyterFrontEndPlugin<void> = {
+// 	id: 'Jupyphant',
+// 	autoStart: true,
+// 	// What to pass to the activate function
+// 	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry],
+// 	optional: [ILayoutRestorer],
+// 	// activate: Function that is called upon startup of the extension
+// 	// Parameters are passed by the extension framework as specified in 'requires'
+// 	activate: activate
+// };
+//
+// // Export the extension to make it known to the extension framework
+// export default extension;
 
 /**
  * Definition of the jupyphant extension.
@@ -132,6 +218,18 @@ const extension: JupyterFrontEndPlugin<void> = {
 			widget.title.label = 'Jupyphant';
 			// Adds the x to close the tab?
 			widget.title.closable = true;
+
+			// Divide Tab in upper part for TreeView / NodeExplorer and lower part for OverviewPlots
+            widget.addWidget(new Panel());
+            widget.addWidget(new Panel());
+            // Scrollbar in both parts in x and y axis
+            widget.widgets[0].node.style.cssText = widget.widgets[0].node.style.cssText +
+                                                ' overflow-x: scroll; overflow-y: scroll;';
+            widget.widgets[1].node.style.cssText = widget.widgets[1].node.style.cssText +
+                                                ' overflow-x: scroll; overflow-y: scroll;';
+            // Styling
+            (<SplitPanel>widget).handles[0].style.cssText += " background-color: DarkGrey;";
+
 			return widget;
 		}
 
@@ -309,17 +407,6 @@ const extension: JupyterFrontEndPlugin<void> = {
                     // Includes, e. g., imports and creating an object
                     // For details, see kernelcode.ts
                     executeCode(pythonCode['setupEnv'], session);
-
-                    // Divide Tab in upper part for TreeView and lower part for Plots
-                    tab.addWidget(new Panel());
-                    tab.addWidget(new Panel());
-                    // Scrollbar in both parts in x and y axis
-                    tab.widgets[0].node.style.cssText = tab.widgets[0].node.style.cssText +
-                                                        ' overflow-x: scroll; overflow-y: scroll;';
-                    tab.widgets[1].node.style.cssText = tab.widgets[1].node.style.cssText +
-                                                        ' overflow-x: scroll; overflow-y: scroll;';
-                    // Styling
-                    (<SplitPanel>tab).handles[0].style.cssText += " background-color: DarkGrey;";
 
                     // Create OutputArea that will show TreeView
                     let outarea_tree = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[0],
