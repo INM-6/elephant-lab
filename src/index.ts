@@ -67,13 +67,13 @@ import '../style/index.css';
 // /*
 // * Activate the JupyphantSplitPanel extension
 // */
-// function activate(app: JupyterFrontEnd, palette: ICommandPalette, notebook_tracker: INotebookTracker, rendermime,
+// function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker, rendermime,
 // 				  restorer: ILayoutRestorer | null) {
 // 	/**
 // 	 * Performs the initialization of the extension
 // 	 * Parameters:
 // 	 *     app: Provides access and allows manipulation of the frontend, i.e., tabs and commands, etc. within JupyterLab
-// 	 *     palette: Provides access to the CommandPalette panel on the left side, allowing to add new commands
+// 	 *     command_palette: Provides access to the CommandPalette panel on the left side, allowing to add new commands
 // 	 *              that can be activated on click
 // 	 *     notebook_tracker: Used to track notebooks and their actions, e.g., which one is active
 // 	 *     restorer: Allows to restore the previous state of the extension at startup
@@ -114,7 +114,7 @@ import '../style/index.css';
 // 	}); // end of app.commands.addCommand()
 //
 // 	// Add the command to the CommandPalette, to make it available on click
-// 	palette.addItem({command, category: 'NeuroScience'});
+// 	command_palette.addItem({command, category: 'NeuroScience'});
 //
 //
 //
@@ -149,13 +149,13 @@ const extension: JupyterFrontEndPlugin<void> = {
 	// activate: Function that is called upon startup of the extension
 	// Parameters are passed by the extension framework as specified in 'requires'
 	activate:
-	(app: JupyterFrontEnd, palette: ICommandPalette, notebook_tracker: INotebookTracker, rendermime,
-	restorer: ILayoutRestorer) => {
+	(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
+	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer) => {
 		/**
 		 * Performs the initialization of the extension
 		 * Parameters:
 		 * app: Provides access and allows manipulation of the frontend, i.e., tabs and commands, etc. within JupyterLab
-		 * palette: Provides access to the CommandPalette panel on the left side, allowing to add new commands
+		 * command_palette: Provides access to the CommandPalette panel on the left side, allowing to add new commands
 		 *           that can be activated on click
 		 * notebook_tracker: Used to track notebooks and their actions, e.g., which one is active
 		 * restorer: Allows to restore the previous state of the extension at startup
@@ -171,44 +171,36 @@ const extension: JupyterFrontEndPlugin<void> = {
 		// Define functions used below
 
 		// Adds an OutputArea to the tab 'widget'
-		function createOutputArea(session: ISessionContext, rendermime: IRenderMimeRegistry,
-		                          tab: Panel, cls: string[], id: string, code: string): OutputArea{
+		function createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string){
 			/**
-			  * Creates an OutputArea and executes code, the output of the code is displayed in the OutputArea
+			  * Creates an OutputArea inside 'tab', in which the output of executed pythonCode will displayed
 			  *
 			  * Parameters:
-			  * session: The IPython session (i.e., the Python kernel) to execute the code in
 			  * rendermime: Required for rendering the output
 			  * tab: The tab the OutputArea is created in
 			  * cls: HTML/DOM classes the OutputArea belongs to; used for styling with CSS and possibly DOM manipulation
 			          later on
 			  * id: HTML/DOM id of the OutputArea; used for styling with CSS and possibly DOM manipulation later on
-			  * code: The code to be executed in the IPython session
 			  */
 			// Create an OutputArea
 			// OutputAreas are used to display stuff, just like the outputs below every cell
 			let model = new OutputAreaModel({trusted: true});
 			let outarea = new OutputArea({rendermime, model});
-			console.log(outarea);
 			// Add OutputArea to the specified tab
 			tab.addWidget(outarea);
-			// Execute code and display its output
-			OutputArea.execute(code, outarea, session);
-			console.log("in fct: createOutputArea -> code = {code}" + code)
 			// Set HTML/DOM id and classes
 			outarea.id = id;
 			for(let currCls of cls){
 				outarea.addClass(currCls);
 			}
-			return outarea;
 		}
 
-		function initializeTab(){
+		function initializeTab(rendermime: IRenderMimeRegistry){
 			/**
 			  * Initialize a new tab for this extension, used for display of visualizations and widgets
 			  */
-			// Create new Phosphor Panel, i.e., tab within JupyterLab,
-			// with a split view (top part and bottom part)
+
+			// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
 			let widget: Panel = new SplitPanel({orientation: 'vertical'});
 			widget.addClass('my-jupyphantWidget')
 			// Set HTML/DOM id
@@ -229,6 +221,12 @@ const extension: JupyterFrontEndPlugin<void> = {
                                                 ' overflow-x: scroll; overflow-y: scroll;';
             // Styling
             (<SplitPanel>widget).handles[0].style.cssText += " background-color: DarkGrey;";
+
+			// Create OutputArea in upper panel that will show TreeView and NodeExplorer
+            createOutputArea(rendermime, <Panel>widget.widgets[0], ['my-outarea-class'], 'jup_vis_out_id1');
+            // Create 2 OutputAreas in lower panel that will show overview raster/lfp plots
+            createOutputArea(rendermime, <Panel>widget.widgets[1], ['my-outarea-class'], 'jup_vis_out_id2');
+            createOutputArea(rendermime, <Panel>widget.widgets[1], ['my-outarea-class'], 'jup_vis_out_id3');
 
 			return widget;
 		}
@@ -271,7 +269,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 				}
 			});
 			// Add the command to the CommandPalette, to make it available on click
-			palette.addItem({command, category: 'NeuroScience'});
+			command_palette.addItem({command, category: 'NeuroScience'});
 		}
 		//@ts-ignore
 		//		function ioCallback(msg: KernelMessage.IIOPubMessage): void {
@@ -379,7 +377,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 
                 // Otherwise initialize new tab in which everything will be displayed
                 // TODO: Introduce OOP, Tab class => move this to Tab constructor
-                let tab = initializeTab();
+                let tab = initializeTab(newPanel.content.rendermime);
                 // Save the tab and corresponding notebook panel to lists
                 // This indicates that a Jupyphant tab already exists for the notebook
                 // and creates a mapping between the notebook and the tab
@@ -408,21 +406,19 @@ const extension: JupyterFrontEndPlugin<void> = {
                     // For details, see kernelcode.ts
                     executeCode(pythonCode['setupEnv'], session);
 
-                    // Create OutputArea that will show TreeView
-                    let outarea_tree = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[0],
-                                                        ['my-outarea-class'], 'jup_vis_out_id1', 'None');
-                    // Create 2 OutputAreas that will show plots
-                    let outarea = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[1],
-                                                   ['my-outarea-class'], 'jup_vis_out_id2', 'None'); // for rasterPlot
-                    let outarea2 = createOutputArea(session, newPanel.content.rendermime, <Panel>tab.widgets[1],
-                                                    ['my-outarea-class'], 'jup_vis_out_id3', 'None'); // for lfpPlot
+                    // get OutputAreas of upper/lower panel that will show TreeView + NodeExplorer / raster + LFP plot
+                    let upperPanel = <Panel>tab.widgets[0];
+                    let lowerPanel = <Panel>tab.widgets[1];
+                    let outarea_treeview_nodeexplorer = <OutputArea>upperPanel.widgets[0];
+                    let outarea_rasterplot = <OutputArea>lowerPanel.widgets[0];
+                    let outarea_lfpplot = <OutputArea>lowerPanel.widgets[1];
 
                     // Also show tree and plots immediately upon being activated
                     // This is what user expects
                     // Code is executed and the results displayed in the specified OutputArea
-                    OutputArea.execute(pythonCode['createTree'], outarea_tree, session);
-                    OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
-                    OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
+                    OutputArea.execute(pythonCode['createTree'], outarea_treeview_nodeexplorer, session);
+                    OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
+                    OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
 
                     // This code is executed without output that needs to be displayed
                     // Therefore, no OutputArea is necessary
@@ -450,8 +446,8 @@ const extension: JupyterFrontEndPlugin<void> = {
 
 			            // Update tree and plots
 			            executeCode(pythonCode['updateTree'], session);
-			            OutputArea.execute(pythonCode['rasterPlot'], outarea, session);
-			            OutputArea.execute(pythonCode['lfpPlot'], outarea2, session);
+			            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
+			            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
 
 			        }); // end of NotebookActions.executed.connect()
 
