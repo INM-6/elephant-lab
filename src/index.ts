@@ -360,7 +360,7 @@ class JupyphantExtension {
 * Activate the JupyphantWidget extension
 */
 function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-					restorer: ILayoutRestorer) {
+					render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer) {
 	/**
 	 * Performs the initialization of the extension
 	 * Parameters:
@@ -372,7 +372,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	 */
 
 
-	console.log('JupyterLab extension Jupyphant is activated!');
+	console.log('JupyterLab extension Jupyphant is activated! (OOP)');
 
 	//Track and restore extension's tabs, needs to work together with restoration of main area
 	// When Main Area is restored, it needs to get all available Notebooks and Consoles
@@ -407,8 +407,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 	id: 'Jupyphant',
 	autoStart: true,
 	// What to pass to the activate function
-	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry],
-	optional: [ILayoutRestorer],
+	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer],
 	// activate: Function that is called upon startup of the extension
 	// Parameters are passed by the extension framework as specified in 'requires'
 	activate: activate
