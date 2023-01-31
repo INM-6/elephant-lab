@@ -55,16 +55,19 @@ class JupyphantExtension {
 	private app: JupyterFrontEnd;
 	private command_palette: ICommandPalette;
 	private notebook_tracker: INotebookTracker;
+	private widget_tracker: WidgetTracker;
 	private myPanels: NotebookPanel[];
 	private myVisTabs: Panel[] ;
 	private widget: SplitPanel;
 
 	// Construct a new JupyphantExtension
-	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker) {
+	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
+						widget_tracker: WidgetTracker) {
 		// save all constructor arguments
 		this.app = app;
 		this.command_palette = command_palette;
 		this.notebook_tracker = notebook_tracker;
+		this.widget_tracker = widget_tracker;
 		// Store references to all tabs containing notebooks
 		this.myPanels = [];
 		// Store references to all tabs created by this extension
@@ -122,7 +125,7 @@ class JupyphantExtension {
 	        let index = this.myPanels.indexOf(newPanel);
 	        if(index != -1){
 	            // Open existing tab in the frontend and bring it to the foreground
-	            this.attachTab(this.myVisTabs[index], tracker);
+	            this.attachTab();
 	            // Nothing else to do
 	            return;
 	        }
@@ -137,7 +140,7 @@ class JupyphantExtension {
 	        this.myVisTabs.push(this.widget);
 	        this.myPanels.push(newPanel);
 	        // Show tab if it was not yet shown; i. e., open in frontend and bring it to the foreground
-	        this.attachTab(this.widget, tracker);
+	        this.attachTab();
 
 
 	        // Get the IPython session (Python kernel) of the notebook
@@ -213,26 +216,22 @@ class JupyphantExtension {
 
 	} // end of newTab()
 
-	public attachTab(tab: Panel, tracker: WidgetTracker<Panel>){
+	public attachTab() {
 		/**
-		  * Attach an existing tab to the frontend to display it and add it to a tracker
-		  *
-		  * Parameters:
-		  * tab: The tab to be attached to the frontend
-		  * tracker: The tracker passed to the activate function
+		  * Attach an existing  to the frontend to display it and add it to a tracker.
 		  */
 
 		// Attach tab to the frontend if not yet attached
-		if (!tab.isAttached) {
-			 this.app.shell.add(tab);
+		if (!this.widget.isAttached) {
+			 this.app.shell.add(this.widget);
 		}
 		// Add the tab to the tracker for restoration
-		if (!tracker.has(tab)) {
+		if (!this.widget_tracker.has(this.widget)) {
 			// Track the state of the widget for later restoration
-			tracker.add(tab);
+			this.widget_tracker.add(this.widget);
 		}
 		// Display the tab, bring it to the foreground
-		 this.app.shell.activateById(tab.id);
+		 this.app.shell.activateById(this.widget.id);
 	} // end of attachTab()
 
 	public initializeTab(rendermime: IRenderMimeRegistry){
@@ -360,7 +359,8 @@ class JupyphantExtension {
 /*
 * Activate the JupyphantWidget extension
 */
-function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker) {
+function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
+					restorer: ILayoutRestorer) {
 	/**
 	 * Performs the initialization of the extension
 	 * Parameters:
@@ -374,13 +374,30 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 
 	console.log('JupyterLab extension Jupyphant is activated!');
 
+	//Track and restore extension's tabs, needs to work together with restoration of main area
+	// When Main Area is restored, it needs to get all available Notebooks and Consoles
+	// and then check all of them and connect each tab to the right one
+	// TODO: This is not yet completed
+	// Tracker has a namespace where everything is saved;
+	// this namespace needs to have the same name as in the last session
+	// to restore the last session
+	let widget_tracker = new WidgetTracker<Panel>({ namespace: 'jupyphant_namespace' });
+
 	// create instance of JupyphantExtension
-	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker);
+	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker, widget_tracker);
 
 	// Add an application command: this is placed into CommandPalette and by clicking on the corresponding button
 	// this command will open the jupyphant tab
 	const command: string = 'jupyphant:open';
 	jupy_ext.createCommand(command);
+
+	// Restore from corresponding namespace
+    restorer.restore(widget_tracker, {
+		command,
+		//args: () => JSONExt.emptyObject,
+		name: () => 'jupyphant_namespace'
+	});
+
 }; // end of activate()
 
 /*
