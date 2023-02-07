@@ -107,34 +107,34 @@ def on_selected_change(change):
 
 my_jupyphant_vis_xxx.tree.observe(on_selected_change, names='selected_nodes')
 
-drop_module = Dropdown(options=elephant_functions_by_module.keys(), description='Module:', disabled=False)
-drop_function = Dropdown(options=elephant_functions_by_module[drop_module.value] , description='Function:', disabled=False)
-drop_parameter = Dropdown(description='Parameter:', disabled=False)
-
-@interact(module = drop_module, function = drop_function, parameter = drop_parameter)
-def print_function(module, function, parameter):
-    drop_function.options = elephant_functions_by_module[module].keys()
-    drop_parameter.options = elephant_functions_by_module[module][drop_function.value]
-
-def on_calculate_button_clicked(b):
-    with output_node_analysis:
-        IPython.display.clear_output()
-        print("Calculation in progress!")
-
-def on_clear_button_clicked(b):
-    with output_node_analysis:
-        IPython.display.clear_output()
-
-calculate_button = Button(description='Calculate', disabled=False, button_style='', tooltip='Calculate', icon='check')
-calculate_button.on_click(on_calculate_button_clicked)
-
-clear_button = Button(description='Clear', disabled=False, button_style='', tooltip='Clear', icon='check')
-clear_button.on_click(on_clear_button_clicked)
-
-tab_analysis= VBox([output_node_analysis, HBox([drop_module, drop_function, drop_parameter]), HBox([calculate_button, clear_button])])
+# drop_module = Dropdown(options=elephant_functions_by_module.keys(), description='Module:', disabled=False)
+# drop_function = Dropdown(options=elephant_functions_by_module[drop_module.value] , description='Function:', disabled=False)
+# drop_parameter = Dropdown(description='Parameter:', disabled=False)
+#
+# @interact(module = drop_module, function = drop_function, parameter = drop_parameter)
+# def print_function(module, function, parameter):
+#     drop_function.options = elephant_functions_by_module[module].keys()
+#     drop_parameter.options = elephant_functions_by_module[module][drop_function.value]
+#
+# def on_calculate_button_clicked(b):
+#     with output_node_analysis:
+#         IPython.display.clear_output()
+#         print("Calculation in progress!")
+#
+# def on_clear_button_clicked(b):
+#     with output_node_analysis:
+#         IPython.display.clear_output()
+#
+# calculate_button = Button(description='Calculate', disabled=False, button_style='', tooltip='Calculate', icon='check')
+# calculate_button.on_click(on_calculate_button_clicked)
+#
+# clear_button = Button(description='Clear', disabled=False, button_style='', tooltip='Clear', icon='check')
+# clear_button.on_click(on_clear_button_clicked)
+#
+# tab_analysis= VBox([output_node_analysis, HBox([drop_module, drop_function, drop_parameter]), HBox([calculate_button, clear_button])])
 
 tab_node_explorer = Tab()
-tab_node_explorer.children = [output_node_info, output_node_plot, output_node_statistic, tab_analysis]
+tab_node_explorer.children = [output_node_info, output_node_plot, output_node_statistic]#, tab_analysis]
 tab_node_explorer.titles = ["INFO", "RAW PLOT", "STATISTICS", "ANALYSIS"]
 
 right_side = VBox([Label("Node Explorer:"), tab_node_explorer])
