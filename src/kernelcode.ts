@@ -87,7 +87,9 @@ def on_selected_change(change):
         # print('Some node selected!')
         # for i in range(len(change["new"])):
         #    print(f'{i}. {change["new"][i].name} -> urn_id = {change["new"][i]._id}')
-        df_spt, df_evt, df_epc = my_jupyphant_vis_xxx.selected_nodes_to_dataframes(selected_ids=selected_ids)
+        df_anasig, df_spt, df_evt, df_epc = my_jupyphant_vis_xxx.selected_nodes_to_dataframes(selected_ids=selected_ids)
+        if df_anasig is not None:
+            display(df_anasig)
         if df_spt is not None:
             display(df_spt)
         if df_evt is not None:

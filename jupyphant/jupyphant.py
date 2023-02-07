@@ -4,6 +4,7 @@
 import __main__
 import time
 from elephant.pandas_bridge import multi_spiketrains_to_dataframe, multi_events_to_dataframe, multi_epochs_to_dataframe
+from jupyphant.pandas_bridge import multi_analogsignals_to_dataframe
 
 NEO_ABBREVIATIONS = {"Block": "BLK",
                      "Segment": "SEG",
@@ -231,29 +232,36 @@ class JupyphantVisualization:
         Convert the selected tree nodes representing neo objects to 'pandas.DataFrame' objects.
 
         """
+        analogsignals = []
         spiketrains = []
         events = []
         epochs = []
 
-        # extract all SpikeTrains, Events and Epochs from the blocks
+        # extract all AnalogSignals, SpikeTrains, Events and Epochs from the blocks
         for bl in self.blocks:
+            analogsignals.append(bl.list_children_by_class(self.AnalogSignal))
             spiketrains.append(bl.list_children_by_class(self.SpikeTrain))
             events.append(bl.list_children_by_class(self.Event))
             epochs.append(bl.list_children_by_class(self.Epoch))
         # extract all SpikeTrains, Events and Epochs from the other (independet) objekts
+        analogsignals.append([obj for obj in self.other_objs if isinstance(obj, self.AnalogSignal)])
         spiketrains.append([obj for obj in self.other_objs if isinstance(obj, self.SpikeTrain)])
         events.append([obj for obj in self.other_objs if isinstance(obj, self.Event)])
         epochs.append([obj for obj in self.other_objs if isinstance(obj, self.Epoch)])
 
+        df_anasig = None
         df_spt = None
         df_evt = None
         df_epc = None
 
         if selected_ids is not None:
+            analogsignals = [anasig for anasig_list in analogsignals for anasig in anasig_list if anasig._id in selected_ids]
             spiketrains = [st for st_list in spiketrains for st in st_list if st._id in selected_ids]
             events = [ev for ev_list in events for ev in ev_list if ev._id in selected_ids]
             epochs = [ep for ep_list in epochs for ep in ep_list if ep._id in selected_ids]
 
+            if len(analogsignals) > 0:
+                df_anasig = multi_analogsignals_to_dataframe(container=analogsignals, parents=False)
             if len(spiketrains) > 0:
                 df_spt = multi_spiketrains_to_dataframe(container=spiketrains, parents=False)
             if len(events) > 0:
@@ -261,7 +269,7 @@ class JupyphantVisualization:
             if len(epochs) > 0:
                 df_epc = multi_epochs_to_dataframe(container=epochs, parents=False)
 
-        return df_spt, df_evt, df_epc
+        return df_anasig, df_spt, df_evt, df_epc
 
     def statistics_of_selected_nodes(self, selected_ids=None):
         spiketrains = []
