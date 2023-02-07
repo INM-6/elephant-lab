@@ -13,8 +13,10 @@ import quantities as pq
 
 from elephant.neo_tools import (extract_neo_attributes, get_all_epochs,
                                 get_all_events, get_all_spiketrains, _get_all_objs)
-from elephant.pandas_bridge import _extract_neo_attrs_safe, _multiindex_from_dict, _sort_inds, _multi_objs_to_dataframe
+from elephant.pandas_bridge import _extract_neo_attrs_safe, _multiindex_from_dict, _sort_inds, _multi_objs_to_dataframe, \
+    _convert_value_safe
 
+pd.set_option('display.max_rows', None)
 
 def analogsignal_to_dataframe(analogsignal, parents=True, child_first=True):
     """Convert a `neo.AnalogSignal` to a `pandas.DataFrame`.
@@ -62,6 +64,8 @@ def analogsignal_to_dataframe(analogsignal, parents=True, child_first=True):
     """
     attrs = _extract_neo_attrs_safe(analogsignal,
                                     parents=parents, child_first=child_first)
+    if 'units' not in attrs:
+        attrs['units'] = _convert_value_safe(analogsignal.units)
     names, indexes = zip(*sorted(attrs.items()))
     names = list(names)
     names.append('channels')
@@ -76,7 +80,7 @@ def analogsignal_to_dataframe(analogsignal, parents=True, child_first=True):
 
     pdobj = pd.DataFrame(analogsignal.magnitude, index=index, columns=columns)
 
-    return pdobj #_sort_inds(pdobj, axis=1)
+    return _sort_inds(pdobj, axis=1)
 
 
 def multi_analogsignals_to_dataframe(container, parents=True, child_first=True):
