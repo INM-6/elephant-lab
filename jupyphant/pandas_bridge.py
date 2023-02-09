@@ -16,7 +16,9 @@ from elephant.neo_tools import (extract_neo_attributes, get_all_epochs,
 from elephant.pandas_bridge import _extract_neo_attrs_safe, _multiindex_from_dict, _sort_inds, _multi_objs_to_dataframe, \
     _convert_value_safe
 
-pd.set_option('display.max_rows', None)
+# sets the number of rows to display in the pandas.Dataframe table
+# pd.set_option('display.max_rows', None)
+
 
 def analogsignal_to_dataframe(analogsignal, parents=True, child_first=True):
     """Convert a `neo.AnalogSignal` to a `pandas.DataFrame`.

@@ -419,7 +419,7 @@ class JupyphantVisualization:
         # Adds the title to the figure
         self.plt.suptitle(title, size=18)
 
-    def plot_anasig(self):
+    def plot_anasig(self, selected_ids=None):
         """
         Wrapper for plot_lfp to update the lfp plot
 
@@ -430,9 +430,13 @@ class JupyphantVisualization:
         for bl in self.blocks:
             anasigs.extend(bl.list_children_by_class(self.AnalogSignal))
         anasigs.extend([obj for obj in self.other_objs if isinstance(obj, self.AnalogSignal)])
+        if selected_ids is not None:
+            # print(f'selected ids = {selected_ids}')
+            anasigs = [anasig for anasig in anasigs if anasig._id in selected_ids]
         # Create plot from scratch
         self.anasig_plot = None
-        self.plot_lfp(anasigs[:20], times=self.np.arange(len(anasigs[0])) * self.pq.s, spacing=50)
+        if anasigs:
+            self.plot_lfp(anasigs[:20], times=self.np.arange(len(anasigs[0])) * self.pq.s, spacing=50)
         # Return it for display
         return self.anasig_plot
 

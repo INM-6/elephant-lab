@@ -101,6 +101,8 @@ def on_selected_change(change):
         # print(f'Python Ids of selected nodes {selected_ids}')
         my_jupyphant_vis_xxx.plot_sptr(selected_ids=selected_ids)
         plt.show()
+        my_jupyphant_vis_xxx.plot_anasig(selected_ids=selected_ids)
+        plt.show()
         # print('after plot')
     with output_node_statistic:
         IPython.display.clear_output()
