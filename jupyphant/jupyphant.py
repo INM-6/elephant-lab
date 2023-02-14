@@ -3,6 +3,8 @@
 # JupyterLab Python kernel
 import __main__
 import time
+
+import matplotlib.pyplot as plt
 from elephant.pandas_bridge import multi_spiketrains_to_dataframe, multi_events_to_dataframe, multi_epochs_to_dataframe
 from jupyphant.pandas_bridge import multi_analogsignals_to_dataframe
 
@@ -43,6 +45,7 @@ class JupyphantVisualization:
     # Depending on the usage situation, import using 
     # sys.path.append might be necessary
     from neo.core.baseneo import BaseNeo
+    from neo.core.container import Container
     from neo.core.regionofinterest import RegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
     from neo import Block, SpikeTrain, AnalogSignal, Event, Epoch
@@ -138,7 +141,7 @@ class JupyphantVisualization:
             # Create one tree node per neo block and name of node is name of block
             nodes = []
             for bl in self.blocks:
-                bl_node = self.Node(f"{NEO_ABBREVIATIONS[bl.__class__.__name__]}: {bl.name}")
+                bl_node = self.Node(f"{NEO_ABBREVIATIONS[bl.__class__.__name__]}::{bl.name}::{bl._id}")
                 bl_node.opened = False
                 self._add_sub_nodes(bl_node, bl)
                 nodes.append(bl_node)
@@ -149,13 +152,13 @@ class JupyphantVisualization:
             # Top-level node for every independent neo object
             for obj in self.other_objs:
                 if issubclass(type(obj), self.RegionOfInterest):
-                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}: ")
+                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}::{obj._id} ")
                     self.map[obj_node._id] = None
                 elif isinstance(obj, list):
-                    obj_node = self.Node(f"{obj.__class__.__name__}: ")
+                    obj_node = self.Node(f"{obj.__class__.__name__}::{obj.__hash__}")
                     self.map[obj_node._id] = None
                 else:
-                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}: {obj.name}")
+                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}::{obj.name}::{obj._id}")
                     self.map[obj_node._id] = obj._id
                 obj_node.opened = False
                 self._add_sub_nodes(obj_node, obj)
@@ -206,7 +209,7 @@ class JupyphantVisualization:
         elif isinstance(obj, (list, self.SpikeTrainList)):
             for child_obj in obj:
                 if issubclass(type(child_obj), self.BaseNeo):
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]}: {child_obj.name}")
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]}::{child_obj.name}::{child_obj._id}")
                     child_node.opened = False
                     self.map[child_node._id] = child_obj._id
                     self._add_sub_nodes(child_node, child_obj)
@@ -304,9 +307,9 @@ class JupyphantVisualization:
                     axes_corrcoef.set_title("Correlation coefficient matrix")
                 return axes_isi_histo, axes_time_histo, axes_ifr, axes_corrcoef
 
-    def plot_sptr(self, selected_ids=None):
+    def create_rasterplot(self, selected_ids=None):
         """
-        Rasterplot for spike trains
+        Create for each top-node a rasterplot for the contained spike trains.
 
         Called at every cell execution
         """
@@ -338,50 +341,53 @@ class JupyphantVisualization:
             except BaseException as e:
                 changes = True
         # Return pre-existing plot if nothing has changed
-        # print(f'Python Ids of selected nodes {selected_ids} in plot_sptr()')
-        # print(f'{not changes} AND {self.plot is not None} AND {selected_ids is not None} AND False')
-        if (not changes) and (self.plot is not None) and (selected_ids is not None) and False:
+        # print(f'Python Ids of selected nodes {selected_ids} in create_rasterplot()')
+        # print(f'{not changes} AND {self.fig is not None} AND {selected_ids is not None} AND False')
+        if (not changes) and (self.fig is not None) and (selected_ids is not None) and False:
             pass
             # TODO: Get plot to be displayed again
             print('before return pre-existing plot')
-            return self.plot
+            return self.fig
             # return self.fig
         # Otherwise, create new plot
         else:
             # Extract all spike trains
-            spiketrains = []
+            spiketrains = {}
             for bl in curr_blocks:
-                spiketrains.append(bl.list_children_by_class(self.SpikeTrain))
-            spiketrains.append([obj for obj in curr_objs if isinstance(obj, self.SpikeTrain)])
+                spiketrains[f"{bl.name}::{bl._id}"] = bl.list_children_by_class(self.SpikeTrain)
+            for obj in curr_objs:
+                if isinstance(obj, self.SpikeTrain):
+                    spiketrains[f"{obj.name}::{obj._id}"] = [obj]
+                elif issubclass(type(obj), self.Container):
+                    spiketrains[f"{obj.name}::{obj._id}"] = obj.list_children_by_class(self.SpikeTrain)
+                else:
+                    pass
             if selected_ids is not None:
-                # print(f'selected ids = {selected_ids}')
-                spiketrains = [st for st_list in spiketrains for st in st_list if st._id in selected_ids]
-                # print(f'selected spiketrains to be plotted: {spiketrains}')
+                for top_node in spiketrains.keys():
+                    spiketrains[top_node] = [st for st in spiketrains[top_node] if st._id in selected_ids]
+
             # TODO: Add user-adaptive time slicing
             #             for row in spiketrains:
             #                 for i, sptr in enumerate(row):
             #                     row[i] = sptr.time_slice(0, 50)
             # If there are any spike trains
             if spiketrains:
-                # Set matplotlib parameters
                 # TODO: adaptive to user's layout, screen width etc.
-                from matplotlib import rcParams
-                size = rcParams['figure.figsize']
-                # figure size in inches
-                rcParams['figure.figsize'] = 11.7, 8.7
-                rcParams['figure.figsize'] = 5.85, 4.35
-                try:
-                    ax = self.plot[0]
-                except TypeError:
-                    ax = None
+                fig, axs = plt.subplots(1, len(spiketrains), figsize=(len(spiketrains)*8, 4))
+                fig.suptitle("Rasterplot for all SpikeTrains in Top-Nodes")
                 # Rasterplot using viziphant
-                self.plot = self.rasterplot(spiketrains, s=0.1, title="Rasterplot for SpikeTrains")
-                # Reset figsize for later plots
-                rcParams['figure.figsize'] = size
-                # self.fig = self.plt.figure()
+                if len(spiketrains) > 1:
+                    for i, top_node in enumerate(spiketrains.keys()):
+                        if spiketrains[top_node]:
+                            axs[i] = self.rasterplot(spiketrains[top_node], axes=axs[i], s=0.1, title=f"{top_node}")
+                        else:
+                            pass
+                else:
+                    top_node = list(spiketrains.keys())[0]
+                    axs = self.rasterplot(spiketrains[top_node], axes=axs, s=0.1,  title=f"{top_node}")
+                self.fig = fig
         # self.plt.show()
-        # return self.fig
-        return self.plot
+        return self.fig
 
     # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
     def plot_lfp(self, lfps, times, title=None, spacing=5, color=None):

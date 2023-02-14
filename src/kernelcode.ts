@@ -29,7 +29,7 @@ let raster_plot =
 `import warnings
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
-    my_jupyphant_vis_xxx.plot_sptr();
+    my_jupyphant_vis_xxx.create_rasterplot();
 `;
 // Call to the function that plots AnalogSignals
 let lfp_plot = 
@@ -99,7 +99,7 @@ def on_selected_change(change):
     with output_node_plot:
         IPython.display.clear_output()
         # print(f'Python Ids of selected nodes {selected_ids}')
-        my_jupyphant_vis_xxx.plot_sptr(selected_ids=selected_ids)
+        my_jupyphant_vis_xxx.create_rasterplot(selected_ids=selected_ids)
         plt.show()
         my_jupyphant_vis_xxx.plot_anasig(selected_ids=selected_ids)
         plt.show()
