@@ -370,24 +370,31 @@ class JupyphantVisualization:
             #             for row in spiketrains:
             #                 for i, sptr in enumerate(row):
             #                     row[i] = sptr.time_slice(0, 50)
-            # If there are any spike trains
-            if spiketrains:
-                # TODO: adaptive to user's layout, screen width etc.
-                fig, axs = plt.subplots(1, len(spiketrains), figsize=(len(spiketrains)*8, 4))
+            # TODO: adaptive to user's layout, screen width etc.
+
+            # remove top-nodes without spiketrains
+            for key in list(spiketrains):
+                if len(spiketrains[key]) == 0:
+                    del spiketrains[key]
+
+            n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
+            if n_subplots > 0:
+                fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots*8, 4))
                 fig.suptitle("Rasterplot for all SpikeTrains in Top-Nodes")
                 # Rasterplot using viziphant
-                if len(spiketrains) > 1:
+                if n_subplots > 1:
                     for i, top_node in enumerate(spiketrains.keys()):
                         if spiketrains[top_node]:
                             axs[i] = self.rasterplot(spiketrains[top_node], axes=axs[i], s=0.1, title=f"{top_node}")
                         else:
-                            pass
+                            axs[i].set_title(f"{top_node}")
                 else:
                     top_node = list(spiketrains.keys())[0]
                     axs = self.rasterplot(spiketrains[top_node], axes=axs, s=0.1,  title=f"{top_node}")
                 self.fig = fig
-        # self.plt.show()
-        return self.fig
+                return self.fig
+            else:
+                pass
 
     # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
     def plot_lfp(self, lfps, times, title=None, spacing=5, color=None):
