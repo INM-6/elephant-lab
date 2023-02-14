@@ -33,7 +33,7 @@ with warnings.catch_warnings():
 `;
 // Call to the function that plots AnalogSignals
 let lfp_plot = 
-`my_jupyphant_vis_xxx.plot_anasig();
+`my_jupyphant_vis_xxx.create_lfpplot();
 `;
 // Call to the function that initializes the ipytree widget with an empty tree
 let create_tree =
@@ -101,7 +101,7 @@ def on_selected_change(change):
         # print(f'Python Ids of selected nodes {selected_ids}')
         my_jupyphant_vis_xxx.create_rasterplot(selected_ids=selected_ids)
         plt.show()
-        my_jupyphant_vis_xxx.plot_anasig(selected_ids=selected_ids)
+        my_jupyphant_vis_xxx.create_lfpplot(selected_ids=selected_ids)
         plt.show()
         # print('after plot')
     with output_node_statistic:

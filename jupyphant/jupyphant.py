@@ -397,61 +397,83 @@ class JupyphantVisualization:
                 pass
 
     # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
-    def plot_lfp(self, lfps, times, title=None, spacing=5, color=None):
+    def plot_lfp(self, lfps, times, title=None, spacing=5, color=None, axes=None):
         '''
         Plot LFPs.
 
-        lfps: LFP signals with trial_id as first dimension and sample_id as second dimension.
-              LFP signals must be arranged according to trial ID.
-        times: time stamps of the recorded LFP samples. Must be of same length as second dimenion of lfps
-        title: title of the figure
-        spacing: vertical spacing between two LFP signals
-        color: color to used for plotting
+        lfps:       LFP signals with trial_id as first dimension and sample_id as second dimension.
+                    LFP signals must be arranged according to trial ID.
+        times:      time stamps of the recorded LFP samples. Must be of same length as second dimenion of lfps
+        title:      title of the figure
+        spacing:    vertical spacing between two LFP signals
+        color:      color to used for plotting
+        axes :      matplotlib.axes.Axes or None, optional
+                    Matplotlib axes handle. If None, new axes are created and returned.
+                    Default: None
         '''
+
+        if axes is None:
+            fig, axes = plt.subplots(nrows=1, ncols=1)
 
         # Plots lfp signals for each trial
         for trial_id, lfp in enumerate(lfps):
-            self.plt.plot(times, lfp.magnitude / 1000 + trial_id * spacing, color=color)
-            xmin, xmax = times[[0, -1]]  # use first and last time stamp for xlim values
+            # normalize by maximum
+            axes.plot(times, lfp.magnitude / max(lfp.magnitude), color=color)
 
-        self.plt.title("Plotting LFPs for AnalogSignals")
+        axes.set_title(title)
         # Defines plot parameters for x-axis
-        self.plt.xlabel('Time ({0})'.format(times.dimensionality))
+        axes.set_xlabel('Time ({0})'.format(times.dimensionality))
 
         # Defines plot parameters for y-axis
-        self.plt.ylabel('trials')
-        ymin, ymax = 0, len(lfps) * spacing
-        self.plt.ylim(ymin - spacing, ymax + spacing)
-        yticks = self.np.arange(ymin, ymax + 1, spacing * 10)
-        yticklabels = [str(i) for i in self.np.arange(0, len(lfps) + 1, 10, dtype=int)]
-        self.plt.yticks(yticks, yticklabels)
+        axes.set_ylabel(f'AnaSig ({lfps[0][0].units.__str__()})')
 
-        # Adjusts axis
-        self.plt.axis('tight')
+        return axes
 
-        # Adds the title to the figure
-        self.plt.suptitle(title, size=18)
-
-    def plot_anasig(self, selected_ids=None):
+    def create_lfpplot(self, selected_ids=None):
         """
         Wrapper for plot_lfp to update the lfp plot
 
         Called at every cell execution
         """
         # Extract all AnalogSignals
-        anasigs = []
+        anasigs = {}
         for bl in self.blocks:
-            anasigs.extend(bl.list_children_by_class(self.AnalogSignal))
-        anasigs.extend([obj for obj in self.other_objs if isinstance(obj, self.AnalogSignal)])
+            anasigs[f"{bl.name}::{bl._id}"] = bl.list_children_by_class(self.AnalogSignal)
+        for obj in self.other_objs:
+            if isinstance(obj, self.AnalogSignal):
+                anasigs[f"{obj.name}::{obj._id}"] = [obj]
+            elif issubclass(type(obj), self.Container):
+                anasigs[f"{obj.name}::{obj._id}"] = obj.list_children_by_class(self.AnalogSignal)
+            else:
+                pass
         if selected_ids is not None:
-            # print(f'selected ids = {selected_ids}')
-            anasigs = [anasig for anasig in anasigs if anasig._id in selected_ids]
-        # Create plot from scratch
-        self.anasig_plot = None
-        if anasigs:
-            self.plot_lfp(anasigs[:20], times=self.np.arange(len(anasigs[0])) * self.pq.s, spacing=50)
-        # Return it for display
-        return self.anasig_plot
+            for top_node in anasigs.keys():
+                anasigs[top_node] = [anasig for anasig in anasigs[top_node] if anasig._id in selected_ids]
+        # remove top-nodes without spiketrains
+        for key in list(anasigs):
+            if len(anasigs[key]) == 0:
+                del anasigs[key]
+
+        n_subplots = sum(1 for v in anasigs.values() if len(v) > 0)
+        if n_subplots > 0:
+            fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots * 8, 4))
+            fig.suptitle("Normalized LFP-Plots for all AnalogSignals in Top-Nodes")
+            # Rasterplot using viziphant
+            if n_subplots > 1:
+                for i, top_node in enumerate(anasigs.keys()):
+                    if anasigs[top_node]:
+                        axs[i] = self.plot_lfp(anasigs[top_node], times=self.np.arange(len(anasigs[top_node][0])) * self.pq.s,
+                                               title=f"{top_node}", spacing=75, axes=axs[i])
+                    else:
+                        axs[i].set_title(f"{top_node}")
+            else:
+                top_node = list(anasigs.keys())[0]
+                axs = self.plot_lfp(anasigs[top_node], times=self.np.arange(len(anasigs[top_node][0])) * self.pq.s,
+                                    title=f"{top_node}", spacing=75, axes=axs)
+            self.fig = fig
+            return self.fig
+        else:
+            pass
 
     def testfunc(self):
         """
