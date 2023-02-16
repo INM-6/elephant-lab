@@ -5,6 +5,7 @@ import __main__
 import time
 
 import matplotlib.pyplot as plt
+import numpy as np
 from elephant.pandas_bridge import multi_spiketrains_to_dataframe, multi_events_to_dataframe, multi_epochs_to_dataframe
 from jupyphant.pandas_bridge import multi_analogsignals_to_dataframe
 
@@ -398,7 +399,7 @@ class JupyphantVisualization:
 
     # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
     def plot_lfp(self, lfps, times, title=None, spacing=5, color=None, axes=None):
-        '''
+        """
         Plot LFPs.
 
         lfps:       LFP signals with trial_id as first dimension and sample_id as second dimension.
@@ -410,15 +411,23 @@ class JupyphantVisualization:
         axes :      matplotlib.axes.Axes or None, optional
                     Matplotlib axes handle. If None, new axes are created and returned.
                     Default: None
-        '''
+        """
 
         if axes is None:
             fig, axes = plt.subplots(nrows=1, ncols=1)
 
         # Plots lfp signals for each trial
         for trial_id, lfp in enumerate(lfps):
-            # normalize by maximum
-            axes.plot(times, lfp.magnitude / max(lfp.magnitude), color=color)
+            # plot each channel
+            if np.shape(lfp)[1] != 1:
+                # transpose to get values per channel
+                lfp = np.transpose(lfp)
+                # normalize by maximum
+                lfp = np.divide(lfp, np.max(lfp, axis=1).reshape(len(lfp), 1))
+                for ch in lfp:
+                    axes.plot(times, ch, color=color)
+            else:
+                axes.plot(times, lfp.magnitude / np.max(lfp.magnitude), color=color)
 
         axes.set_title(title)
         # Defines plot parameters for x-axis
