@@ -37,10 +37,16 @@ let lfp_plot =
 `;
 // Call to the function that initializes the ipytree widget with an empty tree
 let create_tree =
-`import matplotlib.pyplot as plt
+`# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
+%matplotlib widget
+
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+import matplotlib.pyplot as plt
 import IPython
 from IPython.display import display
-from ipywidgets import link, HBox, VBox, IntSlider, Text, Label, Output, Tab, Dropdown, Button, interact
+from ipywidgets import link, HBox, VBox, IntSlider, Text, Label, Output, Tab, Dropdown, Button, interact, Layout
 import elephant
 import inspect
 
@@ -77,7 +83,7 @@ my_jupyphant_vis_xxx.tree.layout.width = '50%'
 
 output_node_info = Output(layout={'border': '1px solid orange'})
 output_node_plot = Output(layout={'border': '1px solid orange'})
-output_node_statistic = Output(layout={'border': '1px solid orange'})
+output_node_statistic = Output(layout=Layout(border= '1px solid orange', width='3572px')) # 4 * 8inch * 96px/inch
 output_node_analysis = Output(layout={'border': '1px solid orange'})
 
 def on_selected_change(change):
@@ -99,10 +105,12 @@ def on_selected_change(change):
     with output_node_plot:
         IPython.display.clear_output()
         # print(f'Python Ids of selected nodes {selected_ids}')
-        my_jupyphant_vis_xxx.create_rasterplot(selected_ids=selected_ids)
-        plt.show()
-        my_jupyphant_vis_xxx.create_lfpplot(selected_ids=selected_ids)
-        plt.show()
+        raw_st = my_jupyphant_vis_xxx.create_rasterplot(selected_ids=selected_ids)
+        if raw_st:
+            plt.show()
+        raw_anasig = my_jupyphant_vis_xxx.create_lfpplot(selected_ids=selected_ids)
+        if raw_anasig:
+            plt.show()
         # print('after plot')
     with output_node_statistic:
         IPython.display.clear_output()

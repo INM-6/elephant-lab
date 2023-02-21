@@ -87,8 +87,8 @@ class JupyphantVisualization:
         self.other_objs = []
         # Plots are saved in order not to require recreation at every cell execution
         self.plot = None
-        self.out = self.Output()
-        self.fig = None
+        self.spiketrain_overview = None
+        self.analogsignal_overview = None
         self.tree = None
         self.map = {}
 
@@ -355,13 +355,12 @@ class JupyphantVisualization:
                 changes = True
         # Return pre-existing plot if nothing has changed
         # print(f'Python Ids of selected nodes {selected_ids} in create_rasterplot()')
-        # print(f'{not changes} AND {self.fig is not None} AND {selected_ids is not None} AND False')
-        if (not changes) and (self.fig is not None) and (selected_ids is not None) and False:
+        # print(f'{not changes} AND {self.spiketrain_overview is not None} AND {selected_ids is not None} AND False')
+        if (not changes) and (self.spiketrain_overview is not None) and (selected_ids is not None) and False:
             pass
             # TODO: Get plot to be displayed again
             print('before return pre-existing plot')
-            return self.fig
-            # return self.fig
+            return self.spiketrain_overview
         # Otherwise, create new plot
         else:
             # Extract all spike trains
@@ -388,8 +387,9 @@ class JupyphantVisualization:
                 else:
                     top_node = list(spiketrains.keys())[0]
                     axs = self.rasterplot(spiketrains[top_node], axes=axs, s=0.1,  title=f"{top_node}")
-                self.fig = fig
-                return self.fig
+                if selected_ids is None:
+                    self.spiketrain_overview = fig
+                return fig
             else:
                 pass
 
@@ -459,8 +459,9 @@ class JupyphantVisualization:
                 top_node = list(anasigs.keys())[0]
                 axs = self.plot_lfp(anasigs[top_node], times=self.np.arange(len(anasigs[top_node][0])) * self.pq.s,
                                     title=f"{top_node}", spacing=75, axes=axs)
-            self.fig = fig
-            return self.fig
+            if selected_ids is None:
+                self.analogsignal_overview = fig
+            return fig
         else:
             pass
 
