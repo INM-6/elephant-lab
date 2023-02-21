@@ -353,30 +353,14 @@ class JupyphantVisualization:
         # Otherwise, create new plot
         else:
             # Extract all spike trains
-            spiketrains = {}
-            for bl in curr_blocks:
-                spiketrains[f"{bl.name}::{bl._id}"] = bl.list_children_by_class(self.SpikeTrain)
-            for obj in curr_objs:
-                if isinstance(obj, self.SpikeTrain):
-                    spiketrains[f"{obj.name}::{obj._id}"] = [obj]
-                elif issubclass(type(obj), self.Container):
-                    spiketrains[f"{obj.name}::{obj._id}"] = obj.list_children_by_class(self.SpikeTrain)
-                else:
-                    pass
-            if selected_ids is not None:
-                for top_node in spiketrains.keys():
-                    spiketrains[top_node] = [st for st in spiketrains[top_node] if st._id in selected_ids]
+            spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
+                                                                         neo_class=self.SpikeTrain)
 
             # TODO: Add user-adaptive time slicing
             #             for row in spiketrains:
             #                 for i, sptr in enumerate(row):
             #                     row[i] = sptr.time_slice(0, 50)
             # TODO: adaptive to user's layout, screen width etc.
-
-            # remove top-nodes without spiketrains
-            for key in list(spiketrains):
-                if len(spiketrains[key]) == 0:
-                    del spiketrains[key]
 
             n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
             if n_subplots > 0:
@@ -445,23 +429,7 @@ class JupyphantVisualization:
         Called at every cell execution
         """
         # Extract all AnalogSignals
-        anasigs = {}
-        for bl in self.blocks:
-            anasigs[f"{bl.name}::{bl._id}"] = bl.list_children_by_class(self.AnalogSignal)
-        for obj in self.other_objs:
-            if isinstance(obj, self.AnalogSignal):
-                anasigs[f"{obj.name}::{obj._id}"] = [obj]
-            elif issubclass(type(obj), self.Container):
-                anasigs[f"{obj.name}::{obj._id}"] = obj.list_children_by_class(self.AnalogSignal)
-            else:
-                pass
-        if selected_ids is not None:
-            for top_node in anasigs.keys():
-                anasigs[top_node] = [anasig for anasig in anasigs[top_node] if anasig._id in selected_ids]
-        # remove top-nodes without spiketrains
-        for key in list(anasigs):
-            if len(anasigs[key]) == 0:
-                del anasigs[key]
+        anasigs = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids, neo_class=self.AnalogSignal)
 
         n_subplots = sum(1 for v in anasigs.values() if len(v) > 0)
         if n_subplots > 0:
@@ -483,6 +451,29 @@ class JupyphantVisualization:
             return self.fig
         else:
             pass
+
+    def _extract_selected_neo_objects_by_top_node(self, selected_ids=None, neo_class=None):
+        neo_objs = {}
+        # iterate/extract form blocks
+        for bl in self.blocks:
+            neo_objs[f"{bl.name}::{bl._id}"] = bl.list_children_by_class(neo_class)
+        # iterate/extract form other_objs
+        for obj in self.other_objs:
+            if isinstance(obj, neo_class):
+                neo_objs[f"{obj.name}::{obj._id}"] = [obj]
+            elif issubclass(type(obj), self.Container):
+                neo_objs[f"{obj.name}::{obj._id}"] = obj.list_children_by_class(neo_class)
+            else:
+                pass
+        # keep neo_obj which are selected
+        if selected_ids is not None:
+            for top_node in neo_objs.keys():
+                neo_objs[top_node] = [neo_obj for neo_obj in neo_objs[top_node] if neo_obj._id in selected_ids]
+        # remove top-nodes with no object of the specified neo_class
+        for key in list(neo_objs):
+            if len(neo_objs[key]) == 0:
+                del neo_objs[key]
+        return neo_objs
 
     def testfunc(self):
         """
