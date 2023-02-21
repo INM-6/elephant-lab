@@ -276,37 +276,49 @@ class JupyphantVisualization:
         return df_anasig, df_spt, df_evt, df_epc
 
     def statistics_of_selected_nodes(self, selected_ids=None):
-        spiketrains = []
-
-        # extract all SpikeTrains from the blocks
-        for bl in self.blocks:
-            spiketrains.append(bl.list_children_by_class(self.SpikeTrain))
-        # extract all SpikeTrains the other (independent) objects
-        spiketrains.append([obj for obj in self.other_objs if isinstance(obj, self.SpikeTrain)])
-
-        if selected_ids is not None:
-            spiketrains = [st for st_list in spiketrains for st in st_list if st._id in selected_ids]
-
-            if len(spiketrains) > 0:
-                # plot ISI
-                axes_isi_histo = self.plot_isi_histogram(spiketrains=spiketrains)
-                # plot time histogram
-                time_histogram = self.statistics.time_histogram(spiketrains, bin_size=0.1 * self.pq.s, output='rate')
-                axes_time_histo = self.plot_time_histogram(histogram=time_histogram)
-                # plot IFR
-                kernel = self.kernels.GaussianKernel(sigma=100 * self.pq.ms)
-                rates = self.statistics.instantaneous_rate(spiketrains, sampling_period=10 * self.pq.ms, kernel=kernel)
-                axes_ifr = self.plot_instantaneous_rates_colormesh(rates)
-                # plot correlation
-                axes_corrcoef = None
-                if len(spiketrains) > 1:
-                    binned_spiketrains = self.BinnedSpikeTrain(spiketrains, bin_size=100 * self.pq.ms)
-                    corrcoef_matrix = self.correlation_coefficient(binned_spiketrains)
-                    axes_corrcoef = self.plot_corrcoef(corrcoef_matrix)
-                    axes_corrcoef.set_xlabel('Neuron')
-                    axes_corrcoef.set_ylabel('Neuron')
-                    axes_corrcoef.set_title("Correlation coefficient matrix")
-                return axes_isi_histo, axes_time_histo, axes_ifr, axes_corrcoef
+        spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
+                                                                     neo_class=self.SpikeTrain)
+        n_st_statistics = 4  # ISI, time-histogram, IFR, correlation
+        n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
+        if n_subplots > 0:
+            fig, axs = plt.subplots(n_subplots, n_st_statistics, figsize=(n_st_statistics * 8, n_subplots * 4),
+                                    squeeze=False)
+            fig.suptitle("Basic statistics for all SpikeTrains in Top-Nodes")
+            for i, top_node in enumerate(spiketrains.keys()):
+                if spiketrains[top_node]:
+                    # plot ISI
+                    axs[i, 0] = self.plot_isi_histogram(spiketrains=spiketrains[top_node], axes=axs[i, 0],
+                                                        title=f"ISI-distribution:\n {top_node}")
+                    # plot time histogram
+                    time_histogram = self.statistics.time_histogram(spiketrains[top_node], bin_size=0.1 * self.pq.s,
+                                                                    output='rate')
+                    axs[i, 1] = self.plot_time_histogram(histogram=time_histogram, axes=axs[i, 1])
+                    axs[i, 1].set_title(f"Time-histogram:\n {top_node}")
+                    # plot IFR
+                    kernel = self.kernels.GaussianKernel(sigma=100 * self.pq.ms)
+                    rates = self.statistics.instantaneous_rate(spiketrains[top_node], sampling_period=10 * self.pq.ms,
+                                                               kernel=kernel)
+                    axs[i, 2] = self.plot_instantaneous_rates_colormesh(rates, axes=axs[i, 2])
+                    axs[i, 2].set_title(f"IFR:\n {top_node}")
+                    # plot correlation
+                    if len(spiketrains[top_node]) > 1:
+                        binned_spiketrains = self.BinnedSpikeTrain(spiketrains[top_node], bin_size=100 * self.pq.ms)
+                        corrcoef_matrix = self.correlation_coefficient(binned_spiketrains)
+                        axs[i, 3] = self.plot_corrcoef(corrcoef_matrix, axes=axs[i, 3])
+                        axs[i, 3].set_xlabel('Neuron')
+                        axs[i, 3].set_ylabel('Neuron')
+                        axs[i, 3].set_title(f"Correlation coefficient matrix:\n {top_node}")
+                    else:
+                        axs[i, 0].set_title(f"ISI-distribution:\n {top_node}")
+                        axs[i, 1].set_title(f"Time-histogram:\n {top_node}")
+                        axs[i, 2].set_title(f"IFR:\n {top_node}")
+                        axs[i, 3].set_xlabel('Neuron')
+                        axs[i, 3].set_ylabel('Neuron')
+                        axs[i, 3].set_title(f"Correlation coefficient matrix:\n {top_node}")
+            fig.tight_layout(pad=1.0)
+            return fig
+        else:
+            pass
 
     def create_rasterplot(self, selected_ids=None):
         """
