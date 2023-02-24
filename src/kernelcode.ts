@@ -37,10 +37,7 @@ let lfp_plot =
 `;
 // Call to the function that initializes the ipytree widget with an empty tree
 let create_tree =
-`# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
-%matplotlib widget
-
-import warnings
+`import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import matplotlib.pyplot as plt
