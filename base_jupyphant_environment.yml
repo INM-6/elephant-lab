@@ -246,7 +246,7 @@ dependencies:
   - zstd=1.5.2=h6239696_4
   - pip:
     - elephant==0.11.2
-    - jupyphant==0.1.0
+#    - jupyphant==0.1.0  # use wheel for installation, e.g. pip install jupyphant/dist/jupyphant-0.1.0-py3-none-any.whl
     - matplotlib==3.6.0
     - pandas==1.5.1
     - scipy==1.9.3
