@@ -44,7 +44,7 @@ display(my_jupyphant_vis_xxx.tree)
 `;
 let create_explorer =
 `# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
-#%matplotlib widget
+%matplotlib ipympl
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
