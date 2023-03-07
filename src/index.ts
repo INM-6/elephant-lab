@@ -176,8 +176,8 @@ class JupyphantExtension {
 	            // Code is executed and the results displayed in the specified OutputArea
 	            OutputArea.execute(pythonCode['createTree'], outarea_treeview, session);
 	            OutputArea.execute(pythonCode['createExplorer'], outarea_nodeexplorer, session);
-// 	            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
-// 	            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
+	            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
+	            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
 
 	            // This code is executed without output that needs to be displayed
 	            // Therefore, no OutputArea is necessary
