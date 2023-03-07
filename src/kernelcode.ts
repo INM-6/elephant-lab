@@ -36,9 +36,15 @@ let lfp_plot =
 `my_jupyphant_vis_xxx.create_lfpplot();
 `;
 // Call to the function that initializes the ipytree widget with an empty tree
-let create_tree =
+let create_tree = `
+from IPython.display import display
+my_jupyphant_vis_xxx.create_tree()
+my_jupyphant_vis_xxx.tree.layout.width = '100%'
+display(my_jupyphant_vis_xxx.tree)
+`;
+let create_explorer =
 `# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
-%matplotlib widget
+#%matplotlib widget
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -78,8 +84,6 @@ for m in elephant_functions_by_module.keys():
     functions_dict = {f : inspect.getfullargspec(eval(f"elephant.{m}.{f}")).args for f in functions} # TODO: signature to list
     elephant_functions_by_module[m] = functions_dict
 
-my_jupyphant_vis_xxx.create_tree()
-my_jupyphant_vis_xxx.tree.layout.width = '50%'
 
 output_node_info = Output(layout={'border': '1px solid orange'})
 output_node_plot = Output(layout={'border': '1px solid orange'})
@@ -154,8 +158,9 @@ tab_node_explorer.children = [output_node_info, output_node_plot, output_node_st
 tab_node_explorer.titles = ["INFO", "RAW PLOT", "STATISTICS", "ANALYSIS"]
 
 right_side = VBox([Label("Node Explorer:"), tab_node_explorer])
-right_side.layout.width = '50%'
-HBox([my_jupyphant_vis_xxx.tree, right_side])
+right_side.layout.width = '100%'
+#HBox([my_jupyphant_vis_xxx.tree, right_side])
+display(right_side)
 `;
 // Call to the function that updates the ipytree tree view of the neo hierarchy
 let update_tree =
@@ -171,5 +176,6 @@ export const pythonCode = {
 	'rasterPlot': raster_plot,
 	'lfpPlot': lfp_plot,
 	'createTree': create_tree,
+	'createExplorer': create_explorer,
 	'updateTree': update_tree
 };

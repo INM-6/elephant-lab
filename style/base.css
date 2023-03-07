@@ -11,3 +11,7 @@
   align-items: center;
   overflow: auto;
 }
+
+.my-jupyphantWidget .p-SplitPanel-handle {
+	background-color: darkgrey;
+}

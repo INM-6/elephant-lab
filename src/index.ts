@@ -162,18 +162,22 @@ class JupyphantExtension {
 	            this.executeCode(pythonCode['setupEnv'], session);
 
 	            // get OutputAreas of upper/lower panel that will show TreeView + NodeExplorer / raster + LFP plot
-	            let upperPanel = <Panel>this.widget.widgets[0];
+	            let upperPanel = <SplitPanel>this.widget.widgets[0];
+	            let upperLeft = <Panel>upperPanel.widgets[0];
+	            let upperRight = <Panel>upperPanel.widgets[1];
 	            let lowerPanel = <Panel>this.widget.widgets[1];
-	            let outarea_treeview_nodeexplorer = <OutputArea>upperPanel.widgets[0];
+	            let outarea_treeview= <OutputArea>upperLeft.widgets[0];
+	            let outarea_nodeexplorer = <OutputArea>upperRight.widgets[0];
 	            let outarea_rasterplot = <OutputArea>lowerPanel.widgets[0];
 	            let outarea_lfpplot = <OutputArea>lowerPanel.widgets[1];
 
 	            // Also show tree and plots immediately upon being activated
 	            // This is what user expects
 	            // Code is executed and the results displayed in the specified OutputArea
-	            OutputArea.execute(pythonCode['createTree'], outarea_treeview_nodeexplorer, session);
-	            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
-	            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
+	            OutputArea.execute(pythonCode['createTree'], outarea_treeview, session);
+	            OutputArea.execute(pythonCode['createExplorer'], outarea_nodeexplorer, session);
+// 	            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
+// 	            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
 
 	            // This code is executed without output that needs to be displayed
 	            // Therefore, no OutputArea is necessary
@@ -249,7 +253,14 @@ class JupyphantExtension {
 		this.widget.title.closable = true;
 
 		// Divide Tab in upper part for TreeView / NodeExplorer and lower part for OverviewPlots
-        this.widget.addWidget(new Panel());
+        // upper Panel
+        this.widget.addWidget(new SplitPanel({orientation: 'horizontal'}));
+        let upper = <SplitPanel>this.widget.widgets[0];
+        upper.addWidget(new Panel());
+        upper.addWidget(new Panel());
+        upper.widgets[0].node.style.cssText = upper.widgets[0].node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+        upper.widgets[1].node.style.cssText = upper.widgets[1].node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+        // lower Panel
         this.widget.addWidget(new Panel());
         // Scrollbar in both parts in x and y axis
         this.widget.widgets[0].node.style.cssText = this.widget.widgets[0].node.style.cssText +
@@ -260,7 +271,8 @@ class JupyphantExtension {
         (<SplitPanel>this.widget).handles[0].style.cssText += " background-color: DarkGrey;";
 
 		// Create OutputArea in upper panel that will show TreeView and NodeExplorer
-        this.createOutputArea(rendermime, <Panel>this.widget.widgets[0], ['my-outarea-class'], 'jup_vis_out_id1');
+        this.createOutputArea(rendermime, <Panel>upper.widgets[0], ['my-outarea-class'], 'jup_vis_out_id1.1');
+        this.createOutputArea(rendermime, <Panel>upper.widgets[1], ['my-outarea-class'], 'jup_vis_out_id1.2');
         // Create 2 OutputAreas in lower panel that will show overview raster/lfp plots
         this.createOutputArea(rendermime, <Panel>this.widget.widgets[1], ['my-outarea-class'], 'jup_vis_out_id2');
         this.createOutputArea(rendermime, <Panel>this.widget.widgets[1], ['my-outarea-class'], 'jup_vis_out_id3');
