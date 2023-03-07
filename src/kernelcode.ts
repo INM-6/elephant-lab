@@ -122,8 +122,9 @@ def on_selected_change(change):
         # print('after plot')
     with output_node_statistic:
         IPython.display.clear_output()
-        my_jupyphant_vis_xxx.statistics_of_selected_nodes(selected_ids=selected_ids)
-        plt.show()
+        fig = my_jupyphant_vis_xxx.statistics_of_selected_nodes(selected_ids=selected_ids)
+        if fig:
+            plt.show()
 
 my_jupyphant_vis_xxx.tree.observe(on_selected_change, names='selected_nodes')
 

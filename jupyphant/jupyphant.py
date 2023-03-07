@@ -307,7 +307,7 @@ class JupyphantVisualization:
             fig.tight_layout(pad=1.0)
             return fig
         else:
-            pass
+            return None
 
     def create_rasterplot(self, selected_ids=None):
         """
