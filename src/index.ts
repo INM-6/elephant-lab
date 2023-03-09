@@ -266,7 +266,7 @@ class JupyphantExtension {
         this.widget.widgets[0].node.style.cssText = this.widget.widgets[0].node.style.cssText +
                                                      ' overflow-x: scroll; overflow-y: scroll;';
         this.widget.widgets[1].node.style.cssText = this.widget.widgets[1].node.style.cssText +
-                                                    ' overflow-x: scroll; overflow-y: scroll;';
+                                                    ' overflow: auto auto';
         // Styling
         (<SplitPanel>this.widget).handles[0].style.cssText += " background-color: DarkGrey;";
 

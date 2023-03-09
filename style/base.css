@@ -15,3 +15,7 @@
 .my-jupyphantWidget .p-SplitPanel-handle {
 	background-color: darkgrey;
 }
+
+.p-SplitPanel-child .my-outarea-class *{
+	overflow: auto;
+}
