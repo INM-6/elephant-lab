@@ -247,10 +247,12 @@ dependencies:
   - zlib=1.2.13=h166bdaf_4
   - zstd=1.5.2=h6239696_4
   - pip:
+      - build==0.10.0
       - elephant==0.11.2
       - jupyphant==0.1.0
       - matplotlib==3.6.0
       - pandas==1.5.1
+      - pyproject-hooks==1.0.0
       - scipy==1.9.3
       - seaborn==0.12.1
       - tqdm==4.64.1
