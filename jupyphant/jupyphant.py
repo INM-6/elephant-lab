@@ -142,25 +142,25 @@ class JupyphantVisualization:
             # Create one tree node per neo block and name of node is name of block
             nodes = []
             for bl in self.blocks:
-                bl_node = self.Node(f"{NEO_ABBREVIATIONS[bl.__class__.__name__]}::{bl.name}::{bl._id}")
+                bl_node = self.Node(f"{NEO_ABBREVIATIONS[bl.__class__.__name__]}::{bl.name}::{id(bl)}")
                 bl_node.opened = False
                 self._add_sub_nodes(bl_node, bl)
                 nodes.append(bl_node)
-                self.map[bl_node._id] = bl._id
+                self.map[bl_node._id] = id(bl)
             print(f"After Blocks: {time.time() - start}")
             # print(f"Nodes After Blocks: {nodes}")
 
             # Top-level node for every independent neo object
             for obj in self.other_objs:
                 if issubclass(type(obj), self.RegionOfInterest):
-                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}::{obj._id} ")
+                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}::{id(obj)} ")
                     self.map[obj_node._id] = None
                 elif isinstance(obj, list):
                     obj_node = self.Node(f"{obj.__class__.__name__}::{obj.__hash__}")
                     self.map[obj_node._id] = None
                 else:
-                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}::{obj.name}::{obj._id}")
-                    self.map[obj_node._id] = obj._id
+                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}::{obj.name}::{id(obj)}")
+                    self.map[obj_node._id] = id(obj)
                 obj_node.opened = False
                 self._add_sub_nodes(obj_node, obj)
                 nodes.append(obj_node)
@@ -210,9 +210,9 @@ class JupyphantVisualization:
         elif isinstance(obj, (list, self.SpikeTrainList)):
             for i, child_obj in enumerate(obj):
                 if issubclass(type(child_obj), self.BaseNeo):
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]}#{i}::{child_obj.name}::{child_obj._id}")
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]}#{i}::{child_obj.name}::{id(child_obj)}")
                     child_node.opened = False
-                    self.map[child_node._id] = child_obj._id
+                    self.map[child_node._id] = id(child_obj)
                     self._add_sub_nodes(child_node, child_obj)
                     parent.add_node(child_node)
                 else:
@@ -458,19 +458,19 @@ class JupyphantVisualization:
         neo_objs = {}
         # iterate/extract form blocks
         for bl in self.blocks:
-            neo_objs[f"{bl.name}::{bl._id}"] = bl.list_children_by_class(neo_class)
+            neo_objs[f"{bl.name}::{id(bl)}"] = bl.list_children_by_class(neo_class)
         # iterate/extract form other_objs
         for obj in self.other_objs:
             if isinstance(obj, neo_class):
-                neo_objs[f"{obj.name}::{obj._id}"] = [obj]
+                neo_objs[f"{obj.name}::{id(obj)}"] = [obj]
             elif issubclass(type(obj), self.Container):
-                neo_objs[f"{obj.name}::{obj._id}"] = obj.list_children_by_class(neo_class)
+                neo_objs[f"{obj.name}::{id(obj)}"] = obj.list_children_by_class(neo_class)
             else:
                 pass
         # keep neo_obj which are selected
         if selected_ids is not None:
             for top_node in neo_objs.keys():
-                neo_objs[top_node] = [neo_obj for neo_obj in neo_objs[top_node] if neo_obj._id in selected_ids]
+                neo_objs[top_node] = [neo_obj for neo_obj in neo_objs[top_node] if id(neo_obj) in selected_ids]
         # remove top-nodes with no object of the specified neo_class
         for key in list(neo_objs):
             if len(neo_objs[key]) == 0:
