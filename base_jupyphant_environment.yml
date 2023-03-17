@@ -1,4 +1,4 @@
-name: MyJupyphant
+name: MyJupyphantClone
 channels:
   - conda-forge
   - defaults
@@ -25,8 +25,8 @@ dependencies:
   - brotlipy=0.7.0=py310h5764c6d_1004
   - bzip2=1.0.8=h7f98852_4
   - c-ares=1.18.1=h7f98852_0
-  - ca-certificates=2022.9.24=ha878542_0
-  - certifi=2022.9.24=pyhd8ed1ab_0
+  - ca-certificates=2022.12.7=ha878542_0
+  - certifi=2022.12.7=pyhd8ed1ab_0
   - cffi=1.15.1=py310h255011f_1
   - chardet=5.0.0=py310hff52083_0
   - charset-normalizer=2.1.1=pyhd8ed1ab_0
@@ -66,6 +66,7 @@ dependencies:
   - importlib-metadata=4.11.4=py310hff52083_0
   - importlib_resources=5.10.0=pyhd8ed1ab_0
   - ipykernel=6.16.1=pyh210e3f2_0
+  - ipympl=0.9.3=pyhd8ed1ab_0
   - ipython=8.5.0=pyh41d4057_1
   - ipython_genutils=0.2.0=py_1
   - ipytree=0.2.2=pyhd8ed1ab_0
@@ -141,6 +142,7 @@ dependencies:
   - libxml2=2.10.3=h7463322_0
   - libzlib=1.2.13=h166bdaf_4
   - markupsafe=2.1.1=py310h5764c6d_1
+  - matplotlib-base=3.7.0=py310he60537e_0
   - matplotlib-inline=0.1.6=pyhd8ed1ab_0
   - mistune=2.0.4=pyhd8ed1ab_0
   - mpg123=1.30.2=h27087fc_1
@@ -162,7 +164,7 @@ dependencies:
   - nss=3.78=h2350873_0
   - numpy=1.23.4=py310h53a5b5f_1
   - openjpeg=2.5.0=h7d73246_1
-  - openssl=1.1.1q=h166bdaf_1
+  - openssl=1.1.1t=h0b41bf4_0
   - packaging=21.3=pyhd8ed1ab_0
   - pandoc=2.19.2=h32600fe_1
   - pandocfilters=1.5.0=pyhd8ed1ab_0
@@ -245,12 +247,12 @@ dependencies:
   - zlib=1.2.13=h166bdaf_4
   - zstd=1.5.2=h6239696_4
   - pip:
-    - elephant==0.11.2
-#    - jupyphant==0.1.0  # use wheel for installation, e.g. pip install jupyphant/dist/jupyphant-0.1.0-py3-none-any.whl
-    - matplotlib==3.6.0
-    - pandas==1.5.1
-    - scipy==1.9.3
-    - seaborn==0.12.1
-    - tqdm==4.64.1
-    - viziphant==0.2.0
-prefix: /home/kramer/anaconda3/envs/MyJupyphant
+      - elephant==0.11.2
+      - jupyphant==0.1.0
+      - matplotlib==3.6.0
+      - pandas==1.5.1
+      - scipy==1.9.3
+      - seaborn==0.12.1
+      - tqdm==4.64.1
+      - viziphant==0.2.0
+prefix: /home/kramer/anaconda3/envs/MyJupyphantClone

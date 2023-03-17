@@ -272,7 +272,7 @@ class JupyphantVisualization:
         if n_subplots > 0:
             fig, axs = plt.subplots(n_subplots, n_st_statistics, figsize=(n_st_statistics * 8, n_subplots * 4),
                                     squeeze=False)
-            fig.suptitle("Basic statistics for all SpikeTrains in Top-Nodes")
+            fig.suptitle(f"Basic statistics for {'selected' if selected_ids else 'all'} SpikeTrains in Top-Nodes")
             for i, top_node in enumerate(spiketrains.keys()):
                 if spiketrains[top_node]:
                     # plot ISI
@@ -365,7 +365,7 @@ class JupyphantVisualization:
             n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
             if n_subplots > 0:
                 fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots*8, 4))
-                fig.suptitle("Rasterplot for all SpikeTrains in Top-Nodes")
+                fig.suptitle(f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in")
                 # Rasterplot using viziphant
                 if n_subplots > 1:
                     for i, top_node in enumerate(spiketrains.keys()):
@@ -435,7 +435,7 @@ class JupyphantVisualization:
         n_subplots = sum(1 for v in anasigs.values() if len(v) > 0)
         if n_subplots > 0:
             fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots * 8, 4))
-            fig.suptitle("Normalized LFP-Plots for all AnalogSignals in Top-Nodes")
+            fig.suptitle(f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals in")
             # Rasterplot using viziphant
             if n_subplots > 1:
                 for i, top_node in enumerate(anasigs.keys()):
