@@ -208,9 +208,9 @@ class JupyphantVisualization:
                 sub_dict_node.opened = False
                 parent.add_node(sub_dict_node)
         elif isinstance(obj, (list, self.SpikeTrainList)):
-            for child_obj in obj:
+            for i, child_obj in enumerate(obj):
                 if issubclass(type(child_obj), self.BaseNeo):
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]}::{child_obj.name}::{child_obj._id}")
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]}#{i}::{child_obj.name}::{child_obj._id}")
                     child_node.opened = False
                     self.map[child_node._id] = child_obj._id
                     self._add_sub_nodes(child_node, child_obj)
@@ -307,7 +307,7 @@ class JupyphantVisualization:
             fig.tight_layout(pad=1.0)
             return fig
         else:
-            pass
+            return None
 
     def create_rasterplot(self, selected_ids=None):
         """

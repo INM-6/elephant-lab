@@ -37,7 +37,16 @@ let lfp_plot =
 `;
 // Call to the function that initializes the ipytree widget with an empty tree
 let create_tree =
-`import warnings
+`from IPython.display import display
+my_jupyphant_vis_xxx.create_tree()
+my_jupyphant_vis_xxx.tree.layout.width = '100%'
+display(my_jupyphant_vis_xxx.tree)
+`;
+let create_explorer =
+`# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
+%matplotlib ipympl
+
+import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import matplotlib.pyplot as plt
@@ -75,11 +84,9 @@ for m in elephant_functions_by_module.keys():
     functions_dict = {f : inspect.getfullargspec(eval(f"elephant.{m}.{f}")).args for f in functions} # TODO: signature to list
     elephant_functions_by_module[m] = functions_dict
 
-my_jupyphant_vis_xxx.create_tree()
-my_jupyphant_vis_xxx.tree.layout.width = '50%'
 
 output_node_info = Output(layout={'border': '1px solid orange'})
-output_node_plot = Output(layout={'border': '1px solid orange'})
+output_node_plot = Output(layout={'border': '1px solid orange', 'width': '900px' })
 output_node_statistic = Output(layout=Layout(border= '1px solid orange', width='3572px')) # 4 * 8inch * 96px/inch
 output_node_analysis = Output(layout={'border': '1px solid orange'})
 
@@ -115,8 +122,9 @@ def on_selected_change(change):
         # print('after plot')
     with output_node_statistic:
         IPython.display.clear_output()
-        my_jupyphant_vis_xxx.statistics_of_selected_nodes(selected_ids=selected_ids)
-        plt.show()
+        fig = my_jupyphant_vis_xxx.statistics_of_selected_nodes(selected_ids=selected_ids)
+        if fig:
+            plt.show()
 
 my_jupyphant_vis_xxx.tree.observe(on_selected_change, names='selected_nodes')
 
@@ -147,12 +155,14 @@ my_jupyphant_vis_xxx.tree.observe(on_selected_change, names='selected_nodes')
 # tab_analysis= VBox([output_node_analysis, HBox([drop_module, drop_function, drop_parameter]), HBox([calculate_button, clear_button])])
 
 tab_node_explorer = Tab()
+tab_node_explorer.layout = Layout(width='auto')
 tab_node_explorer.children = [output_node_info, output_node_plot, output_node_statistic]#, tab_analysis]
 tab_node_explorer.titles = ["INFO", "RAW PLOT", "STATISTICS", "ANALYSIS"]
 
 right_side = VBox([Label("Node Explorer:"), tab_node_explorer])
-right_side.layout.width = '50%'
-HBox([my_jupyphant_vis_xxx.tree, right_side])
+right_side.layout.width = '100%'
+#HBox([my_jupyphant_vis_xxx.tree, right_side])
+display(right_side)
 `;
 // Call to the function that updates the ipytree tree view of the neo hierarchy
 let update_tree =
@@ -168,5 +178,6 @@ export const pythonCode = {
 	'rasterPlot': raster_plot,
 	'lfpPlot': lfp_plot,
 	'createTree': create_tree,
+	'createExplorer': create_explorer,
 	'updateTree': update_tree
 };
