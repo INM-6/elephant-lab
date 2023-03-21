@@ -156,7 +156,7 @@ class JupyphantVisualization:
                     obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}::{id(obj)} ")
                     self.map[obj_node._id] = None
                 elif isinstance(obj, list):
-                    obj_node = self.Node(f"{obj.__class__.__name__}::{obj.__hash__}")
+                    obj_node = self.Node(f"{obj.__class__.__name__}::{id(obj)}")
                     self.map[obj_node._id] = None
                 else:
                     obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}::{obj.name}::{id(obj)}")
