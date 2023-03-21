@@ -483,7 +483,7 @@ class JupyphantVisualization:
         Lists independent neo objects and blocks with all their segments and analogsignals
         """
         # List namespace
-        vals = nsm.who_ls()
+        vals = self.nsm.who_ls()
         # Extract neo objects
         values = [v for v in vals if
                   isinstance(__main__.__dict__[v], (self.BaseNeo, list))]  # in ['Block', 'Segment', 'ChannelIndex',
@@ -505,4 +505,4 @@ class JupyphantVisualization:
                         # pass
                         values.append(''.join([values[-1 - j], '.analogsigs[', str(j), ']']))
 
-        return json.dumps(values)
+        return self.json.dumps(values)
