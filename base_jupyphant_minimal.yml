@@ -1,0 +1,21 @@
+name: JupyphantMinimal
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - ipympl=0.9.3=pyhd8ed1ab_0
+  - ipython=8.5.0=pyh41d4057_1
+  - ipytree=0.2.2=pyhd8ed1ab_0
+  - ipywidgets=8.0.2=pyhd8ed1ab_1
+  - jupyterlab=3.5.0=pyhd8ed1ab_0
+  - matplotlib-base=3.7.0=py310he60537e_0
+  - nodejs=18.11.0=h96d913c_0
+  - numpy=1.23.4=py310h53a5b5f_1
+  - pip=22.3=pyhd8ed1ab_0
+  - python=3.10.6=h582c2e5_0_cpython
+  - quantities=0.13.0=pyhd8ed1ab_0
+  - pip:
+      - elephant==0.11.2
+      - pandas==1.5.1
+      - viziphant==0.2.0
+prefix: /home/kramer/anaconda3/envs/JupyphantMinimal
