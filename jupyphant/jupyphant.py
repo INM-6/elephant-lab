@@ -321,38 +321,35 @@ class JupyphantVisualization:
 
         Called at every cell execution
         """
+        # Extract all SpikeTrains before and after update
         old_spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
                                                                          neo_class=self.SpikeTrain, updated=False)
         new_spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
                                                                          neo_class=self.SpikeTrain)
         # compare contents of spiketrains per top node
-        spiketrains_changed = False
-        if old_spiketrains != new_spiketrains:
-            spiketrains_changed = True
+        spiketrains_unchanged = True
+        if old_spiketrains.keys() != new_spiketrains.keys():
+            spiketrains_unchanged = False
 
         # Return pre-existing rasterplot if content of spiketrains has NOT changed
-        if (not spiketrains_changed) and (self.spiketrain_overview is not None) and (selected_ids is None) and True:
+        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None) and True:
             return self.spiketrain_overview
         # Otherwise, create new plot
         else:
-            # Extract all spike trains
-            spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
-                                                                         neo_class=self.SpikeTrain)
-
-            n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
+            n_subplots = sum(1 for v in new_spiketrains.values() if len(v) > 0)
             if n_subplots > 0:
                 fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots*8, 4))
                 fig.suptitle(f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in")
                 # Rasterplot using viziphant
                 if n_subplots > 1:
-                    for i, top_node in enumerate(spiketrains.keys()):
-                        if spiketrains[top_node]:
-                            axs[i] = self.rasterplot(spiketrains[top_node], axes=axs[i], s=0.1, title=f"{top_node}")
+                    for i, top_node in enumerate(new_spiketrains.keys()):
+                        if new_spiketrains[top_node]:
+                            axs[i] = self.rasterplot(new_spiketrains[top_node], axes=axs[i], s=0.1, title=f"{top_node}")
                         else:
                             axs[i].set_title(f"{top_node}")
                 else:
-                    top_node = list(spiketrains.keys())[0]
-                    axs = self.rasterplot(spiketrains[top_node], axes=axs, s=0.1,  title=f"{top_node}")
+                    top_node = list(new_spiketrains.keys())[0]
+                    axs = self.rasterplot(new_spiketrains[top_node], axes=axs, s=0.1,  title=f"{top_node}")
                 if selected_ids is None:
                     self.spiketrain_overview = fig
                 return fig
@@ -406,30 +403,41 @@ class JupyphantVisualization:
 
         Called at every cell execution
         """
-        # Extract all AnalogSignals
-        anasigs = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids, neo_class=self.AnalogSignal)
+        old_analogsignals = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
+                                                                           neo_class=self.AnalogSignal, updated=False)
+        new_analogsignals = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
+                                                                           neo_class=self.AnalogSignal)
+        # compare contents of AnalogSignals per top node
+        analogsignals_unchanged = True
+        if old_analogsignals.keys() != new_analogsignals.keys():
+            analogsignals_unchanged = False
 
-        n_subplots = sum(1 for v in anasigs.values() if len(v) > 0)
-        if n_subplots > 0:
-            fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots * 8, 4))
-            fig.suptitle(f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals in")
-            # Rasterplot using viziphant
-            if n_subplots > 1:
-                for i, top_node in enumerate(anasigs.keys()):
-                    if anasigs[top_node]:
-                        axs[i] = self.plot_lfp(anasigs[top_node], times=self.np.arange(len(anasigs[top_node][0])) * self.pq.s,
-                                               title=f"{top_node}", spacing=75, axes=axs[i])
-                    else:
-                        axs[i].set_title(f"{top_node}")
-            else:
-                top_node = list(anasigs.keys())[0]
-                axs = self.plot_lfp(anasigs[top_node], times=self.np.arange(len(anasigs[top_node][0])) * self.pq.s,
-                                    title=f"{top_node}", spacing=75, axes=axs)
-            if selected_ids is None:
-                self.analogsignal_overview = fig
-            return fig
+        # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
+        if (analogsignals_unchanged) and (self.analogsignal_overview is not None) and (selected_ids is None) and True:
+            return self.analogsignal_overview
+        # Otherwise, create new plot
         else:
-            pass
+            n_subplots = sum(1 for v in new_analogsignals.values() if len(v) > 0)
+            if n_subplots > 0:
+                fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots * 8, 4))
+                fig.suptitle(f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals in")
+                # Rasterplot using viziphant
+                if n_subplots > 1:
+                    for i, top_node in enumerate(new_analogsignals.keys()):
+                        if new_analogsignals[top_node]:
+                            axs[i] = self.plot_lfp(new_analogsignals[top_node], times=self.np.arange(len(new_analogsignals[top_node][0])) * self.pq.s,
+                                                   title=f"{top_node}", spacing=75, axes=axs[i])
+                        else:
+                            axs[i].set_title(f"{top_node}")
+                else:
+                    top_node = list(new_analogsignals.keys())[0]
+                    axs = self.plot_lfp(new_analogsignals[top_node], times=self.np.arange(len(new_analogsignals[top_node][0])) * self.pq.s,
+                                        title=f"{top_node}", spacing=75, axes=axs)
+                if selected_ids is None:
+                    self.analogsignal_overview = fig
+                return fig
+            else:
+                pass
 
     def _extract_selected_neo_objects_by_top_node(self, selected_ids=None, neo_class=None, updated=True):
         neo_objs = {}
