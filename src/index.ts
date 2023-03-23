@@ -175,9 +175,6 @@ class JupyphantExtension {
 	            // This is what user expects
 	            // Code is executed and the results displayed in the specified OutputArea
 	            OutputArea.execute(pythonCode['createTree'], outarea_treeview, session);
-	            OutputArea.execute(pythonCode['createExplorer'], outarea_nodeexplorer, session);
-	            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
-	            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
 
 	            // This code is executed without output that needs to be displayed
 	            // Therefore, no OutputArea is necessary
@@ -185,6 +182,9 @@ class JupyphantExtension {
 	            // In this case, the callback does nothing as the code does not produce any output
 	            this.executeCode(pythonCode['updateTree'], session);
 
+	            OutputArea.execute(pythonCode['createExplorer'], outarea_nodeexplorer, session);
+	            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
+	            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
 
 	            // Debug output
 	            console.log("BEFORE REGISTERING");

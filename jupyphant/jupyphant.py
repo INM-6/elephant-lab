@@ -85,6 +85,8 @@ class JupyphantVisualization:
         """
         self.blocks = []
         self.other_objs = []
+        self.old_blocks = []
+        self.old_other_objs = []
         # Plots are saved in order not to require recreation at every cell execution
         self.plot = None
         self.spiketrain_overview = None
@@ -98,6 +100,8 @@ class JupyphantVisualization:
         created by the notebook user.
         Called before updating plots, thus, usually at every cell execution.
         """
+        self.old_blocks = self.blocks[:]
+        self.old_other_objs = self.other_objs[:]
         # Get ALL variables in current kernel namespace
         vals = self.nsm.who_ls()
         values = {}
@@ -315,47 +319,28 @@ class JupyphantVisualization:
 
         Called at every cell execution
         """
-        # Keep references to the existing tree
-        # In order to update plot only after an actual change
-        old_blocks = self.blocks[:]
-        old_objs = self.other_objs[:]
-        # Query for changed objects
-        self.update()
-        # Static variable is preserved when running again
-        # If already plotted
-        # TODO: Check block content as well, this might change!!!
-        # New blocks
-        curr_blocks = self.blocks
-        # Check for differences in number of blocks
-        changes = len(curr_blocks) != len(old_blocks)
-        # Difference in number of other objects
-        curr_objs = self.other_objs
-        if len(curr_objs) != len(old_objs):
-            changes = True
-        # If no length differences, make sure the objects are indeed the same
-        if not changes:
-            # TODO: Make sure this actually compares the previous to the current state
-            # I.e., checks content instead of references
-            # So far, this is more of a dummy implementation
-            try:
-                [self.assert_same_sub_schema(old_blocks[i], curr_blocks[i]) for i in range(len(old_blocks))]
-                [self.assert_same_sub_schema(old_objs[i], curr_objs[i]) for i in range(len(old_objs))]
-            except BaseException as e:
-                changes = True
-        # Return pre-existing plot if nothing has changed
-        # print(f'Python Ids of selected nodes {selected_ids} in create_rasterplot()')
-        # print(f'{not changes} AND {self.spiketrain_overview is not None} AND {selected_ids is not None} AND False')
-        if (not changes) and (self.spiketrain_overview is not None) and (selected_ids is not None) and False:
-            pass
-            # TODO: Get plot to be displayed again
-            print('before return pre-existing plot')
+        old_spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
+                                                                         neo_class=self.SpikeTrain, updated=False)
+        new_spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
+                                                                         neo_class=self.SpikeTrain)
+        # compare numbers of spiketrains per top node  # Todo: use hash value of neo-object for comparison
+        spiketrains_changed = False
+        if len(old_spiketrains) != len(new_spiketrains):
+            spiketrains_changed = True
+        if not spiketrains_changed:
+            for i in range(len(old_spiketrains)):
+                if len(old_spiketrains[list(old_spiketrains.keys())[i]]) != len(new_spiketrains[list(new_spiketrains.keys())[i]]):
+                    spiketrains_changed = True
+                    break
+
+        # Return pre-existing rasterplot if number of spiketrains has NOT changed  # Todo: here also the content of the spiketrains should be compared
+        if (not spiketrains_changed) and (self.spiketrain_overview is not None) and (selected_ids is None) and True:
             return self.spiketrain_overview
         # Otherwise, create new plot
         else:
             # Extract all spike trains
             spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
                                                                          neo_class=self.SpikeTrain)
-
             # TODO: Add user-adaptive time slicing
             #             for row in spiketrains:
             #                 for i, sptr in enumerate(row):
@@ -454,13 +439,13 @@ class JupyphantVisualization:
         else:
             pass
 
-    def _extract_selected_neo_objects_by_top_node(self, selected_ids=None, neo_class=None):
+    def _extract_selected_neo_objects_by_top_node(self, selected_ids=None, neo_class=None, updated=True):
         neo_objs = {}
         # iterate/extract form blocks
-        for bl in self.blocks:
+        for bl in self.blocks if updated else self.old_blocks:
             neo_objs[f"{bl.name}::{id(bl)}"] = bl.list_children_by_class(neo_class)
         # iterate/extract form other_objs
-        for obj in self.other_objs:
+        for obj in self.other_objs if updated else self.old_other_objs:
             if isinstance(obj, neo_class):
                 neo_objs[f"{obj.name}::{id(obj)}"] = [obj]
             elif issubclass(type(obj), self.Container):

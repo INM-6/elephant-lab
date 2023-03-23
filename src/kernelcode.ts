@@ -26,10 +26,14 @@ plt.show()
 
 // Call to the function that creates a rasterplot from all spike trains
 let raster_plot =
-`import warnings
+`import matplotlib.pyplot as plt
+import warnings
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
-    my_jupyphant_vis_xxx.create_rasterplot();
+    fig = my_jupyphant_vis_xxx.create_rasterplot()
+    if fig:
+        plt.figure(fig)
+        plt.show()
 `;
 // Call to the function that plots AnalogSignals
 let lfp_plot = 
