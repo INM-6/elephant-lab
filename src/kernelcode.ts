@@ -31,13 +31,18 @@ import warnings
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     fig = my_jupyphant_vis_xxx.create_rasterplot()
-    if fig:
-        plt.figure(fig)
-        plt.show()
+    plt.figure(fig)
+    plt.show()
 `;
 // Call to the function that plots AnalogSignals
 let lfp_plot = 
-`my_jupyphant_vis_xxx.create_lfpplot();
+`import matplotlib.pyplot as plt
+import warnings
+with warnings.catch_warnings():
+	warnings.simplefilter("ignore")
+	fig = my_jupyphant_vis_xxx.create_lfpplot()
+	plt.figure(fig)
+	plt.show()
 `;
 // Call to the function that initializes the ipytree widget with an empty tree
 let create_tree =
