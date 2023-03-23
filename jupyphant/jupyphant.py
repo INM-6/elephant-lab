@@ -198,7 +198,7 @@ class JupyphantVisualization:
         if issubclass(type(obj), (self.BaseNeo, self.RegionOfInterest)):
             # iterate over object attributes and create nodes recursively
             for attr_name, attr_value in obj.__dict__.items():
-                if isinstance(attr_value, (dict, list, self.SpikeTrainList)):
+                if isinstance(attr_value, (list, self.SpikeTrainList)):
                     attr_node = self.Node(attr_name)
                     self.map[attr_node._id] = None
                     attr_node.opened = False
@@ -206,12 +206,6 @@ class JupyphantVisualization:
                     parent.add_node(attr_node)
                 else:
                     pass
-        elif isinstance(obj, dict):
-            for key, value in obj.items():
-                sub_dict_node = self.Node(f"{key}: {value}")
-                self.map[sub_dict_node._id] = None
-                sub_dict_node.opened = False
-                parent.add_node(sub_dict_node)
         elif isinstance(obj, (list, self.SpikeTrainList)):
             for i, child_obj in enumerate(obj):
                 if issubclass(type(child_obj), self.BaseNeo):
