@@ -325,17 +325,12 @@ class JupyphantVisualization:
                                                                          neo_class=self.SpikeTrain, updated=False)
         new_spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
                                                                          neo_class=self.SpikeTrain)
-        # compare numbers of spiketrains per top node  # Todo: use hash value of neo-object for comparison
+        # compare contents of spiketrains per top node
         spiketrains_changed = False
-        if len(old_spiketrains) != len(new_spiketrains):
+        if old_spiketrains != new_spiketrains:
             spiketrains_changed = True
-        if not spiketrains_changed:
-            for i in range(len(old_spiketrains)):
-                if len(old_spiketrains[list(old_spiketrains.keys())[i]]) != len(new_spiketrains[list(new_spiketrains.keys())[i]]):
-                    spiketrains_changed = True
-                    break
 
-        # Return pre-existing rasterplot if number of spiketrains has NOT changed  # Todo: here also the content of the spiketrains should be compared
+        # Return pre-existing rasterplot if content of spiketrains has NOT changed
         if (not spiketrains_changed) and (self.spiketrain_overview is not None) and (selected_ids is None) and True:
             return self.spiketrain_overview
         # Otherwise, create new plot
@@ -343,11 +338,6 @@ class JupyphantVisualization:
             # Extract all spike trains
             spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
                                                                          neo_class=self.SpikeTrain)
-            # TODO: Add user-adaptive time slicing
-            #             for row in spiketrains:
-            #                 for i, sptr in enumerate(row):
-            #                     row[i] = sptr.time_slice(0, 50)
-            # TODO: adaptive to user's layout, screen width etc.
 
             n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
             if n_subplots > 0:
