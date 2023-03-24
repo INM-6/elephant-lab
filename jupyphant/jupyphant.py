@@ -236,14 +236,14 @@ class JupyphantVisualization:
         Convert the selected tree nodes representing neo objects to 'pandas.DataFrame' objects.
 
         """
-        analogsignals = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
-                                                                       neo_class=self.AnalogSignal)
-        spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
-                                                                     neo_class=self.SpikeTrain)
-        events = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
-                                                                neo_class=self.Event)
-        epochs = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
-                                                                neo_class=self.Epoch)
+        analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
+                                                                            neo_class=self.AnalogSignal)
+        spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
+                                                                          neo_class=self.SpikeTrain)
+        events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
+                                                                     neo_class=self.Event)
+        epochs = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
+                                                                     neo_class=self.Epoch)
         df_anasig = []
         df_spt = []
         df_evt = []
@@ -265,8 +265,8 @@ class JupyphantVisualization:
         return df_anasig, df_spt, df_evt, df_epc
 
     def statistics_of_selected_nodes(self, selected_ids=None):
-        spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
-                                                                     neo_class=self.SpikeTrain)
+        spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
+                                                                          neo_class=self.SpikeTrain)
         n_st_statistics = 4  # ISI, time-histogram, IFR, correlation
         n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
         if n_subplots > 0:
@@ -316,10 +316,10 @@ class JupyphantVisualization:
         Called at every cell execution
         """
         # Extract all SpikeTrains before and after update
-        old_spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
-                                                                         neo_class=self.SpikeTrain, updated=False)
-        new_spiketrains = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
-                                                                         neo_class=self.SpikeTrain)
+        old_spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
+                                                                              neo_class=self.SpikeTrain, updated=False)
+        new_spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
+                                                                              neo_class=self.SpikeTrain)
         # compare contents of spiketrains per top node
         spiketrains_unchanged = True
         if old_spiketrains.keys() != new_spiketrains.keys():
@@ -397,10 +397,10 @@ class JupyphantVisualization:
 
         Called at every cell execution
         """
-        old_analogsignals = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
-                                                                           neo_class=self.AnalogSignal, updated=False)
-        new_analogsignals = self._extract_selected_neo_objects_by_top_node(selected_ids=selected_ids,
-                                                                           neo_class=self.AnalogSignal)
+        old_analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
+                                                                                neo_class=self.AnalogSignal, updated=False)
+        new_analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
+                                                                                neo_class=self.AnalogSignal)
         # compare contents of AnalogSignals per top node
         analogsignals_unchanged = True
         if old_analogsignals.keys() != new_analogsignals.keys():
@@ -433,7 +433,7 @@ class JupyphantVisualization:
             else:
                 pass
 
-    def _extract_selected_neo_objects_by_top_node(self, selected_ids=None, neo_class=None, updated=True):
+    def _extract_selected_neo_data_objects_by_top_node(self, selected_ids=None, neo_class=None, updated=True):
         neo_objs = {}
         # iterate/extract form blocks
         for bl in self.blocks if updated else self.old_blocks:
@@ -455,6 +455,33 @@ class JupyphantVisualization:
             if len(neo_objs[key]) == 0:
                 del neo_objs[key]
         return neo_objs
+
+    def _extract_pretty_print_of_selected_neo_container_objects(self, selected_ids=None):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        from IPython.display import display
+
+        neo_containers = []
+        for bl in self.blocks:
+            if joblib.hash(bl, hash_name='sha1') in selected_ids:
+                out = StringIO()
+                with redirect_stdout(out):
+                    display(bl)
+                neo_containers.append(out.getvalue())
+            for seg in bl.segments:
+                if joblib.hash(seg, hash_name='sha1') in selected_ids:
+                    out = StringIO()
+                    with redirect_stdout(out):
+                        display(seg)
+                    neo_containers.append(out.getvalue())
+            for gr in bl.groups:
+                if joblib.hash(gr, hash_name='sha1') in selected_ids:
+                    out = StringIO()
+                    with redirect_stdout(out):
+                        display(gr)
+                    neo_containers.append(out.getvalue())
+        return neo_containers
+
 
     def testfunc(self):
         """

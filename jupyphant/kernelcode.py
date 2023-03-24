@@ -112,6 +112,7 @@ def create_explorer(my_jupyphant_vis_xxx):
             # for i in range(len(change["new"])):
             #    print(f'{i}. {change["new"][i].name} -> urn_id = {change["new"][i]._id}')
             df_anasig, df_spt, df_evt, df_epc = my_jupyphant_vis_xxx.selected_nodes_to_dataframes(selected_ids=selected_ids)
+            neo_containers = my_jupyphant_vis_xxx._extract_pretty_print_of_selected_neo_container_objects(selected_ids=selected_ids)
             if df_anasig:
                 for df in df_anasig:
                     display(df)
@@ -124,6 +125,9 @@ def create_explorer(my_jupyphant_vis_xxx):
             if df_evt:
                 for df in df_evt:
                     display(df)
+            if neo_containers:
+                for container in neo_containers:
+                    display(container)
         with output_node_plot:
             IPython.display.clear_output()
             # print(f'Python Ids of selected nodes {selected_ids}')
