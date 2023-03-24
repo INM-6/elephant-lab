@@ -5,177 +5,53 @@
 
 // Create an object of the Visualization class
 // It is used to access and visualize the neo objects
-let setup_env = 
-`from jupyphant.jupyphant import JupyphantVisualization
-my_jupyphant_vis_xxx = JupyphantVisualization()`	
+let setup_env =
+`# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
+%matplotlib ipympl
+from jupyphant.kernelcode import setup_env
+my_jupyphant_vis_xxx = setup_env()`;
 
 // Dummy plot code for a single AnalogSignal
 let neo_plot =
-`import matplotlib.pyplot as plt
-plt.plot(range(len(ew_block.segments[0].analogsignals[0])), ew_block.segments[0].analogsignals[0])
-plt.show();
+`from jupyphant.kernelcode import neo_plot
+neo_plot()
 `;
 
 // Dummy plot code for testing purposes
 // Does not rely on any data or neo objects from the Python kernel
 let plot_code = 
-`import matplotlib.pyplot as plt
-plt.plot([1,2,3], [4,5,6])
-plt.show()
+`from jupyphant.kernelcode import plot_code
+plot_code()
 `;
 
 // Call to the function that creates a rasterplot from all spike trains
 let raster_plot =
-`import matplotlib.pyplot as plt
-import warnings
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    fig = my_jupyphant_vis_xxx.create_rasterplot()
-    plt.figure(fig)
-    plt.show()
+`from jupyphant.kernelcode import raster_plot
+raster_plot(my_jupyphant_vis_xxx)
 `;
+
 // Call to the function that plots AnalogSignals
 let lfp_plot = 
-`import matplotlib.pyplot as plt
-import warnings
-with warnings.catch_warnings():
-	warnings.simplefilter("ignore")
-	fig = my_jupyphant_vis_xxx.create_lfpplot()
-	plt.figure(fig)
-	plt.show()
+`from jupyphant.kernelcode import lfp_plot
+lfp_plot(my_jupyphant_vis_xxx)
 `;
+
 // Call to the function that initializes the ipytree widget with an empty tree
 let create_tree =
-`from IPython.display import display
-my_jupyphant_vis_xxx.create_tree()
-my_jupyphant_vis_xxx.tree.layout.width = '100%'
-display(my_jupyphant_vis_xxx.tree)
+`from jupyphant.kernelcode import create_tree
+create_tree(my_jupyphant_vis_xxx)
 `;
+
+// Call to the function that initilaizes the node explorer for the ipytree
 let create_explorer =
-`# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
-%matplotlib ipympl
-
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-import matplotlib.pyplot as plt
-import IPython
-from IPython.display import display
-from ipywidgets import link, HBox, VBox, IntSlider, Text, Label, Output, Tab, Dropdown, Button, interact, Layout
-import elephant
-import inspect
-
-elephant_functions_by_module = {
-    'cell_assembly_detection': {},
-    'change_point_detection': {},
-    'conversion': {},
-    'cubic': {},
-    'current_source_density': {},
-    'kernels': {},
-    'neo_tools': {},
-    'phase_analysis': {},
-    'signal_processing': {},
-    'spade': {},
-    'spectral': {},
-    'spike_train_correlation': {},
-    'spike_train_dissimilarity': {},
-    'spike_train_generation': {},
-    'spike_train_surrogates': {},
-    'spike_train_synchrony': {},
-    'sta': {},
-    'statistics': {},
-    'unitary_event_analysis': {},
-    'utils': {},
-    'waveform_features': {}
-}
-for m in elephant_functions_by_module.keys():
-    functions = eval(f'elephant.{m}.__all__')
-    functions_dict = {f : inspect.getfullargspec(eval(f"elephant.{m}.{f}")).args for f in functions} # TODO: signature to list
-    elephant_functions_by_module[m] = functions_dict
-
-
-output_node_info = Output(layout={'border': '1px solid orange'})
-output_node_plot = Output(layout={'border': '1px solid orange', 'width': '900px' })
-output_node_statistic = Output(layout=Layout(border= '1px solid orange', width='3572px')) # 4 * 8inch * 96px/inch
-output_node_analysis = Output(layout={'border': '1px solid orange'})
-
-def on_selected_change(change):
-    selected_ids = [my_jupyphant_vis_xxx.map[node._id] for node in my_jupyphant_vis_xxx.tree.selected_nodes if my_jupyphant_vis_xxx.map[node._id] is not None]
-    with output_node_info:
-        IPython.display.clear_output()
-        # print('Some node selected!')
-        # for i in range(len(change["new"])):
-        #    print(f'{i}. {change["new"][i].name} -> urn_id = {change["new"][i]._id}')
-        df_anasig, df_spt, df_evt, df_epc = my_jupyphant_vis_xxx.selected_nodes_to_dataframes(selected_ids=selected_ids)
-        if df_anasig:
-            for df in df_anasig:
-                display(df)
-        if df_spt:
-	        for df in df_spt:
-	            display(df)
-        if df_epc:
-            for df in df_epc:
-                display(df)
-        if df_evt:
-	        for df in df_evt:
-	            display(df)
-    with output_node_plot:
-        IPython.display.clear_output()
-        # print(f'Python Ids of selected nodes {selected_ids}')
-        raw_st = my_jupyphant_vis_xxx.create_rasterplot(selected_ids=selected_ids)
-        if raw_st:
-            plt.show()
-        raw_anasig = my_jupyphant_vis_xxx.create_lfpplot(selected_ids=selected_ids)
-        if raw_anasig:
-            plt.show()
-        # print('after plot')
-    with output_node_statistic:
-        IPython.display.clear_output()
-        fig = my_jupyphant_vis_xxx.statistics_of_selected_nodes(selected_ids=selected_ids)
-        if fig:
-            plt.show()
-
-my_jupyphant_vis_xxx.tree.observe(on_selected_change, names='selected_nodes')
-
-# drop_module = Dropdown(options=elephant_functions_by_module.keys(), description='Module:', disabled=False)
-# drop_function = Dropdown(options=elephant_functions_by_module[drop_module.value] , description='Function:', disabled=False)
-# drop_parameter = Dropdown(description='Parameter:', disabled=False)
-#
-# @interact(module = drop_module, function = drop_function, parameter = drop_parameter)
-# def print_function(module, function, parameter):
-#     drop_function.options = elephant_functions_by_module[module].keys()
-#     drop_parameter.options = elephant_functions_by_module[module][drop_function.value]
-#
-# def on_calculate_button_clicked(b):
-#     with output_node_analysis:
-#         IPython.display.clear_output()
-#         print("Calculation in progress!")
-#
-# def on_clear_button_clicked(b):
-#     with output_node_analysis:
-#         IPython.display.clear_output()
-#
-# calculate_button = Button(description='Calculate', disabled=False, button_style='', tooltip='Calculate', icon='check')
-# calculate_button.on_click(on_calculate_button_clicked)
-#
-# clear_button = Button(description='Clear', disabled=False, button_style='', tooltip='Clear', icon='check')
-# clear_button.on_click(on_clear_button_clicked)
-#
-# tab_analysis= VBox([output_node_analysis, HBox([drop_module, drop_function, drop_parameter]), HBox([calculate_button, clear_button])])
-
-tab_node_explorer = Tab()
-tab_node_explorer.layout = Layout(width='auto')
-tab_node_explorer.children = [output_node_info, output_node_plot, output_node_statistic]#, tab_analysis]
-tab_node_explorer.titles = ["INFO", "RAW PLOT", "STATISTICS", "ANALYSIS"]
-
-right_side = VBox([Label("Node Explorer:"), tab_node_explorer])
-right_side.layout.width = '100%'
-#HBox([my_jupyphant_vis_xxx.tree, right_side])
-display(right_side)
+`from jupyphant.kernelcode import create_explorer
+create_explorer(my_jupyphant_vis_xxx)
 `;
+
 // Call to the function that updates the ipytree tree view of the neo hierarchy
 let update_tree =
-`my_jupyphant_vis_xxx.update_tree();
+`from jupyphant.kernelcode import update_tree
+update_tree(my_jupyphant_vis_xxx)
 `;
 
 // Make all strings publicly available in a dict
