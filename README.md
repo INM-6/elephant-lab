@@ -9,7 +9,9 @@ A JupyterLab extension for interactive exploration, analysis and visualization o
 
 - JupyterLab >= 3.0
 
-## Install
+## User Installation
+**Note** jupyphant is yet not published on pypi, so please use the development install described below.
+### Install
 
 To install the extension, execute:
 
@@ -17,7 +19,7 @@ To install the extension, execute:
 pip install jupyphant
 ```
 
-## Uninstall
+### Uninstall
 
 To remove the extension, execute:
 
@@ -36,13 +38,23 @@ The `jlpm` command is JupyterLab's pinned version of
 `yarn` or `npm` in lieu of `jlpm` below.
 
 ```bash
-# Clone the repo to your local environment
-# Change directory to the jupyphant directory
-# Install package in development mode
+# 1. Clone the repo to your local environment, e.g. with
+git clone git@github.com:ojoenlanuca/MyJupyphant.git
+
+# 2. Change directory to the MyJupyphant directory
+cd MyJupyphant
+
+# 3. Create virtual environment from the file base_jupyphant_minimal.yml with
+# (change name and prefix in the .yml as you like)
+conda env create -f base_jupyphant_minimal.yml 
+
+# 4. Install package in development mode
 pip install -e .
-# Link your development version of the extension with JupyterLab
+
+# 5. Link your development version of the extension with JupyterLab
 jupyter labextension develop . --overwrite
-# Rebuild extension Typescript source after making changes
+
+# 6. Rebuild extension Typescript source after making changes
 jlpm build
 ```
 
