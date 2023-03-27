@@ -48,13 +48,16 @@ cd MyJupyphant
 # (change name and prefix in the .yml as you like)
 conda env create -f base_jupyphant_minimal.yml 
 
-# 4. Install package in development mode
+# 4. Activate the newly created environment, e.g. with
+conda activate JupyphantMinimal
+
+# 5. Install package in development mode
 pip install -e .
 
-# 5. Link your development version of the extension with JupyterLab
+# 6. Link your development version of the extension with JupyterLab
 jupyter labextension develop . --overwrite
 
-# 6. Rebuild extension Typescript source after making changes
+# 7. Rebuild extension Typescript source after making changes
 jlpm build
 ```
 
