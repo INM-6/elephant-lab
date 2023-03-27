@@ -1,4 +1,4 @@
-![jupyphant_logo2-1](https://user-images.githubusercontent.com/56024817/200008636-a59f5be3-d436-435e-958c-7633760aae26.png)
+![jupyphant_logo_updated](https://user-images.githubusercontent.com/56024817/227979272-bfdf6c7e-4102-4990-9f7e-08108616459d.png)
 
 # jupyphant
 
