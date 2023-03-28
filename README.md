@@ -44,12 +44,12 @@ git clone git@github.com:ojoenlanuca/MyJupyphant.git
 # 2. Change directory to the MyJupyphant directory
 cd MyJupyphant
 
-# 3. Create virtual environment from the file base_jupyphant_minimal.yml with
+# 3. Create virtual environment from the file environment.yml with
 # (change name and prefix in the .yml as you like)
-conda env create -f base_jupyphant_minimal.yml 
+conda env create -f environment.yml 
 
 # 4. Activate the newly created environment, e.g. with
-conda activate JupyphantMinimal
+conda activate Jupyphant
 
 # 5. Install package in development mode
 pip install -e .
@@ -67,7 +67,7 @@ You can watch the source directory and run JupyterLab at the same time in differ
 # Watch the source directory in one terminal, automatically rebuilding when needed
 jlpm watch
 # Run JupyterLab in another terminal
-jupyter lab
+jupyter lab  --watch --ServerApp.iopub_msg_rate_limit=1.0e7
 ```
 
 With the watch command running, every saved change will immediately be built locally and available in your running JupyterLab. Refresh JupyterLab to load the change in your browser (you may need to wait several seconds for the extension to be rebuilt).
