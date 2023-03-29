@@ -39,10 +39,10 @@ The `jlpm` command is JupyterLab's pinned version of
 
 ```bash
 # 1. Clone the repo to your local environment, e.g. with
-git clone git@github.com:ojoenlanuca/MyJupyphant.git
+git clone git@github.com:INM-6/jupyphant.git
 
-# 2. Change directory to the MyJupyphant directory
-cd MyJupyphant
+# 2. Change directory to the jupyphant directory
+cd jupyphant
 
 # 3. Create virtual environment from the file environment.yml with
 # (change name and prefix in the .yml as you like)
