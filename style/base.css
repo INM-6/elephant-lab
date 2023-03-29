@@ -1,0 +1,21 @@
+/*
+    See the JupyterLab Developer Guide for useful CSS Patterns:
+
+    https://jupyterlab.readthedocs.io/en/stable/developer/css.html
+*/
+
+/* Basic style of the Jupyphant-tab */
+.my-jupyphantWidget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: auto;
+}
+
+.my-jupyphantWidget .p-SplitPanel-handle {
+	background-color: darkgrey;
+}
+
+.p-SplitPanel-child .my-outarea-class *{
+	overflow: auto;
+}
