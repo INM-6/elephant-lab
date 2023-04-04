@@ -144,7 +144,7 @@ class JupyphantExtension {
 
 
 	        // Get the IPython session (Python kernel) of the notebook
-	        var session: ISessionContext = newPanel.sessionContext;
+	        var session: ISessionContext = newPanel.sessionContext;  // TODO: rename to session_context
 	        // Debug output
 	        console.log("Session.ready: ", session.ready);
 
@@ -166,7 +166,7 @@ class JupyphantExtension {
 	            let upperLeft = <Panel>upperPanel.widgets[0];
 	            let upperRight = <Panel>upperPanel.widgets[1];
 	            let lowerPanel = <Panel>this.widget.widgets[1];
-	            let outarea_treeview= <OutputArea>upperLeft.widgets[0];
+	            let outarea_treeview= <OutputArea>upperLeft.widgets[0];// TODO: use CamelCase instead of under_scores
 	            let outarea_nodeexplorer = <OutputArea>upperRight.widgets[0];
 	            let outarea_rasterplot = <OutputArea>lowerPanel.widgets[0];
 	            let outarea_lfpplot = <OutputArea>lowerPanel.widgets[1];
@@ -212,6 +212,40 @@ class JupyphantExtension {
 
 		        console.log("After registering");
 
+				session.statusChanged.connect((context, status) => {
+					if( status === "restarting" || status === "autorestarting") {
+						console.log("KERNEL status changed in " + context + ". Status is:"+ status);
+						context.ready.then(() => {
+							this.executeCode(pythonCode['setupEnv'], session);
+							console.log("Jupyphant was reset!");
+
+							// get OutputAreas of upper/lower panel that will show TreeView + NodeExplorer / raster + LFP plot
+				            upperPanel = <SplitPanel>this.widget.widgets[0];
+				            upperLeft = <Panel>upperPanel.widgets[0];
+				            upperRight = <Panel>upperPanel.widgets[1];
+				            lowerPanel = <Panel>this.widget.widgets[1];
+				            outarea_treeview= <OutputArea>upperLeft.widgets[0];// TODO: use CamelCase instead of under_scores
+				            outarea_nodeexplorer = <OutputArea>upperRight.widgets[0];
+				            outarea_rasterplot = <OutputArea>lowerPanel.widgets[0];
+				            outarea_lfpplot = <OutputArea>lowerPanel.widgets[1];
+
+				            // Also show tree and plots immediately upon being activated
+				            // This is what user expects
+				            // Code is executed and the results displayed in the specified OutputArea
+				            OutputArea.execute(pythonCode['createTree'], outarea_treeview, session);
+
+				            // This code is executed without output that needs to be displayed
+				            // Therefore, no OutputArea is necessary
+				            // However, an arbitrary callback can be specified
+				            // In this case, the callback does nothing as the code does not produce any output
+				            this.executeCode(pythonCode['updateTree'], session);
+
+				            OutputArea.execute(pythonCode['createExplorer'], outarea_nodeexplorer, session);
+				            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
+				            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
+						});
+					}
+	             });
 	        }); // end of session.ready.then()
 
 		}); // end of notebook_tracker.restored.then()
