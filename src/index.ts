@@ -4,16 +4,19 @@ import {
   JupyterFrontEndPlugin,
   ILayoutRestorer
 } from '@jupyterlab/application';
+
 import {
 	ICommandPalette,
 	ISessionContext,
 	WidgetTracker
 } from '@jupyterlab/apputils';
+
 import {
 	INotebookTracker,
 	NotebookActions,
 	NotebookPanel
 } from '@jupyterlab/notebook';
+
 import {
 	KernelMessage
 } from '@jupyterlab/services';
@@ -35,7 +38,9 @@ import {
 // Lumino imports for dealing with the tabs within JupyterLab
 // These are called Panels
 import {
-	 SplitPanel, Panel
+	 Panel,
+	 Widget,
+	 DockPanel
 } from '@lumino/widgets';
 //@ts-ignore: TODO: Why is this necessary?
 import {
@@ -57,8 +62,8 @@ class JupyphantExtension {
 	private notebook_tracker: INotebookTracker;
 	private widget_tracker: WidgetTracker;
 	private myPanels: NotebookPanel[];
-	private myVisTabs: Panel[] ;
-	private widget: SplitPanel;
+	private myVisTabs: Widget[] ;
+	private widget: DockPanel;
 
 	// Construct a new JupyphantExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -73,7 +78,7 @@ class JupyphantExtension {
 		// Store references to all tabs created by this extension
 		this.myVisTabs = [];
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
-		this.widget = new SplitPanel({orientation: 'vertical'});
+		this.widget = new DockPanel();
 	}; // end of constructor()
 
 
@@ -161,15 +166,16 @@ class JupyphantExtension {
 	            // For details, see kernelcode.ts
 	            this.executeCode(pythonCode['setupEnv'], session);
 
-	            // get OutputAreas of upper/lower panel that will show TreeView + NodeExplorer / raster + LFP plot
-	            let upperPanel = <SplitPanel>this.widget.widgets[0];
-	            let upperLeft = <Panel>upperPanel.widgets[0];
-	            let upperRight = <Panel>upperPanel.widgets[1];
-	            let lowerPanel = <Panel>this.widget.widgets[1];
-	            let outarea_treeview= <OutputArea>upperLeft.widgets[0];// TODO: use CamelCase instead of under_scores
-	            let outarea_nodeexplorer = <OutputArea>upperRight.widgets[0];
-	            let outarea_rasterplot = <OutputArea>lowerPanel.widgets[0];
-	            let outarea_lfpplot = <OutputArea>lowerPanel.widgets[1];
+	            // get OutputAreas of panels that will show TreeView + NodeExplorer / raster + LFP plot
+				let widgets_iter = this.widget.widgets();
+	            let tree_content = <Panel>widgets_iter.next();
+	            let explorer_content = <Panel>widgets_iter.next();
+	            let overview_content = <Panel>widgets_iter.next();
+
+	            let outarea_treeview= <OutputArea>tree_content.widgets[0];// TODO: use CamelCase instead of under_scores
+	            let outarea_nodeexplorer = <OutputArea>explorer_content.widgets[0];
+	            let outarea_rasterplot = <OutputArea>overview_content.widgets[0];
+	            let outarea_lfpplot = <OutputArea>overview_content.widgets[1];
 
 	            // Also show tree and plots immediately upon being activated
 	            // This is what user expects
@@ -220,14 +226,15 @@ class JupyphantExtension {
 							console.log("Jupyphant was reset!");
 
 							// get OutputAreas of upper/lower panel that will show TreeView + NodeExplorer / raster + LFP plot
-				            upperPanel = <SplitPanel>this.widget.widgets[0];
-				            upperLeft = <Panel>upperPanel.widgets[0];
-				            upperRight = <Panel>upperPanel.widgets[1];
-				            lowerPanel = <Panel>this.widget.widgets[1];
-				            outarea_treeview= <OutputArea>upperLeft.widgets[0];// TODO: use CamelCase instead of under_scores
-				            outarea_nodeexplorer = <OutputArea>upperRight.widgets[0];
-				            outarea_rasterplot = <OutputArea>lowerPanel.widgets[0];
-				            outarea_lfpplot = <OutputArea>lowerPanel.widgets[1];
+				            widgets_iter = this.widget.widgets();
+				            tree_content = <Panel>widgets_iter.next();
+				            explorer_content = <Panel>widgets_iter.next();
+				            overview_content = <Panel>widgets_iter.next();
+
+				            outarea_treeview= <OutputArea>tree_content.widgets[0];// TODO: use CamelCase instead of under_scores
+				            outarea_nodeexplorer = <OutputArea>explorer_content.widgets[0];
+				            outarea_rasterplot = <OutputArea>overview_content.widgets[0];
+				            outarea_lfpplot = <OutputArea>overview_content.widgets[1];
 
 				            // Also show tree and plots immediately upon being activated
 				            // This is what user expects
@@ -286,30 +293,27 @@ class JupyphantExtension {
 		// Adds the x to close the tab?
 		this.widget.title.closable = true;
 
-		// Divide Tab in upper part for TreeView / NodeExplorer and lower part for OverviewPlots
-        // upper Panel
-        this.widget.addWidget(new SplitPanel({orientation: 'horizontal'}));
-        let upper = <SplitPanel>this.widget.widgets[0];
-        upper.addWidget(new Panel());
-        upper.addWidget(new Panel());
-        upper.widgets[0].node.style.cssText = upper.widgets[0].node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-        upper.widgets[1].node.style.cssText = upper.widgets[1].node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-        // lower Panel
-        this.widget.addWidget(new Panel());
-        // Scrollbar in both parts in x and y axis
-        this.widget.widgets[0].node.style.cssText = this.widget.widgets[0].node.style.cssText +
-                                                     ' overflow-x: scroll; overflow-y: scroll;';
-        this.widget.widgets[1].node.style.cssText = this.widget.widgets[1].node.style.cssText +
-                                                    ' overflow: auto auto';
-        // Styling
-        (<SplitPanel>this.widget).handles[0].style.cssText += " background-color: DarkGrey;";
+		let tree_widget = new Panel();
+		tree_widget.title.label = 'Neo Tree';
+		let explorer_widget = new Panel();
+		explorer_widget.title.label = 'Node Explorer';
+		let overview_widget = new Panel();
+		overview_widget.title.label = 'Overview Plots';
 
-		// Create OutputArea in upper panel that will show TreeView and NodeExplorer
-        this.createOutputArea(rendermime, <Panel>upper.widgets[0], ['my-outarea-class'], 'jup_vis_out_id1.1');
-        this.createOutputArea(rendermime, <Panel>upper.widgets[1], ['my-outarea-class'], 'jup_vis_out_id1.2');
-        // Create 2 OutputAreas in lower panel that will show overview raster/lfp plots
-        this.createOutputArea(rendermime, <Panel>this.widget.widgets[1], ['my-outarea-class'], 'jup_vis_out_id2');
-        this.createOutputArea(rendermime, <Panel>this.widget.widgets[1], ['my-outarea-class'], 'jup_vis_out_id3');
+        this.widget.addWidget(tree_widget);
+        this.widget.addWidget(explorer_widget, {mode: 'split-right', ref: tree_widget});
+        this.widget.addWidget(overview_widget, {mode: 'split-bottom', ref: explorer_widget});
+
+		let widgets_iter = this.widget.widgets();
+        let tree_content = <Panel>widgets_iter.next();
+        let explorer_content = <Panel>widgets_iter.next();
+        let overview_content = <Panel>widgets_iter.next();
+		// Create OutputArea that will show TreeView and NodeExplorer
+        this.createOutputArea(rendermime, tree_content, ['my-outarea-class'], 'jup_vis_out_id1.1');
+        this.createOutputArea(rendermime, explorer_content, ['my-outarea-class'], 'jup_vis_out_id1.2');
+        // Create 2 OutputAreas that will show overview raster/lfp plots
+        this.createOutputArea(rendermime, overview_content, ['my-outarea-class'], 'jup_vis_out_id2');
+        this.createOutputArea(rendermime, overview_content, ['my-outarea-class'], 'jup_vis_out_id3');
 	} // end of initializeTab()
 
 	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string){

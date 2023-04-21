@@ -376,7 +376,7 @@ class JupyphantVisualization:
                 # transpose to get values per channel
                 lfp = np.transpose(lfp)
                 # normalize by maximum
-                lfp = np.divide(lfp, np.max(lfp, axis=1).reshape(len(lfp), 1))
+                lfp = np.divide(lfp, np.max(lfp, axis=1).reshape(len(lfp), 1))  ## TODO: causes error in Christianos example notebook of V4A data
                 for ch in lfp:
                     axes.plot(times, ch, color=color)
             else:
