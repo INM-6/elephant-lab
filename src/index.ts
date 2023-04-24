@@ -295,10 +295,13 @@ class JupyphantExtension {
 
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
+		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		let explorer_widget = new Panel();
 		explorer_widget.title.label = 'Node Explorer';
+		explorer_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		let overview_widget = new Panel();
 		overview_widget.title.label = 'Overview Plots';
+		overview_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 
         this.widget.addWidget(tree_widget);
         this.widget.addWidget(explorer_widget, {mode: 'split-right', ref: tree_widget});
