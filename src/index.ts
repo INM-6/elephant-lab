@@ -42,6 +42,11 @@ import {
 	 Widget,
 	 DockPanel
 } from '@lumino/widgets';
+
+import {
+	toArray
+} from '@lumino/algorithm';
+
 //@ts-ignore: TODO: Why is this necessary?
 import {
   JSONExt
@@ -167,13 +172,21 @@ class JupyphantExtension {
 	            this.executeCode(pythonCode['setupEnv'], session);
 
 	            // get OutputAreas of panels that will show TreeView + NodeExplorer / raster + LFP plot
-				let widgets_iter = this.widget.widgets();
-	            let tree_content = <Panel>widgets_iter.next();
-	            let explorer_content = <Panel>widgets_iter.next();
-	            let overview_content = <Panel>widgets_iter.next();
+				let widgets_iter = toArray(this.widget.widgets());
+	            let tree_content = <Panel>widgets_iter[0];
+	            let explorer_content = <DockPanel>widgets_iter[1];
+	            let overview_content = <Panel>widgets_iter[2];
+
+	            let explorer_content_iter = toArray(explorer_content.widgets());
+	            let explorer_content_info = <Panel>explorer_content_iter[0];
+	            let explorer_content_raw = <Panel>explorer_content_iter[1];
+	            let explorer_content_statistics = <Panel>explorer_content_iter[2];
 
 	            let outarea_treeview= <OutputArea>tree_content.widgets[0];// TODO: use CamelCase instead of under_scores
-	            let outarea_nodeexplorer = <OutputArea>explorer_content.widgets[0];
+	            let outarea_nodeexplorer_info = <OutputArea>explorer_content_info.widgets[0];
+	            let outarea_nodeexplorer_raw = <OutputArea>explorer_content_raw.widgets[0];
+	            let outarea_nodeexplorer_statistics = <OutputArea>explorer_content_statistics.widgets[0];
+
 	            let outarea_rasterplot = <OutputArea>overview_content.widgets[0];
 	            let outarea_lfpplot = <OutputArea>overview_content.widgets[1];
 
@@ -187,8 +200,9 @@ class JupyphantExtension {
 	            // However, an arbitrary callback can be specified
 	            // In this case, the callback does nothing as the code does not produce any output
 	            this.executeCode(pythonCode['updateTree'], session);
-
-	            OutputArea.execute(pythonCode['createExplorer'], outarea_nodeexplorer, session);
+				OutputArea.execute(pythonCode['createExplorerInfo'], outarea_nodeexplorer_info, session);
+				OutputArea.execute(pythonCode['createExplorerRawPlot'], outarea_nodeexplorer_raw, session);
+				OutputArea.execute(pythonCode['createExplorerStatistics'], outarea_nodeexplorer_statistics, session);
 	            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
 	            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
 
@@ -225,16 +239,24 @@ class JupyphantExtension {
 							this.executeCode(pythonCode['setupEnv'], session);
 							console.log("Jupyphant was reset!");
 
-							// get OutputAreas of upper/lower panel that will show TreeView + NodeExplorer / raster + LFP plot
-				            widgets_iter = this.widget.widgets();
-				            tree_content = <Panel>widgets_iter.next();
-				            explorer_content = <Panel>widgets_iter.next();
-				            overview_content = <Panel>widgets_iter.next();
+							// get OutputAreas of panels that will show TreeView + NodeExplorer / raster + LFP plot
+							let widgets_iter = toArray(this.widget.widgets());
+				            let tree_content = <Panel>widgets_iter[0];
+				            let explorer_content = <DockPanel>widgets_iter[1];
+				            let overview_content = <Panel>widgets_iter[2];
 
-				            outarea_treeview= <OutputArea>tree_content.widgets[0];// TODO: use CamelCase instead of under_scores
-				            outarea_nodeexplorer = <OutputArea>explorer_content.widgets[0];
-				            outarea_rasterplot = <OutputArea>overview_content.widgets[0];
-				            outarea_lfpplot = <OutputArea>overview_content.widgets[1];
+				            let explorer_content_iter = toArray(explorer_content.widgets());
+				            let explorer_content_info = <Panel>explorer_content_iter[0];
+				            let explorer_content_raw = <Panel>explorer_content_iter[1];
+				            let explorer_content_statistics = <Panel>explorer_content_iter[2];
+
+				            let outarea_treeview= <OutputArea>tree_content.widgets[0];// TODO: use CamelCase instead of under_scores
+				            let outarea_nodeexplorer_info = <OutputArea>explorer_content_info.widgets[0];
+				            let outarea_nodeexplorer_raw = <OutputArea>explorer_content_raw.widgets[0];
+				            let outarea_nodeexplorer_statistics = <OutputArea>explorer_content_statistics.widgets[0];
+
+				            let outarea_rasterplot = <OutputArea>overview_content.widgets[0];
+				            let outarea_lfpplot = <OutputArea>overview_content.widgets[1];
 
 				            // Also show tree and plots immediately upon being activated
 				            // This is what user expects
@@ -246,8 +268,9 @@ class JupyphantExtension {
 				            // However, an arbitrary callback can be specified
 				            // In this case, the callback does nothing as the code does not produce any output
 				            this.executeCode(pythonCode['updateTree'], session);
-
-				            OutputArea.execute(pythonCode['createExplorer'], outarea_nodeexplorer, session);
+							OutputArea.execute(pythonCode['createExplorerInfo'], outarea_nodeexplorer_info, session);
+							OutputArea.execute(pythonCode['createExplorerRawPlot'], outarea_nodeexplorer_raw, session);
+							OutputArea.execute(pythonCode['createExplorerStatistics'], outarea_nodeexplorer_statistics, session);
 				            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
 				            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
 						});
@@ -296,27 +319,40 @@ class JupyphantExtension {
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
 		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		let explorer_widget = new Panel();
+        this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1');
+
+		let explorer_widget = new DockPanel({tabsMovable: false});
 		explorer_widget.title.label = 'Node Explorer';
-		explorer_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		explorer_widget.node.style.cssText = explorer_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+        // INFO
+        let explorer_widget_info = new Panel();
+		explorer_widget_info.title.label = 'Info';
+		explorer_widget_info.node.style.cssText = explorer_widget_info.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1');
+		explorer_widget.addWidget(explorer_widget_info);
+		// RAW
+		let explorer_widget_raw_plot = new Panel();
+		explorer_widget_raw_plot.title.label = 'Raw Plot';
+		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2');
+		explorer_widget.addWidget(explorer_widget_raw_plot, {mode: 'tab-after', ref: explorer_widget_info});
+		// STATISTICS
+		let explorer_widget_statistics = new Panel();
+		explorer_widget_statistics.title.label = 'Statistics';
+		explorer_widget_statistics.node.style.cssText = explorer_widget_statistics.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		this.createOutputArea(rendermime, explorer_widget_statistics, ['my-outarea-class'], 'jup_vis_out_id_2.3');
+		explorer_widget.addWidget(explorer_widget_statistics, {mode: 'tab-after', ref: explorer_widget_raw_plot});
+
 		let overview_widget = new Panel();
 		overview_widget.title.label = 'Overview Plots';
 		overview_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+        this.createOutputArea(rendermime, overview_widget, ['my-outarea-class'], 'jup_vis_out_id_3.1');
+        this.createOutputArea(rendermime, overview_widget, ['my-outarea-class'], 'jup_vis_out_id_3.2');
 
         this.widget.addWidget(tree_widget);
         this.widget.addWidget(explorer_widget, {mode: 'split-right', ref: tree_widget});
         this.widget.addWidget(overview_widget, {mode: 'split-bottom', ref: explorer_widget});
 
-		let widgets_iter = this.widget.widgets();
-        let tree_content = <Panel>widgets_iter.next();
-        let explorer_content = <Panel>widgets_iter.next();
-        let overview_content = <Panel>widgets_iter.next();
-		// Create OutputArea that will show TreeView and NodeExplorer
-        this.createOutputArea(rendermime, tree_content, ['my-outarea-class'], 'jup_vis_out_id1.1');
-        this.createOutputArea(rendermime, explorer_content, ['my-outarea-class'], 'jup_vis_out_id1.2');
-        // Create 2 OutputAreas that will show overview raster/lfp plots
-        this.createOutputArea(rendermime, overview_content, ['my-outarea-class'], 'jup_vis_out_id2');
-        this.createOutputArea(rendermime, overview_content, ['my-outarea-class'], 'jup_vis_out_id3');
 	} // end of initializeTab()
 
 	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string){

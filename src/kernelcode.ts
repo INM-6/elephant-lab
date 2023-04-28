@@ -42,10 +42,22 @@ let create_tree =
 create_tree(my_jupyphant_vis_xxx)
 `;
 
-// Call to the function that initilaizes the node explorer for the ipytree
-let create_explorer =
-`from jupyphant.kernelcode import create_explorer
-create_explorer(my_jupyphant_vis_xxx)
+// Call to the function that shows metadata info of selected nodes in Info-tab of the node-explorer Dockpanel
+let create_explorer_info =
+`from jupyphant.kernelcode import create_explorer_info
+create_explorer_info(my_jupyphant_vis_xxx)
+`;
+
+// Call to the function that shows raw plot of selected nodes in Raw Plot-tab of the node-explorer Dockpanel
+let create_explorer_raw_plot =
+`from jupyphant.kernelcode import create_explorer_raw_plot
+create_explorer_raw_plot(my_jupyphant_vis_xxx)
+`;
+
+// Call to the function that shows statistics plots of selected nodes in Statistics-tab of the node-explorer Dockpanel
+let create_explorer_statistics =
+`from jupyphant.kernelcode import create_explorer_statistics
+create_explorer_statistics(my_jupyphant_vis_xxx)
 `;
 
 // Call to the function that updates the ipytree tree view of the neo hierarchy
@@ -63,6 +75,8 @@ export const pythonCode = {
 	'rasterPlot': raster_plot,
 	'lfpPlot': lfp_plot,
 	'createTree': create_tree,
-	'createExplorer': create_explorer,
+	'createExplorerInfo': create_explorer_info,
+	'createExplorerRawPlot': create_explorer_raw_plot,
+	'createExplorerStatistics': create_explorer_statistics,
 	'updateTree': update_tree
 };
