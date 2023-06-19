@@ -10,29 +10,33 @@ import numpy as np
 from elephant.pandas_bridge import multi_spiketrains_to_dataframe, multi_events_to_dataframe, multi_epochs_to_dataframe
 from jupyphant.pandas_bridge import multi_analogsignals_to_dataframe
 
-NEO_ABBREVIATIONS = {"Block": "BLK",
-                     "Segment": "SEG",
-                     "Group": "GRP",
-                     "ChannelView": "CHV",
-                     "IrregularlySampledSignal": "ISS",
-                     "AnalogSignal": "ASG",
-                     "SpikeTrain": "SPT",
-                     "SpikeTrainList": "SPL",
-                     "Epoch": "EPC",
-                     "Event": "EVT",
-                     "ImageSequence": "ISQ",
-                     "RegionOfInterest": "ROI",
-                     "CircularRegionOfInterest": "CRI",
-                     "PolygonRegionOfInterest": "PRI",
-                     "RectangularRegionOfInterest": "RRI",
+# neo abbreviations and font-awesome icons
+# TODO: maybe create own icons or use more accurate ones from newer fontawesome version (see suggestions in comments)
+NEO_ABBREVIATIONS = {"Block": {"abbr": "BLK", "icon": "cube"},  # folder-grid
+                     "Segment": {"abbr": "SEG", "icon": "columns"},  # grid-divider
+                     "Group": {"abbr": "GRP", "icon": "object-group"},  # chart-tree-map
+                     "ChannelView": {"abbr": "CHV", "icon": "eye"},
+                     "IrregularlySampledSignal": {"abbr": "ISS", "icon": "wave-square"},
+                     "AnalogSignal": {"abbr": "ASG", "icon": "water"},  # waveform
+                     "SpikeTrain": {"abbr": "SPT", "icon": "braille"},
+                     "SpikeTrainList": {"abbr": "SPL", "icon": "bars"},  # barcode-scan
+                     "Epoch": {"abbr": "EPC", "icon": "hourglass"},  # timeline , ruler-horizontal
+                     "Event": {"abbr": "EVT", "icon": "map-marker"},  # location-dot
+                     "ImageSequence": {"abbr": "ISQ", "icon": "images"},
+                     "RegionOfInterest": {"abbr": "ROI", "icon": "map"},
+                     "CircularRegionOfInterest": {"abbr": "CRI", "icon": "circle"},
+                     "PolygonRegionOfInterest": {"abbr": "PRI", "icon": "draw-polygon"},
+                     "RectangularRegionOfInterest": {"abbr": "RRI", "icon": "square"},
+                     # python built-in containters
+                     "list": {"abbr": "python-list", "icon": "list"}
                      }
 
 
 class JupyphantVisualization:
-    # All imports are hidden inside the class in order not to pollute the 
+    # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
     import json
-    # Dealing with the Python kernel's namespace, e.g., 
+    # Dealing with the Python kernel's namespace, e.g.,
     # listing all defined variables
     from IPython.core.magics.namespace import NamespaceMagics
     # Access to the Python kernel
@@ -44,7 +48,7 @@ class JupyphantVisualization:
     # For displaying widgets
     from IPython.display import display
     # Neo classes need to be imported to work with them
-    # Depending on the usage situation, import using 
+    # Depending on the usage situation, import using
     # sys.path.append might be necessary
     from neo.core.baseneo import BaseNeo
     from neo.core.container import Container
@@ -67,7 +71,7 @@ class JupyphantVisualization:
     from viziphant.spike_train_correlation import plot_corrcoef
     plot_isi_histogram = staticmethod(plot_isi_histogram)
     plot_time_histogram = staticmethod(plot_time_histogram)
-    plot_instantaneous_rates_colormesh =staticmethod(plot_instantaneous_rates_colormesh)
+    plot_instantaneous_rates_colormesh = staticmethod(plot_instantaneous_rates_colormesh)
     plot_corrcoef = staticmethod(plot_corrcoef)
     import matplotlib.pyplot as plt
     # Widgets used for display
@@ -77,7 +81,7 @@ class JupyphantVisualization:
     from ipytree import Tree, Node
 
     def __init__(self):
-        """ 
+        """
         Constructor of JupyphantVisualization
         Called upon activation of the extension.
         Initializes some persistent variables that store references to the current neo objects
@@ -105,7 +109,7 @@ class JupyphantVisualization:
         self.old_other_objs = self.other_objs[:]
         # Get ALL variables in current kernel namespace
         vals = self.nsm.who_ls()
-        values = {}
+        self.values = {}
         for v in vals:
             # Access objects created within the notebook
             # XXX Importing __main__ is in general considered bad practice
@@ -114,18 +118,21 @@ class JupyphantVisualization:
             # TODO: It could be possible to just create the class in the same namespace
             # I.e. no imports, by running this code directly inside the notebook
             # This requires to have this whole file as a string in the TypeScript code
-            
             # Objects are accessed using their name returned by who_ls() and the dict
             obj = __main__.__dict__[v]
             # Select only Neo objects and lists
-            if isinstance(obj, (self.BaseNeo, list)) or issubclass(type(obj), self.RegionOfInterest):
-                values[v] = obj
+            if isinstance(obj, (self.BaseNeo, list, self.SpikeTrainList)) or issubclass(type(obj), self.RegionOfInterest):
+                self.values[v] = obj
         # Get only blocks
-        self.blocks = [v for v in values.values() if isinstance(v, self.Block)]
+        self.blocks = [v for v in self.values.values() if isinstance(v, self.Block)]
         # Get all other objects, i.e., neo objects with references independent of a Block
-        self.other_objs = [v for v in values.values() if (isinstance(v, self.BaseNeo) or issubclass(type(v), self.RegionOfInterest)) and not isinstance(v, self.Block)]
+        self.other_objs = [v for v in self.values.values() if (
+                    isinstance(v, self.BaseNeo) or issubclass(type(v), self.RegionOfInterest)) and not isinstance(v, self.Block)]
         # get lists of neo objects or mixed lists
-        neo_objs_in_list = [v for v in values.values() if isinstance(v, list) and any(isinstance(v[i], self.BaseNeo) for i in range(len(v)))]
+        neo_objs_in_list = [v for v in self.values.values() if
+                            (isinstance(v, list) or isinstance(v, self.SpikeTrainList)) and (
+                                        any(isinstance(v[i], self.BaseNeo) for i in range(len(v))) or any(
+                                    isinstance(v[i], self.SpikeTrainList) for i in range(len(v))))]
         # neo_objs_in_list = [ele for l in neo_objs_in_list for ele in l if isinstance(ele, self.BaseNeo) and not isinstance(ele, self.Block)]
         self.other_objs.extend(neo_objs_in_list)
 
@@ -148,7 +155,10 @@ class JupyphantVisualization:
             nodes = []
             for bl in self.blocks:
                 bl_hash = joblib.hash(bl, hash_name='sha1')
-                bl_node = self.Node(f"{NEO_ABBREVIATIONS[bl.__class__.__name__]}::{bl.name}::{bl_hash}")
+                bl_node = self.Node(f"{NEO_ABBREVIATIONS[bl.__class__.__name__]['abbr']}::{bl.name}::{bl_hash}")
+                bl_node.icon = NEO_ABBREVIATIONS[bl.__class__.__name__]['icon']
+                bl_node.open_icon_style = 'success'
+                bl_node.close_icon_style = 'danger'
                 bl_node.opened = False
                 self._add_sub_nodes(bl_node, bl)
                 nodes.append(bl_node)
@@ -160,11 +170,14 @@ class JupyphantVisualization:
             for obj in self.other_objs:
                 obj_hash = joblib.hash(obj, hash_name='sha1')
                 if issubclass(type(obj), self.RegionOfInterest):
-                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}::{obj_hash} ")
-                elif isinstance(obj, list):
+                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]['abbr']}::{obj_hash} ")
+                elif isinstance(obj, (list, self.SpikeTrainList)):
                     obj_node = self.Node(f"{obj.__class__.__name__}::{obj_hash}")
                 else:
-                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]}::{obj.name}::{obj_hash}")
+                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]['abbr']}::{obj.name}::{obj_hash}")
+                obj_node.icon = NEO_ABBREVIATIONS[obj.__class__.__name__]['icon']
+                obj_node.open_icon_style = 'success'
+                obj_node.close_icon_style = 'danger'
                 self.map[obj_node._id] = obj_hash
                 obj_node.opened = False
                 self._add_sub_nodes(obj_node, obj)
@@ -184,7 +197,7 @@ class JupyphantVisualization:
 
     def _add_sub_nodes(self, parent, obj):
         """
-        Adding child objects of a neo container as sub nodes of the tree node 
+        Adding child objects of a neo container as sub nodes of the tree node
         that corresponds to the container
 
         Parameters
@@ -200,6 +213,9 @@ class JupyphantVisualization:
             for attr_name, attr_value in obj.__dict__.items():
                 if isinstance(attr_value, (list, self.SpikeTrainList)):
                     attr_node = self.Node(attr_name)
+                    attr_node.icon = NEO_ABBREVIATIONS[attr_value.__class__.__name__]['icon']
+                    attr_node.open_icon_style = 'success'
+                    attr_node.close_icon_style = 'danger'
                     self.map[attr_node._id] = None
                     attr_node.opened = False
                     self._add_sub_nodes(attr_node, attr_value)
@@ -210,7 +226,20 @@ class JupyphantVisualization:
             for i, child_obj in enumerate(obj):
                 if issubclass(type(child_obj), self.BaseNeo):
                     child_obj_hash = joblib.hash(child_obj, hash_name='sha1')
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]}#{i}::{child_obj.name}::{child_obj_hash}")
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}#{i}::{child_obj.name}::{child_obj_hash}")
+                    child_node.icon = NEO_ABBREVIATIONS[child_obj.__class__.__name__]['icon']
+                    child_node.open_icon_style = 'success'
+                    child_node.close_icon_style = 'danger'
+                    child_node.opened = False
+                    self.map[child_node._id] = child_obj_hash
+                    self._add_sub_nodes(child_node, child_obj)
+                    parent.add_node(child_node)
+                elif isinstance(child_obj, (list, self.SpikeTrainList)):
+                    child_obj_hash = joblib.hash(child_obj, hash_name='sha1')
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}::{child_obj_hash}")
+                    child_node.icon = NEO_ABBREVIATIONS[child_obj.__class__.__name__]['icon']
+                    child_node.open_icon_style = 'success'
+                    child_node.close_icon_style = 'danger'
                     child_node.opened = False
                     self.map[child_node._id] = child_obj_hash
                     self._add_sub_nodes(child_node, child_obj)
@@ -332,7 +361,7 @@ class JupyphantVisualization:
         else:
             n_subplots = sum(1 for v in new_spiketrains.values() if len(v) > 0)
             if n_subplots > 0:
-                fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots*8, 4))
+                fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots * 8, 4))
                 fig.suptitle(f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in")
                 # Rasterplot using viziphant
                 if n_subplots > 1:
@@ -343,7 +372,7 @@ class JupyphantVisualization:
                             axs[i].set_title(f"{top_node}")
                 else:
                     top_node = list(new_spiketrains.keys())[0]
-                    axs = self.rasterplot(new_spiketrains[top_node], axes=axs, s=0.1,  title=f"{top_node}")
+                    axs = self.rasterplot(new_spiketrains[top_node], axes=axs, s=0.1, title=f"{top_node}")
                 if selected_ids is None:
                     self.spiketrain_overview = fig
                 return fig
@@ -398,7 +427,8 @@ class JupyphantVisualization:
         Called at every cell execution
         """
         old_analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
-                                                                                neo_class=self.AnalogSignal, updated=False)
+                                                                                neo_class=self.AnalogSignal,
+                                                                                updated=False)
         new_analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
                                                                                 neo_class=self.AnalogSignal)
         # compare contents of AnalogSignals per top node
@@ -419,13 +449,15 @@ class JupyphantVisualization:
                 if n_subplots > 1:
                     for i, top_node in enumerate(new_analogsignals.keys()):
                         if new_analogsignals[top_node]:
-                            axs[i] = self.plot_lfp(new_analogsignals[top_node], times=self.np.arange(len(new_analogsignals[top_node][0])) * self.pq.s,
+                            axs[i] = self.plot_lfp(new_analogsignals[top_node], times=self.np.arange(
+                                len(new_analogsignals[top_node][0])) * self.pq.s,
                                                    title=f"{top_node}", spacing=75, axes=axs[i])
                         else:
                             axs[i].set_title(f"{top_node}")
                 else:
                     top_node = list(new_analogsignals.keys())[0]
-                    axs = self.plot_lfp(new_analogsignals[top_node], times=self.np.arange(len(new_analogsignals[top_node][0])) * self.pq.s,
+                    axs = self.plot_lfp(new_analogsignals[top_node],
+                                        times=self.np.arange(len(new_analogsignals[top_node][0])) * self.pq.s,
                                         title=f"{top_node}", spacing=75, axes=axs)
                 if selected_ids is None:
                     self.analogsignal_overview = fig
@@ -449,7 +481,8 @@ class JupyphantVisualization:
         # keep neo_obj which are selected
         if selected_ids is not None:
             for top_node in neo_objs.keys():
-                neo_objs[top_node] = [neo_obj for neo_obj in neo_objs[top_node] if joblib.hash(neo_obj, hash_name='sha1') in selected_ids]
+                neo_objs[top_node] = [neo_obj for neo_obj in neo_objs[top_node] if
+                                      joblib.hash(neo_obj, hash_name='sha1') in selected_ids]
         # remove top-nodes with no object of the specified neo_class
         for key in list(neo_objs):
             if len(neo_objs[key]) == 0:
@@ -481,7 +514,6 @@ class JupyphantVisualization:
                         display(gr)
                     neo_containers.append(out.getvalue())
         return neo_containers
-
 
     def testfunc(self):
         """
