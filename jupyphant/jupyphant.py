@@ -169,12 +169,11 @@ class JupyphantVisualization:
             # Top-level node for every independent neo object
             for obj in self.other_objs:
                 obj_hash = joblib.hash(obj, hash_name='sha1')
-                if issubclass(type(obj), self.RegionOfInterest):
-                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]['abbr']}::{obj_hash} ")
-                elif isinstance(obj, (list, self.SpikeTrainList)):
-                    obj_node = self.Node(f"{obj.__class__.__name__}::{obj_hash}")
-                else:
+                # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
+                if hasattr(obj, 'name'):
                     obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]['abbr']}::{obj.name}::{obj_hash}")
+                else:
+                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]['abbr']}::{obj_hash}")
                 obj_node.icon = NEO_ABBREVIATIONS[obj.__class__.__name__]['icon']
                 obj_node.open_icon_style = 'success'
                 obj_node.close_icon_style = 'danger'
@@ -212,40 +211,32 @@ class JupyphantVisualization:
             # iterate over object attributes and create nodes recursively
             for attr_name, attr_value in obj.__dict__.items():
                 if isinstance(attr_value, (list, self.SpikeTrainList)):
-                    attr_node = self.Node(attr_name)
+                    attr_value_hash = joblib.hash(attr_value, hash_name='sha1')
+                    attr_node = self.Node(f"{NEO_ABBREVIATIONS[attr_value.__class__.__name__]['abbr']}::{attr_value_hash}")
                     attr_node.icon = NEO_ABBREVIATIONS[attr_value.__class__.__name__]['icon']
                     attr_node.open_icon_style = 'success'
                     attr_node.close_icon_style = 'danger'
-                    self.map[attr_node._id] = None
                     attr_node.opened = False
+                    self.map[attr_node._id] = attr_value_hash
                     self._add_sub_nodes(attr_node, attr_value)
                     parent.add_node(attr_node)
                 else:
                     pass
         elif isinstance(obj, (list, self.SpikeTrainList)):
             for i, child_obj in enumerate(obj):
-                if issubclass(type(child_obj), self.BaseNeo):
-                    child_obj_hash = joblib.hash(child_obj, hash_name='sha1')
+                child_obj_hash = joblib.hash(child_obj, hash_name='sha1')
+                # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
+                if hasattr(child_obj, 'name'):
                     child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}#{i}::{child_obj.name}::{child_obj_hash}")
-                    child_node.icon = NEO_ABBREVIATIONS[child_obj.__class__.__name__]['icon']
-                    child_node.open_icon_style = 'success'
-                    child_node.close_icon_style = 'danger'
-                    child_node.opened = False
-                    self.map[child_node._id] = child_obj_hash
-                    self._add_sub_nodes(child_node, child_obj)
-                    parent.add_node(child_node)
-                elif isinstance(child_obj, (list, self.SpikeTrainList)):
-                    child_obj_hash = joblib.hash(child_obj, hash_name='sha1')
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}::{child_obj_hash}")
-                    child_node.icon = NEO_ABBREVIATIONS[child_obj.__class__.__name__]['icon']
-                    child_node.open_icon_style = 'success'
-                    child_node.close_icon_style = 'danger'
-                    child_node.opened = False
-                    self.map[child_node._id] = child_obj_hash
-                    self._add_sub_nodes(child_node, child_obj)
-                    parent.add_node(child_node)
                 else:
-                    pass
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}#{i}::{child_obj_hash}")
+                child_node.icon = NEO_ABBREVIATIONS[child_obj.__class__.__name__]['icon']
+                child_node.open_icon_style = 'success'
+                child_node.close_icon_style = 'danger'
+                child_node.opened = False
+                self.map[child_node._id] = child_obj_hash
+                self._add_sub_nodes(child_node, child_obj)
+                parent.add_node(child_node)
         else:
             raise TypeError(f"unsupported class/type: {type(obj)}")
 
