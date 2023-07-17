@@ -28,7 +28,7 @@ NEO_ABBREVIATIONS = {"Block": {"abbr": "BLK", "icon": "cube"},  # folder-grid
                      "PolygonRegionOfInterest": {"abbr": "PRI", "icon": "draw-polygon"},
                      "RectangularRegionOfInterest": {"abbr": "RRI", "icon": "square"},
                      # python built-in containters
-                     "list": {"abbr": "python-list", "icon": "list"}
+                     "list": {"abbr": "PYL", "icon": "list"}
                      }
 
 
@@ -212,7 +212,7 @@ class JupyphantVisualization:
             for attr_name, attr_value in obj.__dict__.items():
                 if isinstance(attr_value, (list, self.SpikeTrainList)):
                     attr_value_hash = joblib.hash(attr_value, hash_name='sha1')
-                    attr_node = self.Node(f"{NEO_ABBREVIATIONS[attr_value.__class__.__name__]['abbr']}::{attr_value_hash}")
+                    attr_node = self.Node(f"{NEO_ABBREVIATIONS[attr_value.__class__.__name__]['abbr']}::{attr_name}::{attr_value_hash}")
                     attr_node.icon = NEO_ABBREVIATIONS[attr_value.__class__.__name__]['icon']
                     attr_node.open_icon_style = 'success'
                     attr_node.close_icon_style = 'danger'
@@ -505,6 +505,9 @@ class JupyphantVisualization:
                         display(gr)
                     neo_containers.append(out.getvalue())
         return neo_containers
+
+    def _extract_selected_neo_objects(self, selected_ids):
+        neo_objs = {}
 
     def testfunc(self):
         """
