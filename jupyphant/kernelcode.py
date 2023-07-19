@@ -71,29 +71,7 @@ def create_explorer_info(jupyphant_entity):
                         jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] is not None]
         with output_node_info:
             IPython.display.clear_output()
-            # print('Some node selected!')
-            # for i in range(len(change["new"])):
-            #    print(f'{i}. {change["new"][i].name} -> urn_id = {change["new"][i]._id}')
-            df_anasig, df_spt, df_evt, df_epc = jupyphant_entity.selected_nodes_to_dataframes(
-                selected_ids=selected_ids)
-            neo_containers = jupyphant_entity._extract_pretty_print_of_selected_neo_container_objects(
-                selected_ids=selected_ids)
-            if df_anasig:
-                for df in df_anasig:
-                    display(df)
-            if df_spt:
-                for df in df_spt:
-                    display(df)
-            if df_epc:
-                for df in df_epc:
-                    display(df)
-            if df_evt:
-                for df in df_evt:
-                    display(df)
-            if neo_containers:
-                for container in neo_containers:
-                    display("outer Hello")
-                    # display(container)
+            jupyphant_entity.pretty_print_of_selected_neo_objects(selected_ids=selected_ids)
 
     output_node_info = Output(layout={'border': '1px solid orange'})
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_info, names='selected_nodes')

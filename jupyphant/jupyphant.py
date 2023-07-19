@@ -8,8 +8,6 @@ import time
 import joblib
 import matplotlib.pyplot as plt
 import numpy as np
-from elephant.pandas_bridge import multi_spiketrains_to_dataframe, multi_events_to_dataframe, multi_epochs_to_dataframe
-from jupyphant.pandas_bridge import multi_analogsignals_to_dataframe
 
 # neo abbreviations and font-awesome icons
 # TODO: maybe create own icons or use more accurate ones from newer fontawesome version (see suggestions in comments)
@@ -242,39 +240,6 @@ class Jupyphant:
         self.ipytree_of_neo_objects.stripes = True
         return self.ipytree_of_neo_objects
 
-    def selected_nodes_to_dataframes(self, selected_ids=None):
-        """
-        Convert the selected tree nodes representing neo objects to 'pandas.DataFrame' objects.
-
-        """
-        analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
-                                                                            neo_class=self.AnalogSignal)
-        spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
-                                                                          neo_class=self.SpikeTrain)
-        events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
-                                                                     neo_class=self.Event)
-        epochs = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
-                                                                     neo_class=self.Epoch)
-        df_anasig = []
-        df_spt = []
-        df_evt = []
-        df_epc = []
-
-        for i, top_node in enumerate(analogsignals.keys()):
-            if analogsignals[top_node]:
-                df_anasig.append(multi_analogsignals_to_dataframe(container=analogsignals[top_node], parents=False))
-        for i, top_node in enumerate(spiketrains.keys()):
-            if spiketrains[top_node]:
-                df_spt.append(multi_spiketrains_to_dataframe(container=spiketrains[top_node], parents=False))
-        for i, top_node in enumerate(events.keys()):
-            if events[top_node]:
-                df_evt.append(multi_events_to_dataframe(container=events[top_node], parents=False))
-        for i, top_node in enumerate(epochs.keys()):
-            if epochs[top_node]:
-                df_epc.append(multi_epochs_to_dataframe(container=epochs[top_node], parents=False))
-
-        return df_anasig, df_spt, df_evt, df_epc
-
     def statistics_of_selected_nodes(self, selected_ids=None):
         spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
                                                                           neo_class=self.SpikeTrain)
@@ -471,34 +436,34 @@ class Jupyphant:
                 del collected_neo_objs[key]
         return collected_neo_objs
 
-    def _extract_pretty_print_of_selected_neo_container_objects(self, selected_ids=None):
+    def pretty_print_of_selected_neo_objects(self, selected_ids=None):
         from io import StringIO
         from contextlib import redirect_stdout
         from IPython.display import display
 
-        neo_containers = []
         for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
+            hash_neo_obj = joblib.hash(neo_obj, hash_name='sha1')
+            if hash_neo_obj in selected_ids:
+                out = StringIO()
+                with redirect_stdout(out):
+                    display(neo_obj)
+                selected_ids.remove(hash_neo_obj)
             if issubclass(type(neo_obj), self.Container):
-                if joblib.hash(neo_obj, hash_name='sha1') in selected_ids:
-                    out = StringIO()
-                    with redirect_stdout(out):
-                        display(neo_obj)
-                    neo_containers.append(out.getvalue())
-
                 for child_container_name in neo_obj._child_containers:
                     child_container = getattr(neo_obj, child_container_name)
+                    hash_child_container = joblib.hash(child_container, hash_name='sha1')
+                    if hash_child_container in selected_ids:
+                        out = StringIO()
+                        with redirect_stdout(out):
+                            display(child_container)
+                        selected_ids.remove(hash_child_container)
                     for child_obj in child_container:
-                        if joblib.hash(child_obj, hash_name='sha1') in selected_ids:
+                        hash_child_obj = joblib.hash(child_obj, hash_name='sha1')
+                        if hash_child_obj in selected_ids:
                             out = StringIO()
                             with redirect_stdout(out):
                                 display(child_obj)
-                            neo_containers.append(out.getvalue())
-            else:
-                pass
-        return neo_containers
-
-    def _extract_selected_neo_objects(self, selected_ids):
-        neo_objs = {}
+                            selected_ids.remove(hash_child_obj)
 
     def testfunc(self):
         """
