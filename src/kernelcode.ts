@@ -9,7 +9,7 @@ let setup_env =
 `# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
 %matplotlib ipympl
 from jupyphant.kernelcode import setup_env
-my_jupyphant_vis_xxx = setup_env()`;
+jupyphant_entity = setup_env()`;
 
 // Dummy plot code for a single AnalogSignal
 let neo_plot =
@@ -27,43 +27,43 @@ plot_code()
 // Call to the function that creates a rasterplot from all spike trains
 let raster_plot =
 `from jupyphant.kernelcode import raster_plot
-raster_plot(my_jupyphant_vis_xxx)
+raster_plot(jupyphant_entity)
 `;
 
 // Call to the function that plots AnalogSignals
 let lfp_plot = 
 `from jupyphant.kernelcode import lfp_plot
-lfp_plot(my_jupyphant_vis_xxx)
+lfp_plot(jupyphant_entity)
 `;
 
 // Call to the function that initializes the ipytree widget with an empty tree
 let create_tree =
 `from jupyphant.kernelcode import create_tree
-create_tree(my_jupyphant_vis_xxx)
+create_tree(jupyphant_entity)
 `;
 
 // Call to the function that shows metadata info of selected nodes in Info-tab of the node-explorer Dockpanel
 let create_explorer_info =
 `from jupyphant.kernelcode import create_explorer_info
-create_explorer_info(my_jupyphant_vis_xxx)
+create_explorer_info(jupyphant_entity)
 `;
 
 // Call to the function that shows raw plot of selected nodes in Raw Plot-tab of the node-explorer Dockpanel
 let create_explorer_raw_plot =
 `from jupyphant.kernelcode import create_explorer_raw_plot
-create_explorer_raw_plot(my_jupyphant_vis_xxx)
+create_explorer_raw_plot(jupyphant_entity)
 `;
 
 // Call to the function that shows statistics plots of selected nodes in Statistics-tab of the node-explorer Dockpanel
 let create_explorer_statistics =
 `from jupyphant.kernelcode import create_explorer_statistics
-create_explorer_statistics(my_jupyphant_vis_xxx)
+create_explorer_statistics(jupyphant_entity)
 `;
 
 // Call to the function that updates the ipytree tree view of the neo hierarchy
 let update_tree =
 `from jupyphant.kernelcode import update_tree
-update_tree(my_jupyphant_vis_xxx)
+update_tree(jupyphant_entity)
 `;
 
 // Make all strings publicly available in a dict

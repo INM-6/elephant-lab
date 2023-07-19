@@ -1,6 +1,7 @@
 # XXX: In general this is bad practice but might be useful for this exact usecase
 # Importing main namespace in order to be able to access objects created in
 # JupyterLab Python kernel
+# TODO: move all imports inside the class
 import __main__
 import time
 
@@ -32,7 +33,7 @@ NEO_ABBREVIATIONS = {"Block": {"abbr": "BLK", "icon": "cube"},  # folder-grid
                      }
 
 
-class JupyphantVisualization:
+class Jupyphant:
     # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
     import json
@@ -81,39 +82,36 @@ class JupyphantVisualization:
     from ipytree import Tree, Node
 
     def __init__(self):
-        """
+        """   # TODO: rewrite docstring
         Constructor of JupyphantVisualization
         Called upon activation of the extension.
         Initializes some persistent variables that store references to the current neo objects
         and plots.
         They are used to check for changes in neo objects and to display the current structure.
         """
-        self.blocks = []
-        self.other_objs = []
-        self.blocks_changed_after_update = False
-        self.other_objs_changed_after_update = False
+        self.neo_objs_and_lists_of_neo_objs_with_var_name = {}
+        self.neo_objs_changed_after_update = False
         # Plots are saved in order not to require recreation at every cell execution
-        self.plot = None
         self.spiketrain_overview = None
         self.spiketrains_hash = None
         self.analogsignal_overview = None
         self.analogsignals_hash = None
-        self.tree = None
-        self.map = {}
+        self.ipytree_of_neo_objects = None
+        self.map_ipytree_node_id_to_neo_obj_hash = {}
 
     def update(self):
-        """
+        """  # TODO: rewrite docstring
         Updates the neo persistent neo structure to represent the current neo structure
         created by the notebook user.
         Called before updating plots, thus, usually at every cell execution.
         """
-        blocks_hash_before_update = joblib.hash(self.blocks, hash_name='sha1')
-        other_objs_hash_before_update = joblib.hash(self.other_objs, hash_name='sha1')
+        neo_objs_hash_before_update = joblib.hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
+                                                  hash_name='sha1')
 
         # Get ALL variables in current kernel namespace
-        vals = self.nsm.who_ls()
-        self.values = {}
-        for v in vals:
+        all_variable_names_in_current_kernel_namespace = self.nsm.who_ls()
+        print(f"all_variable_names_in_current_kernel_namespace = {all_variable_names_in_current_kernel_namespace}")
+        for variable_name in all_variable_names_in_current_kernel_namespace:
             # Access objects created within the notebook
             # XXX Importing __main__ is in general considered bad practice
             # However here the explicit goal is to have access to
@@ -122,75 +120,58 @@ class JupyphantVisualization:
             # I.e. no imports, by running this code directly inside the notebook
             # This requires to have this whole file as a string in the TypeScript code
             # Objects are accessed using their name returned by who_ls() and the dict
-            obj = __main__.__dict__[v]
-            # Select only Neo objects and lists
-            if isinstance(obj, (self.BaseNeo, list, self.SpikeTrainList)) or issubclass(type(obj), self.RegionOfInterest):
-                self.values[v] = obj
-        # Get only blocks
-        self.blocks = [v for v in self.values.values() if isinstance(v, self.Block)]
-        # Get all other objects, i.e., neo objects with references independent of a Block
-        self.other_objs = [v for v in self.values.values() if (
-                    isinstance(v, self.BaseNeo) or issubclass(type(v), self.RegionOfInterest)) and not isinstance(v, self.Block)]
-        # get lists of neo objects or mixed lists
-        neo_objs_in_list = [v for v in self.values.values() if
-                            (isinstance(v, list) or isinstance(v, self.SpikeTrainList)) and (
-                                        any(isinstance(v[i], self.BaseNeo) for i in range(len(v))) or any(
-                                    isinstance(v[i], self.SpikeTrainList) for i in range(len(v))))]
-        # neo_objs_in_list = [ele for l in neo_objs_in_list for ele in l if isinstance(ele, self.BaseNeo) and not isinstance(ele, self.Block)]
-        self.other_objs.extend(neo_objs_in_list)
+            obj_from_kernel_ns = __main__.__dict__[variable_name]
+            # Select only neo objects and SpikeTrainLists / lists with neo objects
+            is_BaseNeo_instance = isinstance(obj_from_kernel_ns, self.BaseNeo)
+            is_RegionOfInterest_subclass = issubclass(type(obj_from_kernel_ns), self.RegionOfInterest)
+            is_list_with_neo_objs = \
+                isinstance(obj_from_kernel_ns, (list, self.SpikeTrainList)) and \
+                (any(isinstance(obj_from_kernel_ns[i], self.BaseNeo) for i in range(len(obj_from_kernel_ns))) or
+                 any(isinstance(obj_from_kernel_ns[i], self.SpikeTrainList) for i in range(len(obj_from_kernel_ns))))
+            if is_BaseNeo_instance or is_RegionOfInterest_subclass or is_list_with_neo_objs:
+                self.neo_objs_and_lists_of_neo_objs_with_var_name[variable_name] = obj_from_kernel_ns
 
-        blocks_hash_after_update = joblib.hash(self.blocks, hash_name='sha1')
-        other_objs_hash_after_update = joblib.hash(self.other_objs, hash_name='sha1')
-        if blocks_hash_before_update != blocks_hash_after_update:
-            self.blocks_changed_after_update = True
-        if other_objs_hash_before_update != other_objs_hash_after_update:
-            self.other_objs_changed_after_update = True
+        print(f"self.neo_objs_and_lists_of_neo_objs_with_var_name = {self.neo_objs_and_lists_of_neo_objs_with_var_name}")
+        neo_objs_hash_after_update = joblib.hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
+                                                 hash_name='sha1')
+
+        if neo_objs_hash_before_update != neo_objs_hash_after_update:
+            self.neo_objs_changed_after_update = True
 
     def update_tree(self):
-        """
+        """  # TODO: rewrite docstring
         Updates the ipytree tree view of the neo hierarchy
 
         Called at every cell execution
         """
         # Timer used for debugging only
         start = time.time()
+        
         # Update all neo objects
         self.update()
-        print(f"After Update: {time.time() - start}")
+        print(f"After update of all neo objects: {time.time() - start}")
+        
         # Currently the tree is created from scratch every time
         # TODO: Reuse the existing tree if there is one
-        if self.tree is not None or True:
-            print("HERE")
+        if self.ipytree_of_neo_objects is not None or True:
             # Create one tree node per neo block and name of node is name of block
             nodes = []
-            for bl in self.blocks:
-                bl_hash = joblib.hash(bl, hash_name='sha1')
-                bl_node = self.Node(f"{NEO_ABBREVIATIONS[bl.__class__.__name__]['abbr']}::{bl.name}::{bl_hash}")
-                bl_node.icon = NEO_ABBREVIATIONS[bl.__class__.__name__]['icon']
-                bl_node.open_icon_style = 'success'
-                bl_node.close_icon_style = 'danger'
-                bl_node.opened = False
-                self._add_sub_nodes(bl_node, bl)
-                nodes.append(bl_node)
-                self.map[bl_node._id] = bl_hash
+            for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
+                hash_neo_obj = joblib.hash(neo_obj, hash_name='sha1')
+                if hasattr(neo_obj, 'name'):
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['abbr']}::{neo_obj.name}::{hash_neo_obj}")
+                # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
+                else:
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['abbr']}::{hash_neo_obj}")
+                node_neo_obj.icon = NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['icon']
+                node_neo_obj.open_icon_style = 'success'
+                node_neo_obj.close_icon_style = 'danger'
+                node_neo_obj.opened = False
+                self._add_sub_nodes(node_neo_obj, neo_obj)
+                nodes.append(node_neo_obj)
+                self.map_ipytree_node_id_to_neo_obj_hash[node_neo_obj._id] = hash_neo_obj
             print(f"After Blocks: {time.time() - start}")
             # print(f"Nodes After Blocks: {nodes}")
-
-            # Top-level node for every independent neo object
-            for obj in self.other_objs:
-                obj_hash = joblib.hash(obj, hash_name='sha1')
-                # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
-                if hasattr(obj, 'name'):
-                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]['abbr']}::{obj.name}::{obj_hash}")
-                else:
-                    obj_node = self.Node(f"{NEO_ABBREVIATIONS[obj.__class__.__name__]['abbr']}::{obj_hash}")
-                obj_node.icon = NEO_ABBREVIATIONS[obj.__class__.__name__]['icon']
-                obj_node.open_icon_style = 'success'
-                obj_node.close_icon_style = 'danger'
-                self.map[obj_node._id] = obj_hash
-                obj_node.opened = False
-                self._add_sub_nodes(obj_node, obj)
-                nodes.append(obj_node)
 
             print(f"After Independent: {time.time() - start}")
             # print(f"Nodes After Independent: {nodes}")
@@ -199,7 +180,7 @@ class JupyphantVisualization:
             import sys
             sys.stdout.flush()
             # Runs asynchronously for Python kernel but blocks output via JS
-            self.tree.nodes = nodes
+            self.ipytree_of_neo_objects.nodes = nodes
             print(f"Rendered: {time.time() - start}")
         else:
             pass
@@ -215,7 +196,7 @@ class JupyphantVisualization:
             Parent node of ipytree
         obj : Neo container or standard python container i.e. list, dict
             Parent container object
-        """
+        """  # TODO: rewrite docstring
         # print(f"parent: {parent}, obj: {obj}")
         if issubclass(type(obj), (self.BaseNeo, self.RegionOfInterest)):
             # iterate over object attributes and create nodes recursively
@@ -227,7 +208,7 @@ class JupyphantVisualization:
                     attr_node.open_icon_style = 'success'
                     attr_node.close_icon_style = 'danger'
                     attr_node.opened = False
-                    self.map[attr_node._id] = attr_value_hash
+                    self.map_ipytree_node_id_to_neo_obj_hash[attr_node._id] = attr_value_hash
                     self._add_sub_nodes(attr_node, attr_value)
                     parent.add_node(attr_node)
                 else:
@@ -244,7 +225,7 @@ class JupyphantVisualization:
                 child_node.open_icon_style = 'success'
                 child_node.close_icon_style = 'danger'
                 child_node.opened = False
-                self.map[child_node._id] = child_obj_hash
+                self.map_ipytree_node_id_to_neo_obj_hash[child_node._id] = child_obj_hash
                 self._add_sub_nodes(child_node, child_obj)
                 parent.add_node(child_node)
         else:
@@ -254,12 +235,12 @@ class JupyphantVisualization:
         """
         Initialize the tree
 
-        """
-        self.tree = None
+        """  # TODO: rewrite docstring
+        self.ipytree_of_neo_objects = None
         # Alternating dark and light stripes for better better visibility
-        self.tree = self.Tree()
-        self.tree.stripes = True
-        return self.tree
+        self.ipytree_of_neo_objects = self.Tree()
+        self.ipytree_of_neo_objects.stripes = True
+        return self.ipytree_of_neo_objects
 
     def selected_nodes_to_dataframes(self, selected_ids=None):
         """
@@ -440,7 +421,7 @@ class JupyphantVisualization:
                 analogsignals_unchanged = False
 
         # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
-        if (analogsignals_unchanged) and (self.analogsignal_overview is not None) and (selected_ids is None) and True:
+        if analogsignals_unchanged and (self.analogsignal_overview is not None) and (selected_ids is None) and True:
             return self.analogsignal_overview
         # Otherwise, create new plot
         else:
@@ -469,28 +450,26 @@ class JupyphantVisualization:
                 pass
 
     def _extract_selected_neo_data_objects_by_top_node(self, selected_ids=None, neo_class=None):
-        neo_objs = {}
-        # iterate/extract form blocks
-        for bl in self.blocks:
-            neo_objs[f"{bl.name}::{joblib.hash(bl, hash_name='sha1')}"] = bl.list_children_by_class(neo_class)
-        # iterate/extract form other_objs
-        for obj in self.other_objs:
-            if isinstance(obj, neo_class):
-                neo_objs[f"{obj.name}::{joblib.hash(obj, hash_name='sha1')}"] = [obj]
-            elif issubclass(type(obj), self.Container):
-                neo_objs[f"{obj.name}::{joblib.hash(obj, hash_name='sha1')}"] = obj.list_children_by_class(neo_class)
+        collected_neo_objs = {}
+        # iterate over 'neo_objs_and_lists_of_neo_objs_with_var_name' and
+        # extract those neo objects that are instances of the given 'neo_class'
+        for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
+            if isinstance(neo_obj, neo_class):
+                collected_neo_objs[f"{neo_obj.name}::{joblib.hash(neo_obj, hash_name='sha1')}"] = [neo_obj]
+            elif issubclass(type(neo_obj), self.Container):
+                collected_neo_objs[f"{neo_obj.name}::{joblib.hash(neo_obj, hash_name='sha1')}"] = neo_obj.list_children_by_class(neo_class)
             else:
                 pass
-        # keep neo_obj which are selected
+        # keep only neo_obj which are selected, i.e. their hash ID was provided via 'selected_ids'
         if selected_ids is not None:
-            for top_node in neo_objs.keys():
-                neo_objs[top_node] = [neo_obj for neo_obj in neo_objs[top_node] if
-                                      joblib.hash(neo_obj, hash_name='sha1') in selected_ids]
-        # remove top-nodes with no object of the specified neo_class
-        for key in list(neo_objs):
-            if len(neo_objs[key]) == 0:
-                del neo_objs[key]
-        return neo_objs
+            for top_node in collected_neo_objs.keys():
+                collected_neo_objs[top_node] = [neo_obj for neo_obj in collected_neo_objs[top_node] if
+                                                joblib.hash(neo_obj, hash_name='sha1') in selected_ids]
+        # remove top-nodes / neo-containers with no object of the specified neo_class
+        for key in list(collected_neo_objs):
+            if len(collected_neo_objs[key]) == 0:
+                del collected_neo_objs[key]
+        return collected_neo_objs
 
     def _extract_pretty_print_of_selected_neo_container_objects(self, selected_ids=None):
         from io import StringIO
@@ -498,24 +477,24 @@ class JupyphantVisualization:
         from IPython.display import display
 
         neo_containers = []
-        for bl in self.blocks:
-            if joblib.hash(bl, hash_name='sha1') in selected_ids:
-                out = StringIO()
-                with redirect_stdout(out):
-                    display(bl)
-                neo_containers.append(out.getvalue())
-            for seg in bl.segments:
-                if joblib.hash(seg, hash_name='sha1') in selected_ids:
+        for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
+            if issubclass(type(neo_obj), self.Container):
+                if joblib.hash(neo_obj, hash_name='sha1') in selected_ids:
                     out = StringIO()
                     with redirect_stdout(out):
-                        display(seg)
+                        display(neo_obj)
                     neo_containers.append(out.getvalue())
-            for gr in bl.groups:
-                if joblib.hash(gr, hash_name='sha1') in selected_ids:
-                    out = StringIO()
-                    with redirect_stdout(out):
-                        display(gr)
-                    neo_containers.append(out.getvalue())
+
+                for child_container_name in neo_obj._child_containers:
+                    child_container = getattr(neo_obj, child_container_name)
+                    for child_obj in child_container:
+                        if joblib.hash(child_obj, hash_name='sha1') in selected_ids:
+                            out = StringIO()
+                            with redirect_stdout(out):
+                                display(child_obj)
+                            neo_containers.append(out.getvalue())
+            else:
+                pass
         return neo_containers
 
     def _extract_selected_neo_objects(self, selected_ids):
