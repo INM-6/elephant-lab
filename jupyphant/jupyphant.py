@@ -51,9 +51,11 @@ class Jupyphant:
     # sys.path.append might be necessary
     from neo.core.baseneo import BaseNeo
     from neo.core.container import Container
-    from neo.core.regionofinterest import RegionOfInterest
+    from neo.core.regionofinterest import RegionOfInterest, CircularRegionOfInterest, RectangularRegionOfInterest, \
+        PolygonRegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
     from neo import Block, SpikeTrain, AnalogSignal, Event, Epoch
+    from collections import Counter
     from neo.test.tools import assert_same_sub_schema
     assert_same_sub_schema = staticmethod(assert_same_sub_schema)
     import numpy as np
@@ -436,34 +438,189 @@ class Jupyphant:
                 del collected_neo_objs[key]
         return collected_neo_objs
 
-    def pretty_print_of_selected_neo_objects(self, selected_ids=None):
+    def _get_neo_obj_hash_and_node_name_of_selected_nodes(self):
+        return {self.map_ipytree_node_id_to_neo_obj_hash[node._id]: node.name
+                for node in self.ipytree_of_neo_objects.selected_nodes}
+
+    def _repr_pretty_neo_objects(self, neo_obj, node_name, pp, cycle):
+        """
+        Handle pretty-printing of any neo class and python built-in list.
+
+        Parameter:
+            obj: neo-object
+            pp: instance of RepresentationPrinter
+            cyle: boolean; False -> no self-recursion; True -> self-recursion
+        """
+
+        def _repr_pretty_recommended_attrs(neo_obj):
+            if hasattr(neo_obj, '_recommended_attrs'):
+                pp.text("\n")
+                pp.text("\n".join([f"{attr[0]}: {getattr(neo_obj, attr[0])}"
+                                   for attr in neo_obj._recommended_attrs if attr[0] not in neo_obj._repr_pretty_attrs_keys_
+                                   and getattr(neo_obj, attr[0]) is not None]))
+
+        # print(f"(INNER) neo_obj = {neo_obj} with node_name = {node_name}\n "
+        #       f"is of type: {type(neo_obj)}\n"
+        #       f"with hash: {joblib.hash(neo_obj, hash_name='sha1')}\n\n")
+
+        # pp.text(f"New Pretty Print Version of {neo_obj.__class__.__name__}\n")
+        pp.text(f"selected node: {node_name}\n")
+
+        # neo-container: Block, Segment, Group
+        if isinstance(neo_obj, self.Container):
+            pp.text(neo_obj.__class__.__name__)
+            pp.text(" with ")
+
+            container_lenghts_and_names = []
+            for container_name in neo_obj._child_containers:
+                child_container = getattr(neo_obj, container_name)
+                if child_container:
+                    container_lenghts_and_names.append('{} {}'.format(len(child_container), container_name))
+            pp.text(', '.join(container_lenghts_and_names))
+
+            if neo_obj._has_repr_pretty_attrs_():
+                pp.breakable()
+                neo_obj._repr_pretty_attrs_(pp, cycle)
+
+            _repr_pretty_recommended_attrs(neo_obj)
+            pp.text("\n\n")
+
+        # SpikeTrainList
+        elif isinstance(neo_obj, self.SpikeTrainList):
+            if neo_obj._items is None:
+                if neo_obj._spike_time_array is None:
+                    pp.text(str([]))
+                else:
+                    pp.text(f"SpikeTrainList containing {neo_obj._spike_time_array.size} spikes from\
+                            {len(neo_obj._all_channel_ids)} neurons")
+            else:
+                pp.text(f"SpikeTrainList containing {len(neo_obj._items)} Spiketrains")
+            pp.text("\n\n")
+
+        # Regions of Interest: Circular, Polygon, Rectangular
+        elif isinstance(neo_obj, self.CircularRegionOfInterest):
+            pp.text(f"{neo_obj.__class__.__name__} with center at {neo_obj.center} and radius {neo_obj.radius}")
+            pp.text("\n\n")
+        elif isinstance(neo_obj, self.PolygonRegionOfInterest):
+            pp.text(f"{neo_obj.__class__.__name__} with vertices at ({neo_obj.vertices})")
+            pp.text("\n\n")
+        elif isinstance(neo_obj, self.RectangularRegionOfInterest):
+            pp.text(f"{neo_obj.__class__.__name__} with center at ({neo_obj.x},{neo_obj.y}), width {neo_obj.width} and height {neo_obj.height}")
+            pp.text("\n\n")
+
+        # built-in: list
+        elif isinstance(neo_obj, list):
+            python_list_type_occurences = [type(ele) for ele in neo_obj]
+            type_counter = self.Counter(python_list_type_occurences)
+            pp.text(f"{neo_obj.__class__.__name__} with the type occurrence frequencies:\n")
+            for key, value in type_counter.items():
+                pp.text(f"type: {key} --> #occ: {value}\n")
+            pp.text("\n\n")
+
+        # any other neo object will be represented with their own / inherited '_repr_pretty_' method
+        else:
+            neo_obj._repr_pretty_(pp, cycle)
+            pp.text("\n")
+            # display also first and last five data values
+            if isinstance(neo_obj, self.AnalogSignal):
+                if len(neo_obj.magnitude) > 10:
+                    pp.text(f"signal: {neo_obj.magnitude[:5]} ... {neo_obj.magnitude[-5:]} {neo_obj.units}\n")
+                else:
+                    pp.text(f"signal: {neo_obj.magnitude} {neo_obj.units}\n")
+                if len(neo_obj.times) > 10:
+                    pp.text(f"times: {neo_obj.times[:5]} ... {neo_obj.times[-5:]}\n")
+                else:
+                    pp.text(f"times: {neo_obj.times}\n")
+            if isinstance(neo_obj, self.SpikeTrain):
+                if len(neo_obj.times) > 10:
+                    pp.text(f"times: {neo_obj.times[:5]} ... {neo_obj.times[-5:]}\n")
+                else:
+                    pp.text(f"times: {neo_obj.times}\n")
+            if isinstance(neo_obj, self.Epoch):
+                if len(neo_obj.times) > 10:
+                    pp.text(f"times: {neo_obj.times[:5]} ... {neo_obj.times[-5:]}\n")
+                else:
+                    pp.text(f"times: {neo_obj.times}\n")
+                if len(neo_obj.durations) > 10:
+                    pp.text(f"durations: {neo_obj.durations[:5]} ... {neo_obj.durations[-5:]}\n")
+                else:
+                    pp.text(f"durations: {neo_obj.durations}\n")
+                if len(neo_obj.labels) > 10:
+                    pp.text(f"labels: {neo_obj.labels[:5]} ... {neo_obj.labels[-5:]}\n")
+                else:
+                    pp.text(f"labels: {neo_obj.labels}\n")
+            if isinstance(neo_obj, self.Event):
+                if len(neo_obj.times) > 10:
+                    pp.text(f"times: {neo_obj.times[:5]} ... {neo_obj.times[-5:]}\n")
+                else:
+                    pp.text(f"times: {neo_obj.times}\n")
+                if len(neo_obj.labels) > 10:
+                    pp.text(f"labels: {neo_obj.labels[:5]} ... {neo_obj.labels[-5:]}\n")
+                else:
+                    pp.text(f"labels: {neo_obj.labels}\n")
+            pp.text("\n\n")
+
+    def pretty_print_of_selected_neo_objects(self):
         from io import StringIO
         from contextlib import redirect_stdout
         from IPython.display import display
+        from IPython.lib.pretty import RepresentationPrinter
 
-        for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
-            hash_neo_obj = joblib.hash(neo_obj, hash_name='sha1')
-            if hash_neo_obj in selected_ids:
-                out = StringIO()
-                with redirect_stdout(out):
-                    display(neo_obj)
-                selected_ids.remove(hash_neo_obj)
-            if issubclass(type(neo_obj), self.Container):
-                for child_container_name in neo_obj._child_containers:
-                    child_container = getattr(neo_obj, child_container_name)
-                    hash_child_container = joblib.hash(child_container, hash_name='sha1')
-                    if hash_child_container in selected_ids:
-                        out = StringIO()
-                        with redirect_stdout(out):
-                            display(child_container)
-                        selected_ids.remove(hash_child_container)
-                    for child_obj in child_container:
-                        hash_child_obj = joblib.hash(child_obj, hash_name='sha1')
-                        if hash_child_obj in selected_ids:
-                            out = StringIO()
-                            with redirect_stdout(out):
-                                display(child_obj)
-                            selected_ids.remove(hash_child_obj)
+        def _iterate_over_neo_objects(neo_objs):
+            for neo_obj in neo_objs:
+                # if hasattr(neo_obj, 'name'):
+                #     if neo_obj.name == "Block 1":
+                        # print(f"mysterious Block 1 found with hash {joblib.hash(neo_obj, hash_name='sha1')}")
+                if len(hashes_and_names_of_selected_nodes) == 0:
+                    # print(f"BREAK1: all selected nodes got displayed! (1)")
+                    break
+                hash_neo_obj = joblib.hash(neo_obj, hash_name='sha1')
+                # print(f"hash_neo_obj = {hash_neo_obj}")
+                # neo data objects, containers, lists / SpikeTrainList
+                if hash_neo_obj in hashes_and_names_of_selected_nodes.keys():
+                    # print(f"1) top node selected!\n"
+                    #       f"name = {hashes_and_names_of_selected_nodes[hash_neo_obj]}\n"
+                    #       f"neo obj = {neo_obj}")
+                    with redirect_stdout(output):
+                        self._repr_pretty_neo_objects(neo_obj=neo_obj, pp=pp, cycle=False,
+                                                      node_name=hashes_and_names_of_selected_nodes[hash_neo_obj])
+                    hashes_and_names_of_selected_nodes.pop(hash_neo_obj)
+                if issubclass(type(neo_obj), self.Container):
+                    # print(f"neo_obj is subclass of Container")
+                    for child_container_name in neo_obj._child_containers:
+                        if len(hashes_and_names_of_selected_nodes) == 0:
+                            # print(f"BREAK2: all selected nodes got displayed! (2)")
+                            break
+                        child_container = getattr(neo_obj, child_container_name)
+                        hash_child_container = joblib.hash(child_container, hash_name='sha1')
+                        if hash_child_container in hashes_and_names_of_selected_nodes.keys():
+                            # print(f"2) child container selected!\n")
+                            with redirect_stdout(output):
+                                self._repr_pretty_neo_objects(neo_obj=child_container, pp=pp, cycle=False,
+                                                              node_name=hashes_and_names_of_selected_nodes[hash_child_container])
+                            hashes_and_names_of_selected_nodes.pop(hash_child_container)
+                        _iterate_over_neo_objects(child_container)
+                if isinstance(neo_obj, (list, self.SpikeTrainList)):
+                    # print(f"neo_obj is instance of list or SpikeTrainList")
+                    _iterate_over_neo_objects(neo_obj)
+
+        output = StringIO()
+        pp = RepresentationPrinter(output)
+
+        hashes_and_names_of_selected_nodes = self._get_neo_obj_hash_and_node_name_of_selected_nodes()
+        # print(f"hashes_and_names_of_selected_nodes = {hashes_and_names_of_selected_nodes}\n")
+
+        import traceback
+        try:
+            # print(f"start iteration")
+            _iterate_over_neo_objects(self.neo_objs_and_lists_of_neo_objs_with_var_name.values())
+            # print(f"finish iteration")
+        except Exception:
+            print(traceback.format_exc())
+
+        display(print(output.getvalue()))
+
+
 
     def testfunc(self):
         """

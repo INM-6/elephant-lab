@@ -67,11 +67,9 @@ def create_explorer_info(jupyphant_entity):
     from ipywidgets import Output
 
     def on_selected_change_info(change):
-        selected_ids = [jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] for node in jupyphant_entity.ipytree_of_neo_objects.selected_nodes if
-                        jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] is not None]
         with output_node_info:
             IPython.display.clear_output()
-            jupyphant_entity.pretty_print_of_selected_neo_objects(selected_ids=selected_ids)
+            jupyphant_entity.pretty_print_of_selected_neo_objects()
 
     output_node_info = Output(layout={'border': '1px solid orange'})
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_info, names='selected_nodes')
