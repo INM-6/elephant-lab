@@ -459,11 +459,6 @@ class Jupyphant:
                                    for attr in neo_obj._recommended_attrs if attr[0] not in neo_obj._repr_pretty_attrs_keys_
                                    and getattr(neo_obj, attr[0]) is not None]))
 
-        # print(f"(INNER) neo_obj = {neo_obj} with node_name = {node_name}\n "
-        #       f"is of type: {type(neo_obj)}\n"
-        #       f"with hash: {joblib.hash(neo_obj, hash_name='sha1')}\n\n")
-
-        # pp.text(f"New Pretty Print Version of {neo_obj.__class__.__name__}\n")
         pp.text(f"selected node: {node_name}\n")
 
         # neo-container: Block, Segment, Group
@@ -568,55 +563,36 @@ class Jupyphant:
 
         def _iterate_over_neo_objects(neo_objs):
             for neo_obj in neo_objs:
-                # if hasattr(neo_obj, 'name'):
-                #     if neo_obj.name == "Block 1":
-                        # print(f"mysterious Block 1 found with hash {joblib.hash(neo_obj, hash_name='sha1')}")
                 if len(hashes_and_names_of_selected_nodes) == 0:
-                    # print(f"BREAK1: all selected nodes got displayed! (1)")
                     break
                 hash_neo_obj = joblib.hash(neo_obj, hash_name='sha1')
-                # print(f"hash_neo_obj = {hash_neo_obj}")
                 # neo data objects, containers, lists / SpikeTrainList
                 if hash_neo_obj in hashes_and_names_of_selected_nodes.keys():
-                    # print(f"1) top node selected!\n"
-                    #       f"name = {hashes_and_names_of_selected_nodes[hash_neo_obj]}\n"
-                    #       f"neo obj = {neo_obj}")
                     with redirect_stdout(output):
                         self._repr_pretty_neo_objects(neo_obj=neo_obj, pp=pp, cycle=False,
                                                       node_name=hashes_and_names_of_selected_nodes[hash_neo_obj])
                     hashes_and_names_of_selected_nodes.pop(hash_neo_obj)
                 if issubclass(type(neo_obj), self.Container):
-                    # print(f"neo_obj is subclass of Container")
                     for child_container_name in neo_obj._child_containers:
                         if len(hashes_and_names_of_selected_nodes) == 0:
-                            # print(f"BREAK2: all selected nodes got displayed! (2)")
                             break
                         child_container = getattr(neo_obj, child_container_name)
                         hash_child_container = joblib.hash(child_container, hash_name='sha1')
                         if hash_child_container in hashes_and_names_of_selected_nodes.keys():
-                            # print(f"2) child container selected!\n")
                             with redirect_stdout(output):
                                 self._repr_pretty_neo_objects(neo_obj=child_container, pp=pp, cycle=False,
                                                               node_name=hashes_and_names_of_selected_nodes[hash_child_container])
                             hashes_and_names_of_selected_nodes.pop(hash_child_container)
                         _iterate_over_neo_objects(child_container)
                 if isinstance(neo_obj, (list, self.SpikeTrainList)):
-                    # print(f"neo_obj is instance of list or SpikeTrainList")
                     _iterate_over_neo_objects(neo_obj)
 
         output = StringIO()
         pp = RepresentationPrinter(output)
 
         hashes_and_names_of_selected_nodes = self._get_neo_obj_hash_and_node_name_of_selected_nodes()
-        # print(f"hashes_and_names_of_selected_nodes = {hashes_and_names_of_selected_nodes}\n")
 
-        import traceback
-        try:
-            # print(f"start iteration")
-            _iterate_over_neo_objects(self.neo_objs_and_lists_of_neo_objs_with_var_name.values())
-            # print(f"finish iteration")
-        except Exception:
-            print(traceback.format_exc())
+        _iterate_over_neo_objects(self.neo_objs_and_lists_of_neo_objs_with_var_name.values())
 
         display(print(output.getvalue()))
 
