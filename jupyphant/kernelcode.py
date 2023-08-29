@@ -8,9 +8,9 @@ import matplotlib
 
 
 def setup_env():
-    from jupyphant.jupyphant import JupyphantVisualization
-    my_jupyphant_vis_xxx = JupyphantVisualization()
-    return my_jupyphant_vis_xxx
+    from jupyphant.jupyphant import Jupyphant
+    jupyphant_entity = Jupyphant()
+    return jupyphant_entity
 
 
 # Dummy plot code for a single AnalogSignal
@@ -29,44 +29,108 @@ def plot_code():
 
 
 # Call to the function that creates a rasterplot from all spike trains
-def raster_plot(my_jupyphant_vis_xxx):
+def raster_plot(jupyphant_entity):
     import matplotlib.pyplot as plt
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        fig = my_jupyphant_vis_xxx.create_rasterplot()
+        fig = jupyphant_entity.create_rasterplot()
         plt.figure(fig)
         plt.show()
 
 
 # Call to the function that plots AnalogSignals
-def lfp_plot(my_jupyphant_vis_xxx):
+def lfp_plot(jupyphant_entity):
     import matplotlib.pyplot as plt
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        fig = my_jupyphant_vis_xxx.create_lfpplot()
+        fig = jupyphant_entity.create_lfpplot()
         plt.figure(fig)
         plt.show()
 
 
 # Call to the function that initializes the ipytree widget with an empty tree
-def create_tree(my_jupyphant_vis_xxx):
+def create_tree(jupyphant_entity):
     from IPython.display import display
-    my_jupyphant_vis_xxx.create_tree()
-    my_jupyphant_vis_xxx.tree.layout.width = '100%'
-    display(my_jupyphant_vis_xxx.tree)
+    jupyphant_entity.create_tree()
+    jupyphant_entity.ipytree_of_neo_objects.layout.width = '100%'
+    display(jupyphant_entity.ipytree_of_neo_objects)
 
 
-# Call to the function that initilaizes the node explorer for the ipytree
-def create_explorer(my_jupyphant_vis_xxx):
+def create_explorer_info(jupyphant_entity):
     import warnings
-    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    # warnings.filterwarnings("ignore", category=DeprecationWarning)
+    # warnings.filterwarnings("ignore", category=UserWarning)
+    import IPython
+    from IPython.display import display
+    from ipywidgets import Output
 
+    def on_selected_change_info(change):
+        with output_node_info:
+            IPython.display.clear_output()
+            jupyphant_entity.pretty_print_of_selected_neo_objects()
+
+    output_node_info = Output(layout={'border': '1px solid orange'})
+    jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_info, names='selected_nodes')
+    display(output_node_info)
+
+
+def create_explorer_raw_plot(jupyphant_entity):
+    import warnings
+    # warnings.filterwarnings("ignore", category=DeprecationWarning)
+    # warnings.filterwarnings("ignore", category=UserWarning)
     import matplotlib.pyplot as plt
     import IPython
     from IPython.display import display
-    from ipywidgets import link, HBox, VBox, IntSlider, Text, Label, Output, Tab, Dropdown, Button, interact, Layout
+    from ipywidgets import Output
+
+    def on_selected_change_raw(change):
+        selected_ids = [jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] for node in jupyphant_entity.ipytree_of_neo_objects.selected_nodes if
+                        jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] is not None]
+        with output_node_raw_plot:
+            IPython.display.clear_output()
+            # print(f'Python Ids of selected nodes {selected_ids}')
+            raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids)
+            if raw_st:
+                plt.show()
+            raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids)
+            if raw_anasig:
+                plt.show()
+            # print('after plot')
+
+    output_node_raw_plot = Output(layout={'border': '1px solid orange', 'width': '900px' })
+    jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_raw, names='selected_nodes')
+    display(output_node_raw_plot)
+
+
+def create_explorer_statistics(jupyphant_entity):
+    import warnings
+    # warnings.filterwarnings("ignore", category=DeprecationWarning)
+    # warnings.filterwarnings("ignore", category=UserWarning)
+    import matplotlib.pyplot as plt
+    import IPython
+    from IPython.display import display
+    from ipywidgets import Output, Layout
+
+    def on_selected_change_statistics(change):
+        selected_ids = [jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] for node in jupyphant_entity.ipytree_of_neo_objects.selected_nodes if
+                        jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] is not None]
+        with output_node_statistic:
+            IPython.display.clear_output()
+            fig = jupyphant_entity.statistics_of_selected_nodes(selected_ids=selected_ids)
+            if fig:
+                plt.show()
+
+    output_node_statistic = Output(layout=Layout(border='1px solid orange', width='3572px'))  # 4 * 8inch * 96px/inch
+    jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_statistics, names='selected_nodes')
+    display(output_node_statistic)
+
+
+def create_explorer_dropdown(jupyphant_entity):
+    import warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    warnings.filterwarnings("ignore", category=UserWarning)
     import elephant
     import inspect
 
@@ -98,54 +162,6 @@ def create_explorer(my_jupyphant_vis_xxx):
     #     functions_dict = {f : inspect.getfullargspec(eval(f"elephant.{m}.{f}")).args for f in functions} # TODO: signature to list
     #     elephant_functions_by_module[m] = functions_dict
 
-
-    output_node_info = Output(layout={'border': '1px solid orange'})
-    output_node_plot = Output(layout={'border': '1px solid orange', 'width': '900px' })
-    output_node_statistic = Output(layout=Layout(border= '1px solid orange', width='3572px')) # 4 * 8inch * 96px/inch
-    # output_node_analysis = Output(layout={'border': '1px solid orange'})
-
-    def on_selected_change(change):
-        selected_ids = [my_jupyphant_vis_xxx.map[node._id] for node in my_jupyphant_vis_xxx.tree.selected_nodes if my_jupyphant_vis_xxx.map[node._id] is not None]
-        with output_node_info:
-            IPython.display.clear_output()
-            # print('Some node selected!')
-            # for i in range(len(change["new"])):
-            #    print(f'{i}. {change["new"][i].name} -> urn_id = {change["new"][i]._id}')
-            df_anasig, df_spt, df_evt, df_epc = my_jupyphant_vis_xxx.selected_nodes_to_dataframes(selected_ids=selected_ids)
-            neo_containers = my_jupyphant_vis_xxx._extract_pretty_print_of_selected_neo_container_objects(selected_ids=selected_ids)
-            if df_anasig:
-                for df in df_anasig:
-                    display(df)
-            if df_spt:
-                for df in df_spt:
-                    display(df)
-            if df_epc:
-                for df in df_epc:
-                    display(df)
-            if df_evt:
-                for df in df_evt:
-                    display(df)
-            if neo_containers:
-                for container in neo_containers:
-                    display(container)
-        with output_node_plot:
-            IPython.display.clear_output()
-            # print(f'Python Ids of selected nodes {selected_ids}')
-            raw_st = my_jupyphant_vis_xxx.create_rasterplot(selected_ids=selected_ids)
-            if raw_st:
-                plt.show()
-            raw_anasig = my_jupyphant_vis_xxx.create_lfpplot(selected_ids=selected_ids)
-            if raw_anasig:
-                plt.show()
-            # print('after plot')
-        with output_node_statistic:
-            IPython.display.clear_output()
-            fig = my_jupyphant_vis_xxx.statistics_of_selected_nodes(selected_ids=selected_ids)
-            if fig:
-                plt.show()
-
-    my_jupyphant_vis_xxx.tree.observe(on_selected_change, names='selected_nodes')
-
     # drop_module = Dropdown(options=elephant_functions_by_module.keys(), description='Module:', disabled=False)
     # drop_function = Dropdown(options=elephant_functions_by_module[drop_module.value] , description='Function:', disabled=False)
     # drop_parameter = Dropdown(description='Parameter:', disabled=False)
@@ -164,6 +180,7 @@ def create_explorer(my_jupyphant_vis_xxx):
     #     with output_node_analysis:
     #         IPython.display.clear_output()
     #
+    # output_node_analysis = Output(layout={'border': '1px solid orange'})
     # calculate_button = Button(description='Calculate', disabled=False, button_style='', tooltip='Calculate', icon='check')
     # calculate_button.on_click(on_calculate_button_clicked)
     #
@@ -172,18 +189,8 @@ def create_explorer(my_jupyphant_vis_xxx):
     #
     # tab_analysis= VBox([output_node_analysis, HBox([drop_module, drop_function, drop_parameter]), HBox([calculate_button, clear_button])])
 
-    tab_node_explorer = Tab()
-    tab_node_explorer.layout = Layout(width='auto')
-    tab_node_explorer.children = [output_node_info, output_node_plot, output_node_statistic]#, tab_analysis]
-    tab_node_explorer.titles = ["INFO", "RAW PLOT", "STATISTICS", "ANALYSIS"]
-
-    right_side = VBox([Label("Node Explorer:"), tab_node_explorer])
-    right_side.layout.width = '100%'
-    # HBox([my_jupyphant_vis_xxx.tree, right_side])
-    display(right_side)
-
 
 # Call to the function that updates the ipytree tree view of the neo hierarchy
-def update_tree(my_jupyphant_vis_xxx):
-    my_jupyphant_vis_xxx.update_tree()
+def update_tree(jupyphant_entity):
+    jupyphant_entity.update_tree()
 
