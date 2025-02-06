@@ -32,4 +32,3 @@ dependencies:
       - joblib==1.2.0
       - pandas==1.5.1
       - viziphant==0.2.0
-prefix: /home/kramer/anaconda3/envs/Jupyphant
