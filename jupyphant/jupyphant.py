@@ -98,6 +98,7 @@ class Jupyphant:
         self.analogsignals_hash = None
         self.ipytree_of_neo_objects = None
         self.map_ipytree_node_id_to_neo_obj_hash = {}
+        self.map_neo_obj_hash_to_neo_obj = {}
 
     def update(self):
         """  # TODO: rewrite docstring
@@ -158,6 +159,7 @@ class Jupyphant:
             nodes = []
             for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
                 hash_neo_obj = joblib.hash(neo_obj, hash_name='sha1')
+                self.map_neo_obj_hash_to_neo_obj[hash_neo_obj] = neo_obj
                 if hasattr(neo_obj, 'name'):
                     node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['abbr']}::{neo_obj.name}::{hash_neo_obj}")
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
@@ -627,3 +629,60 @@ class Jupyphant:
                         values.append(''.join([values[-1 - j], '.analogsigs[', str(j), ']']))
 
         return self.json.dumps(values)
+
+    def parse_kwargs(self, kwargs):
+        import quantities as pq
+        import ast
+
+        parsed_kwargs = {}
+        
+        for key, value in kwargs.items():
+            if isinstance(value, str):
+                try:
+                    safe_globals = {"pq": pq}
+                    parsed_value = eval(value, safe_globals)
+
+
+                    if hasattr(parsed_value, "magnitude"):
+                        parsed_value = parsed_value.magnitude * parsed_value.units
+
+                    parsed_kwargs[key] = parsed_value
+
+                except (ValueError, SyntaxError, NameError):
+                    parsed_kwargs[key] = value
+            else:
+                parsed_kwargs[key] = value
+
+        return parsed_kwargs
+
+
+    def apply_elephant_function(self, module_name, function_name, selected_ids=None, **kwargs):
+        imported_mod = getattr(module_name, function_name)
+        
+        if not selected_ids:
+            print("Es wurde kein passendes Objekt ausgewählt.")
+            return
+        
+        if isinstance(kwargs, str):
+            import ast
+            try:
+                kwargs = ast.literal_eval(kwargs)
+            except Exception as e:
+                print(e)
+                kwargs = {}
+
+        kwargs = self.parse_kwargs(kwargs)
+        results = {}
+
+        neo_objs_from_hash = [self.map_neo_obj_hash_to_neo_obj[hash] for hash in selected_ids]
+
+        for neo_obj in neo_objs_from_hash:
+            print(f"Wende {function_name} an")
+            if (len(kwargs)>0):
+                print([type(x) for x in kwargs.values()])
+            try:
+                result = imported_mod(neo_obj, **kwargs)
+                results[neo_obj] = result
+            except Exception as e:
+                print(f"Fehler bei der Verarbeitung von {type(neo_obj)}: {e}")
+        return results

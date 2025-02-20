@@ -66,6 +66,11 @@ let update_tree =
 update_tree(jupyphant_entity)
 `;
 
+let apply_elephant_analysis =
+`from jupyphant.kernelcode import apply_elephant_analysis
+apply_elephant_analysis(jupyphant_entity, function_name, selected_ids)
+`;
+
 // Make all strings publicly available in a dict
 // This dict is used in index.ts to actually execute the code
 export const pythonCode = {
@@ -78,5 +83,6 @@ export const pythonCode = {
 	'createExplorerInfo': create_explorer_info,
 	'createExplorerRawPlot': create_explorer_raw_plot,
 	'createExplorerStatistics': create_explorer_statistics,
-	'updateTree': update_tree
+	'updateTree': update_tree,
+	'applyElephantAnalysis': apply_elephant_analysis
 };

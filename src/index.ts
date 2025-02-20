@@ -69,10 +69,11 @@ class JupyphantExtension {
 	private myPanels: NotebookPanel[];
 	private myVisTabs: Widget[] ;
 	private widget: DockPanel;
+	private rendermime: IRenderMimeRegistry;
 
 	// Construct a new JupyphantExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-						widget_tracker: WidgetTracker) {
+						widget_tracker: WidgetTracker, rendermime: IRenderMimeRegistry) {
 		// save all constructor arguments
 		this.app = app;
 		this.command_palette = command_palette;
@@ -84,6 +85,8 @@ class JupyphantExtension {
 		this.myVisTabs = [];
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
 		this.widget = new DockPanel();
+		
+		this.rendermime = rendermime;
 	}; // end of constructor()
 
 
@@ -276,6 +279,8 @@ class JupyphantExtension {
 						});
 					}
 	             });
+				//  this.createElephantUI(session);	
+				 this.createElephantGui(session);
 	        }); // end of session.ready.then()
 
 		}); // end of notebook_tracker.restored.then()
@@ -315,11 +320,18 @@ class JupyphantExtension {
 		this.widget.title.label = 'Jupyphant';
 		// Adds the x to close the tab?
 		this.widget.title.closable = true;
+		
+		const session = this.notebook_tracker.currentWidget?.sessionContext;
+
+		if (!session) {
+			console.error("Keine Notebook-Session gefunden!");
+			return;
+		}
 
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
 		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-        this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1');
+        this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
 
 		let explorer_widget = new DockPanel({tabsMovable: false});
 		explorer_widget.title.label = 'Node Explorer';
@@ -328,26 +340,26 @@ class JupyphantExtension {
         let explorer_widget_info = new Panel();
 		explorer_widget_info.title.label = 'Info';
 		explorer_widget_info.node.style.cssText = explorer_widget_info.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1');
+		this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1', session);
 		explorer_widget.addWidget(explorer_widget_info);
 		// RAW
 		let explorer_widget_raw_plot = new Panel();
 		explorer_widget_raw_plot.title.label = 'Raw Plot';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2');
+		this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
 		explorer_widget.addWidget(explorer_widget_raw_plot, {mode: 'tab-after', ref: explorer_widget_info});
 		// STATISTICS
 		let explorer_widget_statistics = new Panel();
 		explorer_widget_statistics.title.label = 'Statistics';
 		explorer_widget_statistics.node.style.cssText = explorer_widget_statistics.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createOutputArea(rendermime, explorer_widget_statistics, ['my-outarea-class'], 'jup_vis_out_id_2.3');
+		this.createOutputArea(rendermime, explorer_widget_statistics, ['my-outarea-class'], 'jup_vis_out_id_2.3', session);
 		explorer_widget.addWidget(explorer_widget_statistics, {mode: 'tab-after', ref: explorer_widget_raw_plot});
 
 		let overview_widget = new Panel();
 		overview_widget.title.label = 'Overview Plots';
 		overview_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-        this.createOutputArea(rendermime, overview_widget, ['my-outarea-class'], 'jup_vis_out_id_3.1');
-        this.createOutputArea(rendermime, overview_widget, ['my-outarea-class'], 'jup_vis_out_id_3.2');
+        this.createOutputArea(rendermime, overview_widget, ['my-outarea-class'], 'jup_vis_out_id_3.1', session);
+        this.createOutputArea(rendermime, overview_widget, ['my-outarea-class'], 'jup_vis_out_id_3.2', session);
 
         this.widget.addWidget(tree_widget);
         this.widget.addWidget(explorer_widget, {mode: 'split-right', ref: tree_widget});
@@ -355,7 +367,7 @@ class JupyphantExtension {
 
 	} // end of initializeTab()
 
-	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string){
+	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext) {
 		/**
 		  * Creates an OutputArea inside 'tab', in which the output of executed pythonCode will displayed
 		  *
@@ -377,6 +389,11 @@ class JupyphantExtension {
 		for(let currCls of cls){
 			outarea.addClass(currCls);
 		}
+		// console.log("Führe Neo-Tree Erstellung aus...");
+		// OutputArea.execute("\njupyphant_entity.create_tree()", outarea, session, { displayId: true })
+        // .then(() => console.log("Neo-Tree erfolgreich geladen!"))
+        // .catch(err => console.error("Fehler beim Laden des Neo-Trees:", err));
+
 	}
 
 	//@ts-ignore
@@ -440,6 +457,436 @@ class JupyphantExtension {
 		}
 	} // end of executeCode()
 
+	public async pingElephantServer(serverUrl: string): Promise<boolean> {
+		try {
+			const response = await fetch(`${serverUrl}/ping`, { method: "GET" });
+			return response.ok;
+		} catch (error) {
+			console.error("Fehler beim Pingen des Servers:", error);
+			return false;
+		}
+	}
+
+	public async loadElephantModules(elephant_modules_dropdown: HTMLSelectElement, elephant_functions_dropdown: HTMLSelectElement, serverUrl: string) {
+		console.log("Lade Elephant-Module");
+		try {
+			const response = await fetch(`${serverUrl}/get_elephant_modules`);
+			if (!response.ok) {
+				throw new Error(`Server antwortet mit Status: ${response.status}`);
+			}
+	
+			const server_response = await response.json();
+			console.log("Erhaltene Elephant-Module:", server_response);
+			
+			this.createElephantDropdowns(elephant_modules_dropdown, elephant_functions_dropdown, server_response);
+			// elephant_modules_dropdown.innerHTML = "";
+			
+			// for (const [moduleName, functions] of Object.entries(server_response) as [string, string[]][]) {
+			// 	console.log(`Modul: ${moduleName}`);
+			// 	const option = document.createElement("option");
+			// 	option.value = moduleName;
+			// 	option.textContent = moduleName;
+			// 	elephant_modules_dropdown.appendChild(option);				
+				
+			// 	functions.forEach((funcName) => {
+			// 		console.log(`Funktion: ${funcName}`);
+			// 		const option = document.createElement("option");
+			// 		option.value = funcName;
+			// 		option.textContent = funcName;
+			// 		elephant_functions_dropdown.appendChild(option);
+			// 	});
+			// }
+	
+		} catch (error) {
+			console.error("Fehler beim Abrufen der Elephant-Funktionen:", error);
+			elephant_modules_dropdown.innerHTML = "<option>Fehler beim Laden</option>";
+		}
+	}
+
+	public createElephantDropdowns(elephant_modules_dropdown: HTMLSelectElement, elephant_functions_dropdown: HTMLSelectElement, elephantModules: { [key: string]: string[] }) {
+		console.log("Erstelle Dropdowns für Module & Funktionen...");
+	
+		elephant_modules_dropdown.id = "elephant-module-select";
+		elephant_modules_dropdown.style.width = "100%";
+		elephant_modules_dropdown.innerHTML = "<option>Modul auswählen...</option>";
+	
+		elephant_functions_dropdown.id = "elephant-function-select";
+		elephant_functions_dropdown.style.width = "100%";
+		elephant_functions_dropdown.innerHTML = "<option>Funktion auswählen...</option>";
+	
+		Object.keys(elephantModules).forEach((moduleName) => {
+			const option = document.createElement("option");
+			option.value = moduleName;
+			option.textContent = moduleName;
+			elephant_modules_dropdown.appendChild(option);
+		});
+	
+		elephant_modules_dropdown.addEventListener("change", () => {
+			const selectedModule = elephant_modules_dropdown.value;
+			this.updateFunctionDropdown(elephant_functions_dropdown, elephantModules[selectedModule] || []);
+		});
+	}
+
+	public updateFunctionDropdown(dropdown: HTMLSelectElement, functions: string[]) {
+		console.log(`Lade Funktionen für Modul: ${dropdown.value}`);
+	
+		// Dropdown leeren und neue Funktionen einfügen
+		dropdown.innerHTML = "<option>Funktion auswählen...</option>";
+		functions.forEach((funcName) => {
+			const option = document.createElement("option");
+			option.value = funcName;
+			option.textContent = funcName;
+			dropdown.appendChild(option);
+		});
+	}
+	
+	
+	
+
+	public createElephantGui(session: ISessionContext) {
+		console.log("Building Elephant-GUI Window");	
+		const buttonOpenGUI = document.createElement("button");
+		buttonOpenGUI.textContent = "🐘 Elephant-Analyse";
+		// buttonOpenGUI.style.position = "absolute";
+		buttonOpenGUI.style.top = "10px";
+		buttonOpenGUI.style.right = "10px";
+		buttonOpenGUI.style.padding = "10px";
+		buttonOpenGUI.style.background = "#007bff";
+		buttonOpenGUI.style.color = "white";
+		buttonOpenGUI.style.border = "none";
+		buttonOpenGUI.style.borderRadius = "5px";
+		buttonOpenGUI.style.cursor = "pointer";
+
+		buttonOpenGUI.onclick = () => {
+			this.elephantMenue(session, this.rendermime);
+		};
+
+		const toolbar = document.getElementById("jp-top-panel");
+
+
+		if (toolbar) {
+			toolbar.appendChild(buttonOpenGUI);
+		} else {
+			console.log("Error while appending Button")
+		}
+		
+	}
+
+
+	public elephantMenue(session: ISessionContext, rendermime: IRenderMimeRegistry) {
+		const menue = document.createElement("div");
+		menue.style.position = "fixed";
+		menue.style.top = "0";
+		menue.style.left = "0";
+		menue.style.width = "100%";
+		menue.style.height = "100%";
+		menue.style.backgroundColor = "rgba(0,0,0,0.5)";
+		menue.style.display = "flex";
+		menue.style.alignItems = "center";
+		menue.style.justifyContent = "center";
+		menue.style.zIndex = "1000";
+		
+		const menueBox = document.createElement("div");
+		menueBox.style.background = "rgba(116, 106, 106, 0.38)";
+		menueBox.style.padding = "20px";
+		menueBox.style.borderRadius = "8px";
+		menueBox.style.boxShadow = "0 4px 6px rgba(0,0,0,0.1)";
+		menueBox.style.width = "400px";
+
+		const closeButton = document.createElement("button");
+		closeButton.textContent = "Schließen";
+		closeButton.style.marginTop = "10px";
+		closeButton.style.padding = "10px";
+		closeButton.style.background = "#dc3545";
+		closeButton.style.color = "white";
+		closeButton.style.border = "none";
+		closeButton.style.cursor = "pointer";
+		closeButton.style.width = "100%";
+
+		closeButton.onclick = () => {
+			document.body.removeChild(menue);
+		};
+
+		const resultDiv = document.createElement("div");
+		resultDiv.style.marginTop = "15px";
+		resultDiv.style.padding = "10px";
+		resultDiv.style.background = "rgba(28, 56, 47, 0.38)";
+		resultDiv.style.border = "1px solid #ddd";
+		resultDiv.style.borderRadius = "5px";
+		resultDiv.style.maxHeight = "200px";
+		resultDiv.style.overflowY = "auto";
+
+
+		const dropdownElephantFunction = document.createElement("select");
+		dropdownElephantFunction.id = "elephant-function-select";
+
+		const dropdownElephantModule = document.createElement("select");
+		dropdownElephantFunction.id = "elephant-module-select";
+
+			
+		const dropdownContainer = document.createElement("div");
+		dropdownContainer.style.marginTop = "10px";
+		dropdownContainer.appendChild(dropdownElephantModule);
+		dropdownContainer.appendChild(dropdownElephantFunction);
+	
+		// Eingabe fuer KeyWord Args
+		const inputKwargs = document.createElement("input");
+		inputKwargs.type = "text";
+		inputKwargs.placeholder = "Optionale Parameter";
+		inputKwargs.style.display = "block";
+		inputKwargs.style.width = "100%";
+		inputKwargs.style.marginTop = "10px";
+		inputKwargs.style.padding = "5px";
+
+		
+		const buttonGenerateCode = document.createElement("button");
+		buttonGenerateCode.textContent = "Code generieren";
+		buttonGenerateCode.style.marginTop = "10px";
+		buttonGenerateCode.style.padding = "10px";
+		buttonGenerateCode.style.background = "rgba(27, 0, 177, 0.6)";
+		buttonGenerateCode.style.color = "white";
+		buttonGenerateCode.style.border = "none";
+		buttonGenerateCode.style.cursor = "pointer";
+		buttonGenerateCode.style.width = "100%";
+
+		buttonGenerateCode.onclick = async () => {
+			console.log("Generate Code button pressed but currently no Implementation :(");
+		};	
+
+		const inputElephantServerAddress = document.createElement("input");
+		inputElephantServerAddress.type = "text";
+		inputElephantServerAddress.placeholder = "Server-Adresse (z.B. http://127.0.0.1:5000)";
+		inputElephantServerAddress.style.width = "100%";
+		inputElephantServerAddress.style.marginBottom = "10px";
+		inputElephantServerAddress.value = localStorage.getItem("elephantServer") || "http://127.0.0.1:5000";
+
+		const buttonPingServer = document.createElement("button");
+		buttonPingServer.textContent = "Server anpingen";
+		buttonPingServer.style.width = "100%";
+		buttonPingServer.style.marginBottom = "10px";
+		buttonPingServer.onclick = async () => {
+			const serverUrl = inputElephantServerAddress.value;
+			localStorage.setItem("elephantServer", serverUrl);
+			const isAlive = await this.pingElephantServer(serverUrl);
+			if (isAlive) {
+				resultDiv.innerHTML = `<b style="color: green;">Server erreichbar!</b>`;
+				buttonLoadFunctions.disabled = false;
+				buttonRunAnalysis.disabled = false;
+				buttonRunAnalysis.style.background = "rgb(59, 201, 95)";
+
+			} else {
+				resultDiv.innerHTML = `<b style="color: red;">Server nicht erreichbar!</b>`
+				buttonLoadFunctions.disabled = true;
+				buttonRunAnalysis.disabled = true;
+			}
+		};
+
+		const buttonLoadFunctions = document.createElement("button");
+		buttonLoadFunctions.textContent = "Elephant-Funktionen abrufen";
+		buttonLoadFunctions.style.width = "100%";
+		buttonLoadFunctions.disabled = true;
+		buttonLoadFunctions.onclick = async () => {
+			// await this.loadElephantFunctions(dropdownElephantFunction, inputElephantServerAddress.value);
+			await this.loadElephantModules(dropdownElephantModule, dropdownElephantFunction, inputElephantServerAddress.value);
+		};
+
+
+		// Button zum Starten der Analyse
+		const buttonRunAnalysis = document.createElement("button");
+		buttonRunAnalysis.textContent = "Elephant-Analyse starten";
+		buttonRunAnalysis.style.marginTop = "10px";
+		buttonRunAnalysis.style.padding = "10px";
+		buttonRunAnalysis.style.background = "rgb(25, 58, 6)";
+		buttonRunAnalysis.style.color = "white";
+		buttonRunAnalysis.style.border = "none";
+		buttonRunAnalysis.style.cursor = "pointer";
+		buttonRunAnalysis.style.width = "100%";
+		buttonRunAnalysis.disabled = true;
+		
+		buttonRunAnalysis.onclick = async () => {
+			const functionName = dropdownElephantFunction.value;
+			const moduleName = dropdownElephantModule.value;
+			
+			const kwargsString = inputKwargs.value;
+			console.log("KWARGS", kwargsString)
+			
+			console.log(`Button Clicked - Starte Analyse: ${functionName} mit Kwargs: ${kwargsString}`);
+	
+			if (!session?.session || !session.session.kernel) {
+				console.error("Kernel nicht gefeunden.");
+				return;
+			}
+	
+			try {
+				await session.ready;
+				console.log("Kernel ist bereit");
+				
+				let code = `
+				from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
+				import elephant
+				selected_ids = get_selected_neo_ids(jupyphant_entity)
+				kwargs = dict(item.split("=") for item in "${kwargsString}".split(", "))
+				apply_elephant_analysis(jupyphant_entity, ${moduleName}, "${functionName}", selected_ids, **kwargs)
+				`;
+
+				if (kwargsString.trim() === "") {
+				code = `
+					from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
+					import elephant
+					selected_ids = get_selected_neo_ids(jupyphant_entity)
+					kwargs = {}
+					apply_elephant_analysis(jupyphant_entity, ${moduleName}, "${functionName}", selected_ids, **kwargs)
+				`;
+				}
+
+				
+				console.log("Sende Anfrage an Kernel...");
+				const future = session.session.kernel.requestExecute({ code });
+	
+				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+					console.log("Kernel-Antwort erhalten:", msg);
+				
+					if (msg.header.msg_type === "stream" && "text" in msg.content) {
+						resultDiv.innerHTML += `<br><b style="color: green;">Ergebnis:</b> ${msg.content["text"]}`;
+					}
+					else if (msg.header.msg_type === "error") {
+						resultDiv.innerHTML += `<br><b style="color: red;">Fehler: ${msg.content}</b>`;
+					}
+					else if (msg.header.msg_type === "execute_result" && "data" in msg.content) {
+						resultDiv.innerHTML += `<br><b style="color: green;">Ergebnis:</b> ${JSON.stringify(msg.content["data"])}`;
+					}
+					else if (msg.header.msg_type === "display_data" && "data" in msg.content) {
+						resultDiv.innerHTML += `<br><b style="color: blue;"></b> ${JSON.stringify(msg.content["data"])}`;
+					}
+				};
+						
+			} catch (error) {
+				console.error("Fehler beim Senden der Anfrage an den Kernel:", error);
+			}
+		}
+
+		const treeContainer = new Panel();
+		treeContainer.node.style.width = "40%";
+		treeContainer.node.style.height = "400px";
+		treeContainer.node.style.overflowY = "auto";
+		treeContainer.node.style.borderRight = "1px solid #ddd";
+		treeContainer.node.style.paddingRight = "10px";
+		treeContainer.node.style.minHeight = "200px";
+		treeContainer.node.style.display = "block";		
+
+        // this.createOutputArea(this.rendermime, treeContainer, ["neo-tree-output"], "neo-tree-output-id", session);
+
+
+		menueBox.appendChild(inputElephantServerAddress);
+		menueBox.appendChild(buttonPingServer);
+    	menueBox.appendChild(buttonLoadFunctions);
+		menueBox.appendChild(dropdownContainer);
+		// menueBox.appendChild(dropdownElephantModule);
+		// menueBox.appendChild(dropdownElephantFunction);
+		menueBox.appendChild(treeContainer.node);
+		menueBox.appendChild(inputKwargs);
+		menueBox.appendChild(buttonRunAnalysis);
+		menueBox.appendChild(resultDiv);
+		menueBox.appendChild(closeButton);
+		menueBox.appendChild(buttonGenerateCode);
+		menue.appendChild(menueBox)
+
+		document.body.appendChild(menue);
+
+	// public createElephantUI(session: ISessionContext) {
+		// console.log("Creating Elephant UI...");
+		
+		// let code: string | null = null;
+		// Dropdown-Menue für Elephant-Funktionen
+		// const dropdownElephantFunction = document.createElement("select");
+		// dropdownElephantFunction.id = "elephant-function-select";
+		// ["instantaneous_rate", "time_histogram", "correlation_coefficient"].forEach(fn => {
+		// 	const option = document.createElement("option");
+		// 	option.value = fn;
+		// 	option.textContent = fn;
+		// 	dropdownElephantFunction.appendChild(option);
+		// });
+	
+		// // Eingabe fuer KeyWord Args
+		// const inputKwargs = document.createElement("input");
+		// inputKwargs.type ="text";
+		// inputKwargs.placeholder = "kwargs fuer Elephant-Funktion";
+		// inputKwargs.style.marginLeft = "10px";
+	    // inputKwargs.id = "elephant-kwargs-input";
+
+		// // Button zum Starten der Analyse
+		// const buttonRunAnalysis = document.createElement("button");
+		// buttonRunAnalysis.textContent = "Elephant-Analyse starten";
+		// buttonRunAnalysis.style.marginLeft = "10px";
+	
+		// buttonRunAnalysis.onclick = async () => {
+		// 	const functionName = dropdownElephantFunction.value;
+
+		// 	const kwargsString = inputKwargs.value;
+		// 	console.log("KWARGS", kwargsString)
+
+		// 	console.log(`Button Clicked - Starte Analyse: ${functionName} mit Kwargs: ${kwargsString}`);
+	
+		// 	if (!session?.session || !session.session.kernel) {
+		// 		console.error("Kernel nicht gefeunden.");
+		// 		return;
+		// 	}
+	
+		// 	try {
+		// 		await session.ready;
+		// 		console.log("Kernel ist bereit");
+				
+		// 		let code = `
+		// 		from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
+		// 		selected_ids = get_selected_neo_ids(jupyphant_entity)
+		// 		kwargs = dict(item.split("=") for item in "${kwargsString}".split(", "))
+		// 		apply_elephant_analysis(jupyphant_entity, "${functionName}", selected_ids, **kwargs)
+		// 		`;
+
+		// 		if (kwargsString.trim() === "") {
+		// 		code = `
+		// 			from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
+		// 			selected_ids = get_selected_neo_ids(jupyphant_entity)
+		// 			kwargs = {}
+		// 			apply_elephant_analysis(jupyphant_entity, "${functionName}", selected_ids, **kwargs)
+		// 		`;
+		// 		}
+
+				
+		// 		console.log("Sende Anfrage an Kernel...");
+		// 		const future = session.session.kernel.requestExecute({ code });
+	
+		// 		future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+		// 			console.log("Kernel-Antwort erhalten:", msg);
+		// 		};		
+		// 	} catch (error) {
+		// 		console.error("Fehler beim Senden der Anfrage an den Kernel:", error);
+		// 	}
+		// };
+		
+		// // Button zur Codegenerierung
+		// const buttonGenerateCode = document.createElement("button");
+		// buttonGenerateCode.textContent = "Elephant-Code generieren";
+		// buttonGenerateCode.style.marginLeft = "10px";
+		
+		// buttonGenerateCode.onclick = async () => {
+		// 	if (code!==null) {
+		// 		return;
+		// 	}
+		// 	console.log(code);
+		// };
+
+		// const toolbar = document.getElementById("jp-top-panel");
+		// if (toolbar) {
+		// 	toolbar.appendChild(dropdownElephantFunction);
+		// 	toolbar.appendChild(inputKwargs)
+		// 	toolbar.appendChild(buttonRunAnalysis);
+		// 	toolbar.appendChild(buttonGenerateCode);
+		// } else {
+		// 	console.error("Toolbar nicht gefunden!");
+		// }
+
+	}
 }; // end of JupyphantWidget class
 
 
@@ -473,7 +920,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	let widget_tracker = new WidgetTracker<Panel>({ namespace: 'jupyphant_namespace' });
 
 	// create instance of JupyphantExtension
-	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker, widget_tracker);
+	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry);
 
 	// Add an application command: this is placed into CommandPalette and by clicking on the corresponding button
 	// this command will open the jupyphant tab

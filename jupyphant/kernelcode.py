@@ -53,6 +53,7 @@ def lfp_plot(jupyphant_entity):
 # Call to the function that initializes the ipytree widget with an empty tree
 def create_tree(jupyphant_entity):
     from IPython.display import display
+    from ipywidgets import widgets, interactive    
     jupyphant_entity.create_tree()
     jupyphant_entity.ipytree_of_neo_objects.layout.width = '100%'
     display(jupyphant_entity.ipytree_of_neo_objects)
@@ -103,6 +104,17 @@ def create_explorer_raw_plot(jupyphant_entity):
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_raw, names='selected_nodes')
     display(output_node_raw_plot)
 
+import matplotlib.pyplot as plt
+
+def apply_elephant_analysis(jupyphant_entity, module_name, function_name, selected_ids=None, **kwargs):
+    print(f"Starte Elephant-Analyse: {function_name} für {selected_ids}")
+
+    results = jupyphant_entity.apply_elephant_function(module_name, function_name, selected_ids, **kwargs)
+
+    # print(results)
+    return results
+
+
 
 def create_explorer_statistics(jupyphant_entity):
     import warnings
@@ -125,6 +137,19 @@ def create_explorer_statistics(jupyphant_entity):
     output_node_statistic = Output(layout=Layout(border='1px solid orange', width='3572px'))  # 4 * 8inch * 96px/inch
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_statistics, names='selected_nodes')
     display(output_node_statistic)
+
+import sys
+
+def get_selected_neo_ids(jupyphant_entity):
+    selected_ids = [
+        jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id]
+        for node in jupyphant_entity.ipytree_of_neo_objects.selected_nodes
+        if node._id in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash
+    ]
+    
+    # print("Gefundene IDs:", selected_ids, file=sys.stdout, flush=True)
+    return selected_ids
+
 
 
 def create_explorer_dropdown(jupyphant_entity):
