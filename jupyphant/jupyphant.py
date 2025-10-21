@@ -158,16 +158,21 @@ class Jupyphant:
             # Create one tree node per neo block and name of node is name of block
             nodes = []
             for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
+                if hasattr(neo_obj, 'block') and neo_obj.block is not None:
+                    continue
+                if hasattr(neo_obj, 'segment') and neo_obj.segment is not None:
+                    continue
                 hash_neo_obj = joblib.hash(neo_obj, hash_name='sha1')
                 self.map_neo_obj_hash_to_neo_obj[hash_neo_obj] = neo_obj
-                if hasattr(neo_obj, 'name'):
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['abbr']}::{neo_obj.name}::{hash_neo_obj} Parent")
-                    node_neo_obj.metadata = {"data-neo-object": "true"}
+                class_name = neo_obj.__class__.__name__
+                
+                if hasattr(neo_obj, 'name') and neo_obj.name:
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']}::{neo_obj.name}::{hash_neo_obj} Parent")
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 else:
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['abbr']}::{hash_neo_obj} Child")
-                    node_neo_obj.metadata = {"data-neo-object": "true"}
-                node_neo_obj.icon = NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['icon']
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']}::{hash_neo_obj} Child")
+                node_neo_obj.metadata = {"data-neo-object": "true"}
+                node_neo_obj.icon = NEO_ABBREVIATIONS[class_name]['icon']
                 node_neo_obj.open_icon_style = 'success'
                 node_neo_obj.close_icon_style = 'danger'
                 node_neo_obj.opened = False
@@ -202,42 +207,60 @@ class Jupyphant:
             Parent container object
         """  # TODO: rewrite docstring
         # print(f"parent: {parent}, obj: {obj}")
+        NEO_CONTAINER_ATTRIBUTES = [
+            'segments', 'analogsignals', 'spiketrains', 'events', 
+            'epochs', 'channel_indexes', 'irregularlysampledsignals', 'imagesequences'
+        ]
         if issubclass(type(obj), (self.BaseNeo, self.RegionOfInterest)):
             # iterate over object attributes and create nodes recursively
-            for attr_name, attr_value in obj.__dict__.items():
-                if isinstance(attr_value, (list, self.SpikeTrainList)):
-                    attr_value_hash = joblib.hash(attr_value, hash_name='sha1')
-                    attr_node = self.Node(f"{NEO_ABBREVIATIONS[attr_value.__class__.__name__]['abbr']}::{attr_name}::{attr_value_hash} object to hold neo objects")
-                    attr_node.metadata = {"data-neo-object": "true"}
-                    attr_node.icon = NEO_ABBREVIATIONS[attr_value.__class__.__name__]['icon']
-                    attr_node.open_icon_style = 'success'
-                    attr_node.close_icon_style = 'danger'
-                    attr_node.opened = False
-                    self.map_ipytree_node_id_to_neo_obj_hash[attr_node._id] = attr_value_hash
-                    self._add_sub_nodes(attr_node, attr_value)
-                    parent.add_node(attr_node)
+
+            for attr_name in NEO_CONTAINER_ATTRIBUTES:
+                if hasattr(obj, attr_name):
+                    attr_value_list = getattr(obj, attr_name)
+                    if attr_value_list is not None and len(attr_value_list) > 0:
+                        attr_value_hash = joblib.hash(attr_value_list, hash_name='sha1')
+                        
+                        attr_node = self.Node(f"{attr_name.capitalize()} [{len(attr_value_list)}]::{attr_value_hash}")
+                        attr_node.icon = 'folder' 
+                        attr_node.metadata = {"data-neo-object": "true", "container-for": attr_name}
+                        attr_node.open_icon_style = 'success'
+                        attr_node.close_icon_style = 'danger'
+                        attr_node.opened = False
+                        self.map_ipytree_node_id_to_neo_obj_hash[attr_node._id] = attr_value_hash
+                        
+                        self._add_sub_nodes(attr_node, attr_value_list)
+
+                        parent.add_node(attr_node)
                 else:
                     pass
-        elif isinstance(obj, (list, self.SpikeTrainList)):
+        elif isinstance(obj, (list, self.SpikeTrainList)) or obj.__class__.__name__ == 'ObjectList':
+            
             for i, child_obj in enumerate(obj):
                 child_obj_hash = joblib.hash(child_obj, hash_name='sha1')
+                
+                class_name = child_obj.__class__.__name__
+                if class_name not in NEO_ABBREVIATIONS:
+                    class_name = 'list' if isinstance(child_obj, list) else 'SpikeTrainList'
+                    if class_name not in NEO_ABBREVIATIONS:
+                         class_name = 'Block'
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
-                if hasattr(child_obj, 'name'):
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}#{i}::{child_obj.name}::{child_obj_hash} not a stl or roi")
-                    child_node.metadata = {"data-neo-object": "true"}
+                if hasattr(child_obj, 'name') and child_obj.name:
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']}#{i}::{child_obj.name}::{child_obj_hash}")
                 else:
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}#{i}::{child_obj_hash} may be a stl or roi")
-                    child_node.metadata = {"data-neo-object": "true"}
-                child_node.icon = NEO_ABBREVIATIONS[child_obj.__class__.__name__]['icon']
-                child_node.open_icon_style = 'success'
-                child_node.close_icon_style = 'danger'
-                child_node.data = {"neo_id": id(obj), "neo_type": type(obj).__name__}
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']}#{i}::{child_obj_hash}")
+                
+                child_node.metadata = {"data-neo-object": "true"}
+                child_node.icon = NEO_ABBREVIATIONS[class_name]['icon']
                 child_node.opened = False
                 self.map_ipytree_node_id_to_neo_obj_hash[child_node._id] = child_obj_hash
                 self._add_sub_nodes(child_node, child_obj)
                 parent.add_node(child_node)
+        
+        elif obj is None or isinstance(obj, (str, int, float, bool, dict)):
+            pass
+        
         else:
-            raise TypeError(f"unsupported class/type: {type(obj)}")
+            print(f"Warning: unsupported class/type for recursion: {type(obj)}")
 
     def create_tree(self):
         """
