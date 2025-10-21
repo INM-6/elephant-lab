@@ -161,10 +161,12 @@ class Jupyphant:
                 hash_neo_obj = joblib.hash(neo_obj, hash_name='sha1')
                 self.map_neo_obj_hash_to_neo_obj[hash_neo_obj] = neo_obj
                 if hasattr(neo_obj, 'name'):
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['abbr']}::{neo_obj.name}::{hash_neo_obj}")
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['abbr']}::{neo_obj.name}::{hash_neo_obj} Parent")
+                    node_neo_obj.metadata = {"data-neo-object": "true"}
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 else:
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['abbr']}::{hash_neo_obj}")
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['abbr']}::{hash_neo_obj} Child")
+                    node_neo_obj.metadata = {"data-neo-object": "true"}
                 node_neo_obj.icon = NEO_ABBREVIATIONS[neo_obj.__class__.__name__]['icon']
                 node_neo_obj.open_icon_style = 'success'
                 node_neo_obj.close_icon_style = 'danger'
@@ -205,7 +207,8 @@ class Jupyphant:
             for attr_name, attr_value in obj.__dict__.items():
                 if isinstance(attr_value, (list, self.SpikeTrainList)):
                     attr_value_hash = joblib.hash(attr_value, hash_name='sha1')
-                    attr_node = self.Node(f"{NEO_ABBREVIATIONS[attr_value.__class__.__name__]['abbr']}::{attr_name}::{attr_value_hash}")
+                    attr_node = self.Node(f"{NEO_ABBREVIATIONS[attr_value.__class__.__name__]['abbr']}::{attr_name}::{attr_value_hash} object to hold neo objects")
+                    attr_node.metadata = {"data-neo-object": "true"}
                     attr_node.icon = NEO_ABBREVIATIONS[attr_value.__class__.__name__]['icon']
                     attr_node.open_icon_style = 'success'
                     attr_node.close_icon_style = 'danger'
@@ -220,12 +223,15 @@ class Jupyphant:
                 child_obj_hash = joblib.hash(child_obj, hash_name='sha1')
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 if hasattr(child_obj, 'name'):
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}#{i}::{child_obj.name}::{child_obj_hash}")
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}#{i}::{child_obj.name}::{child_obj_hash} not a stl or roi")
+                    child_node.metadata = {"data-neo-object": "true"}
                 else:
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}#{i}::{child_obj_hash}")
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[child_obj.__class__.__name__]['abbr']}#{i}::{child_obj_hash} may be a stl or roi")
+                    child_node.metadata = {"data-neo-object": "true"}
                 child_node.icon = NEO_ABBREVIATIONS[child_obj.__class__.__name__]['icon']
                 child_node.open_icon_style = 'success'
                 child_node.close_icon_style = 'danger'
+                child_node.data = {"neo_id": id(obj), "neo_type": type(obj).__name__}
                 child_node.opened = False
                 self.map_ipytree_node_id_to_neo_obj_hash[child_node._id] = child_obj_hash
                 self._add_sub_nodes(child_node, child_obj)
@@ -297,6 +303,8 @@ class Jupyphant:
         """
         spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
                                                                           neo_class=self.SpikeTrain)
+        # Close plots from before to prevent too much memory consumption
+        plt.close()
         # compare contents of AnalogSignals per top node
         spiketrains_unchanged = True
         spiketrains_hash = joblib.hash(spiketrains, hash_name='sha1')
@@ -656,11 +664,23 @@ class Jupyphant:
         return parsed_kwargs
 
 
-    def apply_elephant_function(self, module_name, function_name, selected_ids=None, **kwargs):
-        imported_mod = getattr(module_name, function_name)
+    def apply_elephant_function(self, module_name: str, function_name: str, selected_ids=None, **kwargs):
+        import importlib
+
+        if isinstance(module_name, str):
+            if (module_name.startswith("elephant")):
+                elephant_mod = importlib.import_module(module_name)
+            elif module_name == "": 
+                elephant_mod = importlib.import_module(f"elephant.*")
+            else:
+                elephant_mod = importlib.import_module(f"elephant.{module_name}")
+                
+            imported_func = getattr(elephant_mod, function_name)
+        else:
+            imported_func = getattr(module_name, function_name)
         
         if not selected_ids:
-            print("Es wurde kein passendes Objekt ausgewählt.")
+            print("No valid neo-Object was selected\n")
             return
         
         if isinstance(kwargs, str):
@@ -672,17 +692,13 @@ class Jupyphant:
                 kwargs = {}
 
         kwargs = self.parse_kwargs(kwargs)
-        results = {}
-
         neo_objs_from_hash = [self.map_neo_obj_hash_to_neo_obj[hash] for hash in selected_ids]
 
         for neo_obj in neo_objs_from_hash:
-            print(f"Wende {function_name} an")
             if (len(kwargs)>0):
                 print([type(x) for x in kwargs.values()])
             try:
-                result = imported_mod(neo_obj, **kwargs)
-                results[neo_obj] = result
+                result = imported_func(neo_obj, **kwargs)
             except Exception as e:
-                print(f"Fehler bei der Verarbeitung von {type(neo_obj)}: {e}")
-        return results
+                return(f"Error on {neo_obj}: {e}\n")
+        return result

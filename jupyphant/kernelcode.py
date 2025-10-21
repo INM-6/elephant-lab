@@ -5,7 +5,10 @@
 # It is used to access and visualize the neo objects
 import ipympl
 import matplotlib
-
+import elephant
+import neo
+import numpy as np
+import quantities as pq
 
 def setup_env():
     from jupyphant.jupyphant import Jupyphant
@@ -106,14 +109,9 @@ def create_explorer_raw_plot(jupyphant_entity):
 
 import matplotlib.pyplot as plt
 
-def apply_elephant_analysis(jupyphant_entity, module_name, function_name, selected_ids=None, **kwargs):
-    print(f"Starte Elephant-Analyse: {function_name} für {selected_ids}")
-
-    results = jupyphant_entity.apply_elephant_function(module_name, function_name, selected_ids, **kwargs)
-
-    # print(results)
+def apply_elephant_analysis(jupyphant_entity, module_name: str, function_name: str, selected_ids=None, **kwargs):
+    results = jupyphant_entity.apply_elephant_function(module_name, f"{function_name}", selected_ids, **kwargs)
     return results
-
 
 
 def create_explorer_statistics(jupyphant_entity):
@@ -146,74 +144,19 @@ def get_selected_neo_ids(jupyphant_entity):
         for node in jupyphant_entity.ipytree_of_neo_objects.selected_nodes
         if node._id in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash
     ]
-    
-    # print("Gefundene IDs:", selected_ids, file=sys.stdout, flush=True)
     return selected_ids
 
+def get_object_of_ids(jupyphant_entity):
+    selected_ids = get_selected_neo_ids(jupyphant_entity)
+    if (isinstance(selected_ids, list)):
+        return [jupyphant_entity.map_neo_obj_hash_to_neo_obj[selected_id] for selected_id in selected_ids];
+    return jupyphant_entity.map_neo_obj_hash_to_neo_obj[selected_ids];
+    
+def get_neo_obj_from_id(jupyphant_entity, obj_id):
+    return jupyphant_entity.map_neo_obj_hash_to_neo_obj[obj_id]
 
-
-def create_explorer_dropdown(jupyphant_entity):
-    import warnings
-    warnings.filterwarnings("ignore", category=DeprecationWarning)
-    warnings.filterwarnings("ignore", category=UserWarning)
-    import elephant
-    import inspect
-
-    # elephant_functions_by_module = {
-    #     'cell_assembly_detection': {},
-    #     'change_point_detection': {},
-    #     'conversion': {},
-    #     'cubic': {},
-    #     'current_source_density': {},
-    #     'kernels': {},
-    #     'neo_tools': {},
-    #     'phase_analysis': {},
-    #     'signal_processing': {},
-    #     'spade': {},
-    #     'spectral': {},
-    #     'spike_train_correlation': {},
-    #     'spike_train_dissimilarity': {},
-    #     'spike_train_generation': {},
-    #     'spike_train_surrogates': {},
-    #     'spike_train_synchrony': {},
-    #     'sta': {},
-    #     'statistics': {},
-    #     'unitary_event_analysis': {},
-    #     'utils': {},
-    #     'waveform_features': {}
-    # }
-    # for m in elephant_functions_by_module.keys():
-    #     functions = eval(f'elephant.{m}.__all__')
-    #     functions_dict = {f : inspect.getfullargspec(eval(f"elephant.{m}.{f}")).args for f in functions} # TODO: signature to list
-    #     elephant_functions_by_module[m] = functions_dict
-
-    # drop_module = Dropdown(options=elephant_functions_by_module.keys(), description='Module:', disabled=False)
-    # drop_function = Dropdown(options=elephant_functions_by_module[drop_module.value] , description='Function:', disabled=False)
-    # drop_parameter = Dropdown(description='Parameter:', disabled=False)
-    #
-    # @interact(module = drop_module, function = drop_function, parameter = drop_parameter)
-    # def print_function(module, function, parameter):
-    #     drop_function.options = elephant_functions_by_module[module].keys()
-    #     drop_parameter.options = elephant_functions_by_module[module][drop_function.value]
-    #
-    # def on_calculate_button_clicked(b):
-    #     with output_node_analysis:
-    #         IPython.display.clear_output()
-    #         print("Calculation in progress!")
-    #
-    # def on_clear_button_clicked(b):
-    #     with output_node_analysis:
-    #         IPython.display.clear_output()
-    #
-    # output_node_analysis = Output(layout={'border': '1px solid orange'})
-    # calculate_button = Button(description='Calculate', disabled=False, button_style='', tooltip='Calculate', icon='check')
-    # calculate_button.on_click(on_calculate_button_clicked)
-    #
-    # clear_button = Button(description='Clear', disabled=False, button_style='', tooltip='Clear', icon='check')
-    # clear_button.on_click(on_clear_button_clicked)
-    #
-    # tab_analysis= VBox([output_node_analysis, HBox([drop_module, drop_function, drop_parameter]), HBox([calculate_button, clear_button])])
-
+def get_neo_to_hash_dict(jupyphant_entity):
+    return jupyphant_entity.map_neo_obj_hash_to_neo_obj
 
 # Call to the function that updates the ipytree tree view of the neo hierarchy
 def update_tree(jupyphant_entity):

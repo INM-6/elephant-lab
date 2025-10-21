@@ -7,7 +7,17 @@ node_modules/
 .ipynb_checkpoints
 *.tsbuildinfo
 jupyphant/labextension
-
+*.zip
+*.html
+*.png
+*.js
+*.css
+*.info
+*.gz
+*.ipynb
+*.map
+.venv
+*ipynb
 # Integration tests
 ui-tests/test-results/
 ui-tests/playwright-report/

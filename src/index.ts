@@ -1,13 +1,14 @@
 // Imports for Jupyter
 import {
-  JupyterFrontEnd,
-  JupyterFrontEndPlugin,
-  ILayoutRestorer
+	JupyterFrontEnd,
+	JupyterFrontEndPlugin,
+	ILayoutRestorer
 } from '@jupyterlab/application';
 
 import {
 	ICommandPalette,
 	ISessionContext,
+	SessionContext,
 	WidgetTracker
 } from '@jupyterlab/apputils';
 
@@ -18,7 +19,8 @@ import {
 } from '@jupyterlab/notebook';
 
 import {
-	KernelMessage
+	KernelMessage,
+	Kernel
 } from '@jupyterlab/services';
 
 // Note: SimplifiedOutputArea seems to simply behave like
@@ -32,24 +34,20 @@ import {
 } from '@jupyterlab/outputarea';
 
 import {
-	IRenderMimeRegistry
+	IRenderMimeRegistry,
 } from '@jupyterlab/rendermime';
 
 // Lumino imports for dealing with the tabs within JupyterLab
 // These are called Panels
 import {
-	 Panel,
-	 Widget,
-	 DockPanel
+	Panel,
+	Widget,
+	DockPanel
 } from '@lumino/widgets';
-
-import {
-	toArray
-} from '@lumino/algorithm';
 
 //@ts-ignore: TODO: Why is this necessary?
 import {
-  JSONExt
+	JSONExt
 } from '@lumino/coreutils';
 
 // Own imports
@@ -60,6 +58,12 @@ import {
 // Style from css
 import '../style/index.css';
 
+interface IJupyterMessage {
+	content: {
+		text: string;
+	};
+}
+
 class JupyphantExtension {
 	// declaring members of the class
 	private app: JupyterFrontEnd;
@@ -67,13 +71,12 @@ class JupyphantExtension {
 	private notebook_tracker: INotebookTracker;
 	private widget_tracker: WidgetTracker;
 	private myPanels: NotebookPanel[];
-	private myVisTabs: Widget[] ;
+	private myVisTabs: Widget[];
 	private widget: DockPanel;
-	private rendermime: IRenderMimeRegistry;
 
 	// Construct a new JupyphantExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-						widget_tracker: WidgetTracker, rendermime: IRenderMimeRegistry) {
+		widget_tracker: WidgetTracker, rendermime: IRenderMimeRegistry) {
 		// save all constructor arguments
 		this.app = app;
 		this.command_palette = command_palette;
@@ -85,16 +88,61 @@ class JupyphantExtension {
 		this.myVisTabs = [];
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
 		this.widget = new DockPanel();
-		
-		this.rendermime = rendermime;
 	}; // end of constructor()
 
 
 	/******************************************************************************************************************/
 	// Define utility functions
 	/******************************************************************************************************************/
+	// Create OutputAreas where Python-Code can be executed
+	private async initializeKernelState(session: ISessionContext) {
+		console.log("Jupyphant: Initializing kernel state...");
 
-	public createCommand(command: string){
+		await this.executeCode(pythonCode['setupEnv'], session);
+
+		console.log("Jupyphant: Environment setup complete.");
+		try {
+			// Get DockPanels which represent one window of Jupyphant
+			const widgets_iter = [...this.widget.widgets()];
+			const neo_tree_content = widgets_iter[0] as Panel;
+			const explorer_content = widgets_iter[1] as DockPanel;
+			const output_content = widgets_iter[2] as DockPanel;
+
+			// Create Panels for different types of output
+			const explorer_content_iter = [...explorer_content.widgets()];
+			const explorer_content_info = explorer_content_iter[0] as Panel;
+			const explorer_content_raw = explorer_content_iter[1] as Panel;
+			const explorer_content_statistics = explorer_content_iter[2] as Panel;
+
+			// OutputAreas are used to execute Code in specific Areas
+			const outarea_nodeexplorer_info = explorer_content_info.widgets[0] as OutputArea;
+			const outarea_nodeexplorer_raw = explorer_content_raw.widgets[0] as OutputArea;
+			const outarea_nodeexplorer_statistics = explorer_content_statistics.widgets[0] as OutputArea;
+			const outarea_neo_tree = neo_tree_content.widgets[0] as OutputArea;
+
+			// OutputAreas for Raster- and LFPPlots
+			const output_content_iter = [...output_content.widgets()];
+			const output_content_rasterplot = output_content_iter[0] as Panel;
+			const outarea_content_rasterplot = output_content_rasterplot.widgets[0] as OutputArea;
+			const output_content_lfpplot = output_content_iter[0] as Panel;
+			const outarea_content_lfpplot = output_content_lfpplot.widgets[0] as OutputArea;
+
+			// Execute Jupyphant Code to create Neo Tree / Information and Plots  
+			await OutputArea.execute(pythonCode['createTree'], outarea_neo_tree, session);
+			await this.executeCode(pythonCode['updateTree'], session);
+			await OutputArea.execute(pythonCode['createExplorerInfo'], outarea_nodeexplorer_info, session);
+			await OutputArea.execute(pythonCode['createExplorerRawPlot'], outarea_nodeexplorer_raw, session);
+			await OutputArea.execute(pythonCode['createExplorerStatistics'], outarea_nodeexplorer_statistics, session);
+			await OutputArea.execute(pythonCode['rasterPlot'], outarea_content_rasterplot, session);
+			await OutputArea.execute(pythonCode['lfpPlot'], outarea_content_lfpplot, session);
+
+			console.log("Jupyphant: Kernel state and UI plots initialized.");
+		} catch (error) {
+			console.error("Jupyphant: FAILED to initialize kernel state:", error);
+		}
+	}
+	// Command on which to execute Jupyphant Extension
+	public createCommand(command: string) {
 		/**
 		  * Creates a hardcoded command to start this extension
 		  * And places it as a button in the CommandPalette on the left-hand side
@@ -102,7 +150,7 @@ class JupyphantExtension {
 		  * Clicking 'Jupyphant' in the Commands tab on the left activates the Jupyphant extension
 		  */
 		// Add the specified command to the commands known by JupyterLab
-		 this.app.commands.addCommand(command, {
+		this.app.commands.addCommand(command, {
 			label: 'Jupyphant',
 			execute: () => {
 				// The newTab function that contains the main code is called from the command
@@ -110,184 +158,93 @@ class JupyphantExtension {
 			}
 		});
 		// Add the command to the CommandPalette, to make it available on click
-		this.command_palette.addItem({command, category: 'NeuroScience'});
+		this.command_palette.addItem({ command, category: 'NeuroScience' });
 	} // end of createCommand()
 
 
 	// Function to react on command 'Jupyphant'
 	// Called only after the command is clicked from CommandPalette
-	public newTab() {
+	public async newTab() {
 		/**
-		  * This function actually starts the extension itself.
-		  * It creates a new Jupyphant tab that is connected to the notebook active when this function is executed
-		  * and therefore displays data from this notebook and reacts to its cell executions.
-		  * This function is executed when the command 'Jupyphant' in the CommandPalette is clicked by the user.
-		  * Consequently, the notebook that should be visualized using Jupyphant needs to be opened and its tab
-		  * needs to be in the foreground when the command is clicked.
-		  */
-
+	  * This function actually starts the extension itself.
+	  * It creates a new Jupyphant tab that is connected to the notebook active when this function is executed
+	  * and therefore displays data from this notebook and reacts to its cell executions.
+	  * This function is executed when the command 'Jupyphant' in the CommandPalette is clicked by the user.
+	  * Consequently, the notebook that should be visualized using Jupyphant needs to be opened and its tab
+	  * needs to be in the foreground when the command is clicked.
+	  */
 		// Wait for all notebooks to be restored in case newTab is executed early
 		// This is probably important for restoring the Jupyphant tabs (not yet implemented)
-		this.notebook_tracker.restored.then(()=>{
-	        // Get the current notebook
-	        // TODO: Why is this done twice? Maybe a scope issue?
-	        var newPanel = this.notebook_tracker.currentWidget as NotebookPanel;
 
-	        // If newPanel already has a corresponding Jupyphant tab,
-	        // simply show this tab
-	        let index = this.myPanels.indexOf(newPanel);
-	        if(index != -1){
-	            // Open existing tab in the frontend and bring it to the foreground
-	            this.attachTab();
-	            // Nothing else to do
-	            return;
-	        }
+		console.log("Jupyphant: newTab() started.");
+		await this.notebook_tracker.restored;
+		console.log("Jupyphant: Notebook tracker restored.");
 
-	        // Otherwise initialize new tab in which everything will be displayed
-	        // TODO: Introduce OOP, Tab class => move this to Tab constructor
-	        this.initializeTab(newPanel.content.rendermime)
-	        // Save the tab and corresponding notebook panel to lists
-	        // This indicates that a Jupyphant tab already exists for the notebook
-	        // and creates a mapping between the notebook and the tab
-	        // TODO: Dict would be a better data structure: newPanel -> tab
-	        this.myVisTabs.push(this.widget);
-	        this.myPanels.push(newPanel);
-	        // Show tab if it was not yet shown; i. e., open in frontend and bring it to the foreground
-	        this.attachTab();
+		// Only execute Jupyphant Extension if a Notebook is currently open
+		const newPanel = this.notebook_tracker.currentWidget;
+		if (!newPanel) {
+			console.error("Jupyphant: No active notebook found.");
+			return;
+		}
 
+		if (this.myPanels.includes(newPanel)) {
+			console.log("Jupyphant: Existing tab found, activating it.");
+			this.attachTab();
+			return;
+		}
 
-	        // Get the IPython session (Python kernel) of the notebook
-	        var session: ISessionContext = newPanel.sessionContext;  // TODO: rename to session_context
-	        // Debug output
-	        console.log("Session.ready: ", session.ready);
+		this.initializeTab(newPanel.content.rendermime);
+		this.myVisTabs.push(this.widget);
+		this.myPanels.push(newPanel);
+		this.attachTab();
 
-	        // If session (kernel) is available in the notebook
-	        // And kernel is ready as well
-	        session.ready.then(() => {
-	            // Register a Comm channel (not needed currently, but might be)
-	            // This enables manually exchanging messages from kernel to extension and back
-	            this.registerComm('test2', session);
+		const initialSession = newPanel.sessionContext;
+		await initialSession.ready;
+		await this.initializeKernelState(initialSession);
 
-	            // Setup kernel environment, i. e., activate the jupyphant Python module
-	            // in order to be able to execute the Jupyphant Python code
-	            // Includes, e. g., imports and creating an object
-	            // For details, see kernelcode.ts
-	            this.executeCode(pythonCode['setupEnv'], session);
+		const widgets_iter = [...this.widget.widgets()];
+		const output_content = widgets_iter[2] as DockPanel;
+		const output_content_iter = [...output_content.widgets()];
+		const outarea_content_rasterplot = (output_content_iter[0] as Panel).widgets[0] as OutputArea;
+		const outarea_content_lfpplot = (output_content_iter[0] as Panel).widgets[1] as OutputArea;
 
-	            // get OutputAreas of panels that will show TreeView + NodeExplorer / raster + LFP plot
-				let widgets_iter = toArray(this.widget.widgets());
-	            let tree_content = <Panel>widgets_iter[0];
-	            let explorer_content = <DockPanel>widgets_iter[1];
-	            let overview_content = <Panel>widgets_iter[2];
+		// Listener for cell execution
+		NotebookActions.executed.connect(async (sender, exec_data) => {
+			if (exec_data.notebook !== newPanel.content) {
+				return;
+			}
+			console.log("Jupyphant: Cell executed, updating plots.");
 
-	            let explorer_content_iter = toArray(explorer_content.widgets());
-	            let explorer_content_info = <Panel>explorer_content_iter[0];
-	            let explorer_content_raw = <Panel>explorer_content_iter[1];
-	            let explorer_content_statistics = <Panel>explorer_content_iter[2];
+			await this.executeCode(pythonCode['updateTree'], initialSession);
+			await OutputArea.execute(pythonCode['rasterPlot'], outarea_content_rasterplot, initialSession);
+			await OutputArea.execute(pythonCode['lfpPlot'], outarea_content_lfpplot, initialSession);
+		});
 
-	            let outarea_treeview= <OutputArea>tree_content.widgets[0];// TODO: use CamelCase instead of under_scores
-	            let outarea_nodeexplorer_info = <OutputArea>explorer_content_info.widgets[0];
-	            let outarea_nodeexplorer_raw = <OutputArea>explorer_content_raw.widgets[0];
-	            let outarea_nodeexplorer_statistics = <OutputArea>explorer_content_statistics.widgets[0];
-
-	            let outarea_rasterplot = <OutputArea>overview_content.widgets[0];
-	            let outarea_lfpplot = <OutputArea>overview_content.widgets[1];
-
-	            // Also show tree and plots immediately upon being activated
-	            // This is what user expects
-	            // Code is executed and the results displayed in the specified OutputArea
-	            OutputArea.execute(pythonCode['createTree'], outarea_treeview, session);
-
-	            // This code is executed without output that needs to be displayed
-	            // Therefore, no OutputArea is necessary
-	            // However, an arbitrary callback can be specified
-	            // In this case, the callback does nothing as the code does not produce any output
-	            this.executeCode(pythonCode['updateTree'], session);
-				OutputArea.execute(pythonCode['createExplorerInfo'], outarea_nodeexplorer_info, session);
-				OutputArea.execute(pythonCode['createExplorerRawPlot'], outarea_nodeexplorer_raw, session);
-				OutputArea.execute(pythonCode['createExplorerStatistics'], outarea_nodeexplorer_statistics, session);
-	            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
-	            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
-
-	            // Debug output
-	            console.log("BEFORE REGISTERING");
-
-		        // Create a listener that waits for any notebook cell to be executed
-		        // and reacts by updating the tree and the plots, if the notebook
-		        // whose cell was executed is the notebook this Jupyphant tab is connected to
-		        // Recall that newPanel is the notebook for which this Jupyphant tab was created
-		        NotebookActions.executed.connect((sender, exec_data) => {
-		            // Only react if codecell from connected notebook was executed
-		            // TODO: Maybe check via Session ID or something
-		            // TODO: Is this a secure check? Is content unique?
-		            if(exec_data.notebook != newPanel.content){
-		              return;
-		            }
-		            // Debug output
-		            console.log("Cell executed");
-
-		            // Update tree and plots
-		            this.executeCode(pythonCode['updateTree'], session);
-		            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
-		            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
-
-		        }); // end of NotebookActions.executed.connect()
-
-		        console.log("After registering");
-
-				session.statusChanged.connect((context, status) => {
-					if( status === "restarting" || status === "autorestarting") {
-						console.log("KERNEL status changed in " + context + ". Status is:"+ status);
-						context.ready.then(() => {
-							this.executeCode(pythonCode['setupEnv'], session);
-							console.log("Jupyphant was reset!");
-
-							// get OutputAreas of panels that will show TreeView + NodeExplorer / raster + LFP plot
-							let widgets_iter = toArray(this.widget.widgets());
-				            let tree_content = <Panel>widgets_iter[0];
-				            let explorer_content = <DockPanel>widgets_iter[1];
-				            let overview_content = <Panel>widgets_iter[2];
-
-				            let explorer_content_iter = toArray(explorer_content.widgets());
-				            let explorer_content_info = <Panel>explorer_content_iter[0];
-				            let explorer_content_raw = <Panel>explorer_content_iter[1];
-				            let explorer_content_statistics = <Panel>explorer_content_iter[2];
-
-				            let outarea_treeview= <OutputArea>tree_content.widgets[0];// TODO: use CamelCase instead of under_scores
-				            let outarea_nodeexplorer_info = <OutputArea>explorer_content_info.widgets[0];
-				            let outarea_nodeexplorer_raw = <OutputArea>explorer_content_raw.widgets[0];
-				            let outarea_nodeexplorer_statistics = <OutputArea>explorer_content_statistics.widgets[0];
-
-				            let outarea_rasterplot = <OutputArea>overview_content.widgets[0];
-				            let outarea_lfpplot = <OutputArea>overview_content.widgets[1];
-
-				            // Also show tree and plots immediately upon being activated
-				            // This is what user expects
-				            // Code is executed and the results displayed in the specified OutputArea
-				            OutputArea.execute(pythonCode['createTree'], outarea_treeview, session);
-
-				            // This code is executed without output that needs to be displayed
-				            // Therefore, no OutputArea is necessary
-				            // However, an arbitrary callback can be specified
-				            // In this case, the callback does nothing as the code does not produce any output
-				            this.executeCode(pythonCode['updateTree'], session);
-							OutputArea.execute(pythonCode['createExplorerInfo'], outarea_nodeexplorer_info, session);
-							OutputArea.execute(pythonCode['createExplorerRawPlot'], outarea_nodeexplorer_raw, session);
-							OutputArea.execute(pythonCode['createExplorerStatistics'], outarea_nodeexplorer_statistics, session);
-				            OutputArea.execute(pythonCode['rasterPlot'], outarea_rasterplot, session);
-				            OutputArea.execute(pythonCode['lfpPlot'], outarea_lfpplot, session);
-						});
+		// Listener for changed Kernel, waits for Kernel to be ready
+		newPanel.sessionContext.kernelChanged.connect(async (sender, args) => {
+			console.log("Jupyphant: Kernel has changed (restarted).");
+			const newKernel = args.newValue;
+			if (newKernel) {
+				const waitForIdle = new Promise<void>(resolve => {
+					if (newKernel.status === 'idle') {
+						resolve();
+						return;
 					}
-	             });
-				//  this.createElephantUI(session);	
-				 this.createElephantGui(session);
-	        }); // end of session.ready.then()
+					const listener = (kernel: Kernel.IKernelConnection, status: KernelMessage.Status) => {
+						if (status === 'idle') {
+							newKernel.statusChanged.disconnect(listener);
+							resolve();
+						}
+					};
+					newKernel.statusChanged.connect(listener);
+				});
+				await waitForIdle;
+				console.log("Jupyphant: New kernel is idle and ready. Re-initializing state.");
+			}
+		});
 
-		}); // end of notebook_tracker.restored.then()
-
-		console.log("Connected to currently active Notebook");
-
-	} // end of newTab()
+		console.log("Jupyphant: Event listeners registered.");
+	}
 
 	public attachTab() {
 		/**
@@ -296,7 +253,7 @@ class JupyphantExtension {
 
 		// Attach tab to the frontend if not yet attached
 		if (!this.widget.isAttached) {
-			 this.app.shell.add(this.widget);
+			this.app.shell.add(this.widget);
 		}
 		// Add the tab to the tracker for restoration
 		if (!this.widget_tracker.has(this.widget)) {
@@ -304,40 +261,44 @@ class JupyphantExtension {
 			this.widget_tracker.add(this.widget);
 		}
 		// Display the tab, bring it to the foreground
-		 this.app.shell.activateById(this.widget.id);
+		this.app.shell.activateById(this.widget.id);
 	} // end of attachTab()
 
-	public initializeTab(rendermime: IRenderMimeRegistry){
+	public initializeTab(rendermime: IRenderMimeRegistry) {
 		/**
-		  * Initialize a new tab for this extension, used for display of visualizations and widgets
+		  * Initialize a new tab for this extension.
 		  */
 
-		this.widget.addClass('my-jupyphantWidget')
+		this.widget.addClass('my-jupyphantWidget');
 		// Set HTML/DOM id
-		let dateTime: string = new Date().toLocaleString();
-		this.widget.id = 'Jupyphant, ' + dateTime;
+		this.widget.id = 'Jupyphant, ' + new Date().toLocaleString();
 		// Title of the tab
 		this.widget.title.label = 'Jupyphant';
 		// Adds the x to close the tab?
 		this.widget.title.closable = true;
-		
 		const session = this.notebook_tracker.currentWidget?.sessionContext;
-
 		if (!session) {
-			console.error("Keine Notebook-Session gefunden!");
+			console.error("Jupyphant: No notebook session found during UI initialization!");
 			return;
 		}
 
+		this.createWidgets(rendermime, session);
+
+	} // end of initializeTab()
+
+	public createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
+		// NEO TREE 
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
 		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-        this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
+		this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
 
-		let explorer_widget = new DockPanel({tabsMovable: false});
+		// NODE EXPLORER
+		let explorer_widget = new DockPanel({ tabsMovable: false });
 		explorer_widget.title.label = 'Node Explorer';
 		explorer_widget.node.style.cssText = explorer_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-        // INFO
-        let explorer_widget_info = new Panel();
+		// INFO
+		let explorer_widget_info = new Panel();
 		explorer_widget_info.title.label = 'Info';
 		explorer_widget_info.node.style.cssText = explorer_widget_info.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1', session);
@@ -347,266 +308,132 @@ class JupyphantExtension {
 		explorer_widget_raw_plot.title.label = 'Raw Plot';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
-		explorer_widget.addWidget(explorer_widget_raw_plot, {mode: 'tab-after', ref: explorer_widget_info});
+		explorer_widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
 		// STATISTICS
 		let explorer_widget_statistics = new Panel();
 		explorer_widget_statistics.title.label = 'Statistics';
 		explorer_widget_statistics.node.style.cssText = explorer_widget_statistics.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.createOutputArea(rendermime, explorer_widget_statistics, ['my-outarea-class'], 'jup_vis_out_id_2.3', session);
-		explorer_widget.addWidget(explorer_widget_statistics, {mode: 'tab-after', ref: explorer_widget_raw_plot});
+		explorer_widget.addWidget(explorer_widget_statistics, { mode: 'tab-after', ref: explorer_widget_raw_plot });
 
-		let overview_widget = new Panel();
-		overview_widget.title.label = 'Overview Plots';
-		overview_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-        this.createOutputArea(rendermime, overview_widget, ['my-outarea-class'], 'jup_vis_out_id_3.1', session);
-        this.createOutputArea(rendermime, overview_widget, ['my-outarea-class'], 'jup_vis_out_id_3.2', session);
+		// ELEPHANT
+		let elephant_widget = new Panel();
+		elephant_widget.title.label = 'Elephant Analysis';
+		elephant_widget.node.style.cssText = elephant_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		explorer_widget.addWidget(elephant_widget, { mode: 'tab-after', ref: explorer_widget_statistics });
+		this.createElephantElements(session, elephant_widget);
 
-        this.widget.addWidget(tree_widget);
-        this.widget.addWidget(explorer_widget, {mode: 'split-right', ref: tree_widget});
-        this.widget.addWidget(overview_widget, {mode: 'split-bottom', ref: explorer_widget});
+		// OUTPUT-TABS (Plot, Error, Output)
+		let output_tabs = new DockPanel({ tabsMovable: false });
+		output_tabs.title.label = 'Output-Area';
+		let output_widget_plot = new Panel();
+		output_widget_plot.title.label = 'Overview Plots';
+		output_widget_plot.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		this.createOutputArea(rendermime, output_widget_plot, ['my-outarea-class'], 'jup_vis_out_id_3.1', session);
+		this.createOutputArea(rendermime, output_widget_plot, ['my-outarea-class'], 'jup_vis_out_id_3.2', session);
 
-	} // end of initializeTab()
+		// Text Output used for Analysis Results
+		let output_widget_text = new Panel();
+		output_widget_text.title.label = 'Output';
+		output_widget_text.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		this.createOutputArea(rendermime, output_widget_text, ['my-outarea-class'], 'jup_vis_out_id_3.3', session);
 
-	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext) {
-		/**
-		  * Creates an OutputArea inside 'tab', in which the output of executed pythonCode will displayed
-		  *
-		  * Parameters:
-		  * rendermime: Required for rendering the output
-		  * tab: The tab the OutputArea is created in
-		  * cls: HTML/DOM classes the OutputArea belongs to; used for styling with CSS and possibly DOM manipulation
-		          later on
-		  * id: HTML/DOM id of the OutputArea; used for styling with CSS and possibly DOM manipulation later on
-		  */
-		// Create an OutputArea
-		// OutputAreas are used to display stuff, just like the outputs below every cell
-		let model = new OutputAreaModel({trusted: true});
-		let outarea = new OutputArea({rendermime, model});
-		// Add OutputArea to the specified tab
-		tab.addWidget(outarea);
-		// Set HTML/DOM id and classes
-		outarea.id = id;
-		for(let currCls of cls){
-			outarea.addClass(currCls);
-		}
-		// console.log("Führe Neo-Tree Erstellung aus...");
-		// OutputArea.execute("\njupyphant_entity.create_tree()", outarea, session, { displayId: true })
-        // .then(() => console.log("Neo-Tree erfolgreich geladen!"))
-        // .catch(err => console.error("Fehler beim Laden des Neo-Trees:", err));
+		// Error Output used mainly for debugging 
+		// TODO: implement this (if necessary?) 
+		let output_widget_error = new Panel();
+		output_widget_error.title.label = 'Error';
+		output_widget_error.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		this.createOutputArea(rendermime, output_widget_error, ['my-outarea-class'], 'jup_vis_out_id_3.4', session);
 
+		output_tabs.addWidget(output_widget_plot);
+		output_tabs.addWidget(output_widget_text);
+		output_tabs.addWidget(output_widget_error);
+
+		this.widget.addWidget(tree_widget);
+		this.widget.addWidget(explorer_widget, { mode: 'split-right', ref: tree_widget });
+		this.widget.addWidget(output_tabs, { mode: 'split-bottom' });
 	}
 
-	//@ts-ignore
-	public registerComm(name: string, context: SessionContext){
-		/**
-		  * Registers a communication channel that allows sending messages
-		  * back and forth between the TypeScript code and the IPython session, i.e., the Python kernel
-		  * name: Name of the channel
-		  * session: IPython session (Python kernel) to communicate with
-		  */
-		//TODO: Remove hardcoded stuff
-        console.log("Communication channel created")
-		// Registers something like a callback that acts when the kernel sends a message
-		context.session.kernel.registerCommTarget('test2', (comm:any, commMsg:any):any => {
-			// Only react if the message is sent to the channel/target named 'test2'
-			if(commMsg.content.target_name !== 'test2'){
-				return;
-			}
-			// React to the message
-			// Callback that deals with the message
-			comm.onMsg = (msg:any) => {
-				var c = msg.buffers[0].buffer;
-				c;
-				console.log("Message received");
-				//console.log(c[0]);
-				//console.log("MEEESSSAAAGGEEE ", msg.buffers[0]);
-				//console.log(new Float32Array(msg.buffers[0].buffer));
-			};
-			// Callback that reacts to closing of the communication channel (possibly by the Python kernel)
-			comm.onClose = (msg:any) => {};
-		});
-	} // end of registerComm()
+	public createElephantElements(session: ISessionContext, elephant_widget: Panel) {
 
-	//@ts-ignore: May be unused
-	public executeCode(code: string, context: SessionContext, callback?: any){
-		/**
-		  * Executes Python code in the specified IPython session and executes a callback
-		  * processing the output after finishing the execution
-
-		  * Parameters:
-		  * code: Code to be executed, provided as a string; possibly from kernelcode.ts
-		  * session: The IPython session (i. e., Python kernel) that will execute the code
-		  */
-		// Create a request that will be sent to the kernel
-		let request: KernelMessage.IExecuteRequestMsg['content'] = {
-			code: code,
-			stop_on_error: false,
-			store_history: false,
-		};
-        console.log("within executeCode: code = " + code)
-		// Request execution, stored as a future
-		let future = context.session.kernel.requestExecute(request);
-		// In case a callback function was provided, execute it upon completion of the request
-		if(callback){
-			// When output is published from the request's future
-			future.onIOPub = ( ( msg: KernelMessage.IIOPubMessage ) => {
-			    console.log("within executeCode: output is published with msg = " + msg)
-				// Execute callback
-				callback( msg );
-			});
-		}
-	} // end of executeCode()
-
-	public async pingElephantServer(serverUrl: string): Promise<boolean> {
-		try {
-			const response = await fetch(`${serverUrl}/ping`, { method: "GET" });
-			return response.ok;
-		} catch (error) {
-			console.error("Fehler beim Pingen des Servers:", error);
-			return false;
-		}
-	}
-
-	public async loadElephantModules(elephant_modules_dropdown: HTMLSelectElement, elephant_functions_dropdown: HTMLSelectElement, serverUrl: string) {
-		console.log("Lade Elephant-Module");
-		try {
-			const response = await fetch(`${serverUrl}/get_elephant_modules`);
-			if (!response.ok) {
-				throw new Error(`Server antwortet mit Status: ${response.status}`);
-			}
-	
-			const server_response = await response.json();
-			console.log("Erhaltene Elephant-Module:", server_response);
-			
-			this.createElephantDropdowns(elephant_modules_dropdown, elephant_functions_dropdown, server_response);
-			// elephant_modules_dropdown.innerHTML = "";
-			
-			// for (const [moduleName, functions] of Object.entries(server_response) as [string, string[]][]) {
-			// 	console.log(`Modul: ${moduleName}`);
-			// 	const option = document.createElement("option");
-			// 	option.value = moduleName;
-			// 	option.textContent = moduleName;
-			// 	elephant_modules_dropdown.appendChild(option);				
-				
-			// 	functions.forEach((funcName) => {
-			// 		console.log(`Funktion: ${funcName}`);
-			// 		const option = document.createElement("option");
-			// 		option.value = funcName;
-			// 		option.textContent = funcName;
-			// 		elephant_functions_dropdown.appendChild(option);
-			// 	});
-			// }
-	
-		} catch (error) {
-			console.error("Fehler beim Abrufen der Elephant-Funktionen:", error);
-			elephant_modules_dropdown.innerHTML = "<option>Fehler beim Laden</option>";
-		}
-	}
-
-	public createElephantDropdowns(elephant_modules_dropdown: HTMLSelectElement, elephant_functions_dropdown: HTMLSelectElement, elephantModules: { [key: string]: string[] }) {
-		console.log("Erstelle Dropdowns für Module & Funktionen...");
-	
-		elephant_modules_dropdown.id = "elephant-module-select";
-		elephant_modules_dropdown.style.width = "100%";
-		elephant_modules_dropdown.innerHTML = "<option>Modul auswählen...</option>";
-	
-		elephant_functions_dropdown.id = "elephant-function-select";
-		elephant_functions_dropdown.style.width = "100%";
-		elephant_functions_dropdown.innerHTML = "<option>Funktion auswählen...</option>";
-	
-		Object.keys(elephantModules).forEach((moduleName) => {
-			const option = document.createElement("option");
-			option.value = moduleName;
-			option.textContent = moduleName;
-			elephant_modules_dropdown.appendChild(option);
-		});
-	
-		elephant_modules_dropdown.addEventListener("change", () => {
-			const selectedModule = elephant_modules_dropdown.value;
-			this.updateFunctionDropdown(elephant_functions_dropdown, elephantModules[selectedModule] || []);
-		});
-	}
-
-	public updateFunctionDropdown(dropdown: HTMLSelectElement, functions: string[]) {
-		console.log(`Lade Funktionen für Modul: ${dropdown.value}`);
-	
-		// Dropdown leeren und neue Funktionen einfügen
-		dropdown.innerHTML = "<option>Funktion auswählen...</option>";
-		functions.forEach((funcName) => {
-			const option = document.createElement("option");
-			option.value = funcName;
-			option.textContent = funcName;
-			dropdown.appendChild(option);
-		});
-	}
-	
-	
-	
-
-	public createElephantGui(session: ISessionContext) {
-		console.log("Building Elephant-GUI Window");	
-		const buttonOpenGUI = document.createElement("button");
-		buttonOpenGUI.textContent = "🐘 Elephant-Analyse";
-		// buttonOpenGUI.style.position = "absolute";
-		buttonOpenGUI.style.top = "10px";
-		buttonOpenGUI.style.right = "10px";
-		buttonOpenGUI.style.padding = "10px";
-		buttonOpenGUI.style.background = "#007bff";
-		buttonOpenGUI.style.color = "white";
-		buttonOpenGUI.style.border = "none";
-		buttonOpenGUI.style.borderRadius = "5px";
-		buttonOpenGUI.style.cursor = "pointer";
-
-		buttonOpenGUI.onclick = () => {
-			this.elephantMenue(session, this.rendermime);
-		};
-
-		const toolbar = document.getElementById("jp-top-panel");
-
-
-		if (toolbar) {
-			toolbar.appendChild(buttonOpenGUI);
-		} else {
-			console.log("Error while appending Button")
-		}
-		
-	}
-
-
-	public elephantMenue(session: ISessionContext, rendermime: IRenderMimeRegistry) {
+		// Menue is the main container for the Analysis Windows elements
 		const menue = document.createElement("div");
-		menue.style.position = "fixed";
-		menue.style.top = "0";
-		menue.style.left = "0";
-		menue.style.width = "100%";
+		menue.style.position = "center";
+		menue.style.width = "90%";
+		menue.style.minWidth = "302px";
+		menue.style.maxWidth = "800px";
 		menue.style.height = "100%";
-		menue.style.backgroundColor = "rgba(0,0,0,0.5)";
+		menue.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
 		menue.style.display = "flex";
 		menue.style.alignItems = "center";
 		menue.style.justifyContent = "center";
 		menue.style.zIndex = "1000";
-		
+
 		const menueBox = document.createElement("div");
-		menueBox.style.background = "rgba(116, 106, 106, 0.38)";
+		menueBox.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
 		menueBox.style.padding = "20px";
 		menueBox.style.borderRadius = "8px";
-		menueBox.style.boxShadow = "0 4px 6px rgba(0,0,0,0.1)";
+		menueBox.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0)";
 		menueBox.style.width = "400px";
 
-		const closeButton = document.createElement("button");
-		closeButton.textContent = "Schließen";
-		closeButton.style.marginTop = "10px";
-		closeButton.style.padding = "10px";
-		closeButton.style.background = "#dc3545";
-		closeButton.style.color = "white";
-		closeButton.style.border = "none";
-		closeButton.style.cursor = "pointer";
-		closeButton.style.width = "100%";
 
-		closeButton.onclick = () => {
-			document.body.removeChild(menue);
-		};
+		// Radio buttons used for remote and local analysis execution
+		const radioContainer = document.createElement("div");
 
+		// Radio button for remote Elephant Analysis
+		const remoteRadioButton = document.createElement("input");
+		remoteRadioButton.type = "radio";
+		remoteRadioButton.name = "location";
+		remoteRadioButton.value = "remote";
+		const remoteLabel = document.createElement("label");
+		remoteLabel.textContent = "Remote";
+		remoteLabel.style.marginRight = "20px";
+		remoteLabel.prepend(remoteRadioButton);
+
+		// Radio button for local Elephant Analysis
+		const localRadioButton = document.createElement("input");
+		localRadioButton.type = "radio";
+		localRadioButton.name = "location";
+		localRadioButton.value = "local";
+		localRadioButton.checked = true;
+		const localLabel = document.createElement("label");
+		localLabel.textContent = "Local";
+		localLabel.prepend(localRadioButton);
+
+		radioContainer.appendChild(localLabel);
+		radioContainer.appendChild(remoteLabel);
+
+		// function used to change state of radio buttons
+		function toggleRadioButtons() {
+			if (remoteRadioButton.checked) {
+				remoteDiv.style.display = "block";
+				localDiv.style.display = "none";
+			} else {
+				remoteDiv.style.display = "none";
+				localDiv.style.display = "block";
+
+			}
+		}
+
+		// EventListeners for activating / deactivating radio buttons
+		remoteRadioButton.addEventListener("change", () => {
+			toggleRadioButtons();
+		})
+
+		localRadioButton.addEventListener("change", () => {
+			toggleRadioButtons();
+		})
+
+		// Local Div is used for grouping elements used for local analysis
+		const localDiv = document.createElement("div");
+		localDiv.id = "localDiv";
+
+		// Remote Div is used for grouping elements used for local analysis
+		const remoteDiv = document.createElement("div");
+		remoteDiv.id = "remoteDiv";
+
+		// Result Div used to display output
+		// TODO: may be removed due to the existence of Output Container
 		const resultDiv = document.createElement("div");
 		resultDiv.style.marginTop = "15px";
 		resultDiv.style.padding = "10px";
@@ -616,287 +443,823 @@ class JupyphantExtension {
 		resultDiv.style.maxHeight = "200px";
 		resultDiv.style.overflowY = "auto";
 
+		// Dropdown Menus for Elephant Module and Function
+		const dropdownElephantModule = document.createElement("select");
+		dropdownElephantModule.id = "elephant-module-select";
 
 		const dropdownElephantFunction = document.createElement("select");
 		dropdownElephantFunction.id = "elephant-function-select";
 
-		const dropdownElephantModule = document.createElement("select");
-		dropdownElephantFunction.id = "elephant-module-select";
-
-			
 		const dropdownContainer = document.createElement("div");
 		dropdownContainer.style.marginTop = "10px";
 		dropdownContainer.appendChild(dropdownElephantModule);
 		dropdownContainer.appendChild(dropdownElephantFunction);
-	
-		// Eingabe fuer KeyWord Args
+
+		// Input of Keywords Arguments used for local analysis
+		// TODO: remove this and use pydantic implementation
 		const inputKwargs = document.createElement("input");
 		inputKwargs.type = "text";
-		inputKwargs.placeholder = "Optionale Parameter";
+		inputKwargs.placeholder = "Keyword arguments";
 		inputKwargs.style.display = "block";
 		inputKwargs.style.width = "100%";
 		inputKwargs.style.marginTop = "10px";
 		inputKwargs.style.padding = "5px";
+		inputKwargs.addEventListener("dragover", (event) => {
+			event.preventDefault();
+		});
+		inputKwargs.addEventListener("drop", async () => {
+			if (!session?.session || !session.session.kernel) {
+				console.error("Kernel not found.");
+				return;
+			}
+			let code = `
+				from jupyphant.kernelcode import get_selected_neo_ids
+				selected_ids = get_selected_neo_ids(jupyphant_entity)[0]
+				print(selected_ids)`;
+			const future = session.session.kernel.requestExecute({ code });
+			let msg_content: string
+			future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+				if (msg.header.msg_type === "stream" && "text" in msg.content)
+					msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
+				console.log(msg_content);
+				inputKwargs.value = msg_content;
+			}
+			await future.done;
+		});
 
-		
+		// Button for Code generation in a new Jupyter Cell
 		const buttonGenerateCode = document.createElement("button");
-		buttonGenerateCode.textContent = "Code generieren";
+		buttonGenerateCode.textContent = "Generate Code";
 		buttonGenerateCode.style.marginTop = "10px";
 		buttonGenerateCode.style.padding = "10px";
-		buttonGenerateCode.style.background = "rgba(27, 0, 177, 0.6)";
+		buttonGenerateCode.style.background = "rgba(104, 33, 203, 1)";
 		buttonGenerateCode.style.color = "white";
 		buttonGenerateCode.style.border = "none";
 		buttonGenerateCode.style.cursor = "pointer";
 		buttonGenerateCode.style.width = "100%";
 
-		buttonGenerateCode.onclick = async () => {
-			console.log("Generate Code button pressed but currently no Implementation :(");
-		};	
-
+		// Elephant Server Address, only used for remote Analysis
 		const inputElephantServerAddress = document.createElement("input");
 		inputElephantServerAddress.type = "text";
-		inputElephantServerAddress.placeholder = "Server-Adresse (z.B. http://127.0.0.1:5000)";
+		inputElephantServerAddress.placeholder = "Server address  (z.B. http://127.0.0.1:5000)";
 		inputElephantServerAddress.style.width = "100%";
 		inputElephantServerAddress.style.marginBottom = "10px";
 		inputElephantServerAddress.value = localStorage.getItem("elephantServer") || "http://127.0.0.1:5000";
 
+		// Button used to either ping server and load functions from there or search for available functions in local installation
+		const buttonLoadFunctions = document.createElement("button");
+		buttonLoadFunctions.textContent = "Fetch elephant functions";
+		buttonLoadFunctions.style.width = "100%";
+		buttonLoadFunctions.onclick = async () => {
+			await this.loadElephantModules(dropdownElephantModule, dropdownElephantFunction, inputKwargs, inputElephantServerAddress.value, remoteRadioButton.checked);
+
+			if (localRadioButton.checked) {
+				let code = `
+				import elephant
+				from importlib.metadata import version, PackageNotFoundError
+				try:
+					print(version("elephant"))
+				except PackageNotFoundError:
+					print("nicht installiert")								
+				`
+				if (!session?.session || !session.session.kernel) {
+					console.error("Kernel not found.");
+					return;
+				}
+				let future = session.session.kernel.requestExecute({ code });
+				let msg_content: string
+				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+					if (msg.header.msg_type === "stream" && "text" in msg.content)
+						msg_content = (msg as IJupyterMessage).content.text;
+					buttonRunAnalysisLocal.innerHTML = `run elephant analysis (locally)<br>Current local Elephant Version: "${msg_content.trim()}"`;
+				}
+				await future.done;
+			} else {
+				const response = await fetch(`${inputElephantServerAddress.value}`, { method: "GET" });
+				const data = await response.json();
+				buttonRunAnalysisRemote.innerHTML = `run elephant analysis<br>Current remote Elephant Version: "${data.elephant_version}"`;
+			}
+		};
+
+
+		// Button to start remote Analysis
+		const buttonRunAnalysisRemote = document.createElement("button");
+		buttonRunAnalysisRemote.textContent = "run elephant analysis";
+		buttonRunAnalysisRemote.style.marginTop = "10px";
+		buttonRunAnalysisRemote.style.padding = "10px";
+		buttonRunAnalysisRemote.style.background = "rgb(25, 58, 6)";
+		buttonRunAnalysisRemote.style.color = "white";
+		buttonRunAnalysisRemote.style.border = "none";
+		buttonRunAnalysisRemote.style.cursor = "pointer";
+		buttonRunAnalysisRemote.style.width = "100%";
+		buttonRunAnalysisRemote.disabled = true;
+
+		buttonRunAnalysisRemote.onclick = async () => {
+			let widgets_iter = [...this.widget.widgets()];
+			let output_content = <DockPanel>widgets_iter[2];
+			let output_content_iter = [...output_content.widgets()];
+			let output_content_text = <Panel>output_content_iter[2];
+			let outarea_content_text = <OutputArea>output_content_text.widgets[0];
+
+
+			const functionName = dropdownElephantFunction.value;
+			const moduleName = dropdownElephantModule.value;
+
+			let params: { [key: string]: any } = {};
+
+			paramContainer.querySelectorAll("input, select").forEach((input) => {
+				if (input instanceof HTMLInputElement || input instanceof HTMLSelectElement) {
+					console.log(`input: ${input}`)
+					console.log(`${input.id}: ${input.value}`);
+				}
+				const paramName = input.id.replace("param-", "");
+
+				let value: any = (input as HTMLInputElement).value;
+
+				if (!isNaN(value) && value.trim() !== "") {
+					value = Number(value);
+				} else if (value.toLowerCase() === "true") {
+					value = true;
+				} else if (value.toLowerCase() === "false") {
+					value = false;
+				}
+				params[paramName] = value;
+			});
+			// Extract input parameters
+			const entriesArray = Object.entries(params)
+			const pythonListString = `[${Object.values(entriesArray).map(v => `'${v}'`).join(', ')}]`;
+
+			// Code logic to send data to server using pickle
+			let code = `
+			import requests
+			import pickle
+			import neo
+			import types
+			import json
+			from pprint import pprint
+
+			from jupyphant.kernelcode import get_neo_to_hash_dict
+			
+			def parse_list_to_dict(data_list):
+				result_dict = {}
+				for item_string in data_list:
+					parts = item_string.split(',', 1)
+								
+					key = parts[0].strip()
+									
+					if len(parts) > 1 and parts[1].strip():
+						value = parts[1].strip()
+					else:
+						value = ""			
+					result_dict[key] = value
+					
+				return result_dict
+
+			def get_notebook_variable(allowed_types=None):
+				g = globals()
+				variables = {}
+
+				for name, val in g.items():
+					if allowed_types is not None and not isinstance(val, allowed_types):
+						continue
+					if isinstance(val, types.ModuleType):
+						continue
+					variables[name] = val
+				return variables
+
+
+			inputObjects = parse_list_to_dict(${pythonListString})
+			neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
+			variables_in_notebook = get_notebook_variable()
+
+			for key, value in inputObjects.items():
+				if value in neo_hash_obj_dict:
+					res = neo_hash_obj_dict[value]
+					inputObjects[key] = res
+				elif value in variables_in_notebook.keys():
+					res = variables_in_notebook.get(value)
+					inputObjects[key] = res
+
+			url = "${inputElephantServerAddress.value}/execute_pickle"
+			pickled_data = pickle.dumps(inputObjects)
+
+			text_data = {
+				"module_name": "${moduleName}",
+				"function_name": "${functionName}"
+			}
+
+			binary_data = {
+				'params': ('data.pkl', pickled_data, 'application/octet-stream')
+			}
+
+			try:
+				response = requests.post(url, data=text_data, files=binary_data)
+				pprint(f"Server response: {response.text}")
+
+			except requests.exceptions.RequestException as e:
+				pprint(f"Ein Verbindungsfehler ist aufgetreten: {e}")
+			`
+			await OutputArea.execute(code, outarea_content_text, session);
+		};
+
+		// Ping Server button and check for reachability
 		const buttonPingServer = document.createElement("button");
-		buttonPingServer.textContent = "Server anpingen";
+		buttonPingServer.textContent = "Ping server";
 		buttonPingServer.style.width = "100%";
 		buttonPingServer.style.marginBottom = "10px";
 		buttonPingServer.onclick = async () => {
 			const serverUrl = inputElephantServerAddress.value;
 			localStorage.setItem("elephantServer", serverUrl);
-			const isAlive = await this.pingElephantServer(serverUrl);
-			if (isAlive) {
-				resultDiv.innerHTML = `<b style="color: green;">Server erreichbar!</b>`;
-				buttonLoadFunctions.disabled = false;
-				buttonRunAnalysis.disabled = false;
-				buttonRunAnalysis.style.background = "rgb(59, 201, 95)";
-
+			if (await this.pingElephantServer(serverUrl)) {
+				resultDiv.innerHTML = `<b style="color: green;">Server reachable!</b>`;
+				buttonRunAnalysisRemote.disabled = false;
+				buttonRunAnalysisRemote.style.background = "rgb(59, 201, 95)";
 			} else {
-				resultDiv.innerHTML = `<b style="color: red;">Server nicht erreichbar!</b>`
-				buttonLoadFunctions.disabled = true;
-				buttonRunAnalysis.disabled = true;
+				resultDiv.innerHTML = `<b style="color: red;">Server not reachable!</b>`
+				buttonRunAnalysisRemote.disabled = true;
 			}
 		};
 
-		const buttonLoadFunctions = document.createElement("button");
-		buttonLoadFunctions.textContent = "Elephant-Funktionen abrufen";
-		buttonLoadFunctions.style.width = "100%";
-		buttonLoadFunctions.disabled = true;
-		buttonLoadFunctions.onclick = async () => {
-			// await this.loadElephantFunctions(dropdownElephantFunction, inputElephantServerAddress.value);
-			await this.loadElephantModules(dropdownElephantModule, dropdownElephantFunction, inputElephantServerAddress.value);
-		};
+		// Button to start local Analysis
+		const buttonRunAnalysisLocal = document.createElement("button");
+		buttonRunAnalysisLocal.textContent = "run elephant analysis (locally)";
+		buttonRunAnalysisLocal.style.marginTop = "10px";
+		buttonRunAnalysisLocal.style.padding = "10px";
+		buttonRunAnalysisLocal.style.background = "rgb(59, 201, 95)";
+		buttonRunAnalysisLocal.style.color = "white";
+		buttonRunAnalysisLocal.style.border = "none";
+		buttonRunAnalysisLocal.style.cursor = "pointer";
+		buttonRunAnalysisLocal.style.width = "100%";
 
-
-		// Button zum Starten der Analyse
-		const buttonRunAnalysis = document.createElement("button");
-		buttonRunAnalysis.textContent = "Elephant-Analyse starten";
-		buttonRunAnalysis.style.marginTop = "10px";
-		buttonRunAnalysis.style.padding = "10px";
-		buttonRunAnalysis.style.background = "rgb(25, 58, 6)";
-		buttonRunAnalysis.style.color = "white";
-		buttonRunAnalysis.style.border = "none";
-		buttonRunAnalysis.style.cursor = "pointer";
-		buttonRunAnalysis.style.width = "100%";
-		buttonRunAnalysis.disabled = true;
-		
-		buttonRunAnalysis.onclick = async () => {
+		buttonRunAnalysisLocal.onclick = async () => {
 			const functionName = dropdownElephantFunction.value;
 			const moduleName = dropdownElephantModule.value;
-			
+
 			const kwargsString = inputKwargs.value;
 			console.log("KWARGS", kwargsString)
-			
-			console.log(`Button Clicked - Starte Analyse: ${functionName} mit Kwargs: ${kwargsString}`);
-	
+
+			console.log(`Starting (local) Analysis: ${functionName} with kwargs: ${kwargsString}`);
+
 			if (!session?.session || !session.session.kernel) {
-				console.error("Kernel nicht gefeunden.");
+				console.error("Kernel not found.");
 				return;
 			}
-	
+
 			try {
 				await session.ready;
-				console.log("Kernel ist bereit");
-				
-				let code = `
-				from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
-				import elephant
-				selected_ids = get_selected_neo_ids(jupyphant_entity)
-				kwargs = dict(item.split("=") for item in "${kwargsString}".split(", "))
-				apply_elephant_analysis(jupyphant_entity, ${moduleName}, "${functionName}", selected_ids, **kwargs)
-				`;
+				console.log("Kernel is ready!");
 
-				if (kwargsString.trim() === "") {
-				code = `
+				// Code logic to execute local Elephant function
+				// TODO: change to use pydantic and not kwargs
+				let code = `
 					from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
 					import elephant
 					selected_ids = get_selected_neo_ids(jupyphant_entity)
-					kwargs = {}
-					apply_elephant_analysis(jupyphant_entity, ${moduleName}, "${functionName}", selected_ids, **kwargs)
-				`;
+					kwargs = dict(item.split("=") for item in "${kwargsString}".split(", "))
+					apply_elephant_analysis(jupyphant_entity, "${moduleName}", "${functionName}", selected_ids, **kwargs)
+					`;
+
+				if (kwargsString.trim() === "") {
+					code = `
+						from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
+						import elephant
+						selected_ids = get_selected_neo_ids(jupyphant_entity)
+						kwargs = {}
+						apply_elephant_analysis(jupyphant_entity, "${moduleName}", "${functionName}", selected_ids, **kwargs)
+					`;
 				}
 
-				
+
 				console.log("Sende Anfrage an Kernel...");
 				const future = session.session.kernel.requestExecute({ code });
-	
+
 				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
 					console.log("Kernel-Antwort erhalten:", msg);
-				
+
 					if (msg.header.msg_type === "stream" && "text" in msg.content) {
-						resultDiv.innerHTML += `<br><b style="color: green;">Ergebnis:</b> ${msg.content["text"]}`;
+						resultDiv.innerHTML = `<br><b style="color: green;">Ergebnis:</b> ${msg.content["text"]}`;
 					}
 					else if (msg.header.msg_type === "error") {
-						resultDiv.innerHTML += `<br><b style="color: red;">Fehler: ${msg.content}</b>`;
+						resultDiv.innerHTML = `<br><b style="color: red;">Fehler: ${msg.content}</b>`;
 					}
 					else if (msg.header.msg_type === "execute_result" && "data" in msg.content) {
-						resultDiv.innerHTML += `<br><b style="color: green;">Ergebnis:</b> ${JSON.stringify(msg.content["data"])}`;
+						resultDiv.innerHTML = `<br><b style="color: green;">Result:</b> ${JSON.stringify(msg.content["data"])}`;
 					}
 					else if (msg.header.msg_type === "display_data" && "data" in msg.content) {
-						resultDiv.innerHTML += `<br><b style="color: blue;"></b> ${JSON.stringify(msg.content["data"])}`;
+						resultDiv.innerHTML = `<br><b style="color: blue;"></b> ${JSON.stringify(msg.content["data"])}`;
 					}
 				};
-						
+				await future.done;
 			} catch (error) {
 				console.error("Fehler beim Senden der Anfrage an den Kernel:", error);
 			}
 		}
 
-		const treeContainer = new Panel();
-		treeContainer.node.style.width = "40%";
-		treeContainer.node.style.height = "400px";
-		treeContainer.node.style.overflowY = "auto";
-		treeContainer.node.style.borderRight = "1px solid #ddd";
-		treeContainer.node.style.paddingRight = "10px";
-		treeContainer.node.style.minHeight = "200px";
-		treeContainer.node.style.display = "block";		
 
-        // this.createOutputArea(this.rendermime, treeContainer, ["neo-tree-output"], "neo-tree-output-id", session);
+		const paramContainer = document.createElement("div");
+		paramContainer.style.marginTop = "10px";
+		paramContainer.innerHTML = "";
+
+		// TODO: maybe unnecessary -> change to onChange Listener on Functions dropdown in order to remove one button (better for user)
+		const fetchParamsButton = document.createElement("button");
+		fetchParamsButton.textContent = "Retrieve parameter"
+		fetchParamsButton.onclick = async () => {
+			if (dropdownElephantFunction.value === "") {
+				return;
+			}
+
+			const moduleName = dropdownElephantModule.value;
+			const functionName = dropdownElephantFunction.value;
+			const response = await fetch(`${inputElephantServerAddress.value}/get_model_schema/${moduleName}.${functionName}`)
+			const data = await response.json();
+			if (paramContainer.children.length > 0) {
+				paramContainer.innerHTML = "";
+			}
+			// create input fields with default parameter and description
+			for (const [key, value] of Object.entries(data.properties as Record<string, any>)) {
+				const row = document.createElement("div");
+				row.className = "form-row";
+
+				console.log("Key:", key, "Value:", value, "type:", value.type);
+
+				const label = document.createElement("label");
+				// TODO: Separation of concerns -> style into css
+				label.innerHTML = `<br><span style="color: LightSkyBlue; font-weight: bold;">${value.title || key}</span><br>
+				<span style="color: LightSlateGrey;">\n${value.description || ""}</span>`;
+
+				let input: HTMLInputElement | HTMLSelectElement;
+
+				// different input fields for different types of data
+				// TODO: input default values from pydantic models
+				if (value.type === "integer" || value.type === "number") {
+					input = document.createElement("input");
+					input.type = "range";
+					input.min = "0";
+					input.max = "100";
+					input.step = "1";
+					input.value = value.default ?? "50";
+
+				} else if (value.type === "string") {
+					input = document.createElement("input");
+					input.type = "text";
+					input.placeholder = value.default ? `default: ${value.default}` : "";
+					input.addEventListener("dragover", (event) => {
+						event.preventDefault();
+					});
+					input.addEventListener("drop", async (event) => {
+						console.log("drop");
+						if (!session?.session || !session.session.kernel) {
+							console.error("Kernel not found.");
+							return;
+						}
+						let code = `
+							from jupyphant.kernelcode import get_selected_neo_ids
+							selected_ids = get_selected_neo_ids(jupyphant_entity)[0]
+							`;
+						const future = session.session.kernel.requestExecute({ code });
+						let msg_content: string
+						future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+							if (msg.header.msg_type === "stream" && "text" in msg.content)
+								msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
+							console.log(msg_content);
+							input.value = msg_content;
+						}
+						await future.done;
+					});
+
+				} else if (value.type === "boolean") {
+					input = document.createElement("select");
+					const trueOption = document.createElement("option");
+					trueOption.value = "true";
+					trueOption.textContent = "True";
+					const falseOption = document.createElement("option");
+					falseOption.value = "false";
+					falseOption.textContent = "False";
+					input.appendChild(trueOption);
+					input.appendChild(falseOption);
+
+				} else {
+					input = document.createElement("input");
+					input.type = "text";
+					console.log("value.default: " + value.default)
+					input.placeholder = value.default ? `default: ${value.default}` : "";
+					input.addEventListener("dragover", (event) => {
+						event.preventDefault();
+					});
+					input.addEventListener("drop", async (event) => {
+						console.log("drop");
+						if (!session?.session || !session.session.kernel) {
+							console.error("Kernel not found.");
+							return;
+						}
+						let code = `
+							from jupyphant.kernelcode import get_selected_neo_ids
+							selected_ids = get_selected_neo_ids(jupyphant_entity)[0]
+							print(selected_ids)`;
+						const future = session.session.kernel.requestExecute({ code });
+						let msg_content: string
+						future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+							if (msg.header.msg_type === "stream" && "text" in msg.content)
+								msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
+							console.log(msg_content);
+							input.value = msg_content;
+						}
+						await future.done;
+					});
+				}
+
+				for (const entry of Object.entries(data.properties[key])) {
+					if (entry[0] !== "description" && entry[0] !== "default" && entry[0] !== "title") {
+						if (input instanceof HTMLInputElement) {
+							input.placeholder += (entry[0] ? ` ${entry[0]}: ${entry[1]}` : "");
+						} else if (input instanceof HTMLSelectElement) {
+							input.title = input.title + (value.default ?? "") + (entry[0] ? ` ${entry[0]}: ${entry[1]}` : "");
+						}
+					}
+				}
+
+				input.id = `param-${key}`;
+				input.className = "form-row-input";
+				row.appendChild(label);
+				row.appendChild(input);
+				paramContainer.appendChild(row);
+			}
+
+		};
+
+		buttonGenerateCode.onclick = async () => {
+			let selected_elephant_module = dropdownElephantModule.value;
+			let selected_elephant_function = dropdownElephantFunction.value;
+
+			if (remoteRadioButton.checked) {
+				const paramArray = Array.from(paramContainer.children).map(async child => {
+					let param = child.querySelector('.form-row-input') as HTMLInputElement | HTMLSelectElement;
+					if (param) {
+						try {
+							await session.ready;
+							if (!session?.session || !session.session.kernel) {
+								console.error("Kernel not found.");
+								return null;
+							}
+							console.log(`Param Value: ${param.value.trim()}`);
+							// TODO: hash to object
+							let code = `
+							from jupyphant.kernelcode import get_neo_to_hash_dict
+							from jupyphant.kernelcode import get_selected_neo_ids
+							selected_id = get_selected_neo_ids(jupyphant_entity)
+							neo_dict = get_neo_to_hash_dict(jupyphant_entity)
+							print(neo_dict[selected_id[0]])
+							`;
+							let future = session.session.kernel.requestExecute({ code });
+
+							const outputPromise = new Promise<string | null>((resolve, reject) => {
+								future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+									if (msg.header.msg_type === 'stream' && "text" in msg.content) {
+										const streamMsg = msg as KernelMessage.IStreamMsg;
+										resolve(streamMsg.content.text);
+									} else {
+										console.log(msg);
+									}
+								};
+
+								future.done.then(() => {
+									resolve(null);
+								}).catch(err => {
+									reject(err);
+								});
+							});
+
+							const kernelOutput = await outputPromise;
+
+							console.log(`Kernel output was: ${kernelOutput}`);
+							return kernelOutput ? kernelOutput.trim() : param.value;
+
+						} catch (error) {
+							console.error("Fehler beim Senden der Anfrage an den Kernel:", error);
+							return null;
+						}
+					}
+					return null;
+				})
+
+				const resolvedValues = await Promise.all(paramArray);
+				const paramValues = resolvedValues.filter(value => value !== null) as string[];
+
+				let currentNotebook = this.notebook_tracker.currentWidget?.content;
+				if (!currentNotebook) {
+					return;
+				}
+				NotebookActions.insertBelow(currentNotebook);
+				const activeCell = currentNotebook.activeCell;
+
+				if (activeCell) {
+					activeCell.model.sharedModel.setSource(`# Code generated using Elephant-Interface\n${selected_elephant_module}.${selected_elephant_function}(${[...paramValues]})`);
+				}
+			}
 
 
-		menueBox.appendChild(inputElephantServerAddress);
-		menueBox.appendChild(buttonPingServer);
-    	menueBox.appendChild(buttonLoadFunctions);
+		}
+
+		// Cobble together the Frontend
+		menueBox.appendChild(radioContainer);
+		menueBox.appendChild(buttonLoadFunctions);
 		menueBox.appendChild(dropdownContainer);
-		// menueBox.appendChild(dropdownElephantModule);
-		// menueBox.appendChild(dropdownElephantFunction);
-		menueBox.appendChild(treeContainer.node);
-		menueBox.appendChild(inputKwargs);
-		menueBox.appendChild(buttonRunAnalysis);
+		menueBox.appendChild(localDiv);
+		menueBox.appendChild(remoteDiv);
 		menueBox.appendChild(resultDiv);
-		menueBox.appendChild(closeButton);
 		menueBox.appendChild(buttonGenerateCode);
-		menue.appendChild(menueBox)
+		menue.appendChild(menueBox);
 
-		document.body.appendChild(menue);
 
-	// public createElephantUI(session: ISessionContext) {
-		// console.log("Creating Elephant UI...");
+		remoteDiv.appendChild(inputElephantServerAddress);
+		remoteDiv.appendChild(buttonPingServer);
+		remoteDiv.appendChild(fetchParamsButton);
+		remoteDiv.appendChild(paramContainer);
+		remoteDiv.appendChild(buttonRunAnalysisRemote);
+
+		localDiv.appendChild(inputKwargs);
+		localDiv.appendChild(buttonRunAnalysisLocal);
+
+		toggleRadioButtons();
+
+		const menuWidget = new Widget();
+		menuWidget.node.appendChild(menueBox);
+		elephant_widget.addWidget(menuWidget);
+	}
+
+
+	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext) {
+		/**
+		  * Creates an OutputArea inside 'tab', in which the output of executed pythonCode will displayed
+		  *
+		  * Parameters:
+		  * rendermime: Required for rendering the output
+		  * tab: The tab the OutputArea is created in
+		  * cls: HTML/DOM classes the OutputArea belongs to; used for styling with CSS and possibly DOM manipulation
+				  later on
+		  * id: HTML/DOM id of the OutputArea; used for styling with CSS and possibly DOM manipulation later on
+		  */
+		// Create an OutputArea
+		// OutputAreas are used to display stuff, just like the outputs below every cell
+		let model = new OutputAreaModel({ trusted: true });
+		let outarea = new OutputArea({ rendermime, model });
+		// Add OutputArea to the specified tab
+		tab.addWidget(outarea);
+		// Set HTML/DOM id and classes
+		outarea.id = id;
+		for (let currCls of cls) {
+			outarea.addClass(currCls);
+		}
+	}
+
+	//@ts-ignore
+	public registerComm(name: string, context: SessionContext) {
+		/**
+		  * Registers a communication channel that allows sending messages
+		  * back and forth between the TypeScript code and the IPython session, i.e., the Python kernel
+		  * name: Name of the channel
+		  * session: IPython session (Python kernel) to communicate with
+		  */
+		//TODO: Remove hardcoded stuff
+		console.log("Communication channel created")
+		// Registers something like a callback that acts when the kernel sends a message
+
+		if (context.session?.kernel == null) {
+			return;
+		}
+
+		context.session.kernel.registerCommTarget('test2', (comm: any, commMsg: any): any => {
+			// Only react if the message is sent to the channel/target named 'test2'
+			if (commMsg.content.target_name !== 'test2') {
+				return;
+			}
+			// React to the message
+			// Callback that deals with the message
+			comm.onMsg = (msg: any) => {
+				var c = msg.buffers[0].buffer;
+				c;
+				console.log("Message received");
+				//console.log(c[0]);
+				//console.log("MEEESSSAAAGGEEE ", msg.buffers[0]);
+				//console.log(new Float32Array(msg.buffers[0].buffer));
+			};
+			// Callback that reacts to closing of the communication channel (possibly by the Python kernel)
+			comm.onClose = (msg: any) => { };
+		});
+	} // end of registerComm()
+
+	//@ts-ignore: May be unused
+	async public executeCode(code: string, context: ISessionContext, callback?: any) {
+		/**
+		  * Executes Python code in the specified IPython session and executes a callback
+		  * processing the output after finishing the execution
 		
-		// let code: string | null = null;
-		// Dropdown-Menue für Elephant-Funktionen
-		// const dropdownElephantFunction = document.createElement("select");
-		// dropdownElephantFunction.id = "elephant-function-select";
-		// ["instantaneous_rate", "time_histogram", "correlation_coefficient"].forEach(fn => {
-		// 	const option = document.createElement("option");
-		// 	option.value = fn;
-		// 	option.textContent = fn;
-		// 	dropdownElephantFunction.appendChild(option);
-		// });
-	
-		// // Eingabe fuer KeyWord Args
-		// const inputKwargs = document.createElement("input");
-		// inputKwargs.type ="text";
-		// inputKwargs.placeholder = "kwargs fuer Elephant-Funktion";
-		// inputKwargs.style.marginLeft = "10px";
-	    // inputKwargs.id = "elephant-kwargs-input";
+		  * Parameters:
+		  * code: Code to be executed, provided as a string; possibly from kernelcode.ts
+		  * session: The IPython session (i. e., Python kernel) that will execute the code
+		  */
+		// Create a request that will be sent to the kernel
+		const kernel = context.session?.kernel;
+		if (!kernel) {
+			console.error("Kernel not available for execution.");
+			return;
+		}
 
-		// // Button zum Starten der Analyse
-		// const buttonRunAnalysis = document.createElement("button");
-		// buttonRunAnalysis.textContent = "Elephant-Analyse starten";
-		// buttonRunAnalysis.style.marginLeft = "10px";
-	
-		// buttonRunAnalysis.onclick = async () => {
-		// 	const functionName = dropdownElephantFunction.value;
+		let request: KernelMessage.IExecuteRequestMsg['content'] = {
+			code: code,
+			stop_on_error: false,
+			store_history: false,
+		};
+		// Request execution, stored as a future
+		let future = kernel.requestExecute(request);
+		// In case a callback function was provided, execute it upon completion of the request
+		if (callback) {
+			// When output is published from the request's future
+			future.onIOPub = ((msg: KernelMessage.IIOPubMessage) => {
+				// Execute callback
+				console.log(msg);
+				callback(msg);
+			});
+		}
+		await future.done;
+	} // end of executeCode()
 
-		// 	const kwargsString = inputKwargs.value;
-		// 	console.log("KWARGS", kwargsString)
+	public async pingElephantServer(serverUrl: string): Promise<boolean> {
+		try {
+			const response = await fetch(`${serverUrl}`, { method: "GET" });
+			console.log(response.ok);
+			return true;
+		} catch (error) {
+			console.error(`Error while pinging the server ${serverUrl}!:`, error);
+			return false;
+		}
+	}
 
-		// 	console.log(`Button Clicked - Starte Analyse: ${functionName} mit Kwargs: ${kwargsString}`);
-	
-		// 	if (!session?.session || !session.session.kernel) {
-		// 		console.error("Kernel nicht gefeunden.");
-		// 		return;
-		// 	}
-	
-		// 	try {
-		// 		await session.ready;
-		// 		console.log("Kernel ist bereit");
+	// Load Elephant Modules either locally or remotely
+	// TODO: change function as many things are passed and depending on use case
+	public async loadElephantModules(elephant_modules_dropdown: HTMLSelectElement, elephant_functions_dropdown: HTMLSelectElement, inputKwargs: HTMLInputElement, serverUrl: string, remote: Boolean = false) {
+		console.log("Loading Elephant modules");
+		// load elephant modules from remote server
+		if (remote) {
+			try {
+				let response = await fetch(`${serverUrl}/get_elephant_modules`);
+				if (!response.ok) {
+					throw new Error(`Error: Server responded with: ${response.status}`);
+				}
+
+				let server_response: string[] = await response.json();
+				console.log(server_response)
+				this.createElephantDropdowns(elephant_modules_dropdown, server_response);
+
+				elephant_modules_dropdown.onchange = async () => {
+					response = await fetch(`${serverUrl}/get_elephant_functions/${elephant_modules_dropdown.value}`);
+					server_response = await response.json()
+					console.log(server_response)
+					this.updateFunctionDropdown(elephant_functions_dropdown, server_response)
+				}
+
+			} catch (error) {
+				console.error("Error getting elephant functions:", error);
+				elephant_modules_dropdown.innerHTML = "<option>error on loading</option>";
+			}
+			// load elephant modules from local elephant installation
+		} else {
+			var newPanel = this.notebook_tracker.currentWidget as NotebookPanel;
+			var session: ISessionContext = newPanel.sessionContext as unknown as ISessionContext;
+
+			if (!session?.session || !session.session.kernel) {
+				console.error("Kernel not found.");
+				return;
+			}
+
+			// get elephant modules
+			let code = `
+			import sys
+			modules = [
+			name
+			for name in sys.modules
+			if name == "elephant" or name.startswith("elephant.")
+			]
+			print(modules)
+			`
+			let future = session.session.kernel.requestExecute({ code });
+			let msg_content: string
+			future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+				if (msg.header.msg_type === "stream" && "text" in msg.content)
+					msg_content = (msg as IJupyterMessage).content.text;
+				let validJsonString = msg_content.replace(/'/g, '"');
+				let stringArray: string[] = JSON.parse(validJsonString);
+				this.createElephantDropdowns(elephant_modules_dropdown, stringArray);
+			}
+			await future.done;
+
+
+			elephant_modules_dropdown.onchange = async () => {
+				// get elephant functions
+				code = `
+				import sys
+				import inspect
+
+				module = sys.modules.get("${elephant_modules_dropdown.value}")
+				if module is None:
+					raise ValueError("Elephant-Module not found")
+
+				function_names = [
+					name
+					for name, obj in inspect.getmembers(module, inspect.isfunction)
+					if not name.startswith("_")
+				]
+				print(function_names)
 				
-		// 		let code = `
-		// 		from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
-		// 		selected_ids = get_selected_neo_ids(jupyphant_entity)
-		// 		kwargs = dict(item.split("=") for item in "${kwargsString}".split(", "))
-		// 		apply_elephant_analysis(jupyphant_entity, "${functionName}", selected_ids, **kwargs)
-		// 		`;
+			`
+				if (!session?.session || !session.session.kernel) {
+					console.error("Kernel not found.");
+					return;
+				}
+				future = session.session.kernel.requestExecute({ code });
+				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+					if (msg.header.msg_type === "stream" && "text" in msg.content)
+						msg_content = (msg as IJupyterMessage).content.text;
+					let validJsonString = msg_content.replace(/'/g, '"');
+					let stringArray: string[] = JSON.parse(validJsonString);
+					console.log("FUNCTIONS: " + stringArray);
+					this.updateFunctionDropdown(elephant_functions_dropdown, stringArray);
+				}
+				await future.done;
+			};
 
-		// 		if (kwargsString.trim() === "") {
-		// 		code = `
-		// 			from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
-		// 			selected_ids = get_selected_neo_ids(jupyphant_entity)
-		// 			kwargs = {}
-		// 			apply_elephant_analysis(jupyphant_entity, "${functionName}", selected_ids, **kwargs)
-		// 		`;
-		// 		}
 
-				
-		// 		console.log("Sende Anfrage an Kernel...");
-		// 		const future = session.session.kernel.requestExecute({ code });
-	
-		// 		future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-		// 			console.log("Kernel-Antwort erhalten:", msg);
-		// 		};		
-		// 	} catch (error) {
-		// 		console.error("Fehler beim Senden der Anfrage an den Kernel:", error);
-		// 	}
-		// };
-		
-		// // Button zur Codegenerierung
-		// const buttonGenerateCode = document.createElement("button");
-		// buttonGenerateCode.textContent = "Elephant-Code generieren";
-		// buttonGenerateCode.style.marginLeft = "10px";
-		
-		// buttonGenerateCode.onclick = async () => {
-		// 	if (code!==null) {
-		// 		return;
-		// 	}
-		// 	console.log(code);
-		// };
+			elephant_functions_dropdown.onchange = async () => {
+				console.log(`${elephant_modules_dropdown.value}.${elephant_functions_dropdown.value}`);
 
-		// const toolbar = document.getElementById("jp-top-panel");
-		// if (toolbar) {
-		// 	toolbar.appendChild(dropdownElephantFunction);
-		// 	toolbar.appendChild(inputKwargs)
-		// 	toolbar.appendChild(buttonRunAnalysis);
-		// 	toolbar.appendChild(buttonGenerateCode);
-		// } else {
-		// 	console.error("Toolbar nicht gefunden!");
-		// }
+				let code = `
+				import inspect
+				import elephant
+				sig = inspect.signature(${elephant_modules_dropdown.value}.${elephant_functions_dropdown.value})
+				print([(name) for name, param in sig.parameters.items()])
+				`
+
+				if (!session?.session || !session.session.kernel) {
+					console.error("Kernel not found.");
+					return;
+				}
+				future = session.session.kernel.requestExecute({ code });
+				let msgcontent: string
+				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+					if (msg.header.msg_type === "stream" && "text" in msg.content)
+						msgcontent = (msg as IJupyterMessage).content.text;
+					console.log("PARAMS: " + msgcontent)
+					inputKwargs.placeholder = msgcontent;
+				}
+				await future.done;
+			};
+
+
+
+		}
 
 	}
+
+	// Helper function to create Module Dropdown
+	public createElephantDropdowns(elephant_modules_dropdown: HTMLSelectElement, elephantModules: string[]) {
+		console.log("Creating Dropdowns for modules & functions...");
+
+		elephant_modules_dropdown.id = "elephant-module-select";
+		elephant_modules_dropdown.style.width = "100%";
+		elephant_modules_dropdown.innerHTML = "<option>Choose a module...</option>";
+
+		Object.values(elephantModules).forEach((moduleName) => {
+			const option = document.createElement("option");
+			option.value = moduleName;
+			option.textContent = moduleName;
+			elephant_modules_dropdown.appendChild(option);
+		});
+	}
+
+	// Function used in EventListener to update Functions according to module
+	public updateFunctionDropdown(dropdown: HTMLSelectElement, elephant_functions: string[]) {
+		dropdown.id = "elephant-function-select";
+		dropdown.style.width = "100%";
+		dropdown.innerHTML = "<option>Choose a function...</option>";
+		console.log(`Loading functions from module: ${dropdown.value}`);
+
+		dropdown.innerHTML = "<option>Choose a function...</option>";
+
+		Object.values(elephant_functions).forEach((funcName) => {
+			const option = document.createElement("option");
+			option.value = funcName;
+			option.textContent = funcName;
+			dropdown.appendChild(option);
+		});
+	}
+
 }; // end of JupyphantWidget class
-
-
-
 
 /*
 * Activate the JupyphantWidget extension
 */
 function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-					render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer) {
+	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer) {
 	/**
 	 * Performs the initialization of the extension
 	 * Parameters:
@@ -928,7 +1291,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	jupy_ext.createCommand(command);
 
 	// Restore from corresponding namespace
-    restorer.restore(widget_tracker, {
+	restorer.restore(widget_tracker, {
 		command,
 		//args: () => JSONExt.emptyObject,
 		name: () => 'jupyphant_namespace'

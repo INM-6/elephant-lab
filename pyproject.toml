@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.3.1", "jupyterlab>=3.4.7,<4.0.0", "hatch-nodejs-version"]
+requires = ["hatchling>=1.3.1", "jupyterlab>=4.0.0,<4.4.9", "hatch-nodejs-version"]
 build-backend = "hatchling.build"
 
 [project]
@@ -22,6 +22,28 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
+"ipytree",
+"ipympl",
+"joblib",
+"ipywidgets",
+"jsonschema",
+"jupyter-packaging",
+"jupyter-client",
+"jupyter-core",
+"jupyter-server",
+"jupyterlab",
+"jupyterlab-pygments",
+"jupyterlab-server",
+"jupyterlab-widgets",
+"matplotlib",
+"nodejs",
+"numpy",
+"pip",
+"neo",
+"elephant",
+"viziphant",
+"quantities",
+"traitlets"
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 
@@ -69,7 +91,7 @@ npm = ["jlpm"]
 [tool.hatch.build.hooks.jupyter-builder.editable-build-kwargs]
 build_cmd = "install:extension"
 npm = ["jlpm"]
-source_dir = "src"
+source_dir = "."
 build_dir = "jupyphant/labextension"
 
 [tool.jupyter-releaser.options]
