@@ -219,7 +219,7 @@ class Jupyphant:
                     attr_value_list = getattr(obj, attr_name)
                     if attr_value_list is not None and len(attr_value_list) > 0:
                         attr_value_hash = joblib.hash(attr_value_list, hash_name='sha1')
-                        
+                        self.map_neo_obj_hash_to_neo_obj[attr_value_hash] = attr_value_list                
                         attr_node = self.Node(f"{attr_name.capitalize()} [{len(attr_value_list)}]::{attr_value_hash}")
                         attr_node.icon = 'folder' 
                         attr_node.metadata = {"data-neo-object": "true", "container-for": attr_name}
@@ -547,6 +547,20 @@ class Jupyphant:
             pp.text(f"{neo_obj.__class__.__name__} with the type occurrence frequencies:\n")
             for key, value in type_counter.items():
                 pp.text(f"type: {key} --> #occ: {value}\n")
+            pp.text("\n\n")
+        
+        elif neo_obj.__class__.__name__ == 'ObjectList':
+            class_name = neo_obj.__class__.__name__
+            
+            if len(neo_obj) > 0:
+                item_type = neo_obj[0].__class__.__name__
+                pp.text(f"{class_name} containing {len(neo_obj)} {item_type} object(s)")
+            else:
+                pp.text(f"{class_name} (empty)")
+            pp.text("\n\n")
+
+        elif isinstance(neo_obj, self.BaseNeo):
+            pp.text(str(neo_obj))
             pp.text("\n\n")
 
         # any other neo object will be represented with their own / inherited '_repr_pretty_' method
