@@ -7,7 +7,7 @@ A JupyterLab extension for interactive exploration, analysis and visualization o
 
 ## Requirements
 
-- JupyterLab >= 3.0
+- JupyterLab >= 4.0
 
 ## User Installation
 **Note** jupyphant is yet not published on pypi, so please use the development install described below.
@@ -31,25 +31,28 @@ pip uninstall jupyphant
 
 ### Development install
 
-Note: You will need NodeJS to build the extension package.
+Note: **You will need NodeJS to build the extension package.**
+**Please follow the official installation guide https://nodejs.org/en/download**
 
 The `jlpm` command is JupyterLab's pinned version of
 [yarn](https://yarnpkg.com/) that is installed with JupyterLab. You may use
 `yarn` or `npm` in lieu of `jlpm` below.
 
 ```bash
+
+# Make sure NodeJS is installed. You can check your version with node -v
+
 # 1. Clone the repo to your local environment, e.g. with
 git clone git@github.com:INM-6/jupyphant.git
 
 # 2. Change directory to the jupyphant directory
 cd jupyphant
 
-# 3. Create virtual environment from the file environment.yml with
-# (change name and prefix in the .yml as you like)
-conda env create -f environment.yml 
+# 3. Create virtual environment with your preferred virtual environment
+python3 -m venv .venv
 
 # 4. Activate the newly created environment, e.g. with
-conda activate Jupyphant
+source .venv/bin/activate
 
 # 5. Install package in development mode
 pip install -e .
