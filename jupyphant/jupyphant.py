@@ -237,6 +237,7 @@ class Jupyphant:
             
             for i, child_obj in enumerate(obj):
                 child_obj_hash = joblib.hash(child_obj, hash_name='sha1')
+                self.map_neo_obj_hash_to_neo_obj[child_obj_hash] = child_obj
                 
                 class_name = child_obj.__class__.__name__
                 if class_name not in NEO_ABBREVIATIONS:
@@ -252,6 +253,9 @@ class Jupyphant:
                 child_node.metadata = {"data-neo-object": "true"}
                 child_node.icon = NEO_ABBREVIATIONS[class_name]['icon']
                 child_node.opened = False
+                child_node.open_icon_style = 'success'
+                child_node.close_icon_style = 'danger'
+                child_node.data = {"neo_id": id(obj), "neo_type": type(obj).__name__}
                 self.map_ipytree_node_id_to_neo_obj_hash[child_node._id] = child_obj_hash
                 self._add_sub_nodes(child_node, child_obj)
                 parent.add_node(child_node)
