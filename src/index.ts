@@ -363,14 +363,14 @@ class JupyphantExtension {
 		menue.style.minWidth = "302px";
 		menue.style.maxWidth = "800px";
 		menue.style.height = "100%";
-		menue.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+		menue.style.backgroundColor = "rgba(0, 0, 0, 0)";
 		menue.style.display = "flex";
 		menue.style.alignItems = "center";
 		menue.style.justifyContent = "center";
 		menue.style.zIndex = "1000";
 
 		const menueBox = document.createElement("div");
-		menueBox.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+		menueBox.style.backgroundColor = "rgba(0, 0, 0, 0)";
 		menueBox.style.padding = "20px";
 		menueBox.style.borderRadius = "8px";
 		menueBox.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0)";
@@ -455,38 +455,6 @@ class JupyphantExtension {
 		dropdownContainer.appendChild(dropdownElephantModule);
 		dropdownContainer.appendChild(dropdownElephantFunction);
 
-		// Input of Keywords Arguments used for local analysis
-		// TODO: remove this and use pydantic implementation
-		const inputKwargs = document.createElement("input");
-		inputKwargs.type = "text";
-		inputKwargs.placeholder = "Keyword arguments";
-		inputKwargs.style.display = "block";
-		inputKwargs.style.width = "100%";
-		inputKwargs.style.marginTop = "10px";
-		inputKwargs.style.padding = "5px";
-		inputKwargs.addEventListener("dragover", (event) => {
-			event.preventDefault();
-		});
-		inputKwargs.addEventListener("drop", async () => {
-			if (!session?.session || !session.session.kernel) {
-				console.error("Kernel not found.");
-				return;
-			}
-			let code = `
-				from jupyphant.kernelcode import get_selected_neo_ids
-				selected_ids = get_selected_neo_ids(jupyphant_entity)[0]
-				print(selected_ids)`;
-			const future = session.session.kernel.requestExecute({ code });
-			let msg_content: string
-			future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-				if (msg.header.msg_type === "stream" && "text" in msg.content)
-					msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
-				console.log(msg_content);
-				inputKwargs.value = msg_content;
-			}
-			await future.done;
-		});
-
 		// Button for Code generation in a new Jupyter Cell
 		const buttonGenerateCode = document.createElement("button");
 		buttonGenerateCode.textContent = "Generate Code";
@@ -511,7 +479,7 @@ class JupyphantExtension {
 		buttonLoadFunctions.textContent = "Fetch elephant functions";
 		buttonLoadFunctions.style.width = "100%";
 		buttonLoadFunctions.onclick = async () => {
-			await this.loadElephantModules(dropdownElephantModule, dropdownElephantFunction, inputKwargs, inputElephantServerAddress.value, remoteRadioButton.checked);
+			await this.loadElephantModules(dropdownElephantModule, dropdownElephantFunction, paramContainer, inputElephantServerAddress.value, remoteRadioButton.checked);
 
 			if (localRadioButton.checked) {
 				let code = `
@@ -692,67 +660,96 @@ class JupyphantExtension {
 		buttonRunAnalysisLocal.style.width = "100%";
 
 		buttonRunAnalysisLocal.onclick = async () => {
+			let widgets_iter = [...this.widget.widgets()];
+			let output_content = <DockPanel>widgets_iter[2];
+			let output_content_iter = [...output_content.widgets()];
+			let output_content_text = <Panel>output_content_iter[2];
+			let outarea_content_text = <OutputArea>output_content_text.widgets[0];
+
 			const functionName = dropdownElephantFunction.value;
 			const moduleName = dropdownElephantModule.value;
 
-			const kwargsString = inputKwargs.value;
-			console.log("KWARGS", kwargsString)
+			let params: { [key: string]: any } = {};
 
-			console.log(`Starting (local) Analysis: ${functionName} with kwargs: ${kwargsString}`);
-
-			if (!session?.session || !session.session.kernel) {
-				console.error("Kernel not found.");
-				return;
-			}
-
-			try {
-				await session.ready;
-				console.log("Kernel is ready!");
-
-				// Code logic to execute local Elephant function
-				// TODO: change to use pydantic and not kwargs
-				let code = `
-					from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
-					import elephant
-					selected_ids = get_selected_neo_ids(jupyphant_entity)
-					kwargs = dict(item.split("=") for item in "${kwargsString}".split(", "))
-					apply_elephant_analysis(jupyphant_entity, "${moduleName}", "${functionName}", selected_ids, **kwargs)
-					`;
-
-				if (kwargsString.trim() === "") {
-					code = `
-						from jupyphant.kernelcode import get_selected_neo_ids, apply_elephant_analysis
-						import elephant
-						selected_ids = get_selected_neo_ids(jupyphant_entity)
-						kwargs = {}
-						apply_elephant_analysis(jupyphant_entity, "${moduleName}", "${functionName}", selected_ids, **kwargs)
-					`;
+			paramContainer.querySelectorAll("input, select").forEach((input) => {
+				if (input instanceof HTMLInputElement || input instanceof HTMLSelectElement) {
+					console.log(`input: ${input}`)
+					console.log(`${input.id}: ${input.value}`);
 				}
+				const paramName = input.id.replace("param-", "");
+
+				let value: any = (input as HTMLInputElement).value;
+
+				if (!isNaN(value) && value.trim() !== "") {
+					value = Number(value);
+				} else if (value.toLowerCase() === "true") {
+					value = true;
+				} else if (value.toLowerCase() === "false") {
+					value = false;
+				}
+				params[paramName] = value;
+			});
+
+			// Extract input parameters
+			const entriesArray = Object.entries(params)
+			const pythonListString = `[${Object.values(entriesArray).map(v => `'${v}'`).join(', ')}]`;
+
+			let code = `
+			import requests
+			import pickle
+			import neo
+			import types
+			import json
+
+			from jupyphant.kernelcode import get_neo_to_hash_dict
+			
+			def parse_list_to_dict(data_list):
+				result_dict = {}
+				for item_string in data_list:
+					parts = item_string.split(',', 1)
+								
+					key = parts[0].strip()
+									
+					if len(parts) > 1 and parts[1].strip():
+						value = parts[1].strip()
+					else:
+						value = ""			
+					result_dict[key] = value
+					
+				return result_dict
+
+			def get_notebook_variable(allowed_types=None):
+				g = globals()
+				variables = {}
+
+				for name, val in g.items():
+					if allowed_types is not None and not isinstance(val, allowed_types):
+						continue
+					if isinstance(val, types.ModuleType):
+						continue
+					variables[name] = val
+				return variables
 
 
-				console.log("Sende Anfrage an Kernel...");
-				const future = session.session.kernel.requestExecute({ code });
+			inputObjects = parse_list_to_dict(${pythonListString})
+			neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
+			variables_in_notebook = get_notebook_variable()
 
-				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-					console.log("Kernel-Antwort erhalten:", msg);
+			for key, value in inputObjects.items():
+				if value in neo_hash_obj_dict:
+					res = neo_hash_obj_dict[value]
+					inputObjects[key] = res
+				elif value in variables_in_notebook.keys():
+					res = variables_in_notebook.get(value)
+					inputObjects[key] = res
+				else: inputObjects[key] = None
+			try:
+				print(f"Result: {${moduleName}.${functionName}(**inputObjects)}")
 
-					if (msg.header.msg_type === "stream" && "text" in msg.content) {
-						resultDiv.innerHTML = `<br><b style="color: green;">Ergebnis:</b> ${msg.content["text"]}`;
-					}
-					else if (msg.header.msg_type === "error") {
-						resultDiv.innerHTML = `<br><b style="color: red;">Fehler: ${msg.content}</b>`;
-					}
-					else if (msg.header.msg_type === "execute_result" && "data" in msg.content) {
-						resultDiv.innerHTML = `<br><b style="color: green;">Result:</b> ${JSON.stringify(msg.content["data"])}`;
-					}
-					else if (msg.header.msg_type === "display_data" && "data" in msg.content) {
-						resultDiv.innerHTML = `<br><b style="color: blue;"></b> ${JSON.stringify(msg.content["data"])}`;
-					}
-				};
-				await future.done;
-			} catch (error) {
-				console.error("Fehler beim Senden der Anfrage an den Kernel:", error);
-			}
+			except requests.exceptions.RequestException as e:
+				print(f"Ein Verbindungsfehler ist aufgetreten: {e}")
+			`
+			await OutputArea.execute(code, outarea_content_text, session);
 		}
 
 
@@ -772,118 +769,8 @@ class JupyphantExtension {
 			const functionName = dropdownElephantFunction.value;
 			const response = await fetch(`${inputElephantServerAddress.value}/get_model_schema/${moduleName}.${functionName}`)
 			const data = await response.json();
-			if (paramContainer.children.length > 0) {
-				paramContainer.innerHTML = "";
-			}
 			// create input fields with default parameter and description
-			for (const [key, value] of Object.entries(data.properties as Record<string, any>)) {
-				const row = document.createElement("div");
-				row.className = "form-row";
-
-				console.log("Key:", key, "Value:", value, "type:", value.type);
-
-				const label = document.createElement("label");
-				// TODO: Separation of concerns -> style into css
-				label.innerHTML = `<br><span style="color: LightSkyBlue; font-weight: bold;">${value.title || key}</span><br>
-				<span style="color: LightSlateGrey;">\n${value.description || ""}</span>`;
-
-				let input: HTMLInputElement | HTMLSelectElement;
-
-				// different input fields for different types of data
-				// TODO: input default values from pydantic models
-				if (value.type === "integer" || value.type === "number") {
-					input = document.createElement("input");
-					input.type = "range";
-					input.min = "0";
-					input.max = "100";
-					input.step = "1";
-					input.value = value.default ?? "50";
-
-				} else if (value.type === "string") {
-					input = document.createElement("input");
-					input.type = "text";
-					input.placeholder = value.default ? `default: ${value.default}` : "";
-					input.addEventListener("dragover", (event) => {
-						event.preventDefault();
-					});
-					input.addEventListener("drop", async (event) => {
-						console.log("drop");
-						if (!session?.session || !session.session.kernel) {
-							console.error("Kernel not found.");
-							return;
-						}
-						let code = `
-							from jupyphant.kernelcode import get_selected_neo_ids
-							selected_ids = get_selected_neo_ids(jupyphant_entity)[0]
-							`;
-						const future = session.session.kernel.requestExecute({ code });
-						let msg_content: string
-						future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-							if (msg.header.msg_type === "stream" && "text" in msg.content)
-								msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
-							console.log(msg_content);
-							input.value = msg_content;
-						}
-						await future.done;
-					});
-
-				} else if (value.type === "boolean") {
-					input = document.createElement("select");
-					const trueOption = document.createElement("option");
-					trueOption.value = "true";
-					trueOption.textContent = "True";
-					const falseOption = document.createElement("option");
-					falseOption.value = "false";
-					falseOption.textContent = "False";
-					input.appendChild(trueOption);
-					input.appendChild(falseOption);
-
-				} else {
-					input = document.createElement("input");
-					input.type = "text";
-					console.log("value.default: " + value.default)
-					input.placeholder = value.default ? `default: ${value.default}` : "";
-					input.addEventListener("dragover", (event) => {
-						event.preventDefault();
-					});
-					input.addEventListener("drop", async (event) => {
-						console.log("drop");
-						if (!session?.session || !session.session.kernel) {
-							console.error("Kernel not found.");
-							return;
-						}
-						let code = `
-							from jupyphant.kernelcode import get_selected_neo_ids
-							selected_ids = get_selected_neo_ids(jupyphant_entity)[0]
-							print(selected_ids)`;
-						const future = session.session.kernel.requestExecute({ code });
-						let msg_content: string
-						future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-							if (msg.header.msg_type === "stream" && "text" in msg.content)
-								msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
-							console.log(msg_content);
-							input.value = msg_content;
-						}
-						await future.done;
-					});
-				}
-
-				for (const entry of Object.entries(data.properties[key])) {
-					if (entry[0] !== "description" && entry[0] !== "default" && entry[0] !== "title") {
-						if (input instanceof HTMLInputElement) {
-							input.placeholder += (entry[0] ? ` ${entry[0]}: ${entry[1]}` : "");
-						} else if (input instanceof HTMLSelectElement) {
-							input.title = input.title + (value.default ?? "") + (entry[0] ? ` ${entry[0]}: ${entry[1]}` : "");
-						}
-					}
-				}
-
-				input.id = `param-${key}`;
-				input.className = "form-row-input";
-				row.appendChild(label);
-				row.appendChild(input);
-				paramContainer.appendChild(row);
-			}
+			this.createInputFields(data, paramContainer, session);
 
 		};
 
@@ -977,8 +864,8 @@ class JupyphantExtension {
 		remoteDiv.appendChild(paramContainer);
 		remoteDiv.appendChild(buttonRunAnalysisRemote);
 
-		localDiv.appendChild(inputKwargs);
 		localDiv.appendChild(buttonRunAnalysisLocal);
+		localDiv.appendChild(paramContainer);
 
 		toggleRadioButtons();
 
@@ -1097,7 +984,7 @@ class JupyphantExtension {
 
 	// Load Elephant Modules either locally or remotely
 	// TODO: change function as many things are passed and depending on use case
-	public async loadElephantModules(elephant_modules_dropdown: HTMLSelectElement, elephant_functions_dropdown: HTMLSelectElement, inputKwargs: HTMLInputElement, serverUrl: string, remote: Boolean = false) {
+	public async loadElephantModules(elephant_modules_dropdown: HTMLSelectElement, elephant_functions_dropdown: HTMLSelectElement, paramContainer: HTMLDivElement, serverUrl: string, remote: Boolean = false) {
 		console.log("Loading Elephant modules");
 		// load elephant modules from remote server
 		if (remote) {
@@ -1192,32 +1079,149 @@ class JupyphantExtension {
 			elephant_functions_dropdown.onchange = async () => {
 				console.log(`${elephant_modules_dropdown.value}.${elephant_functions_dropdown.value}`);
 
+				let function_name_to_pydantic_name = elephant_functions_dropdown.value.split("_").map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+				console.log(`function_name_to_pydantic_name ${function_name_to_pydantic_name}`);
 				let code = `
-				import inspect
-				import elephant
-				sig = inspect.signature(${elephant_modules_dropdown.value}.${elephant_functions_dropdown.value})
-				print([(name) for name, param in sig.parameters.items()])
+				from elephant import models
+				import json
+				print(json.dumps(models.model_${elephant_modules_dropdown.value.replace("elephant.", "")}.Pydantic${function_name_to_pydantic_name}Model.model_json_schema()))
 				`
-
 				if (!session?.session || !session.session.kernel) {
 					console.error("Kernel not found.");
 					return;
 				}
 				future = session.session.kernel.requestExecute({ code });
-				let msgcontent: string
+				let data: unknown;
 				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-					if (msg.header.msg_type === "stream" && "text" in msg.content)
-						msgcontent = (msg as IJupyterMessage).content.text;
-					console.log("PARAMS: " + msgcontent)
-					inputKwargs.placeholder = msgcontent;
+					if (msg.header.msg_type === "stream" && "text" in msg.content) {
+						data = JSON.parse((msg as IJupyterMessage).content.text);
+						console.log("PARAMS: " + data)
+						console.log("PARAMS_type: " + typeof data)
+
+					}
 				}
-				await future.done;
+				await future.done.then(() => {
+					this.createInputFields(data, paramContainer, session)
+				})
 			};
-
-
 
 		}
 
+	}
+
+	public createInputFields(data: any, paramContainer: HTMLDivElement, session: ISessionContext) {
+		if (paramContainer.children.length > 0) {
+			paramContainer.innerHTML = "";
+		}
+		for (const [key, value] of Object.entries(data.properties as Record<string, any>)) {
+			console.log(`KEY: ${key}, VALUE: ${value}`)
+			const row = document.createElement("div");
+			row.className = "form-row";
+
+			console.log("Key:", key, "Value:", value, "type:", value.type);
+
+			const label = document.createElement("label");
+			// TODO: Separation of concerns -> style into css
+			label.innerHTML = `<br><span style="color: LightSkyBlue; font-weight: bold;">${value.title || key}</span><br>
+				<span style="color: LightSlateGrey;">\n${value.description || ""}</span>`;
+
+			let input: HTMLInputElement | HTMLSelectElement;
+
+			// different input fields for different types of data
+			// TODO: input default values from pydantic models
+			if (value.type === "integer" || value.type === "number") {
+				input = document.createElement("input");
+				input.type = "range";
+				input.min = "0";
+				input.max = "100";
+				input.step = "1";
+				input.value = value.default ?? "50";
+
+			} else if (value.type === "string") {
+				input = document.createElement("input");
+				input.type = "text";
+				input.placeholder = value.default ? `default: ${value.default}` : "";
+				input.addEventListener("dragover", (event) => {
+					event.preventDefault();
+				});
+				input.addEventListener("drop", async (event) => {
+					console.log("drop");
+					if (!session?.session || !session.session.kernel) {
+						console.error("Kernel not found.");
+						return;
+					}
+					let code = `
+							from jupyphant.kernelcode import get_selected_neo_ids
+							selected_ids = get_selected_neo_ids(jupyphant_entity)[0]
+							`;
+					const future = session.session.kernel.requestExecute({ code });
+					let msg_content: string
+					future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+						if (msg.header.msg_type === "stream" && "text" in msg.content)
+							msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
+						console.log(msg_content);
+						input.value = msg_content;
+					}
+					await future.done;
+				});
+
+			} else if (value.type === "boolean") {
+				input = document.createElement("select");
+				const trueOption = document.createElement("option");
+				trueOption.value = "true";
+				trueOption.textContent = "True";
+				const falseOption = document.createElement("option");
+				falseOption.value = "false";
+				falseOption.textContent = "False";
+				input.appendChild(trueOption);
+				input.appendChild(falseOption);
+
+			} else {
+				input = document.createElement("input");
+				input.type = "text";
+				console.log("value.default: " + value.default)
+				input.placeholder = value.default ? `default: ${value.default}` : "";
+				input.addEventListener("dragover", (event) => {
+					event.preventDefault();
+				});
+				input.addEventListener("drop", async (event) => {
+					console.log("drop");
+					if (!session?.session || !session.session.kernel) {
+						console.error("Kernel not found.");
+						return;
+					}
+					let code = `
+							from jupyphant.kernelcode import get_selected_neo_ids
+							selected_ids = get_selected_neo_ids(jupyphant_entity)[0]
+							print(selected_ids)`;
+					const future = session.session.kernel.requestExecute({ code });
+					let msg_content: string
+					future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+						if (msg.header.msg_type === "stream" && "text" in msg.content)
+							msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
+						console.log(msg_content);
+						input.value = msg_content;
+					}
+					await future.done;
+				});
+			}
+
+			for (const entry of Object.entries(data.properties[key])) {
+				if (entry[0] !== "description" && entry[0] !== "default" && entry[0] !== "title") {
+					if (input instanceof HTMLInputElement) {
+						input.placeholder += (entry[0] ? ` ${entry[0]}: ${entry[1]}` : "");
+					} else if (input instanceof HTMLSelectElement) {
+						input.title = input.title + (value.default ?? "") + (entry[0] ? ` ${entry[0]}: ${entry[1]}` : "");
+					}
+				}
+			}
+
+			input.id = `param-${key}`;
+			input.className = "form-row-input";
+			row.appendChild(label);
+			row.appendChild(input);
+			paramContainer.appendChild(row);
+		}
 	}
 
 	// Helper function to create Module Dropdown
