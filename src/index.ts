@@ -778,72 +778,91 @@ class JupyphantExtension {
 			let selected_elephant_module = dropdownElephantModule.value;
 			let selected_elephant_function = dropdownElephantFunction.value;
 
-			if (remoteRadioButton.checked) {
-				const paramArray = Array.from(paramContainer.children).map(async child => {
-					let param = child.querySelector('.form-row-input') as HTMLInputElement | HTMLSelectElement;
-					if (param) {
-						try {
-							await session.ready;
-							if (!session?.session || !session.session.kernel) {
-								console.error("Kernel not found.");
-								return null;
-							}
-							console.log(`Param Value: ${param.value.trim()}`);
-							// TODO: hash to object
-							let code = `
-							from jupyphant.kernelcode import get_neo_to_hash_dict
-							from jupyphant.kernelcode import get_selected_neo_ids
-							selected_id = get_selected_neo_ids(jupyphant_entity)
-							neo_dict = get_neo_to_hash_dict(jupyphant_entity)
-							print(neo_dict[selected_id[0]])
-							`;
-							let future = session.session.kernel.requestExecute({ code });
-
-							const outputPromise = new Promise<string | null>((resolve, reject) => {
-								future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-									if (msg.header.msg_type === 'stream' && "text" in msg.content) {
-										const streamMsg = msg as KernelMessage.IStreamMsg;
-										resolve(streamMsg.content.text);
-									} else {
-										console.log(msg);
-									}
-								};
-
-								future.done.then(() => {
-									resolve(null);
-								}).catch(err => {
-									reject(err);
-								});
-							});
-
-							const kernelOutput = await outputPromise;
-
-							console.log(`Kernel output was: ${kernelOutput}`);
-							return kernelOutput ? kernelOutput.trim() : param.value;
-
-						} catch (error) {
-							console.error("Fehler beim Senden der Anfrage an den Kernel:", error);
+			const paramArray = Array.from(paramContainer.children).map(async child => {
+				let param = child.querySelector('.form-row-input') as HTMLInputElement | HTMLSelectElement;
+				if (param.value !== "") {
+					try {
+						await session.ready;
+						if (!session?.session || !session.session.kernel) {
+							console.error("Kernel not found.");
 							return null;
 						}
+						console.log(`Param Value: ${param.value.trim()}`);
+						// TODO: hash to object
+						let code = `
+						import types
+						from jupyphant.kernelcode import get_neo_to_hash_dict
+
+						def get_notebook_variable(allowed_types=None):
+							g = globals()
+							variables = {}
+
+							for name, val in g.items():
+								if allowed_types is not None and not isinstance(val, allowed_types):
+									continue
+								if isinstance(val, types.ModuleType):
+									continue
+								variables[name] = val
+							return variables
+
+						
+						neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
+						variables_in_notebook = get_notebook_variable()
+
+						found_obj = neo_hash_obj_dict["${param.value}"]
+						
+						if found_obj is not None:
+							for key, value in variables_in_notebook.items():
+								if value is found_obj:
+									print(key)
+						`;
+
+						let future = session.session.kernel.requestExecute({ code });
+
+						const outputPromise = new Promise<string | null>((resolve, reject) => {
+							future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+								if (msg.header.msg_type === 'stream' && "text" in msg.content) {
+									const streamMsg = msg as KernelMessage.IStreamMsg;
+									resolve(streamMsg.content.text);
+								} else {
+									console.log(msg);
+								}
+							};
+
+							future.done.then(() => {
+								resolve(null);
+							}).catch(err => {
+								reject(err);
+							});
+						});
+
+						const kernelOutput = await outputPromise;
+						console.log(`Kernel output was: ${kernelOutput}`);
+
+						return kernelOutput ? kernelOutput.trim() : param.value;
+
+					} catch (error) {
+						console.error("Fehler beim Senden der Anfrage an den Kernel:", error);
+						return null;
 					}
-					return null;
-				})
-
-				const resolvedValues = await Promise.all(paramArray);
-				const paramValues = resolvedValues.filter(value => value !== null) as string[];
-
-				let currentNotebook = this.notebook_tracker.currentWidget?.content;
-				if (!currentNotebook) {
-					return;
 				}
-				NotebookActions.insertBelow(currentNotebook);
-				const activeCell = currentNotebook.activeCell;
+				return null;
+			})
+			console.log(selected_elephant_module, selected_elephant_function, paramArray);
 
-				if (activeCell) {
-					activeCell.model.sharedModel.setSource(`# Code generated using Elephant-Interface\n${selected_elephant_module}.${selected_elephant_function}(${[...paramValues]})`);
-				}
+			const resolvedValues = await Promise.all(paramArray);
+			const paramValues = resolvedValues.filter(value => value !== null) as string[];
+
+			let currentNotebook = this.notebook_tracker.currentWidget?.content;
+			if (!currentNotebook) {
+				return;
 			}
+			NotebookActions.insertBelow(currentNotebook);
+			const activeCell = currentNotebook.activeCell;
 
+			if (activeCell) {
+				activeCell.model.sharedModel.setSource(`# Code generated using Elephant-Interface\n${selected_elephant_module}.${selected_elephant_function}(${[...paramValues]})`);
+			}
 
 		}
 
@@ -1110,6 +1129,10 @@ class JupyphantExtension {
 	}
 
 	public createInputFields(data: any, paramContainer: HTMLDivElement, session: ISessionContext) {
+		if (data === undefined) {
+			return null;
+		}
+		// remove existing parameter input fields
 		if (paramContainer.children.length > 0) {
 			paramContainer.innerHTML = "";
 		}
