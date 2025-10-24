@@ -11,23 +11,23 @@ import numpy as np
 
 # neo abbreviations and font-awesome icons
 # TODO: maybe create own icons or use more accurate ones from newer fontawesome version (see suggestions in comments)
-NEO_ABBREVIATIONS = {"Block": {"abbr": "BLK", "icon": "cube"},  # folder-grid
-                     "Segment": {"abbr": "SEG", "icon": "columns"},  # grid-divider
-                     "Group": {"abbr": "GRP", "icon": "object-group"},  # chart-tree-map
-                     "ChannelView": {"abbr": "CHV", "icon": "eye"},
-                     "IrregularlySampledSignal": {"abbr": "ISS", "icon": "wave-square"},
-                     "AnalogSignal": {"abbr": "ASG", "icon": "water"},  # waveform
-                     "SpikeTrain": {"abbr": "SPT", "icon": "braille"},
-                     "SpikeTrainList": {"abbr": "SPL", "icon": "bars"},  # barcode-scan
-                     "Epoch": {"abbr": "EPC", "icon": "hourglass"},  # timeline , ruler-horizontal
-                     "Event": {"abbr": "EVT", "icon": "map-marker"},  # location-dot
-                     "ImageSequence": {"abbr": "ISQ", "icon": "images"},
-                     "RegionOfInterest": {"abbr": "ROI", "icon": "map"},
-                     "CircularRegionOfInterest": {"abbr": "CRI", "icon": "circle"},
-                     "PolygonRegionOfInterest": {"abbr": "PRI", "icon": "draw-polygon"},
-                     "RectangularRegionOfInterest": {"abbr": "RRI", "icon": "square"},
+NEO_ABBREVIATIONS = {"Block": {"abbr": "", "icon": "cube"},  # folder-grid
+                     "Segment": {"abbr": "", "icon": "columns"},  # grid-divider
+                     "Group": {"abbr": "", "icon": "object-group"},  # chart-tree-map
+                     "ChannelView": {"abbr": "", "icon": "eye"},
+                     "IrregularlySampledSignal": {"abbr": "", "icon": "wave-square"},
+                     "AnalogSignal": {"abbr": "", "icon": "water"},  # waveform
+                     "SpikeTrain": {"abbr": "", "icon": "braille"},
+                     "SpikeTrainList": {"abbr": "", "icon": "bars"},  # barcode-scan
+                     "Epoch": {"abbr": "", "icon": "hourglass"},  # timeline , ruler-horizontal
+                     "Event": {"abbr": "", "icon": "map-marker"},  # location-dot
+                     "ImageSequence": {"abbr": "", "icon": "images"},
+                     "RegionOfInterest": {"abbr": "", "icon": "map"},
+                     "CircularRegionOfInterest": {"abbr": "", "icon": "circle"},
+                     "PolygonRegionOfInterest": {"abbr": "", "icon": "draw-polygon"},
+                     "RectangularRegionOfInterest": {"abbr": "", "icon": "square"},
                      # python built-in containters
-                     "list": {"abbr": "PYL", "icon": "list"}
+                     "list": {"abbr": "", "icon": "list"}
                      }
 
 
@@ -100,6 +100,12 @@ class Jupyphant:
         self.map_ipytree_node_id_to_neo_obj_hash = {}
         self.map_neo_obj_hash_to_neo_obj = {}
 
+    def names_for(self, obj):
+        for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
+            if obj is value:
+                return key
+        return ""
+            
     def update(self):
         """  # TODO: rewrite docstring
         Updates the neo persistent neo structure to represent the current neo structure
@@ -167,10 +173,10 @@ class Jupyphant:
                 class_name = neo_obj.__class__.__name__
                 
                 if hasattr(neo_obj, 'name') and neo_obj.name:
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']}::{neo_obj.name}::{hash_neo_obj} Parent")
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {neo_obj.name} :: [{hash_neo_obj[:5]}]")
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 else:
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']}::{hash_neo_obj} Child")
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(neo_obj)} [{hash_neo_obj[:5]}]")
                 node_neo_obj.metadata = {"data-neo-object": "true"}
                 node_neo_obj.icon = NEO_ABBREVIATIONS[class_name]['icon']
                 node_neo_obj.open_icon_style = 'success'
@@ -220,7 +226,7 @@ class Jupyphant:
                     if attr_value_list is not None and len(attr_value_list) > 0:
                         attr_value_hash = joblib.hash(attr_value_list, hash_name='sha1')
                         self.map_neo_obj_hash_to_neo_obj[attr_value_hash] = attr_value_list                
-                        attr_node = self.Node(f"{attr_name.capitalize()} [{len(attr_value_list)}]::{attr_value_hash}")
+                        attr_node = self.Node(f"{attr_name.capitalize()} [{len(attr_value_list)}] :: [{attr_value_hash[:5]}]")
                         attr_node.icon = 'folder' 
                         attr_node.metadata = {"data-neo-object": "true", "container-for": attr_name}
                         attr_node.open_icon_style = 'success'
@@ -246,9 +252,9 @@ class Jupyphant:
                          class_name = 'Block'
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 if hasattr(child_obj, 'name') and child_obj.name:
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']}#{i}::{child_obj.name}::{child_obj_hash}")
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(child_obj)} #{i} :: {child_obj.name}::[{child_obj_hash[:5]}]")
                 else:
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']}#{i}::{child_obj_hash}")
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(child_obj)} #{i} :: [{child_obj_hash[:5]}]")
                 
                 child_node.metadata = {"data-neo-object": "true"}
                 child_node.icon = NEO_ABBREVIATIONS[class_name]['icon']
@@ -459,9 +465,9 @@ class Jupyphant:
         # extract those neo objects that are instances of the given 'neo_class'
         for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
             if isinstance(neo_obj, neo_class):
-                collected_neo_objs[f"{neo_obj.name}::{joblib.hash(neo_obj, hash_name='sha1')}"] = [neo_obj]
+                collected_neo_objs[f"{neo_obj.name} :: {joblib.hash(neo_obj, hash_name='sha1')}"] = [neo_obj]
             elif issubclass(type(neo_obj), self.Container):
-                collected_neo_objs[f"{neo_obj.name}::{joblib.hash(neo_obj, hash_name='sha1')}"] = neo_obj.list_children_by_class(neo_class)
+                collected_neo_objs[f"{neo_obj.name} :: {joblib.hash(neo_obj, hash_name='sha1')}"] = neo_obj.list_children_by_class(neo_class)
             else:
                 pass
         # keep only neo_obj which are selected, i.e. their hash ID was provided via 'selected_ids'
