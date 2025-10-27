@@ -8,6 +8,7 @@ import time
 import joblib
 import matplotlib.pyplot as plt
 import numpy as np
+import neo
 
 # neo abbreviations and font-awesome icons
 # TODO: maybe create own icons or use more accurate ones from newer fontawesome version (see suggestions in comments)
@@ -30,6 +31,8 @@ NEO_ABBREVIATIONS = {"Block": {"abbr": "", "icon": "cube"},  # folder-grid
                      "list": {"abbr": "", "icon": "list"}
                      }
 
+STRING_TO_NEO_OBJ = {"spiketrain": neo.SpikeTrain, "analogsignal": neo.AnalogSignal, "block": neo.Block, "segment": neo.Segment}
+NEO_OBJS_TO_SHOW = [neo.AnalogSignal, neo.SpikeTrain, neo.Block, neo.Segment]
 
 class Jupyphant:
     # All imports are hidden inside the class in order not to pollute the
@@ -105,7 +108,14 @@ class Jupyphant:
             if obj is value:
                 return key
         return ""
-            
+    
+    def show_neo_obj(self, neo_obj_string):
+        neo_obj_type = STRING_TO_NEO_OBJ[neo_obj_string]
+        if neo_obj_type in NEO_OBJS_TO_SHOW:
+            NEO_OBJS_TO_SHOW.remove(neo_obj_type)
+        else:
+            NEO_OBJS_TO_SHOW.append(neo_obj_type)
+        
     def update(self):
         """  # TODO: rewrite docstring
         Updates the neo persistent neo structure to represent the current neo structure
@@ -164,6 +174,8 @@ class Jupyphant:
             # Create one tree node per neo block and name of node is name of block
             nodes = []
             for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
+                if type(neo_obj) not in NEO_OBJS_TO_SHOW:
+                    continue
                 if hasattr(neo_obj, 'block') and neo_obj.block is not None:
                     continue
                 if hasattr(neo_obj, 'segment') and neo_obj.segment is not None:
@@ -223,6 +235,11 @@ class Jupyphant:
             for attr_name in NEO_CONTAINER_ATTRIBUTES:
                 if hasattr(obj, attr_name):
                     attr_value_list = getattr(obj, attr_name)
+                    try:
+                        if STRING_TO_NEO_OBJ[str(attr_name[:-1].lower())] not in NEO_OBJS_TO_SHOW:
+                            continue
+                    except KeyError:
+                        pass
                     if attr_value_list is not None and len(attr_value_list) > 0:
                         attr_value_hash = joblib.hash(attr_value_list, hash_name='sha1')
                         self.map_neo_obj_hash_to_neo_obj[attr_value_hash] = attr_value_list                
@@ -242,6 +259,8 @@ class Jupyphant:
         elif isinstance(obj, (list, self.SpikeTrainList)) or obj.__class__.__name__ == 'ObjectList':
             
             for i, child_obj in enumerate(obj):
+                if type(child_obj) not in NEO_OBJS_TO_SHOW:
+                    continue
                 child_obj_hash = joblib.hash(child_obj, hash_name='sha1')
                 self.map_neo_obj_hash_to_neo_obj[child_obj_hash] = child_obj
                 

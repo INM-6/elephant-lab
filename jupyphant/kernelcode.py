@@ -162,3 +162,5 @@ def get_neo_to_hash_dict(jupyphant_entity):
 def update_tree(jupyphant_entity):
     jupyphant_entity.update_tree()
 
+def toggle_neo_tree_objs(jupyphant_entity, neo_obj):
+    jupyphant_entity.show_neo_obj(neo_obj)

@@ -321,7 +321,7 @@ class JupyphantExtension {
 		elephant_widget.title.label = 'Elephant Analysis';
 		elephant_widget.node.style.cssText = elephant_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		explorer_widget.addWidget(elephant_widget, { mode: 'tab-after', ref: explorer_widget_statistics });
-		this.createElephantElements(session, elephant_widget);
+		this.createElephantElements(session, elephant_widget, tree_widget);
 
 		// OUTPUT-TABS (Plot, Error, Output)
 		let output_tabs = new DockPanel({ tabsMovable: false });
@@ -354,7 +354,16 @@ class JupyphantExtension {
 		this.widget.addWidget(output_tabs, { mode: 'split-bottom' });
 	}
 
-	public createElephantElements(session: ISessionContext, elephant_widget: Panel) {
+	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
+		let code = `
+			from jupyphant.kernelcode import toggle_neo_tree_objs, update_tree
+			toggle_neo_tree_objs(jupyphant_entity, "${checkbox_id}")
+			update_tree(jupyphant_entity)
+			`
+		this.executeCode(code, session);
+	}
+
+	public createElephantElements(session: ISessionContext, elephant_widget: Panel, tree_widget: Panel) {
 
 		// Menue is the main container for the Analysis Windows elements
 		const menue = document.createElement("div");
@@ -376,6 +385,30 @@ class JupyphantExtension {
 		menueBox.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0)";
 		menueBox.style.width = "400px";
 
+		const neo_obj_filter_dict = { "block": "cube", "segment": "columns", "spiketrain": "braille", "analogsignal": "water" }
+
+		const filterContainer = document.createElement('div');
+		filterContainer.textContent = "Filter (click to turn off) ";
+
+		Object.keys(neo_obj_filter_dict).forEach(key => {
+			const iconName = neo_obj_filter_dict[key as keyof typeof neo_obj_filter_dict];
+			const label = document.createElement("label");
+			const icon = document.createElement("i");
+			icon.className = `fa fa-${iconName}`
+			icon.setAttribute("aria-hidden", "true");
+			label.prepend(icon);
+
+			const checkbox = document.createElement("input");
+			checkbox.type = "checkbox";
+			checkbox.id = key;
+			checkbox.checked = true;
+			checkbox.onchange = (() => {
+				this.neo_tree_filter(checkbox.id, session);
+			});
+			filterContainer.appendChild(checkbox);
+			filterContainer.appendChild(label);
+		})
+		tree_widget.node.appendChild(filterContainer);
 
 		// Radio buttons used for remote and local analysis execution
 		const radioContainer = document.createElement("div");
