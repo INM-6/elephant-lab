@@ -13,9 +13,20 @@
 }
 
 .my-jupyphantWidget .p-SplitPanel-handle {
-	background-color: darkgrey;
+  background-color: darkgrey;
 }
 
-.p-SplitPanel-child .my-outarea-class *{
-	overflow: auto;
+.p-SplitPanel-child .my-outarea-class * {
+  overflow: auto;
+}
+
+.sticky-filter {
+
+  position: sticky;
+  top: 0;
+  background-color: var(--jp-layout-color1);
+  z-index: 10;
+
+  padding: 8px;
+  border-bottom: 1px solid var(--jp-border-color1);
 }

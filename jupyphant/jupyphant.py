@@ -186,14 +186,19 @@ class Jupyphant:
                 
                 if hasattr(neo_obj, 'name') and neo_obj.name:
                     node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {neo_obj.name} :: [{hash_neo_obj[:5]}]")
+                    if neo_obj.name.lower() == "block":
+                        if len(neo_obj.segments) > 5:
+                            node_neo_obj.opened = False
+                        else:
+                            node_neo_obj.opened = True
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 else:
                     node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(neo_obj)} [{hash_neo_obj[:5]}]")
+                    node_neo_obj.opened = True
                 node_neo_obj.metadata = {"data-neo-object": "true"}
                 node_neo_obj.icon = NEO_ABBREVIATIONS[class_name]['icon']
                 node_neo_obj.open_icon_style = 'success'
                 node_neo_obj.close_icon_style = 'danger'
-                node_neo_obj.opened = False
                 self._add_sub_nodes(node_neo_obj, neo_obj)
                 nodes.append(node_neo_obj)
                 self.map_ipytree_node_id_to_neo_obj_hash[node_neo_obj._id] = hash_neo_obj
@@ -244,11 +249,14 @@ class Jupyphant:
                         attr_value_hash = joblib.hash(attr_value_list, hash_name='sha1')
                         self.map_neo_obj_hash_to_neo_obj[attr_value_hash] = attr_value_list                
                         attr_node = self.Node(f"{attr_name.capitalize()} [{len(attr_value_list)}] :: [{attr_value_hash[:5]}]")
+                        if len(attr_value_list) > 5:
+                            attr_node.opened = False
+                        else:
+                            attr_node.opened = True
                         attr_node.icon = 'folder' 
                         attr_node.metadata = {"data-neo-object": "true", "container-for": attr_name}
                         attr_node.open_icon_style = 'success'
                         attr_node.close_icon_style = 'danger'
-                        attr_node.opened = False
                         self.map_ipytree_node_id_to_neo_obj_hash[attr_node._id] = attr_value_hash
                         
                         self._add_sub_nodes(attr_node, attr_value_list)
@@ -277,12 +285,15 @@ class Jupyphant:
                 
                 child_node.metadata = {"data-neo-object": "true"}
                 child_node.icon = NEO_ABBREVIATIONS[class_name]['icon']
-                child_node.opened = False
                 child_node.open_icon_style = 'success'
                 child_node.close_icon_style = 'danger'
                 child_node.data = {"neo_id": id(obj), "neo_type": type(obj).__name__}
                 self.map_ipytree_node_id_to_neo_obj_hash[child_node._id] = child_obj_hash
                 self._add_sub_nodes(child_node, child_obj)
+                if len(parent.nodes) > 5:
+                    child_node.opened = False
+                else:
+                    child_node.opened = True
                 parent.add_node(child_node)
         
         elif obj is None or isinstance(obj, (str, int, float, bool, dict)):

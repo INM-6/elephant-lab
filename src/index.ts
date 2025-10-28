@@ -286,12 +286,41 @@ class JupyphantExtension {
 
 	} // end of initializeTab()
 
+	public create_tree_filter(session: ISessionContext, tree_widget: Panel) {
+		const neo_obj_filter_dict = { "block": "cube", "segment": "columns", "spiketrain": "braille", "analogsignal": "water" }
+
+		const filterContainer = document.createElement('div');
+		filterContainer.textContent = "Filter (click to turn off) ";
+
+		Object.keys(neo_obj_filter_dict).forEach(key => {
+			const iconName = neo_obj_filter_dict[key as keyof typeof neo_obj_filter_dict];
+			const label = document.createElement("label");
+			const icon = document.createElement("i");
+			icon.className = `fa fa-${iconName}`
+			icon.setAttribute("aria-hidden", "true");
+			label.prepend(icon);
+
+			const checkbox = document.createElement("input");
+			checkbox.type = "checkbox";
+			checkbox.id = key;
+			checkbox.checked = true;
+			checkbox.onchange = (() => {
+				this.neo_tree_filter(checkbox.id, session);
+			});
+			filterContainer.appendChild(checkbox);
+			filterContainer.appendChild(label);
+		});
+		filterContainer.classList.add('sticky-filter');
+		tree_widget.node.prepend(filterContainer);
+	}
+
 	public createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
 		// NEO TREE 
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
 		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
+		this.create_tree_filter(session, tree_widget);
 
 		// NODE EXPLORER
 		let explorer_widget = new DockPanel({ tabsMovable: false });
@@ -385,30 +414,6 @@ class JupyphantExtension {
 		menueBox.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0)";
 		menueBox.style.width = "400px";
 
-		const neo_obj_filter_dict = { "block": "cube", "segment": "columns", "spiketrain": "braille", "analogsignal": "water" }
-
-		const filterContainer = document.createElement('div');
-		filterContainer.textContent = "Filter (click to turn off) ";
-
-		Object.keys(neo_obj_filter_dict).forEach(key => {
-			const iconName = neo_obj_filter_dict[key as keyof typeof neo_obj_filter_dict];
-			const label = document.createElement("label");
-			const icon = document.createElement("i");
-			icon.className = `fa fa-${iconName}`
-			icon.setAttribute("aria-hidden", "true");
-			label.prepend(icon);
-
-			const checkbox = document.createElement("input");
-			checkbox.type = "checkbox";
-			checkbox.id = key;
-			checkbox.checked = true;
-			checkbox.onchange = (() => {
-				this.neo_tree_filter(checkbox.id, session);
-			});
-			filterContainer.appendChild(checkbox);
-			filterContainer.appendChild(label);
-		})
-		tree_widget.node.appendChild(filterContainer);
 
 		// Radio buttons used for remote and local analysis execution
 		const radioContainer = document.createElement("div");
