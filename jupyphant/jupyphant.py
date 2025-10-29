@@ -31,9 +31,36 @@ NEO_ABBREVIATIONS = {"Block": {"abbr": "", "icon": "cube"},  # folder-grid
                      "list": {"abbr": "", "icon": "list"}
                      }
 
-STRING_TO_NEO_OBJ = {"spiketrain": neo.SpikeTrain, "analogsignal": neo.AnalogSignal, "block": neo.Block, "segment": neo.Segment}
-NEO_OBJS_TO_SHOW = [neo.AnalogSignal, neo.SpikeTrain, neo.Block, neo.Segment]
-
+STRING_TO_NEO_OBJ = {
+    "spiketrain": neo.SpikeTrain, 
+    "analogsignal": neo.AnalogSignal, 
+    "block": neo.Block, 
+    "segment": neo.Segment, 
+    "epoch": neo.Epoch, 
+    "channelview": neo.ChannelView, 
+    "group": neo.Group,
+    "irregularlysampledsignal": neo.IrregularlySampledSignal,
+    "event": neo.Event,
+    "imagesequence": neo.ImageSequence,
+    "circularregionofinterest": neo.CircularRegionOfInterest,
+    "polygonregionofinterest": neo.PolygonRegionOfInterest,
+    "rectangularregionofinterest": neo.RectangularRegionOfInterest
+}
+NEO_OBJS_TO_SHOW = [
+    neo.AnalogSignal, 
+    neo.SpikeTrain, 
+    neo.Block, 
+    neo.Segment, 
+    neo.Epoch, 
+    neo.ChannelView,
+    neo.Group,
+    neo.IrregularlySampledSignal,
+    neo.Event,
+    neo.ImageSequence,
+    neo.CircularRegionOfInterest,
+    neo.PolygonRegionOfInterest,
+    neo.RectangularRegionOfInterest
+]
 class Jupyphant:
     # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
@@ -103,12 +130,18 @@ class Jupyphant:
         self.map_ipytree_node_id_to_neo_obj_hash = {}
         self.map_neo_obj_hash_to_neo_obj = {}
         self.filter_changed = False
+        self.expand_all = False
 
     def names_for(self, obj):
         for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
             if obj is value:
                 return key
         return ""
+    
+    def expand_neo_tree(self, opened):
+        self.expand_all = opened
+        self.filter_changed = True
+        self.update_tree()
     
     def show_neo_obj(self, neo_obj_string):
         neo_obj_type = STRING_TO_NEO_OBJ[neo_obj_string]
@@ -192,10 +225,7 @@ class Jupyphant:
                 if hasattr(neo_obj, 'name') and neo_obj.name:
                     node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {neo_obj.name} :: [{hash_neo_obj[:5]}]")
                     if neo_obj.name.lower() == "block":
-                        if len(neo_obj.segments) > 5:
-                            node_neo_obj.opened = False
-                        else:
-                            node_neo_obj.opened = True
+                        node_neo_obj.opened = self.expand_all or (len(neo_obj.segments) < 5)
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 else:
                     node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(neo_obj)} [{hash_neo_obj[:5]}]")
@@ -254,10 +284,7 @@ class Jupyphant:
                         attr_value_hash = joblib.hash(attr_value_list, hash_name='sha1')
                         self.map_neo_obj_hash_to_neo_obj[attr_value_hash] = attr_value_list                
                         attr_node = self.Node(f"{attr_name.capitalize()} [{len(attr_value_list)}] :: [{attr_value_hash[:5]}]")
-                        if len(attr_value_list) > 5:
-                            attr_node.opened = False
-                        else:
-                            attr_node.opened = True
+                        attr_node.opened = self.expand_all or (len(attr_value_list) < 5)
                         attr_node.icon = 'folder' 
                         attr_node.metadata = {"data-neo-object": "true", "container-for": attr_name}
                         attr_node.open_icon_style = 'success'
@@ -295,10 +322,7 @@ class Jupyphant:
                 child_node.data = {"neo_id": id(obj), "neo_type": type(obj).__name__}
                 self.map_ipytree_node_id_to_neo_obj_hash[child_node._id] = child_obj_hash
                 self._add_sub_nodes(child_node, child_obj)
-                if len(parent.nodes) > 5:
-                    child_node.opened = False
-                else:
-                    child_node.opened = True
+                child_node.opened = self.expand_all or (len(parent.nodes) < 5) 
                 parent.add_node(child_node)
         
         elif obj is None or isinstance(obj, (str, int, float, bool, dict)):

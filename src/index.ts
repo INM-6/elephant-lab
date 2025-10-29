@@ -287,10 +287,27 @@ class JupyphantExtension {
 	} // end of initializeTab()
 
 	public create_tree_filter(session: ISessionContext, tree_widget: Panel) {
-		const neo_obj_filter_dict = { "block": "cube", "segment": "columns", "spiketrain": "braille", "analogsignal": "water" }
+		const neo_obj_filter_dict = {
+			"block": "cube",
+			"segment": "columns",
+			"spiketrain": "braille",
+			"analogsignal": "water",
+			"epoch": "hourglass",
+			"channelview": "eye",
+			"group": "object-group",
+			"irregularlysampledsignal": "wave-square",
+			"spiketrainlist": "bars",
+			"event": "map-marker",
+			"imagesequence": "images",
+			"regionofinterest": "map",
+			"circularregionofinterest": "circle",
+			"polygonregionofinterest": "draw-polygon",
+			"rectangularregionofinterest": "square",
+			"open_all": "check",
+		}
 
 		const filterContainer = document.createElement('div');
-		filterContainer.textContent = "Filter (click to turn off) ";
+		filterContainer.textContent = "Filter";
 
 		Object.keys(neo_obj_filter_dict).forEach(key => {
 			const iconName = neo_obj_filter_dict[key as keyof typeof neo_obj_filter_dict];
@@ -304,9 +321,17 @@ class JupyphantExtension {
 			checkbox.type = "checkbox";
 			checkbox.id = key;
 			checkbox.checked = true;
-			checkbox.onchange = (() => {
-				this.neo_tree_filter(checkbox.id, session);
-			});
+			if (key === "open_all") {
+				checkbox.checked = false;
+				checkbox.onchange = (() => {
+					this.neo_tree_expand(checkbox.checked, session);
+				});
+			} else {
+				checkbox.onchange = (() => {
+					this.neo_tree_filter(checkbox.id, session);
+				});
+			}
+
 			filterContainer.appendChild(checkbox);
 			filterContainer.appendChild(label);
 		});
@@ -388,6 +413,19 @@ class JupyphantExtension {
 			from jupyphant.kernelcode import toggle_neo_tree_objs, update_tree
 			toggle_neo_tree_objs(jupyphant_entity, "${checkbox_id}")
 			update_tree(jupyphant_entity)
+			`
+		this.executeCode(code, session);
+	}
+
+	public neo_tree_expand(checked: boolean, session: ISessionContext) {
+		let code = `
+			from jupyphant.kernelcode import expand_neo_tree
+			# TODO: is there a better way to convert ts bool into python bool?
+			if "${checked}" == "true":
+				checked = True
+			else:
+				checked = False
+			expand_neo_tree(jupyphant_entity, checked)
 			`
 		this.executeCode(code, session);
 	}

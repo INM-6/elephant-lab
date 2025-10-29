@@ -164,3 +164,6 @@ def update_tree(jupyphant_entity):
 
 def toggle_neo_tree_objs(jupyphant_entity, neo_obj):
     jupyphant_entity.show_neo_obj(neo_obj)
+
+def expand_neo_tree(jupyphant_entity, opened):
+    jupyphant_entity.expand_neo_tree(opened)
