@@ -102,6 +102,7 @@ class Jupyphant:
         self.ipytree_of_neo_objects = None
         self.map_ipytree_node_id_to_neo_obj_hash = {}
         self.map_neo_obj_hash_to_neo_obj = {}
+        self.filter_changed = False
 
     def names_for(self, obj):
         for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
@@ -115,6 +116,7 @@ class Jupyphant:
             NEO_OBJS_TO_SHOW.remove(neo_obj_type)
         else:
             NEO_OBJS_TO_SHOW.append(neo_obj_type)
+        self.filter_changed = True
         
     def update(self):
         """  # TODO: rewrite docstring
@@ -152,8 +154,11 @@ class Jupyphant:
         neo_objs_hash_after_update = joblib.hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
                                                  hash_name='sha1')
 
-        if neo_objs_hash_before_update != neo_objs_hash_after_update:
+        if neo_objs_hash_before_update != neo_objs_hash_after_update or self.filter_changed:
             self.neo_objs_changed_after_update = True
+        else:
+            self.neo_objs_changed_after_update = False
+        self.filter_changed = False
 
     def update_tree(self):
         """  # TODO: rewrite docstring
@@ -170,7 +175,7 @@ class Jupyphant:
         
         # Currently the tree is created from scratch every time
         # TODO: Reuse the existing tree if there is one
-        if self.ipytree_of_neo_objects is not None or True:
+        if self.ipytree_of_neo_objects is not None and self.neo_objs_changed_after_update:
             # Create one tree node per neo block and name of node is name of block
             nodes = []
             for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
