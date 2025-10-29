@@ -29,6 +29,7 @@ def plot_code():
     import matplotlib.pyplot as plt
     plt.plot([1, 2, 3], [4, 5, 6])
     plt.show()
+    plt.close('all')
 
 
 # Call to the function that creates a rasterplot from all spike trains
@@ -40,6 +41,7 @@ def raster_plot(jupyphant_entity):
         fig = jupyphant_entity.create_rasterplot()
         plt.figure(fig)
         plt.show()
+        plt.close('all')
 
 
 # Call to the function that plots AnalogSignals
@@ -51,6 +53,7 @@ def lfp_plot(jupyphant_entity):
         fig = jupyphant_entity.create_lfpplot()
         plt.figure(fig)
         plt.show()
+        plt.close('all')
 
 
 # Call to the function that initializes the ipytree widget with an empty tree
@@ -131,6 +134,7 @@ def create_explorer_statistics(jupyphant_entity):
             fig = jupyphant_entity.statistics_of_selected_nodes(selected_ids=selected_ids)
             if fig:
                 plt.show()
+                plt.close('all')
 
     output_node_statistic = Output(layout=Layout(border='1px solid orange', width='3572px'))  # 4 * 8inch * 96px/inch
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_statistics, names='selected_nodes')

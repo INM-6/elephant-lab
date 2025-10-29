@@ -396,7 +396,7 @@ class Jupyphant:
         spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
                                                                           neo_class=self.SpikeTrain)
         # Close plots from before to prevent too much memory consumption
-        plt.close()
+        plt.close('all')
         # compare contents of AnalogSignals per top node
         spiketrains_unchanged = True
         spiketrains_hash = joblib.hash(spiketrains, hash_name='sha1')
@@ -478,6 +478,7 @@ class Jupyphant:
 
         Called at every cell execution
         """
+        plt.close('all')
         analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
                                                                             neo_class=self.AnalogSignal)
         # compare contents of AnalogSignals per top node
