@@ -151,13 +151,63 @@ class Jupyphant:
             NEO_OBJS_TO_SHOW.append(neo_obj_type)
         self.filter_changed = True
         
+    def get_neo_hash(self, neo_obj, hash_name="sha1"):
+        """
+        Creates a hash value for neo objects, 
+        taking into account the data, units and metadata.
+        """
+        if isinstance(neo_obj, neo.AnalogSignal):
+            hashable_summary = (
+                neo_obj.magnitude,
+                str(neo_obj.units),
+                float(neo_obj.sampling_rate),
+                str(neo_obj.sampling_rate),
+                float(neo_obj.t_start)
+            )
+            return joblib.hash(hashable_summary, hash_name=hash_name)
+        
+        elif isinstance(neo_obj, neo.IrregularlySampledSignal):
+            hashable_summary = (
+                neo_obj.magnitude,
+                str(neo_obj.units),
+                float(neo_obj.t_start)
+            )
+            return joblib.hash(hashable_summary, hash_name=hash_name)
+        
+        elif isinstance(neo_obj, neo.SpikeTrain):
+            hashable_summary = (
+                neo_obj.times,
+                str(neo_obj.units),
+                float(neo_obj.t_start),
+                float(neo_obj.t_stop)
+            )
+            return joblib.hash(hashable_summary, hash_name=hash_name)
+
+        elif isinstance(neo_obj, (neo.Epoch, neo.Event)):
+            hashable_summary = (
+                neo_obj.times,
+                neo_obj.labels,
+                str(neo_obj.units)
+            )
+            return joblib.hash(hashable_summary, hash_name=hash_name)
+        
+        elif isinstance(neo_obj, (neo.Block, neo.Segment)):
+            hashable_summary = (
+                neo_obj.name,
+                neo_obj.description,
+                neo_obj.annotations
+            )
+            return joblib.hash(hashable_summary, hash_name=hash_name)
+            
+        return joblib.hash(neo_obj, hash_name)
+        
     def update(self):
         """  # TODO: rewrite docstring
         Updates the neo persistent neo structure to represent the current neo structure
         created by the notebook user.
         Called before updating plots, thus, usually at every cell execution.
         """
-        neo_objs_hash_before_update = joblib.hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
+        neo_objs_hash_before_update = self.get_neo_hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
                                                   hash_name='sha1')
 
         # Get ALL variables in current kernel namespace
@@ -184,7 +234,7 @@ class Jupyphant:
                 self.neo_objs_and_lists_of_neo_objs_with_var_name[variable_name] = obj_from_kernel_ns
 
         print(f"self.neo_objs_and_lists_of_neo_objs_with_var_name = {self.neo_objs_and_lists_of_neo_objs_with_var_name}")
-        neo_objs_hash_after_update = joblib.hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
+        neo_objs_hash_after_update = self.get_neo_hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
                                                  hash_name='sha1')
 
         if neo_objs_hash_before_update != neo_objs_hash_after_update or self.filter_changed:
@@ -218,7 +268,7 @@ class Jupyphant:
                     continue
                 if hasattr(neo_obj, 'segment') and neo_obj.segment is not None:
                     continue
-                hash_neo_obj = joblib.hash(neo_obj, hash_name='sha1')
+                hash_neo_obj = self.get_neo_hash(neo_obj, hash_name='sha1')
                 self.map_neo_obj_hash_to_neo_obj[hash_neo_obj] = neo_obj
                 class_name = neo_obj.__class__.__name__
                 
@@ -281,7 +331,7 @@ class Jupyphant:
                     except KeyError:
                         pass
                     if attr_value_list is not None and len(attr_value_list) > 0:
-                        attr_value_hash = joblib.hash(attr_value_list, hash_name='sha1')
+                        attr_value_hash = self.get_neo_hash(attr_value_list, hash_name='sha1')
                         self.map_neo_obj_hash_to_neo_obj[attr_value_hash] = attr_value_list                
                         attr_node = self.Node(f"{attr_name.capitalize()} [{len(attr_value_list)}] :: [{attr_value_hash[:5]}]")
                         attr_node.opened = self.expand_all or (len(attr_value_list) < 5)
@@ -301,7 +351,7 @@ class Jupyphant:
             for i, child_obj in enumerate(obj):
                 if type(child_obj) not in NEO_OBJS_TO_SHOW:
                     continue
-                child_obj_hash = joblib.hash(child_obj, hash_name='sha1')
+                child_obj_hash = self.get_neo_hash(child_obj, hash_name='sha1')
                 self.map_neo_obj_hash_to_neo_obj[child_obj_hash] = child_obj
                 
                 class_name = child_obj.__class__.__name__
@@ -399,7 +449,7 @@ class Jupyphant:
         plt.close('all')
         # compare contents of AnalogSignals per top node
         spiketrains_unchanged = True
-        spiketrains_hash = joblib.hash(spiketrains, hash_name='sha1')
+        spiketrains_hash = self.get_neo_hash(spiketrains, hash_name='sha1')
         if self.spiketrains_hash is None:
             self.spiketrains_hash = spiketrains_hash
         else:
@@ -483,7 +533,7 @@ class Jupyphant:
                                                                             neo_class=self.AnalogSignal)
         # compare contents of AnalogSignals per top node
         analogsignals_unchanged = True
-        analogsignals_hash = joblib.hash(analogsignals, hash_name='sha1')
+        analogsignals_hash = self.get_neo_hash(analogsignals, hash_name='sha1')
         if self.analogsignals_hash is None:
             self.analogsignals_hash = analogsignals_hash
         else:
@@ -525,16 +575,16 @@ class Jupyphant:
         # extract those neo objects that are instances of the given 'neo_class'
         for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
             if isinstance(neo_obj, neo_class):
-                collected_neo_objs[f"{neo_obj.name} :: {joblib.hash(neo_obj, hash_name='sha1')}"] = [neo_obj]
+                collected_neo_objs[f"{neo_obj.name} :: {self.get_neo_hash(neo_obj, hash_name='sha1')}"] = [neo_obj]
             elif issubclass(type(neo_obj), self.Container):
-                collected_neo_objs[f"{neo_obj.name} :: {joblib.hash(neo_obj, hash_name='sha1')}"] = neo_obj.list_children_by_class(neo_class)
+                collected_neo_objs[f"{neo_obj.name} :: {self.get_neo_hash(neo_obj, hash_name='sha1')}"] = neo_obj.list_children_by_class(neo_class)
             else:
                 pass
         # keep only neo_obj which are selected, i.e. their hash ID was provided via 'selected_ids'
         if selected_ids is not None:
             for top_node in collected_neo_objs.keys():
                 collected_neo_objs[top_node] = [neo_obj for neo_obj in collected_neo_objs[top_node] if
-                                                joblib.hash(neo_obj, hash_name='sha1') in selected_ids]
+                                                self.get_neo_hash(neo_obj, hash_name='sha1') in selected_ids]
         # remove top-nodes / neo-containers with no object of the specified neo_class
         for key in list(collected_neo_objs):
             if len(collected_neo_objs[key]) == 0:
@@ -682,7 +732,7 @@ class Jupyphant:
             for neo_obj in neo_objs:
                 if len(hashes_and_names_of_selected_nodes) == 0:
                     break
-                hash_neo_obj = joblib.hash(neo_obj, hash_name='sha1')
+                hash_neo_obj = self.get_neo_hash(neo_obj, hash_name='sha1')
                 # neo data objects, containers, lists / SpikeTrainList
                 if hash_neo_obj in hashes_and_names_of_selected_nodes.keys():
                     with redirect_stdout(output):
@@ -694,7 +744,7 @@ class Jupyphant:
                         if len(hashes_and_names_of_selected_nodes) == 0:
                             break
                         child_container = getattr(neo_obj, child_container_name)
-                        hash_child_container = joblib.hash(child_container, hash_name='sha1')
+                        hash_child_container = self.get_neo_hash(child_container, hash_name='sha1')
                         if hash_child_container in hashes_and_names_of_selected_nodes.keys():
                             with redirect_stdout(output):
                                 self._repr_pretty_neo_objects(neo_obj=child_container, pp=pp, cycle=False,
