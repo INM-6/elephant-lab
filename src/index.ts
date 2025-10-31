@@ -306,33 +306,49 @@ class JupyphantExtension {
 			"open_all": "check",
 		}
 
+		const checked_style = {
+			color: "#2cbb00ff",
+			fontWeight: "bold",
+			cursor: "pointer",
+			padding: "4px",
+			userSelect: "none",
+		}
+
+		const unchecked_style = {
+			color: "#727272ff",
+			fontWeight: "normal",
+			cursor: "pointer",
+			padding: "4px",
+			userSelect: "none",
+		}
+
 		const filterContainer = document.createElement('div');
 		filterContainer.textContent = "Filter";
 
 		Object.keys(neo_obj_filter_dict).forEach(key => {
 			const iconName = neo_obj_filter_dict[key as keyof typeof neo_obj_filter_dict];
 			const label = document.createElement("label");
+			label.dataset.key = key;
+			if (key === "open_all") {
+				label.dataset.checked = "false";
+				Object.assign(label.style, unchecked_style);
+			} else {
+				label.dataset.checked = "true";
+				Object.assign(label.style, checked_style);
+			}
 			const icon = document.createElement("i");
 			icon.className = `fa fa-${iconName}`
 			icon.setAttribute("aria-hidden", "true");
 			label.prepend(icon);
+			label.appendChild(document.createTextNode(`  `));
+			label.onclick = () => {
+				const isCurrentlyChecked = label.dataset.checked === "true";
+				const isNowChecked = !isCurrentlyChecked;
+				label.dataset.checked = isNowChecked ? "true" : "false";
+				isNowChecked ? Object.assign(label.style, checked_style) : Object.assign(label.style, unchecked_style);
+				key === "open_all" ? this.neo_tree_expand(isNowChecked, session) : this.neo_tree_filter(label.dataset.key!, session);
+			};
 
-			const checkbox = document.createElement("input");
-			checkbox.type = "checkbox";
-			checkbox.id = key;
-			checkbox.checked = true;
-			if (key === "open_all") {
-				checkbox.checked = false;
-				checkbox.onchange = (() => {
-					this.neo_tree_expand(checkbox.checked, session);
-				});
-			} else {
-				checkbox.onchange = (() => {
-					this.neo_tree_filter(checkbox.id, session);
-				});
-			}
-
-			filterContainer.appendChild(checkbox);
 			filterContainer.appendChild(label);
 		});
 		filterContainer.classList.add('sticky-filter');
