@@ -304,6 +304,7 @@ class JupyphantExtension {
 			"polygonregionofinterest": "draw-polygon",
 			"rectangularregionofinterest": "square",
 			"open_all": "check",
+			"hide_all": "eye-slash"
 		}
 
 		const checked_style = {
@@ -323,7 +324,7 @@ class JupyphantExtension {
 		}
 
 		const filterContainer = document.createElement('div');
-		filterContainer.textContent = "Filter";
+		filterContainer.textContent = "Filter  ";
 
 		Object.keys(neo_obj_filter_dict).forEach(key => {
 			const iconName = neo_obj_filter_dict[key as keyof typeof neo_obj_filter_dict];
@@ -785,6 +786,12 @@ class JupyphantExtension {
 			// Extract input parameters
 			const entriesArray = Object.entries(params)
 			const pythonListString = `[${Object.values(entriesArray).map(v => `'${v}'`).join(', ')}]`;
+			let methods_to_execute: Array<string> = [];
+			const methodSelect = paramContainer.querySelector("#method-select") as HTMLSelectElement;
+
+			if (methodSelect && methodSelect.value && methodSelect.value !== "Select a method...") {
+				methods_to_execute.push(methodSelect.value.toLowerCase());
+			}
 
 			let code = `
 			import requests
@@ -827,19 +834,35 @@ class JupyphantExtension {
 			neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
 			variables_in_notebook = get_notebook_variable()
 
-			for key, value in inputObjects.items():
-				if value in neo_hash_obj_dict:
+			for key, value in inputObjects.copy().items():
+				if key.lower().startswith('method'):
+					inputObjects.pop(key)
+				elif value in neo_hash_obj_dict:
 					res = neo_hash_obj_dict[value]
 					inputObjects[key] = res
+					res = None
 				elif value in variables_in_notebook.keys():
 					res = variables_in_notebook.get(value)
 					inputObjects[key] = res
+					res = None
 				else: inputObjects[key] = None
-			try:
-				print(f"Result: {${moduleName}.${functionName}(**inputObjects)}")
+			methods_to_execute = ${JSON.stringify(methods_to_execute)} 
+			if (methods_to_execute):
+				try:
+					object_name = "${moduleName}.${functionName}(**inputObjects)"
+					for method_name in methods_to_execute:
+						method_parts = f".{method_name}()"
+						chained_call_string = object_name + "".join(method_parts)
 
-			except requests.exceptions.RequestException as e:
-				print(f"Ein Verbindungsfehler ist aufgetreten: {e}")
+					print(eval(chained_call_string))
+
+				except requests.exceptions.RequestException as e:
+					print(f"Ein Verbindungsfehler ist aufgetreten: {e}")
+			else:
+				try:
+					print(f"{${moduleName}.${functionName}(**inputObjects)}")
+				except requests.exceptions.RequestException as e:
+					print(f"Ein Verbindungsfehler ist aufgetreten: {e}")
 			`
 			await OutputArea.execute(code, outarea_content_text, session);
 		}
@@ -907,6 +930,7 @@ class JupyphantExtension {
 							for key, value in variables_in_notebook.items():
 								if value is found_obj:
 									print(key)
+									found_obj = None
 						`;
 
 						let future = session.session.kernel.requestExecute({ code });
@@ -1157,6 +1181,9 @@ class JupyphantExtension {
 				code = `
 				import sys
 				import inspect
+				
+				def is_function_or_class(obj):
+					return inspect.isfunction(obj) or inspect.isclass(obj)
 
 				module = sys.modules.get("${elephant_modules_dropdown.value}")
 				if module is None:
@@ -1164,7 +1191,7 @@ class JupyphantExtension {
 
 				function_names = [
 					name
-					for name, obj in inspect.getmembers(module, inspect.isfunction)
+					for name, obj in inspect.getmembers(module, is_function_or_class)
 					if not name.startswith("_")
 				]
 				print(function_names)
@@ -1188,14 +1215,61 @@ class JupyphantExtension {
 
 
 			elephant_functions_dropdown.onchange = async () => {
+				if (paramContainer.children.length > 0) {
+					paramContainer.innerHTML = "";
+				}
 				console.log(`${elephant_modules_dropdown.value}.${elephant_functions_dropdown.value}`);
 
 				let function_name_to_pydantic_name = elephant_functions_dropdown.value.split("_").map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
 				console.log(`function_name_to_pydantic_name ${function_name_to_pydantic_name}`);
 				let code = `
-				from elephant import models
+				from elephant import schemas
 				import json
-				print(json.dumps(models.model_${elephant_modules_dropdown.value.replace("elephant.", "")}.Pydantic${function_name_to_pydantic_name}Model.model_json_schema()))
+
+				schema_data = schemas.schema_${elephant_modules_dropdown.value.replace("elephant.", "")}.Pydantic${function_name_to_pydantic_name}.model_json_schema()
+
+				if isinstance(schema_data, str):
+					try:
+						schema_dict = json.loads(schema_data)
+					except json.JSONDecodeError:
+						print(json.dumps({"error": "Invalid JSON schema"}))
+						schema_dict = {}
+				else:
+					schema_dict = schema_data
+
+
+				def get_separated_properties(schema_dict):
+					main_props = schema_dict.get('properties', {})
+					definitions = schema_dict.get('$defs', {})
+					
+					output = {
+						"init_params": {},
+						"instance_methods": {}
+					}
+
+					if 'is_class_model' not in main_props:
+						output["init_params"] = main_props
+						print(json.dumps(output))
+						return
+
+					for prop_name, prop_schema in main_props.items():
+						
+						if prop_name == 'constructor' and '$ref' in prop_schema:
+							try:
+								def_name = prop_schema['$ref'].split('/')[-1]
+								referenced_model_schema = definitions[def_name]
+								init_properties = referenced_model_schema.get('properties', {})
+								output["init_params"].update(init_properties)
+								
+							except (KeyError, IndexError):
+								pass
+						
+						elif prop_name not in ('constructor', 'is_class_model'):
+							output["instance_methods"][prop_name] = prop_schema
+							
+					print(json.dumps(output))
+
+				get_separated_properties(schema_dict)
 				`
 				if (!session?.session || !session.session.kernel) {
 					console.error("Kernel not found.");
@@ -1212,7 +1286,7 @@ class JupyphantExtension {
 					}
 				}
 				await future.done.then(() => {
-					this.createInputFields(data, paramContainer, session)
+					this.createInputFields(data, paramContainer, session);
 				})
 			};
 
@@ -1221,14 +1295,11 @@ class JupyphantExtension {
 	}
 
 	public createInputFields(data: any, paramContainer: HTMLDivElement, session: ISessionContext) {
-		if (data === undefined) {
-			return null;
-		}
+		const params = data.init_params || data;
+
+		const methods = data.instance_methods || null;
 		// remove existing parameter input fields
-		if (paramContainer.children.length > 0) {
-			paramContainer.innerHTML = "";
-		}
-		for (const [key, value] of Object.entries(data.properties as Record<string, any>)) {
+		for (const [key, value] of Object.entries(params as Record<string, any>)) {
 			console.log(`KEY: ${key}, VALUE: ${value}`)
 			const row = document.createElement("div");
 			row.className = "form-row";
@@ -1321,7 +1392,7 @@ class JupyphantExtension {
 				});
 			}
 
-			for (const entry of Object.entries(data.properties[key])) {
+			for (const entry of Object.entries(data.init_params[key])) {
 				if (entry[0] !== "description" && entry[0] !== "default" && entry[0] !== "title") {
 					if (input instanceof HTMLInputElement) {
 						input.placeholder += (entry[0] ? ` ${entry[0]}: ${entry[1]}` : "");
@@ -1335,6 +1406,38 @@ class JupyphantExtension {
 			input.className = "form-row-input";
 			row.appendChild(label);
 			row.appendChild(input);
+			paramContainer.appendChild(row);
+		}
+
+		if (methods && Object.keys(methods).length > 0) {
+
+			const row = document.createElement("div");
+			row.className = "form-row";
+
+			const label = document.createElement("label");
+			label.innerHTML = `<br><span style="color: LightSkyBlue; font-weight: bold;">Method</span><br>
+    		<span style="color: LightSlateGrey;">\nSelect a method to execute</span>`;
+
+			const select = document.createElement("select");
+			select.id = "method-select";
+			select.className = "form-row-input";
+
+			const defaultOption = document.createElement("option");
+			defaultOption.value = "";
+			defaultOption.textContent = "Select a method...";
+			defaultOption.selected = true;
+			select.appendChild(defaultOption);
+
+
+			for (const [key, value] of Object.entries(methods as Record<string, any>)) {
+				const option = document.createElement("option");
+				option.id = `method-${key}`;
+				option.value = key;
+				option.textContent = value.title || key;
+				select.appendChild(option);
+			}
+			row.appendChild(label);
+			row.appendChild(select);
 			paramContainer.appendChild(row);
 		}
 	}
