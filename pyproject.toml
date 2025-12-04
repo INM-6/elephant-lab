@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "jupyphant"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 classifiers = [
     "Framework :: Jupyter",
     "Framework :: Jupyter :: JupyterLab",
@@ -40,7 +40,7 @@ dependencies = [
 "numpy",
 "pip",
 "neo",
-"elephant",
+"elephant@git+https://github.com/JanNolten/elephant#egg=feature/pydantic",
 "viziphant",
 "quantities",
 "traitlets"
