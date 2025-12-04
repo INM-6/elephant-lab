@@ -36,7 +36,7 @@ import {
 import {
 	IRenderMimeRegistry,
 } from '@jupyterlab/rendermime';
-
+import { WorkflowEngineWidget } from './workflow_engine';
 // Lumino imports for dealing with the tabs within JupyterLab
 // These are called Panels
 import {
@@ -58,7 +58,7 @@ import {
 // Style from css
 import '../style/index.css';
 
-interface IJupyterMessage {
+export interface IJupyterMessage {
 	content: {
 		text: string;
 	};
@@ -73,6 +73,7 @@ class JupyphantExtension {
 	private myPanels: NotebookPanel[];
 	private myVisTabs: Widget[];
 	private widget: DockPanel;
+	private workflowEngine: WorkflowEngineWidget | null;
 
 	// Construct a new JupyphantExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -88,6 +89,7 @@ class JupyphantExtension {
 		this.myVisTabs = [];
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
 		this.widget = new DockPanel();
+		this.workflowEngine = null;
 	}; // end of constructor()
 
 
@@ -135,6 +137,7 @@ class JupyphantExtension {
 			await OutputArea.execute(pythonCode['createExplorerStatistics'], outarea_nodeexplorer_statistics, session);
 			await OutputArea.execute(pythonCode['rasterPlot'], outarea_content_rasterplot, session);
 			await OutputArea.execute(pythonCode['lfpPlot'], outarea_content_lfpplot, session);
+			this.widget.title.label += ' (ready)'; // Indicates that the Jupyphant Extension is completly loaded
 
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
@@ -356,6 +359,53 @@ class JupyphantExtension {
 		tree_widget.node.prepend(filterContainer);
 	}
 
+	// Sets up the DragAndDrop Listeners on the Neo Tree Objects 
+	public setupDragAndDrop(treeWidget: Panel) {
+		const observer = new MutationObserver((mutationsList, observer) => {
+			// Selector for the <li> elements that represent each node in the jsTree that hasn't been processed yet
+			const treeNodes = treeWidget.node.querySelectorAll('.jstree-node:not([data-dnd-setup="true"])');
+
+			if (treeNodes.length > 0) {
+				console.log(`Jupyphant: Found ${treeNodes.length} new jsTree nodes, setting up drag and drop.`);
+
+				treeNodes.forEach(nodeElement => {
+					const htmlElement = nodeElement as HTMLElement;
+					htmlElement.dataset.dndSetup = 'true'; // Mark as processed
+
+					// Make the entire node row draggable
+					htmlElement.draggable = true;
+
+					htmlElement.addEventListener('dragstart', (event) => {
+						// Find the anchor tag within the node to get the ID and name
+						const anchor = htmlElement.querySelector('.jstree-anchor');
+						if (anchor && event.dataTransfer) {
+							const nodeName = (anchor.textContent || "").trim();
+							const varName = nodeName.split(' ')[0];
+
+							const item = {
+								id: varName,
+								name: nodeName,
+								code: varName,
+								is_class: false,
+								parameters: []
+							};
+
+							// Set the drag data
+							event.dataTransfer.setData('text/plain', JSON.stringify(item));
+							console.log(`Dragging node: ${nodeName} (variable name: ${varName})`);
+
+							// Stop jstree's own handlers from interfering with the drag
+							event.stopPropagation();
+						}
+					});
+				});
+			}
+		});
+
+		// Start observing the tree widget's DOM for changes, and don't disconnect
+		observer.observe(treeWidget.node, { childList: true, subtree: true });
+	}
+
 	public createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
 		// NEO TREE 
 		let tree_widget = new Panel();
@@ -363,6 +413,7 @@ class JupyphantExtension {
 		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
 		this.create_tree_filter(session, tree_widget);
+		this.setupDragAndDrop(tree_widget);
 
 		// NODE EXPLORER
 		let explorer_widget = new DockPanel({ tabsMovable: false });
@@ -423,6 +474,8 @@ class JupyphantExtension {
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget, { mode: 'split-right', ref: tree_widget });
 		this.widget.addWidget(output_tabs, { mode: 'split-bottom' });
+		this.workflowEngine = new WorkflowEngineWidget(session, this.widget, this.notebook_tracker);
+		this.app.shell.add(this.workflowEngine, 'right', { rank: 500 });
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
@@ -700,7 +753,7 @@ class JupyphantExtension {
 				elif value in variables_in_notebook.keys():
 					res = variables_in_notebook.get(value)
 					inputObjects[key] = res
-
+			globals().pop(res)
 			url = "${inputElephantServerAddress.value}/execute_pickle"
 			pickled_data = pickle.dumps(inputObjects)
 
@@ -801,6 +854,7 @@ class JupyphantExtension {
 			import json
 
 			from jupyphant.kernelcode import get_neo_to_hash_dict
+			elephant_objs = []
 			
 			def parse_list_to_dict(data_list):
 				result_dict = {}
@@ -840,31 +894,72 @@ class JupyphantExtension {
 				elif value in neo_hash_obj_dict:
 					res = neo_hash_obj_dict[value]
 					inputObjects[key] = res
-					res = None
 				elif value in variables_in_notebook.keys():
 					res = variables_in_notebook.get(value)
 					inputObjects[key] = res
-					res = None
 				else: inputObjects[key] = None
+			globals.pop(res)
 			methods_to_execute = ${JSON.stringify(methods_to_execute)} 
 			if (methods_to_execute):
+				method_parts = []
 				try:
 					object_name = "${moduleName}.${functionName}(**inputObjects)"
 					for method_name in methods_to_execute:
-						method_parts = f".{method_name}()"
-						chained_call_string = object_name + "".join(method_parts)
-
-					print(eval(chained_call_string))
+						method_parts.append(f".{method_name}()")
+					chained_call_string = object_name + "".join(method_parts)
+					result = eval(chained_call_string)
+					elephant_objs.append(result)
+					print(result)
 
 				except requests.exceptions.RequestException as e:
 					print(f"Ein Verbindungsfehler ist aufgetreten: {e}")
 			else:
 				try:
-					print(f"{${moduleName}.${functionName}(**inputObjects)}")
+					object_name = f"${moduleName}.${functionName}(**inputObjects)" 
+					try:
+						result = eval(object_name)
+						elephant_objs.append(result)
+						print(result)
+					except:
+						object_name = f"${moduleName}.${functionName}" 
+						elephant_objs.append(object_name)
+						print(object_name)
 				except requests.exceptions.RequestException as e:
 					print(f"Ein Verbindungsfehler ist aufgetreten: {e}")
 			`
 			await OutputArea.execute(code, outarea_content_text, session);
+
+			if (!session?.session || !session.session.kernel) {
+				console.error("Kernel not found.");
+				return null;
+			}
+
+			let my_code =
+				`
+			import elephant
+			import json
+			import pickle
+			
+			elephant_object = globals()["elephant_objs"]
+			object_list = []
+			object_list.append({
+							"id": elephant_object.__class__.__name__, 
+							"name": f"{elephant_object}",
+							"is_class": True,
+							"code": f"{pickle.dumps(elephant_object)}"
+			})
+			print(json.dumps(object_list))
+			`
+
+			const future = session.session.kernel.requestExecute({ code: my_code });
+			let msg_content: string
+			future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+				if (msg.header.msg_type === "stream" && "text" in msg.content) {
+					msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
+					this.workflowEngine!.updateItems(JSON.parse(msg_content));
+				}
+			}
+			await future.done;
 		}
 
 
@@ -930,7 +1025,7 @@ class JupyphantExtension {
 							for key, value in variables_in_notebook.items():
 								if value is found_obj:
 									print(key)
-									found_obj = None
+							globals.pop(found_obj)
 						`;
 
 						let future = session.session.kernel.requestExecute({ code });

@@ -256,8 +256,6 @@ class Jupyphant:
         self.update()
         print(f"After update of all neo objects: {time.time() - start}")
         
-        # Currently the tree is created from scratch every time
-        # TODO: Reuse the existing tree if there is one
         if self.ipytree_of_neo_objects is not None and self.neo_objs_changed_after_update:
             # Create one tree node per neo block and name of node is name of block
             nodes = []
