@@ -498,25 +498,49 @@ class Jupyphant:
         if axes is None:
             fig, axes = plt.subplots(nrows=1, ncols=1)
 
-        # Plots lfp signals for each trial
+        trace_idx = 0
+        
         for trial_id, lfp in enumerate(lfps):
-            # plot each channel
-            if np.shape(lfp)[1] != 1:
-                # transpose to get values per channel
-                lfp = np.transpose(lfp)
-                # normalize by maximum
-                lfp = np.divide(lfp, np.max(lfp, axis=1).reshape(len(lfp), 1))  ## TODO: causes error in Christianos example notebook of V4A data
-                for ch in lfp:
-                    axes.plot(times, ch, color=color)
-            else:
-                axes.plot(times, lfp.magnitude / np.max(lfp.magnitude), color=color)
+            data = lfp.magnitude
+            
+            if data.ndim == 1:
+                data = data.reshape(-1, 1)
+            
+            num_channels = data.shape[1]
+            
+            for ch_idx in range(num_channels):
+                offset = trace_idx * spacing
+                
+                channel_data = data[:, ch_idx]
+
+                min_val = self.np.min(channel_data)
+                max_val = self.np.max(channel_data)
+                range_val = max_val - min_val
+
+                if range_val > 0:
+                    norm_data = (channel_data - min_val) / range_val
+                else:
+                    norm_data = channel_data - min_val
+
+                # Plot
+                axes.plot(times, norm_data + offset, color=color)
+                
+                trace_idx += 1
 
         axes.set_title(title)
-        # Defines plot parameters for x-axis
         axes.set_xlabel('Time ({0})'.format(times.dimensionality))
 
         # Defines plot parameters for y-axis
-        axes.set_ylabel(f'AnaSig ({lfps[0][0].units.__str__()})')
+        if trace_idx > 1 and spacing > 0:
+            # Set ticks at the baseline of each signal
+            axes.set_yticks([i * spacing for i in range(trace_idx)])
+            # Label them 0, 1, 2...
+            axes.set_yticklabels(range(trace_idx))
+            axes.set_ylabel("Signal Trace Index")
+            axes.set_ylim(-0.1, (trace_idx - 1) * spacing + 1.2)
+        else:
+            # Fallback for single plot
+            axes.set_ylabel(f'AnaSig ({lfps[0].units.__str__()})')
 
         return axes
 
@@ -539,28 +563,33 @@ class Jupyphant:
                 analogsignals_unchanged = False
 
         # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
-        if analogsignals_unchanged and (self.analogsignal_overview is not None) and (selected_ids is None) and True:
+        if analogsignals_unchanged and (self.analogsignal_overview is not None) and (selected_ids is None):
             return self.analogsignal_overview
-        # Otherwise, create new plot
         else:
             n_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
             if n_subplots > 0:
+                # Increased figure height slightly to accommodate stacked plots
                 fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots * 8, 4))
-                fig.suptitle(f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals in")
-                # Rasterplot using viziphant
-                if n_subplots > 1:
-                    for i, top_node in enumerate(analogsignals.keys()):
-                        if analogsignals[top_node]:
-                            axs[i] = self.plot_lfp(analogsignals[top_node], times=self.np.arange(
-                                len(analogsignals[top_node][0])) * self.pq.s,
-                                                   title=f"{top_node}", spacing=75, axes=axs[i])
-                        else:
-                            axs[i].set_title(f"{top_node}")
-                else:
-                    top_node = list(analogsignals.keys())[0]
-                    axs = self.plot_lfp(analogsignals[top_node],
-                                        times=self.np.arange(len(analogsignals[top_node][0])) * self.pq.s,
-                                        title=f"{top_node}", spacing=75, axes=axs)
+                
+                # Make axs iterable even if its a single axes object
+                if n_subplots == 1:
+                    axs = [axs]
+
+                fig.suptitle(f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals")
+                
+                for i, top_node in enumerate(analogsignals.keys()):
+                    if analogsignals[top_node]:
+                        # Pass single axes object
+                        self.plot_lfp(
+                            analogsignals[top_node], 
+                            times=self.np.arange(len(analogsignals[top_node][0])) * self.pq.s,
+                            title=f"{top_node}", 
+                            spacing=1.5,
+                            axes=axs[i]
+                        )
+                    else:
+                        axs[i].set_title(f"{top_node} (No Data)")
+                        
                 if selected_ids is None:
                     self.analogsignal_overview = fig
                 return fig
