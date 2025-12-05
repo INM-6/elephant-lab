@@ -577,12 +577,28 @@ class Jupyphant:
 
                 fig.suptitle(f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals")
                 
+                max_duration_limit = 10 * self.pq.s 
+
                 for i, top_node in enumerate(analogsignals.keys()):
-                    if analogsignals[top_node]:
-                        # Pass single axes object
+                    raw_signals = analogsignals[top_node]
+                    
+                    if raw_signals:
+                        durations = [(sig.t_stop - sig.t_start) for sig in raw_signals]
+                        
+                        min_available_duration = min(durations)
+
+                        cut_duration = min(max_duration_limit, min_available_duration)
+
+                        sliced_signals = [
+                            sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
+                            for sig in raw_signals
+                        ]
+
+                        plot_times = sliced_signals[0].times - sliced_signals[0].t_start
+                        
                         self.plot_lfp(
-                            analogsignals[top_node], 
-                            times=self.np.arange(len(analogsignals[top_node][0])) * self.pq.s,
+                            sliced_signals, 
+                            times=plot_times,
                             title=f"{top_node}", 
                             spacing=1.5,
                             axes=axs[i]
