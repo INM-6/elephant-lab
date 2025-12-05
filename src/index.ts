@@ -748,12 +748,11 @@ class JupyphantExtension {
 
 			for key, value in inputObjects.items():
 				if value in neo_hash_obj_dict:
-					res = neo_hash_obj_dict[value]
-					inputObjects[key] = res
+					jupyphant_result = neo_hash_obj_dict[value]
+					inputObjects[key] = jupyphant_result
 				elif value in variables_in_notebook.keys():
-					res = variables_in_notebook.get(value)
-					inputObjects[key] = res
-			globals().pop(res)
+					jupyphant_result = variables_in_notebook.get(value)
+					inputObjects[key] = jupyphant_result
 			url = "${inputElephantServerAddress.value}/execute_pickle"
 			pickled_data = pickle.dumps(inputObjects)
 
@@ -892,11 +891,11 @@ class JupyphantExtension {
 				if key.lower().startswith('method'):
 					inputObjects.pop(key)
 				elif value in neo_hash_obj_dict:
-					res = neo_hash_obj_dict[value]
-					inputObjects[key] = res
+					jupyphant_result = neo_hash_obj_dict[value]
+					inputObjects[key] = jupyphant_result
 				elif value in variables_in_notebook.keys():
-					res = variables_in_notebook.get(value)
-					inputObjects[key] = res
+					jupyphant_result = variables_in_notebook.get(value)
+					inputObjects[key] = jupyphant_result
 				else: inputObjects[key] = None
 			methods_to_execute = ${JSON.stringify(methods_to_execute)} 
 			if (methods_to_execute):
@@ -1007,6 +1006,8 @@ class JupyphantExtension {
 							variables = {}
 
 							for name, val in g.items():
+								if name.startswith('jupyphant'):
+									continue
 								if allowed_types is not None and not isinstance(val, allowed_types):
 									continue
 								if isinstance(val, types.ModuleType):
@@ -1018,12 +1019,13 @@ class JupyphantExtension {
 						neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
 						variables_in_notebook = get_notebook_variable()
 
-						found_obj = neo_hash_obj_dict["${param.value}"]
+						jupyphant_found_obj = neo_hash_obj_dict.get("${param.value}")
 						
-						if found_obj is not None:
+						if jupyphant_found_obj is not None:
 							for key, value in variables_in_notebook.items():
-								if value is found_obj:
+								if value is jupyphant_found_obj:
 									print(key)
+									break
 						`;
 
 						let future = session.session.kernel.requestExecute({ code });
