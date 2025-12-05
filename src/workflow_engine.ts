@@ -850,7 +850,7 @@ export class WorkflowEngineWidget extends Widget {
     data = pickle.loads(${item.code})
     result = data[0]
     ${resultsDictName}["${resultId}"] = result
-    print("${resultId}") 
+    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
 except Exception as e:
     print(f"Error loading instance ${item.name}: {e}", file=sys.stderr)`;
         }
@@ -876,7 +876,7 @@ try:
     final_list = [arg for arg in processed_args if arg is not None]
     
     ${resultsDictName}["${resultId}"] = final_list
-    print("${resultId}") 
+    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
 
 except Exception as e:
     print(f"Error creating list: {e}", file=sys.stderr)`;
@@ -898,7 +898,7 @@ try:
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     integer_value = int(processed_args[0])
     ${resultsDictName}["${resultId}"] = integer_value
-    print("${resultId}")
+    print(f"JUPYPHANT_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error in Integer node: {e}", file=sys.stderr)`;
         } else if (item.code === '__UTIL_PRINT__') {
@@ -921,6 +921,7 @@ try:
     for res in printed_results:
         print(res)
     ${resultsDictName}["${resultId}"] = printed_results
+    print(f"JUPYPHANT_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error in Print node: {e}", file=sys.stderr)`;
         }
@@ -962,7 +963,7 @@ try:
     result = method_to_run(*processed_args)
         
     ${resultsDictName}["${resultId}"] = result
-    print("${resultId}") 
+    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
 
 except Exception as e:
     print(f"Error running method ${item.name}: {e}", file=sys.stderr)`;
@@ -1021,7 +1022,7 @@ try:
         result = method_to_run(**kwargs)
 
         ${resultsDictName}["${resultId}"] = result
-        print("${resultId}") 
+        print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
     else:
         print(f"Error: Module ${modulePath} not loaded.", file=sys.stderr)
 except Exception as e:
@@ -1038,7 +1039,7 @@ except Exception as e:
         found_obj = globals()[var_name]
         result = found_obj
         ${resultsDictName}["${resultId}"] = result
-        print("${resultId}")
+        print(f"JUPYPHANT_RESULT_KEY:${resultId}")
     else:
         print(f"Error: Variable '${varName}' not found in the notebook's global scope.", file=sys.stderr)
 except Exception as e:
@@ -1086,16 +1087,33 @@ except Exception as e:
         // this code is in principal just used to execute Python Code in kernel
         future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
             const msg_type = msg.header.msg_type;
-            if (msg_type === 'stream' || msg_type === 'display_data' || msg_type === 'execute_result' || msg_type === 'error') {
+            if (KernelMessage.isStreamMsg(msg)) {
+                if (msg.content.name === 'stdout') {
+                    const text = msg.content.text;
+                    const lines = text.split('\n');
+                    const lines_to_print: string[] = [];
+                    for (const line of lines) {
+                        if (line.trim().startsWith("JUPYPHANT_RESULT_KEY:")) {
+                            stdout_accumulator += line.trim().substring("JUPYPHANT_RESULT_KEY:".length);
+                        } else {
+                            lines_to_print.push(line);
+                        }
+                    }
+                    if (lines_to_print.length > 0) {
+                        const new_text = lines_to_print.join('\n');
+                        if (new_text.trim().length > 0) {
+                            const output: any = { ...msg.content, text: new_text, output_type: msg_type };
+                            outputArea.model.add(output);
+                        }
+                    }
+                } else if (msg.content.name === 'stderr') {
+                    console.warn("Kernel STDERR:", msg.content.text);
+                    const output: any = { ...msg.content, output_type: msg_type };
+                    outputArea.model.add(output);
+                }
+            } else if (msg_type === 'display_data' || msg_type === 'execute_result' || msg_type === 'error') {
                 const output: any = { ...msg.content, output_type: msg_type };
                 outputArea.model.add(output);
-                if (KernelMessage.isStreamMsg(msg)) {
-                    if (msg.content.name === 'stdout') {
-                        stdout_accumulator += msg.content.text;
-                    } else if (msg.content.name === 'stderr') {
-                        console.warn("Kernel STDERR:", msg.content.text);
-                    }
-                }
             } else if (msg_type === 'clear_output') {
                 outputArea.model.clear(false);
             }

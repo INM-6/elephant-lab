@@ -33,11 +33,7 @@ raster_plot(jupyphant_entity)
 // Call to the function that plots AnalogSignals
 let lfp_plot = 
 `
-try:
-	if (jupyphant_entity):
-		print("DEBUG: Jupyphant-Extension ready.")
-except:
-	print("Jupyphant-Entity not defined. Redefining Jupyphant...")
+if not jupyphant_entity:
 	from jupyphant.kernelcode import setup_env
 	jupyphant_entity = setup_env();
 from jupyphant.kernelcode import lfp_plot
