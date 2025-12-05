@@ -1034,14 +1034,19 @@ except Exception as e:
             console.log("...using VARIABLE NAME (neo) execution logic");
             const varName = item.code;
             codeToExecute = `try:
-    var_name = "${varName}"
-    if var_name in globals():
-        found_obj = globals()[var_name]
-        result = found_obj
+    node_id = "${varName}"
+    if node_id in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash:
+        neo_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node_id]
+        result = jupyphant_entity.map_neo_obj_hash_to_neo_obj[neo_hash]
+    elif node_id in globals():
+        result = globals()[node_id]
+    else:
+        result = None
+        print(f"Error: Variable or node id '{varName}' not found.", file=sys.stderr)
+    
+    if result is not None:
         ${resultsDictName}["${resultId}"] = result
         print(f"JUPYPHANT_RESULT_KEY:${resultId}")
-    else:
-        print(f"Error: Variable '${varName}' not found in the notebook's global scope.", file=sys.stderr)
 except Exception as e:
     print(f"Error getting object for variable ${varName}: {e}", file=sys.stderr)`;
         }

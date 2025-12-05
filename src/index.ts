@@ -380,19 +380,19 @@ class JupyphantExtension {
 						const anchor = htmlElement.querySelector('.jstree-anchor');
 						if (anchor && event.dataTransfer) {
 							const nodeName = (anchor.textContent || "").trim();
-							const varName = nodeName.split(' ')[0];
+							const nodeId = htmlElement.id;
 
 							const item = {
-								id: varName,
+								id: nodeId,
 								name: nodeName,
-								code: varName,
+								code: nodeId,
 								is_class: false,
 								parameters: []
 							};
 
 							// Set the drag data
 							event.dataTransfer.setData('text/plain', JSON.stringify(item));
-							console.log(`Dragging node: ${nodeName} (variable name: ${varName})`);
+							console.log(`Dragging node: ${nodeName} (ID: ${nodeId})`);
 
 							// Stop jstree's own handlers from interfering with the drag
 							event.stopPropagation();
@@ -1429,24 +1429,36 @@ class JupyphantExtension {
 					event.preventDefault();
 				});
 				input.addEventListener("drop", async (event) => {
-					console.log("drop");
-					if (!session?.session || !session.session.kernel) {
-						console.error("Kernel not found.");
+					event.preventDefault();
+					const itemString = event.dataTransfer?.getData('text/plain');
+					if (!itemString) {
 						return;
 					}
-					let code = `
-							from jupyphant.kernelcode import get_selected_neo_ids
-							selected_ids = get_selected_neo_ids(jupyphant_entity)[0]
+					try {
+						const item = JSON.parse(itemString);
+						const nodeId = item.id;
+						if (!session?.session || !session.session.kernel) {
+							console.error("Kernel not found.");
+							return;
+						}
+						let code = `
+							node_id = "${nodeId}"
+							neo_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
+							if neo_hash:
+								print(neo_hash)
 							`;
-					const future = session.session.kernel.requestExecute({ code });
-					let msg_content: string
-					future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-						if (msg.header.msg_type === "stream" && "text" in msg.content)
-							msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
-						console.log(msg_content);
-						input.value = msg_content;
+						const future = session.session.kernel.requestExecute({ code });
+						let msg_content: string
+						future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+							if (msg.header.msg_type === "stream" && "text" in msg.content)
+								msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
+							console.log(msg_content);
+							input.value = msg_content;
+						}
+						await future.done;
+					} catch (e) {
+						console.error("Failed to handle drop", e)
 					}
-					await future.done;
 				});
 
 			} else if (value.type === "boolean") {
@@ -1469,24 +1481,36 @@ class JupyphantExtension {
 					event.preventDefault();
 				});
 				input.addEventListener("drop", async (event) => {
-					console.log("drop");
-					if (!session?.session || !session.session.kernel) {
-						console.error("Kernel not found.");
+					event.preventDefault();
+					const itemString = event.dataTransfer?.getData('text/plain');
+					if (!itemString) {
 						return;
 					}
-					let code = `
-							from jupyphant.kernelcode import get_selected_neo_ids
-							selected_ids = get_selected_neo_ids(jupyphant_entity)[0]
-							print(selected_ids)`;
-					const future = session.session.kernel.requestExecute({ code });
-					let msg_content: string
-					future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-						if (msg.header.msg_type === "stream" && "text" in msg.content)
-							msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
-						console.log(msg_content);
-						input.value = msg_content;
+					try {
+						const item = JSON.parse(itemString);
+						const nodeId = item.id;
+						if (!session?.session || !session.session.kernel) {
+							console.error("Kernel not found.");
+							return;
+						}
+						let code = `
+							node_id = "${nodeId}"
+							neo_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
+							if neo_hash:
+								print(neo_hash)
+							`;
+						const future = session.session.kernel.requestExecute({ code });
+						let msg_content: string
+						future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+							if (msg.header.msg_type === "stream" && "text" in msg.content)
+								msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
+							console.log(msg_content);
+							input.value = msg_content;
+						}
+						await future.done;
+					} catch (e) {
+						console.error("Failed to handle drop", e)
 					}
-					await future.done;
 				});
 			}
 
