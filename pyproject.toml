@@ -40,7 +40,7 @@ dependencies = [
 "numpy",
 "pip",
 "neo",
-"elephant@git+https://github.com/JanNolten/elephant#egg=feature/pydantic",
+"elephant @ git+https://github.com/JanNolten/elephant.git@feature/pydantic",
 "viziphant",
 "quantities",
 "traitlets"

@@ -898,7 +898,6 @@ class JupyphantExtension {
 					res = variables_in_notebook.get(value)
 					inputObjects[key] = res
 				else: inputObjects[key] = None
-			globals.pop(res)
 			methods_to_execute = ${JSON.stringify(methods_to_execute)} 
 			if (methods_to_execute):
 				method_parts = []
@@ -1025,7 +1024,6 @@ class JupyphantExtension {
 							for key, value in variables_in_notebook.items():
 								if value is found_obj:
 									print(key)
-							globals.pop(found_obj)
 						`;
 
 						let future = session.session.kernel.requestExecute({ code });
@@ -1390,6 +1388,11 @@ class JupyphantExtension {
 	}
 
 	public createInputFields(data: any, paramContainer: HTMLDivElement, session: ISessionContext) {
+		if (!data) {
+			paramContainer.innerHTML = '<p style="color: red;">Error: Could not load parameters for the selected function. The data object is undefined.</p>';
+			console.error("createInputFields was called with undefined 'data'. This might happen if the Python script for fetching the schema failed to produce output.");
+			return;
+		}
 		const params = data.init_params || data;
 
 		const methods = data.instance_methods || null;
