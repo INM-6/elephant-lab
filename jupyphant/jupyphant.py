@@ -283,6 +283,8 @@ class Jupyphant:
                 node_neo_obj.open_icon_style = 'success'
                 node_neo_obj.close_icon_style = 'danger'
                 self._add_sub_nodes(node_neo_obj, neo_obj)
+                if any(node.name == node_neo_obj.name for node in nodes):
+                    continue
                 nodes.append(node_neo_obj)
                 self.map_ipytree_node_id_to_neo_obj_hash[node_neo_obj._id] = hash_neo_obj
             print(f"After Blocks: {time.time() - start}")
