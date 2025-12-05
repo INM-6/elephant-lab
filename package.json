@@ -7,9 +7,9 @@
     "jupyterlab",
     "jupyterlab-extension"
   ],
-  "homepage": "https://github.com/ojoenlanuca/jupyphant",
+  "homepage": "https://github.com/INM-6/jupyphant",
   "bugs": {
-    "url": "https://github.com/ojoenlanuca/jupyphant/issues"
+    "url": "https://github.com/INM-6/jupyphant/issues"
   },
   "license": "BSD-3-Clause",
   "author": {
@@ -25,7 +25,7 @@
   "style": "style/index.css",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ojoenlanuca/jupyphant.git"
+    "url": "https://github.com/INM-6/jupyphant.git"
   },
   "scripts": {
     "build": "jlpm build:lib && jlpm build:labextension:dev",
