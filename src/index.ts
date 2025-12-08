@@ -9,7 +9,8 @@ import {
 	ICommandPalette,
 	ISessionContext,
 	SessionContext,
-	WidgetTracker
+	WidgetTracker,
+	MainAreaWidget,
 } from '@jupyterlab/apputils';
 
 import {
@@ -190,10 +191,24 @@ class JupyphantExtension {
 			return;
 		}
 
-		if (this.myPanels.includes(newPanel)) {
-			console.log("Jupyphant: Existing tab found, activating it.");
-			this.attachTab();
+		const mainWidgetId = 'jupyphant-workflow-main-widget';
+
+		const mainWidgets = Array.from(this.app.shell.widgets('main'));
+		let mainWidget = mainWidgets.find(widget => widget.id === mainWidgetId);
+
+		// If the main widget exists, just activate it and return
+		if (mainWidget) {
+			console.log("Jupyphant: Existing workflow engine found, activating it.");
+			this.app.shell.activateById(mainWidgetId);
 			return;
+		}
+
+		console.log("Jupyphant: Creating new Jupyphant instance.");
+
+		// Clear the panel before adding new widgets
+		const oldWidgets = Array.from(this.widget.widgets());
+		for (const w of oldWidgets) {
+			w.dispose();
 		}
 
 		this.initializeTab(newPanel.content.rendermime);
@@ -256,7 +271,7 @@ class JupyphantExtension {
 
 		// Attach tab to the frontend if not yet attached
 		if (!this.widget.isAttached) {
-			this.app.shell.add(this.widget);
+			this.app.shell.add(this.widget, 'right', { rank: 300 });
 		}
 		// Add the tab to the tracker for restoration
 		if (!this.widget_tracker.has(this.widget)) {
@@ -264,7 +279,7 @@ class JupyphantExtension {
 			this.widget_tracker.add(this.widget);
 		}
 		// Display the tab, bring it to the foreground
-		this.app.shell.activateById(this.widget.id);
+		this.app.shell.activateById('jupyphant-workflow-main-widget');
 	} // end of attachTab()
 
 	public initializeTab(rendermime: IRenderMimeRegistry) {
@@ -475,7 +490,12 @@ class JupyphantExtension {
 		this.widget.addWidget(explorer_widget, { mode: 'split-right', ref: tree_widget });
 		this.widget.addWidget(output_tabs, { mode: 'split-bottom' });
 		this.workflowEngine = new WorkflowEngineWidget(session, this.widget, this.notebook_tracker);
-		this.app.shell.add(this.workflowEngine, 'right', { rank: 500 });
+		const main = new MainAreaWidget({ content: this.workflowEngine });
+		main.id = 'jupyphant-workflow-main-widget';
+		main.title.label = 'Jupyphant Workflow';
+		main.title.closable = true;
+		this.app.shell.add(main, 'main');
+		this.app.shell.activateById(main.id);
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
