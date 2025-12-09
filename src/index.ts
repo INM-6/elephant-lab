@@ -58,6 +58,7 @@ import {
 } from './kernelcode';
 // Style from css
 import '../style/index.css';
+import '../style/sidebar.css';
 
 export interface IJupyterMessage {
 	content: {
@@ -457,8 +458,13 @@ class JupyphantExtension {
 		let elephant_widget = new Panel();
 		elephant_widget.title.label = 'Elephant Analysis';
 		elephant_widget.node.style.cssText = elephant_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		explorer_widget.addWidget(elephant_widget, { mode: 'tab-after', ref: explorer_widget_statistics });
 		this.createElephantElements(session, elephant_widget, tree_widget);
+		const elephantMain = new MainAreaWidget({ content: elephant_widget });
+		elephantMain.id = 'jupyphant-elephant-analysis-widget';
+		elephantMain.title.label = 'Elephant Analysis';
+		elephantMain.title.closable = true;
+		this.app.shell.add(elephantMain, 'main');
+
 
 		// OUTPUT-TABS (Plot, Error, Output)
 		let output_tabs = new DockPanel({ tabsMovable: false });
