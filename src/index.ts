@@ -76,6 +76,15 @@ class JupyphantExtension {
 	private myVisTabs: Widget[];
 	private widget: DockPanel;
 	private workflowEngine: WorkflowEngineWidget | null;
+	private outarea_content_rasterplot: OutputArea | null;
+	private outarea_content_lfpplot: OutputArea | null;
+	private outarea_nodeexplorer_info: OutputArea | null;
+	private outarea_nodeexplorer_raw: OutputArea | null;
+	private outarea_nodeexplorer_statistics: OutputArea | null;
+	private outarea_neo_tree: OutputArea | null;
+	private output_tabs: DockPanel | null;
+	private outarea_workflow: OutputArea | null;
+
 
 	// Construct a new JupyphantExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -92,6 +101,14 @@ class JupyphantExtension {
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
 		this.widget = new DockPanel();
 		this.workflowEngine = null;
+		this.outarea_content_rasterplot = null;
+		this.outarea_content_lfpplot = null;
+		this.outarea_nodeexplorer_info = null;
+		this.outarea_nodeexplorer_raw = null;
+		this.outarea_nodeexplorer_statistics = null;
+		this.outarea_neo_tree = null;
+		this.output_tabs = null;
+		this.outarea_workflow = null;
 	}; // end of constructor()
 
 
@@ -106,39 +123,14 @@ class JupyphantExtension {
 
 		console.log("Jupyphant: Environment setup complete.");
 		try {
-			// Get DockPanels which represent one window of Jupyphant
-			const widgets_iter = [...this.widget.widgets()];
-			const neo_tree_content = widgets_iter[0] as Panel;
-			const explorer_content = widgets_iter[1] as DockPanel;
-			const output_content = widgets_iter[2] as DockPanel;
-
-			// Create Panels for different types of output
-			const explorer_content_iter = [...explorer_content.widgets()];
-			const explorer_content_info = explorer_content_iter[0] as Panel;
-			const explorer_content_raw = explorer_content_iter[1] as Panel;
-			const explorer_content_statistics = explorer_content_iter[2] as Panel;
-
-			// OutputAreas are used to execute Code in specific Areas
-			const outarea_nodeexplorer_info = explorer_content_info.widgets[0] as OutputArea;
-			const outarea_nodeexplorer_raw = explorer_content_raw.widgets[0] as OutputArea;
-			const outarea_nodeexplorer_statistics = explorer_content_statistics.widgets[0] as OutputArea;
-			const outarea_neo_tree = neo_tree_content.widgets[0] as OutputArea;
-
-			// OutputAreas for Raster- and LFPPlots
-			const output_content_iter = [...output_content.widgets()];
-			const output_content_rasterplot = output_content_iter[0] as Panel;
-			const outarea_content_rasterplot = output_content_rasterplot.widgets[0] as OutputArea;
-			const output_content_lfpplot = output_content_iter[0] as Panel;
-			const outarea_content_lfpplot = output_content_lfpplot.widgets[0] as OutputArea;
-
 			// Execute Jupyphant Code to create Neo Tree / Information and Plots  
-			await OutputArea.execute(pythonCode['createTree'], outarea_neo_tree, session);
+			await OutputArea.execute(pythonCode['createTree'], this.outarea_neo_tree!, session);
 			await this.executeCode(pythonCode['updateTree'], session);
-			await OutputArea.execute(pythonCode['createExplorerInfo'], outarea_nodeexplorer_info, session);
-			await OutputArea.execute(pythonCode['createExplorerRawPlot'], outarea_nodeexplorer_raw, session);
-			await OutputArea.execute(pythonCode['createExplorerStatistics'], outarea_nodeexplorer_statistics, session);
-			await OutputArea.execute(pythonCode['rasterPlot'], outarea_content_rasterplot, session);
-			await OutputArea.execute(pythonCode['lfpPlot'], outarea_content_lfpplot, session);
+			await OutputArea.execute(pythonCode['createExplorerInfo'], this.outarea_nodeexplorer_info!, session);
+			await OutputArea.execute(pythonCode['createExplorerRawPlot'], this.outarea_nodeexplorer_raw!, session);
+			await OutputArea.execute(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
+			await OutputArea.execute(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, session);
+			await OutputArea.execute(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, session);
 			this.widget.title.label += ' (ready)'; // Indicates that the Jupyphant Extension is completly loaded
 
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
@@ -221,12 +213,6 @@ class JupyphantExtension {
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
 
-		const widgets_iter = [...this.widget.widgets()];
-		const output_content = widgets_iter[2] as DockPanel;
-		const output_content_iter = [...output_content.widgets()];
-		const outarea_content_rasterplot = (output_content_iter[0] as Panel).widgets[0] as OutputArea;
-		const outarea_content_lfpplot = (output_content_iter[0] as Panel).widgets[1] as OutputArea;
-
 		// Listener for cell execution
 		NotebookActions.executed.connect(async (sender, exec_data) => {
 			if (exec_data.notebook !== newPanel.content) {
@@ -235,8 +221,8 @@ class JupyphantExtension {
 			console.log("Jupyphant: Cell executed, updating plots.");
 
 			await this.executeCode(pythonCode['updateTree'], initialSession);
-			await OutputArea.execute(pythonCode['rasterPlot'], outarea_content_rasterplot, initialSession);
-			await OutputArea.execute(pythonCode['lfpPlot'], outarea_content_lfpplot, initialSession);
+			await OutputArea.execute(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession);
+			await OutputArea.execute(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession);
 		});
 
 		// Listener for changed Kernel, waits for Kernel to be ready
@@ -427,7 +413,7 @@ class JupyphantExtension {
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
 		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
+		this.outarea_neo_tree = this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
 		this.create_tree_filter(session, tree_widget);
 		this.setupDragAndDrop(tree_widget);
 
@@ -439,19 +425,19 @@ class JupyphantExtension {
 		let explorer_widget_info = new Panel();
 		explorer_widget_info.title.label = 'Info';
 		explorer_widget_info.node.style.cssText = explorer_widget_info.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1', session);
+		this.outarea_nodeexplorer_info = this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1', session);
 		explorer_widget.addWidget(explorer_widget_info);
 		// RAW
 		let explorer_widget_raw_plot = new Panel();
 		explorer_widget_raw_plot.title.label = 'Raw Plot';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
+		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
 		explorer_widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
 		// STATISTICS
 		let explorer_widget_statistics = new Panel();
 		explorer_widget_statistics.title.label = 'Statistics';
 		explorer_widget_statistics.node.style.cssText = explorer_widget_statistics.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createOutputArea(rendermime, explorer_widget_statistics, ['my-outarea-class'], 'jup_vis_out_id_2.3', session);
+		this.outarea_nodeexplorer_statistics = this.createOutputArea(rendermime, explorer_widget_statistics, ['my-outarea-class'], 'jup_vis_out_id_2.3', session);
 		explorer_widget.addWidget(explorer_widget_statistics, { mode: 'tab-after', ref: explorer_widget_raw_plot });
 
 		// ELEPHANT
@@ -467,35 +453,39 @@ class JupyphantExtension {
 
 
 		// OUTPUT-TABS (Plot, Error, Output)
-		let output_tabs = new DockPanel({ tabsMovable: false });
-		output_tabs.title.label = 'Output-Area';
-		let output_widget_plot = new Panel();
-		output_widget_plot.title.label = 'Overview Plots';
-		output_widget_plot.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createOutputArea(rendermime, output_widget_plot, ['my-outarea-class'], 'jup_vis_out_id_3.1', session);
-		this.createOutputArea(rendermime, output_widget_plot, ['my-outarea-class'], 'jup_vis_out_id_3.2', session);
+		if (!this.output_tabs) {
+			const output_tabs = new DockPanel({ tabsMovable: false });
+			output_tabs.id = 'jupyphant-output-tabs';
+			output_tabs.title.label = 'Output-Area';
+			let output_widget_plot = new Panel();
+			output_widget_plot.title.label = 'Overview Plots';
+			output_widget_plot.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+			this.outarea_content_rasterplot = this.createOutputArea(rendermime, output_widget_plot, ['my-outarea-class'], 'jup_vis_out_id_3.1', session);
+			this.outarea_content_lfpplot = this.createOutputArea(rendermime, output_widget_plot, ['my-outarea-class'], 'jup_vis_out_id_3.2', session);
 
-		// Text Output used for Analysis Results
-		let output_widget_text = new Panel();
-		output_widget_text.title.label = 'Output';
-		output_widget_text.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createOutputArea(rendermime, output_widget_text, ['my-outarea-class'], 'jup_vis_out_id_3.3', session);
+			// Text Output used for Analysis Results
+			let output_widget_text = new Panel();
+			output_widget_text.title.label = 'Output';
+			output_widget_text.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+			this.outarea_workflow = this.createOutputArea(rendermime, output_widget_text, ['my-outarea-class'], 'jup_vis_out_id_3.3', session);
 
-		// Error Output used mainly for debugging 
-		// TODO: implement this (if necessary?) 
-		let output_widget_error = new Panel();
-		output_widget_error.title.label = 'Error';
-		output_widget_error.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createOutputArea(rendermime, output_widget_error, ['my-outarea-class'], 'jup_vis_out_id_3.4', session);
+			// Error Output used mainly for debugging 
+			// TODO: implement this (if necessary?) 
+			let output_widget_error = new Panel();
+			output_widget_error.title.label = 'Error';
+			output_widget_error.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+			this.createOutputArea(rendermime, output_widget_error, ['my-outarea-class'], 'jup_vis_out_id_3.4', session);
 
-		output_tabs.addWidget(output_widget_plot);
-		output_tabs.addWidget(output_widget_text);
-		output_tabs.addWidget(output_widget_error);
+			output_tabs.addWidget(output_widget_plot);
+			output_tabs.addWidget(output_widget_text);
+			output_tabs.addWidget(output_widget_error);
+			this.app.shell.add(output_tabs, 'right', { rank: 400 });
+			this.output_tabs = output_tabs;
+		}
 
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget, { mode: 'split-right', ref: tree_widget });
-		this.widget.addWidget(output_tabs, { mode: 'split-bottom' });
-		this.workflowEngine = new WorkflowEngineWidget(session, this.widget, this.notebook_tracker);
+		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker);
 		const main = new MainAreaWidget({ content: this.workflowEngine });
 		main.id = 'jupyphant-workflow-main-widget';
 		main.title.label = 'Jupyphant Workflow';
@@ -695,11 +685,7 @@ class JupyphantExtension {
 		buttonRunAnalysisRemote.disabled = true;
 
 		buttonRunAnalysisRemote.onclick = async () => {
-			let widgets_iter = [...this.widget.widgets()];
-			let output_content = <DockPanel>widgets_iter[2];
-			let output_content_iter = [...output_content.widgets()];
-			let output_content_text = <Panel>output_content_iter[2];
-			let outarea_content_text = <OutputArea>output_content_text.widgets[0];
+			const outarea_content_text = this.outarea_workflow!;
 
 
 			const functionName = dropdownElephantFunction.value;
@@ -831,11 +817,7 @@ class JupyphantExtension {
 		buttonRunAnalysisLocal.style.width = "100%";
 
 		buttonRunAnalysisLocal.onclick = async () => {
-			let widgets_iter = [...this.widget.widgets()];
-			let output_content = <DockPanel>widgets_iter[2];
-			let output_content_iter = [...output_content.widgets()];
-			let output_content_text = <Panel>output_content_iter[2];
-			let outarea_content_text = <OutputArea>output_content_text.widgets[0];
+			const outarea_content_text = this.outarea_workflow!;
 
 			const functionName = dropdownElephantFunction.value;
 			const moduleName = dropdownElephantModule.value;
@@ -1131,7 +1113,7 @@ class JupyphantExtension {
 	}
 
 
-	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext) {
+	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext): OutputArea {
 		/**
 		  * Creates an OutputArea inside 'tab', in which the output of executed pythonCode will displayed
 		  *
@@ -1153,6 +1135,7 @@ class JupyphantExtension {
 		for (let currCls of cls) {
 			outarea.addClass(currCls);
 		}
+		return outarea;
 	}
 
 	//@ts-ignore

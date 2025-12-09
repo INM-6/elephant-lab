@@ -1,6 +1,6 @@
 import { ISessionContext, showDialog, Dialog } from '@jupyterlab/apputils';
 import { KernelMessage } from '@jupyterlab/services';
-import { DockPanel, Widget, Panel } from '@lumino/widgets';
+import { Widget } from '@lumino/widgets';
 import { Message } from '@lumino/messaging';
 import { OutputArea } from '@jupyterlab/outputarea';
 import { LiteGraph, LGraph, LGraphCanvas, LGraphNode } from 'litegraph.js';
@@ -163,7 +163,7 @@ export class WorkflowEngineWidget extends Widget {
     private graph: LGraph | null;
     private graphCanvas: LGraphCanvas | null;
     private canvasElement: HTMLCanvasElement;
-    private widget: DockPanel; // used to get OutputAreas
+    private outputArea: OutputArea;
     private notebook_tracker: INotebookTracker; // Current active Notebook -> used for Cell Injection
     public session: ISessionContext | null; // used to execute Python Code in same session as Jupyphant 
     private elephantMenu: any = { content: "Elephant (loading...)", disabled: true };
@@ -172,13 +172,13 @@ export class WorkflowEngineWidget extends Widget {
     session, widget and notebook_tracker are used to keep track of the notebook status 
     and communicate with Jupyphant (since the WorkflowEngine is a Widget of its own)
     */
-    constructor(session: ISessionContext | null = null, widget: DockPanel, notebook_tracker: INotebookTracker) {
+    constructor(session: ISessionContext | null = null, outputArea: OutputArea, notebook_tracker: INotebookTracker) {
         super();
         this.id = 'workflowEngine';
         this.title.label = 'Workflow Engine';
         this.title.closable = true;
         this.session = session;
-        this.widget = widget;
+        this.outputArea = outputArea;
         this.notebook_tracker = notebook_tracker;
         this.graph = null;
         this.graphCanvas = null;
@@ -1132,12 +1132,7 @@ except Exception as e:
     // Helper function to get Text-OutputArea of Jupyphant (for Plot you may use another one)
     private _getWorkflowOutputArea(): OutputArea | null {
         try {
-            let widgets_iter = [...this.widget.widgets()];
-            let output_content = <DockPanel>widgets_iter[2];
-            let output_content_iter = [...output_content.widgets()];
-            let output_content_text = <Panel>output_content_iter[2];
-            let outarea_content_text = <OutputArea>output_content_text.widgets[0];
-            return outarea_content_text;
+            return this.outputArea;
         } catch (e) {
             console.error("Could not find OutputArea!", e);
             return null;
