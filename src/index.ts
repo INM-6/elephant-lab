@@ -479,12 +479,13 @@ class JupyphantExtension {
 			output_tabs.addWidget(output_widget_plot);
 			output_tabs.addWidget(output_widget_text);
 			output_tabs.addWidget(output_widget_error);
-			this.app.shell.add(output_tabs, 'right', { rank: 400 });
+			this.app.shell.add(output_tabs, 'left', { rank: 400 });
+			output_tabs.addClass('my-jupyphantWidget');
 			this.output_tabs = output_tabs;
 		}
 
 		this.widget.addWidget(tree_widget);
-		this.widget.addWidget(explorer_widget, { mode: 'split-right', ref: tree_widget });
+		this.widget.addWidget(explorer_widget, { mode: 'split-bottom', ref: tree_widget });
 		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker);
 		const main = new MainAreaWidget({ content: this.workflowEngine });
 		main.id = 'jupyphant-workflow-main-widget';
