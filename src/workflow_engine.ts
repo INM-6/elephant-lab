@@ -1326,10 +1326,10 @@ except Exception as e:
     private async _getDocstring(code: string): Promise<string | null> {
         if (!this.session || !this.session.session) { return null; }
         const pythonCode = `
-import inspect, json, sys, pprint
+import inspect, json, sys, pprint, html
 
 target_obj = None
-info_parts = []
+html_output = []
 
 try:
     fqn = "${code}"
@@ -1347,31 +1347,41 @@ try:
 
     if target_obj is None:
         try:
-            # Fallback for notebook variables or other non-module objects
             target_obj = eval(fqn)
         except Exception:
-            info_parts.append(f"Could not find object '{fqn}'")
+            safe_name = html.escape(fqn)
+            html_output.append(f"<p>Could not find object '<b>{safe_name}</b>'</p>")
 
     if target_obj is not None:
         # Get pretty-printed representation first
         try:
             representation = pprint.pformat(target_obj)
-            info_parts.append(representation)
-        except Exception as e_pprint:
-            info_parts.append(f"Could not get representation for '{fqn}': {e_pprint}")
+            safe_rep = html.escape(representation)
+            
+            html_output.append("<h4>Representation:</h4>")
+            html_output.append(
+                f"<pre style='background-color: var(--jp-layout-color2); padding: 8px; border-radius: 4px;'>{safe_rep}</pre>"
+            )
+        except Exception as e:
+            html_output.append(f"<p><i>Could not get representation: {html.escape(str(e))}</i></p>")
 
         # Then get docstring
         docstring = inspect.getdoc(target_obj)
         if docstring:
-            info_parts.append("\\n\\n--- Docstring ---\\n")
-            info_parts.append(docstring)
+            safe_doc = html.escape(docstring)
+            html_output.append("<hr><h4>Docstring:</h4>")
+            html_output.append(
+                f"<pre style='white-space: pre-wrap; font-family: var(--jp-code-font-family);'>{safe_doc}</pre>"
+            )
+        else:
+             html_output.append("<p><i>No docstring found.</i></p>")
     
-    final_info = "".join(info_parts)
-    print(json.dumps(final_info if final_info else None))
+    final_html = "".join(html_output)
+    print(json.dumps(final_html if final_html else None))
 
 except Exception as e:
-    print(json.dumps(f"An error occurred while trying to get info for '{code}': {str(e)}"))
-        `;
+    print(json.dumps(f"<p style='color:var(--jp-error-color)'>An error occurred: {html.escape(str(e))}</p>"))
+`;
         let msg_content: string = "";
         let future = this.session.session.kernel!.requestExecute({ code: pythonCode });
         future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
@@ -1397,11 +1407,18 @@ except Exception as e:
         body.style.maxHeight = '50vh';
         body.style.overflowY = 'auto';
 
+        // Create a simple widget to hold the HTML
+        class HtmlBody extends Widget {
+            constructor(htmlContent: string) {
+                super();
+                this.node.innerHTML = htmlContent;
+            }
+        }
 
+        // Show the dialog
         showDialog({
-            title: `Documentation for ${node.properties.item.name}`,
-            body: new Widget({ node: body }),
-            buttons: [Dialog.okButton({ label: 'Close' })]
+            title: `Info for ${code}`,
+            body: new HtmlBody(docstring || "No docstring found.")
         });
     }
 
