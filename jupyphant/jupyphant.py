@@ -418,8 +418,15 @@ class Jupyphant:
                     axs[i, 2] = self.plot_instantaneous_rates_colormesh(rates, axes=axs[i, 2])
                     axs[i, 2].set_title(f"IFR:\n {top_node}")
                     # plot correlation
-                    if len(spiketrains[top_node]) > 1:
-                        binned_spiketrains = self.BinnedSpikeTrain(spiketrains[top_node], bin_size=100 * self.pq.ms)
+                    selected_ids = [
+                    self.map_ipytree_node_id_to_neo_obj_hash[node._id]
+                    for node in self.ipytree_of_neo_objects.selected_nodes
+                    if node._id in self.map_ipytree_node_id_to_neo_obj_hash
+                    ]
+                    extracted_spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=neo.SpikeTrain).items()
+                    if len(extracted_spiketrains) > 1:
+                        sp_list = [st[0] for _, st in extracted_spiketrains]
+                        binned_spiketrains = self.BinnedSpikeTrain(sp_list, bin_size=100 * self.pq.ms)
                         corrcoef_matrix = self.correlation_coefficient(binned_spiketrains)
                         axs[i, 3] = self.plot_corrcoef(corrcoef_matrix, axes=axs[i, 3])
                         axs[i, 3].set_xlabel('Neuron')
