@@ -243,6 +243,20 @@ export class WorkflowEngineWidget extends Widget {
         };
         buttonContainer.appendChild(generateCodeButton);
 
+        const importButton = document.createElement('button');
+        importButton.innerHTML = 'Upload workflow from file <i class="fa fa-upload" aria-hidden="true"></i>';
+        importButton.title = 'Import a workflow from a file';
+        importButton.className = 'workflow-button workflow-button-io';
+        importButton.onclick = () => this._importWorkflow();
+        buttonContainer.appendChild(importButton);
+
+        const exportButton = document.createElement('button');
+        exportButton.innerHTML = 'Download workflow as file <i class="fa fa-download" aria-hidden="true"></i>';
+        exportButton.title = 'Export the workflow to a file';
+        exportButton.className = 'workflow-button workflow-button-io';
+        exportButton.onclick = () => this._exportWorkflow();
+        buttonContainer.appendChild(exportButton);
+
         this.node.appendChild(buttonContainer);
 
         this.canvasElement = document.createElement('canvas');
@@ -361,6 +375,15 @@ export class WorkflowEngineWidget extends Widget {
         .workflow-button-generate:hover {
             background-color: var(--jp-accent-color2);
             border-color: var(--jp-accent-color2);
+        }
+        .workflow-button-io {
+            background-color: var(--jp-info-color1);
+            color: white;
+            border-color: var(--jp-info-color1);
+        }
+        .workflow-button-io:hover {
+            background-color: var(--jp-info-color2);
+            border-color: var(--jp-info-color2);
         }
         .workflow-button-debug {
             background-color: var(--jp-warn-color2);
@@ -2002,5 +2025,108 @@ except Exception as e:
             console.error("Failed to parse elephant members from kernel:", e, msg_content);
             return null;
         }
+    }
+
+
+    private _exportWorkflow() {
+        if (!this.graph) {
+            return;
+        }
+
+        try {
+            const data = this.graph.serialize();
+            const dataStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'workflow.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Error serializing workflow:", err);
+            showDialog({
+                title: 'Export Error',
+                body: 'Could not serialize the workflow. Check console for details.',
+                buttons: [Dialog.okButton()]
+            });
+        }
+    }
+
+    private _importWorkflow() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.onchange = (event: Event) => {
+            const file = (event.target as HTMLInputElement).files?.[0];
+            if (!file) {
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e: ProgressEvent<FileReader>) => {
+                try {
+                    if (typeof e.target?.result !== 'string') {
+                        throw new Error("File could not be read as text.");
+                    }
+                    const data = JSON.parse(e.target.result);
+                    if (this.graph) {
+                        this.graph.clear();
+
+                        if (data.nodes) {
+                            for (const node_info of data.nodes) {
+                                if (!LiteGraph.registered_node_types[node_info.type]) {
+                                    console.error("Node type not found: " + node_info.type);
+                                    continue;
+                                }
+                                const node = LiteGraph.createNode(node_info.type) as JupyphantNode;
+                                if (node) {
+                                    node.id = node_info.id;
+                                    node.pos = node_info.pos;
+                                    if (node_info.size) node.size = node_info.size;
+
+                                    if (node_info.properties) {
+                                        node.properties = Object.assign({}, node.properties, node_info.properties);
+
+                                        if (node.properties.item) {
+                                            node.setProperty("item", node.properties.item);
+                                        }
+                                    }
+
+                                    this.graph.add(node);
+                                }
+                            }
+                        }
+
+                        if (data.links) {
+                            for (const link_info of data.links) {
+                                const origin_node = this.graph.getNodeById(link_info[1]);
+                                const target_node = this.graph.getNodeById(link_info[3]);
+                                if (origin_node && target_node) {
+                                    const link = origin_node.connect(link_info[2], target_node, link_info[4]);
+                                    if (link) {
+                                        link.id = link_info[0];
+                                    }
+                                } else {
+                                    console.warn("Could not find nodes for link:", link_info);
+                                }
+                            }
+                        }
+                        this.graph.setDirtyCanvas(true, true);
+                    }
+                } catch (err) {
+                    console.error("Error parsing or configuring workflow file:", err);
+                    showDialog({
+                        title: 'Import Error',
+                        body: 'Could not parse or configure from the selected workflow file.',
+                        buttons: [Dialog.okButton()]
+                    });
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
     }
 }
