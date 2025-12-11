@@ -43,6 +43,18 @@ class JupyphantNode extends LGraphNode {
         // reset outputs
         this.outputs.length = 0;
 
+        if (this.properties.item?.code === '__UTIL_LOOP__') {
+            this.title = "For Loop";
+            this.addInput("exec in", LiteGraph.EVENT);
+            this.addInput("List", "");
+
+            this.addOutput("after loop", LiteGraph.EVENT);
+            this.addOutput("loop body", LiteGraph.EVENT);
+            this.addOutput("item", "");
+            this.addOutput("index", "number");
+            return;
+        }
+
         // Add execution pins only to "processing" nodes, not "source/variable" nodes.
         // This avoids cluttering the UI for nodes that just represent data.
         let isProcessingNode = false;
@@ -723,7 +735,12 @@ export class WorkflowEngineWidget extends Widget {
             sortedList.push(currentNode);
 
             // Find the 'exec out' slot and see what it's connected to
-            const execOutput = currentNode.outputs.find(output => output.type === -1);
+            let execOutput;
+            if ((currentNode as JupyphantNode).properties?.item.code === '__UTIL_LOOP__') {
+                execOutput = currentNode.outputs.find(output => output.name === 'after loop');
+            } else {
+                execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'loop body');
+            }
             if (execOutput && execOutput.links) {
                 for (const linkId of execOutput.links) {
                     const link = this.graph.links[linkId];
@@ -810,7 +827,105 @@ export class WorkflowEngineWidget extends Widget {
 
         console.log("4. Processing node:", item.name);
 
-        // resolve Dependencies of previous graph nodes to correctly execute 
+        if (item.code === '__UTIL_LOOP__') {
+            const listInput = jupyphantNode.inputs.find(i => i.name === 'List');
+            if (!listInput || listInput.link === null) {
+                executed_nodes.set(jupyphantNode, null);
+                return null;
+            }
+            const listLink = this.graph!.links[listInput.link];
+            const listOriginNode = this.graph!.getNodeById(listLink.origin_id);
+            if (!listOriginNode) {
+                executed_nodes.set(jupyphantNode, null);
+                return null;
+            }
+            const listKey = await this.executeNode(listOriginNode, executed_nodes, outputArea);
+            if (!listKey) {
+                executed_nodes.set(jupyphantNode, null);
+                return null;
+            }
+
+            const loopBodyExecOutput = jupyphantNode.outputs.find(o => o.name === 'loop body');
+            if (!loopBodyExecOutput || !loopBodyExecOutput.links || loopBodyExecOutput.links.length === 0) {
+                executed_nodes.set(jupyphantNode, null);
+                return null;
+            }
+            const loopBodyStartLink = this.graph!.links[loopBodyExecOutput.links[0]];
+            const loopBodyStartNode = this.graph!.getNodeById(loopBodyStartLink.target_id);
+
+            if (!loopBodyStartNode) {
+                executed_nodes.set(jupyphantNode, null);
+                return null;
+            }
+
+            const loopBodyNodes = this._getSubgraphExecutionOrder(loopBodyStartNode);
+
+            let loopBodyCode = "";
+            const loopScopeExecutedNodes = new Map<LGraphNode, string | null>();
+
+            for (const bodyNode of loopBodyNodes) {
+                if (!(bodyNode instanceof JupyphantNode)) continue;
+
+                const bodyNodeItem = bodyNode.properties.item;
+                const bodyNodeArgs: (string | null)[] = [];
+
+                if (bodyNodeItem.parameters) {
+                    for (const param of bodyNodeItem.parameters) {
+                        const inputIndex = bodyNode.inputs.findIndex(i => i.name === param.name);
+                        let value: string | null = null;
+
+                        if (inputIndex !== -1 && bodyNode.inputs[inputIndex].link !== null) {
+                            const linkInfo = this.graph!.links[bodyNode.inputs[inputIndex].link!];
+                            const originNode = this.graph!.getNodeById(linkInfo.origin_id);
+
+                            if (originNode) {
+                                if (originNode === jupyphantNode) {
+                                    const outputSlot = jupyphantNode.outputs[linkInfo.origin_slot];
+                                    if (outputSlot.name === 'item') {
+                                        value = '__loop_item__';
+                                    } else if (outputSlot.name === 'index') {
+                                        value = '__loop_index__';
+                                    }
+                                } else if (loopScopeExecutedNodes.has(originNode)) {
+                                    value = loopScopeExecutedNodes.get(originNode)!;
+                                } else if (executed_nodes.has(originNode)) {
+                                    value = executed_nodes.get(originNode)!;
+                                } else {
+                                    value = await this.executeNode(originNode, executed_nodes, outputArea);
+                                }
+                            }
+                        } else {
+                            const propName = `param_${param.name}`;
+                            value = (bodyNode.properties[propName] as string) || null;
+                        }
+                        bodyNodeArgs.push(value);
+                    }
+                }
+                const bodyNodeResultId = `result_${crypto.randomUUID().replace(/-/g, '_')}`;
+                const nodeCode = this._generatePythonCodeForNode(bodyNode as JupyphantNode, bodyNodeArgs, bodyNodeResultId);
+                if (nodeCode) {
+                    const indentedCode = nodeCode.split('\n').map(line => "    " + line).join('\n');
+                    loopBodyCode += indentedCode + "\n";
+                }
+                loopScopeExecutedNodes.set(bodyNode, bodyNodeResultId);
+            }
+
+            const resultsDictName = "workflow_results";
+            const codeToExecute = `
+_list = ${resultsDictName}['${listKey}']
+for __loop_index__, __loop_item__ in enumerate(_list):
+    ${resultsDictName}['__loop_item__'] = __loop_item__
+    ${resultsDictName}['__loop_index__'] = __loop_index__
+${loopBodyCode}
+`;
+
+            console.log("Executing loop code:\n", codeToExecute);
+            await this.executeCode(codeToExecute, true, outputArea);
+
+            executed_nodes.set(jupyphantNode, null); // Loop node itself has no result
+            return null;
+        }
+
         const args: (string | null)[] = [];
         if (item.parameters && item.parameters.length > 0) {
             console.log("...collecting parameters for", item.name);
@@ -837,11 +952,39 @@ export class WorkflowEngineWidget extends Widget {
         console.log("5. Collected string args/keys:", args);
 
 
-        let codeToExecute = "";
         const resultId = `result_${crypto.randomUUID().replace(/-/g, '_')}`;
+        const codeToExecute = this._generatePythonCodeForNode(jupyphantNode, args, resultId);
+
+        if (!codeToExecute) {
+            executed_nodes.set(jupyphantNode, null);
+            return null;
+        }
+
+        console.log("Executing code for", item.name);
+        const result_key = await this.executeCode(codeToExecute, true, outputArea);
+
+        if (result_key && result_key.startsWith("result_")) {
+            console.log("Got result key for", item.name, ":", result_key);
+            const dataOutputIndex = jupyphantNode.outputs.findIndex(o => o.name === 'result');
+            if (dataOutputIndex !== -1) {
+                jupyphantNode.setOutputData(dataOutputIndex, result_key);
+            }
+            executed_nodes.set(jupyphantNode, result_key);
+            return result_key;
+        } else {
+            if (result_key) {
+                console.warn("Got error or unexpected stdout for", item.name, ":", result_key);
+            }
+            executed_nodes.set(jupyphantNode, null);
+            return null;
+        }
+    }
+
+    private _generatePythonCodeForNode(node: JupyphantNode, args: (string | null)[], resultId: string): string {
+        const item = node.properties.item;
         const args_json_string = JSON.stringify(args);
         const resultsDictName = "workflow_results";
-
+        let codeToExecute = "";
 
         // Code is pickled python code
         if (item.code.startsWith("b'")) {
@@ -977,8 +1120,7 @@ except Exception as e:
 
             if (!modulePath || !functionName) {
                 console.error("Invalid item.code:", item.code);
-                executed_nodes.set(jupyphantNode, null);
-                return null;
+                return ""
             }
 
             const paramNames = item.parameters.map(p => p.name);
@@ -1050,27 +1192,50 @@ except Exception as e:
 except Exception as e:
     print(f"Error getting object for variable ${varName}: {e}", file=sys.stderr)`;
         }
-
-        console.log("6. Executing code for", item.name);
-        const result_key = await this.executeCode(codeToExecute, true, outputArea);
-
-        if (result_key && result_key.startsWith("result_")) {
-            console.log("7. Got result key for", item.name, ":", result_key);
-            const dataOutputIndex = jupyphantNode.outputs.findIndex(o => o.name === 'result');
-            if (dataOutputIndex !== -1) {
-                jupyphantNode.setOutputData(dataOutputIndex, result_key);
-            }
-            executed_nodes.set(jupyphantNode, result_key);
-            return result_key;
-        } else {
-            if (result_key) {
-                console.warn("7. Got error or unexpected stdout for", item.name, ":", result_key);
-            }
-            executed_nodes.set(jupyphantNode, null);
-            return null;
-        }
+        return codeToExecute
     }
 
+
+    private _getSubgraphExecutionOrder(startNode: LGraphNode): LGraphNode[] {
+        const sortedList: LGraphNode[] = [];
+        if (!startNode) {
+            return sortedList;
+        }
+
+        const visited = new Set<LGraphNode>();
+        const queue: LGraphNode[] = [startNode];
+
+        while (queue.length > 0) {
+            const currentNode = queue.shift()!;
+
+            if (visited.has(currentNode)) {
+                continue;
+            }
+            visited.add(currentNode);
+            sortedList.push(currentNode);
+
+            let execOutput;
+            if ((currentNode as JupyphantNode).properties?.item.code === '__UTIL_LOOP__') {
+                execOutput = currentNode.outputs.find(output => output.name === 'after loop');
+            } else {
+                execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'loop body');
+            }
+
+            if (execOutput && execOutput.links) {
+                for (const linkId of execOutput.links) {
+                    const link = this.graph!.links[linkId];
+                    if (link) {
+                        const nextNode = this.graph!.getNodeById(link.target_id);
+                        if (nextNode && !visited.has(nextNode)) {
+                            queue.push(nextNode);
+                        }
+                    }
+                }
+            }
+        }
+
+        return sortedList;
+    }
 
     // Run Code in specific OutputArea (e.g. Jupyphants-Text-Output or -Plot-Output)
     private async executeCode(code: string, executeCode = false, outputArea: OutputArea): Promise<string | null> {
@@ -1155,13 +1320,11 @@ except Exception as e:
 
 
     private _generateCodeFromWorkflow() {
-        const allNodes = (this.graph as any)._nodes as JupyphantNode[];
         const nodeResultNames = new Map<LGraphNode, string>();
         const codeLines: string[] = [];
         const imports = new Set<string>();
         let varCounter = 0;
         const generatedNodes = new Set<LGraphNode>();
-        const loadedObjects = new Map<string, string>();
 
         const sanitizeVarName = (name: string) => {
             const namePart = name.split(' ')[0];
@@ -1176,7 +1339,7 @@ except Exception as e:
             return sanitized;
         };
 
-        const generateCodeForNode = (jupyphantNode: JupyphantNode) => {
+        const generateCodeForNode = (jupyphantNode: JupyphantNode, indent = "") => {
             if (generatedNodes.has(jupyphantNode)) {
                 return;
             }
@@ -1188,6 +1351,41 @@ except Exception as e:
                 return;
             }
 
+            if (item.code === '__UTIL_LOOP__') {
+                generatedNodes.add(jupyphantNode);
+
+                const listInput = jupyphantNode.inputs.find(i => i.name === 'List');
+                if (!listInput || listInput.link === null) return;
+                const listLink = this.graph!.links[listInput.link];
+                const listOriginNode = this.graph!.getNodeById(listLink.origin_id);
+
+                if (listOriginNode instanceof JupyphantNode) {
+                    generateCodeForNode(listOriginNode, indent);
+                    const listVarName = nodeResultNames.get(listOriginNode);
+                    if (!listVarName) return;
+
+                    const loopBodyExecOutput = jupyphantNode.outputs.find(o => o.name === 'loop body');
+                    if (!loopBodyExecOutput || !loopBodyExecOutput.links || !loopBodyExecOutput.links.length) return;
+
+                    const loopBodyStartLink = this.graph!.links[loopBodyExecOutput.links[0]];
+                    const loopBodyStartNode = this.graph!.getNodeById(loopBodyStartLink.target_id);
+
+                    if (loopBodyStartNode) {
+                        const loopBodyNodes = this._getSubgraphExecutionOrder(loopBodyStartNode);
+
+                        codeLines.push(indent + `for loop_index, loop_item in enumerate(${listVarName}):`);
+
+                        for (const bodyNode of loopBodyNodes) {
+                            if (bodyNode instanceof JupyphantNode) {
+                                generateCodeForNode(bodyNode, indent + "    ");
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+
+
             // Recursively generate code for dependencies first
             if (item.parameters) {
                 for (const param of item.parameters) {
@@ -1197,7 +1395,7 @@ except Exception as e:
                         if (linkInfo) {
                             const originNode = this.graph!.getNodeById(linkInfo.origin_id);
                             if (originNode instanceof JupyphantNode) {
-                                generateCodeForNode(originNode);
+                                generateCodeForNode(originNode, indent);
                             }
                         }
                     }
@@ -1224,7 +1422,16 @@ except Exception as e:
                         const linkInfo = this.graph!.links[input.link];
                         if (linkInfo) {
                             const originNode = this.graph!.getNodeById(linkInfo.origin_id);
-                            if (originNode && nodeResultNames.has(originNode)) {
+                            if (originNode && (originNode as JupyphantNode).properties.item.code === '__UTIL_LOOP__') {
+                                const outputSlot = originNode.outputs[linkInfo.origin_slot];
+                                if (outputSlot.name === 'item') {
+                                    argumentValue = 'loop_item';
+                                } else if (outputSlot.name === 'index') {
+                                    argumentValue = 'loop_index';
+                                } else {
+                                    argumentValue = 'None';
+                                }
+                            } else if (originNode && nodeResultNames.has(originNode)) {
                                 argumentValue = nodeResultNames.get(originNode)!;
                             } else {
                                 argumentValue = 'None';
@@ -1260,8 +1467,7 @@ except Exception as e:
 
             let lineOfCode = '';
 
-            if (item.code.startsWith("b'") || (item.id.length > 20 && !item.code.includes("."))) {
-                loadedObjects.set(resultVarName, item.name);
+            if (item.code.startsWith("b'")) {
             } else if (item.code === "__UTIL_LIST__") {
                 const listItems = processedArgs.filter(arg => arg.value !== 'None').map(arg => arg.value).join(', ');
                 lineOfCode = `${resultVarName} = [${listItems}]`;
@@ -1300,17 +1506,18 @@ except Exception as e:
                     .join(', ');
                 lineOfCode = `${resultVarName} = ${fqn}(${processed_args})`;
             } else {
-                loadedObjects.set(resultVarName, item.name);
+                // loadedObjects.set(resultVarName, item.name);
             }
 
             if (lineOfCode) {
-                codeLines.push(lineOfCode);
+                codeLines.push(indent + lineOfCode);
             }
 
             generatedNodes.add(jupyphantNode);
         };
 
-        for (const node of allNodes) {
+        const executionOrder = this._getExecutionOrder();
+        for (const node of executionOrder) {
             if (node instanceof JupyphantNode) {
                 generateCodeForNode(node);
             }
@@ -1427,6 +1634,34 @@ except Exception as e:
 
         return () => {
             return [
+                {
+                    content: "Loop",
+                    submenu: {
+                        options: [
+                            {
+                                content: "For Loop",
+                                callback: (value: any, options: any, event: any, parentMenu: any) => {
+                                    const item: DraggableItem = {
+                                        id: "util/for_loop",
+                                        name: "For Loop",
+                                        code: "__UTIL_LOOP__",
+                                        is_class: false,
+                                        parameters: [
+                                            // No standard parameters here, we will set up inputs/outputs manually
+                                        ]
+                                    };
+                                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    if (this.graph && this.graphCanvas) {
+                                        node.properties.item = item;
+                                        node.setProperty("item", item);
+                                        node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
+                                        this.graph.add(node);
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
                 {
                     content: "Output",
                     submenu: {
