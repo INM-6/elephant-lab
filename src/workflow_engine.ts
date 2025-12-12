@@ -6,6 +6,7 @@ import { OutputArea } from '@jupyterlab/outputarea';
 import { LiteGraph, LGraph, LGraphCanvas, LGraphNode } from 'litegraph.js';
 import 'litegraph.js/css/litegraph.css';
 import { INotebookTracker, NotebookActions } from '@jupyterlab/notebook';
+import { IRenderMimeRegistry, MimeModel } from '@jupyterlab/rendermime';
 
 // Attributes of a Jupyphant Node to distinguish different types of nodes
 export type DraggableItem = {
@@ -179,12 +180,13 @@ export class WorkflowEngineWidget extends Widget {
     private notebook_tracker: INotebookTracker; // Current active Notebook -> used for Cell Injection
     public session: ISessionContext | null; // used to execute Python Code in same session as Jupyphant 
     private elephantMenu: any = { content: "Elephant (loading...)", disabled: true };
+    private rendermime: IRenderMimeRegistry;
 
     /*
     session, widget and notebook_tracker are used to keep track of the notebook status 
     and communicate with Jupyphant (since the WorkflowEngine is a Widget of its own)
     */
-    constructor(session: ISessionContext | null = null, outputArea: OutputArea, notebook_tracker: INotebookTracker) {
+    constructor(session: ISessionContext | null = null, outputArea: OutputArea, notebook_tracker: INotebookTracker, rendermime: IRenderMimeRegistry) {
         super();
         this.id = 'workflowEngine';
         this.title.label = 'Workflow Engine';
@@ -192,6 +194,7 @@ export class WorkflowEngineWidget extends Widget {
         this.session = session;
         this.outputArea = outputArea;
         this.notebook_tracker = notebook_tracker;
+        this.rendermime = rendermime;
         this.graph = null;
         this.graphCanvas = null;
         this.addClass('jp-workflowEngine');
@@ -1556,10 +1559,10 @@ except Exception as e:
     private async _getDocstring(code: string): Promise<string | null> {
         if (!this.session || !this.session.session) { return null; }
         const pythonCode = `
-import inspect, json, sys, pprint, html
+import inspect, json, sys, pprint
 
 target_obj = None
-html_output = []
+md_output = []
 
 try:
     fqn = "${code}"
@@ -1579,38 +1582,31 @@ try:
         try:
             target_obj = eval(fqn)
         except Exception:
-            safe_name = html.escape(fqn)
-            html_output.append(f"<p>Could not find object '<b>{safe_name}</b>'</p>")
+            md_output.append(f"Could not find object '**{fqn}**'")
 
     if target_obj is not None:
         # Get pretty-printed representation first
         try:
             representation = pprint.pformat(target_obj)
-            safe_rep = html.escape(representation)
-            
-            html_output.append("<h4>Representation:</h4>")
-            html_output.append(
-                f"<pre style='background-color: var(--jp-layout-color2); padding: 8px; border-radius: 4px;'>{safe_rep}</pre>"
-            )
+            md_output.append("#### Representation:")
+            md_output.append(f"\`\`\`python\\n{representation}\\n\`\`\`")
         except Exception as e:
-            html_output.append(f"<p><i>Could not get representation: {html.escape(str(e))}</i></p>")
+            md_output.append(f"*Could not get representation: {e}*")
 
         # Then get docstring
         docstring = inspect.getdoc(target_obj)
         if docstring:
-            safe_doc = html.escape(docstring)
-            html_output.append("<hr><h4>Docstring:</h4>")
-            html_output.append(
-                f"<pre style='white-space: pre-wrap; font-family: var(--jp-code-font-family);'>{safe_doc}</pre>"
-            )
+            md_output.append("---")
+            md_output.append("#### Docstring:")
+            md_output.append(docstring)
         else:
-             html_output.append("<p><i>No docstring found.</i></p>")
+             md_output.append("*No docstring found.*")
     
-    final_html = "".join(html_output)
-    print(json.dumps(final_html if final_html else None))
+    final_md = "\\n\\n".join(md_output)
+    print(json.dumps(final_md if final_md else None))
 
 except Exception as e:
-    print(json.dumps(f"<p style='color:var(--jp-error-color)'>An error occurred: {html.escape(str(e))}</p>"))
+    print(json.dumps(f"An error occurred: {e}"))
 `;
         let msg_content: string = "";
         let future = this.session.session.kernel!.requestExecute({ code: pythonCode });
@@ -1630,25 +1626,18 @@ except Exception as e:
         const code = node.properties.item.code;
         const docstring = await this._getDocstring(code);
 
-        const body = document.createElement('pre');
-        body.textContent = docstring || "No docstring found.";
-        body.style.whiteSpace = 'pre-wrap';
-        body.style.wordWrap = 'break-word';
-        body.style.maxHeight = '50vh';
-        body.style.overflowY = 'auto';
+        const mimeType = 'text/markdown';
+        const model = new MimeModel({
+            data: { [mimeType]: docstring || "*No docstring found.*" }
+        });
 
-        // Create a simple widget to hold the HTML
-        class HtmlBody extends Widget {
-            constructor(htmlContent: string) {
-                super();
-                this.node.innerHTML = htmlContent;
-            }
-        }
+        const renderer = this.rendermime.createRenderer(mimeType);
+        await renderer.renderModel(model);
 
         // Show the dialog
         showDialog({
             title: `Info for ${code}`,
-            body: new HtmlBody(docstring || "No docstring found.")
+            body: renderer
         });
     }
 

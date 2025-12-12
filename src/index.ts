@@ -486,7 +486,7 @@ class JupyphantExtension {
 
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget, { mode: 'split-bottom', ref: tree_widget });
-		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker);
+		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker, rendermime);
 		const main = new MainAreaWidget({ content: this.workflowEngine });
 		main.id = 'jupyphant-workflow-main-widget';
 		main.title.label = 'Jupyphant Workflow';
