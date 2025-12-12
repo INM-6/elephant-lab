@@ -558,47 +558,25 @@ export class WorkflowEngineWidget extends Widget {
         }
     }
 
+
+    /*Method used to generate python code string that should be run on the Jupyter Kernel
+    fqn: function that should be called (needs to exist in jupyphant.graphLogic)
+    fqnParam: parameter that should be passed to the function (needs to displayed as a string)
+    */
+    private _generateCodeForFqn(fqn: string, fqnParam: string): string {
+        return `
+    from jupyphant.graphLogic import ${fqn}
+    import json
+    print(json.dumps(${fqn}(${fqnParam})))
+    `;
+    }
+
     /* Method used to get Details for given Object (determine whether Object is a class)
     and get the Details (thus arguments) for this Object
     TODO: currently inspect is used to gather all information of the parameters -> rewrite to use PyDantic models */
     private async _getDetailsForName(fqn: string): Promise<DraggableItem | null> {
         if (!this.session || !this.session.session) { return null; }
-        const code = `
-        import inspect, json, sys
-        def _get_params_for_obj(obj):
-            param_list_for_json = []
-            try:
-                if inspect.isclass(obj): 
-                    sig = inspect.signature(obj.__init__)
-                    params = list(sig.parameters.values())[1:]
-                else: 
-                    sig = inspect.signature(obj) 
-                    params = sig.parameters.values()
-            except (ValueError, TypeError): 
-                return []
-            for param in params:
-                if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
-                    default_val = param.default
-                    if default_val is inspect.Parameter.empty: 
-                        default_val = "__REQUIRED__" 
-                    param_list_for_json.append({"name": param.name, "default": str(default_val)})
-            return param_list_for_json
-        try:
-            fqn = "${fqn}"; parts = fqn.split('.')
-            func_name = parts.pop()
-            module_path = ".".join(parts)
-            __import__(module_path) 
-            import sys 
-            module_obj = sys.modules[module_path] 
-            target_obj = getattr(module_obj, func_name)
-            details = {"id": fqn, "name": fqn, "is_class": inspect.isclass(target_obj), "code": fqn, "parameters": _get_params_for_obj(target_obj)}
-            print(json.dumps(details))
-        except Exception as e:
-            try: __import__(module_path)
-            except Exception as e_import: 
-                print(f"Failed to import {module_path}: {e_import}", file=sys.stderr)
-            print(f"Error inspecting {fqn}: {e}", file=sys.stderr); print(json.dumps(None))
-        `;
+        const code = this._generateCodeForFqn("getDetailsForName", `"${fqn}"`);
         let msg_content: string = "";
         let future = this.session.session.kernel!.requestExecute({ code });
         future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
