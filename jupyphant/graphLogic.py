@@ -1,4 +1,4 @@
-import inspect, sys
+import inspect, sys, json
 
 def getDetailsForName(fqn : str):
     def _get_params_for_obj(obj):
@@ -120,6 +120,7 @@ def getMethodsFromTarget(target_id_str : str):
 
 def generatePythonCodeForNodeStartWithB(item_code, item_name : str, resultId: str, resultsDictName):
     try:
+        import pickle
         data = pickle.loads(item_code)
         result = data[0]
         resultsDictName[resultId] = result
@@ -230,3 +231,65 @@ def generatePythonCodeForNodeStartWithDot(method_name, args_json_string, item_na
 
     except Exception as e:
         print(f"Error running method ${item_name}: {e}", file=sys.stderr)
+
+def generatePythonCodeForNodeIncludesDot(modulePath: str, resultsDictName, functionName: str, resultId: str, item_name: str, args_json_string, paramNamesJson):
+    import elephant.statistics, neo
+    import quantities as pq
+    import numpy as np
+
+    try:
+        __import__(modulePath)
+        module_obj = sys.modules[modulePath]
+    except ImportError:
+        print(f"Error: Could not import module ${modulePath}", file=sys.stderr)
+        module_obj = None
+
+    def _prepare_arg(arg_str):
+        if isinstance(arg_str, str):
+            if arg_str in resultsDictName:
+                return resultsDictName[arg_str]
+        if arg_str == "" or arg_str == "__REQUIRED__":
+            return None
+        try:
+            return eval(arg_str)
+        except:
+            return arg_str
+
+    try:
+        if module_obj:
+            method_to_run = getattr(module_obj, functionName)
+            raw_args = json.loads(args_json_string)
+            param_names = json.loads(paramNamesJson)
+            processed_args = [_prepare_arg(arg) for arg in raw_args]
+
+            kwargs = dict(zip(param_names, processed_args))
+
+            if functionName == "SpikeTrain" and isinstance(kwargs.get('times'), list):
+                kwargs['times'] = np.array(kwargs['times'], dtype=np.float64)
+
+            result = method_to_run(**kwargs)
+
+            resultsDictName[resultId] = result
+            print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+        else:
+            print(f"Error: Module ${modulePath} not loaded.", file=sys.stderr)
+    except Exception as e:
+        print(f"Error running ${item_name} (name): {e}", file=sys.stderr)
+
+def generatePythonCodeForNodeOther(varName: str, resultsDictName, resultId: str):
+    try:
+        node_id = varName
+        if node_id in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash:
+            neo_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node_id]
+            result = jupyphant_entity.map_neo_obj_hash_to_neo_obj[neo_hash]
+        elif node_id in globals():
+            result = globals()[node_id]
+        else:
+            result = None
+            print(f"Error: Variable or node id '{varName}' not found.", file=sys.stderr)
+        
+        if result is not None:
+            resultsDictName[resultId] = result
+            print(f"JUPYPHANT_RESULT_KEY:${resultId}")
+    except Exception as e:
+        print(f"Error getting object for variable ${varName}: {e}", file=sys.stderr)

@@ -947,71 +947,14 @@ ${loopBodyCode}
             const paramNames = item.parameters.map(p => p.name);
             const paramNamesJson = JSON.stringify(paramNames);
 
-            codeToExecute = `import elephant.statistics, neo
-import quantities as pq
-import numpy as np
-
-try:
-    __import__("${modulePath}")
-    module_obj = sys.modules["${modulePath}"]
-except ImportError:
-    print(f"Error: Could not import module ${modulePath}", file=sys.stderr)
-    module_obj = None
-
-def _prepare_arg(arg_str):
-    global ${resultsDictName}
-    if isinstance(arg_str, str):
-        if arg_str in ${resultsDictName}:
-            return ${resultsDictName}[arg_str]
-    if arg_str == "" or arg_str == "__REQUIRED__":
-        return None
-    try:
-        return eval(arg_str)
-    except:
-        return arg_str
-
-try:
-    if module_obj:
-        method_to_run = getattr(module_obj, "${functionName}")
-        raw_args = json.loads('''${args_json_string}''')
-        param_names = json.loads('''${paramNamesJson}''')
-        processed_args = [_prepare_arg(arg) for arg in raw_args]
-
-        kwargs = dict(zip(param_names, processed_args))
-
-        if "${functionName}" == "SpikeTrain" and isinstance(kwargs.get('times'), list):
-            kwargs['times'] = np.array(kwargs['times'], dtype=np.float64)
-
-        result = method_to_run(**kwargs)
-
-        ${resultsDictName}["${resultId}"] = result
-        print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
-    else:
-        print(f"Error: Module ${modulePath} not loaded.", file=sys.stderr)
-except Exception as e:
-    print(f"Error running ${item.name} (name): {e}", file=sys.stderr)`;
+            codeToExecute = this._generateCodeForFqn("generatePythonCodeForNodeIncludesDot", `"${modulePath}", ${resultsDictName}, "${functionName}", "${resultId}", "${item.name}", '''${args_json_string}''', '''${paramNamesJson}'''`);
         }
 
         // Get Object by variable name from notebook scope
         else {
             console.log("...using VARIABLE NAME (neo) execution logic");
             const varName = item.code;
-            codeToExecute = `try:
-    node_id = "${varName}"
-    if node_id in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash:
-        neo_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node_id]
-        result = jupyphant_entity.map_neo_obj_hash_to_neo_obj[neo_hash]
-    elif node_id in globals():
-        result = globals()[node_id]
-    else:
-        result = None
-        print(f"Error: Variable or node id '{varName}' not found.", file=sys.stderr)
-    
-    if result is not None:
-        ${resultsDictName}["${resultId}"] = result
-        print(f"JUPYPHANT_RESULT_KEY:${resultId}")
-except Exception as e:
-    print(f"Error getting object for variable ${varName}: {e}", file=sys.stderr)`;
+            codeToExecute = this._generateCodeForFqn("generatePythonCodeForNodeVariableName", `"${varName}", ${resultsDictName}, "${resultId}"`);
         }
         return codeToExecute
     }
