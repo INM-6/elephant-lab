@@ -908,9 +908,9 @@ export class WorkflowEngineWidget extends Widget {
                                 if (originNode === jupyphantNode) {
                                     const outputSlot = jupyphantNode.outputs[linkInfo.origin_slot];
                                     if (outputSlot.name === 'item') {
-                                        value = '__loop_item__';
+                                        value = '__jupyphant_loop_item__';
                                     } else if (outputSlot.name === 'index') {
-                                        value = '__loop_index__';
+                                        value = '__jupyphant_loop_index__';
                                     }
                                 } else if (loopScopeExecutedNodes.has(originNode)) {
                                     value = loopScopeExecutedNodes.get(originNode)!;
@@ -939,9 +939,9 @@ export class WorkflowEngineWidget extends Widget {
             const resultsDictName = "workflow_results";
             const codeToExecute = `
 _list = ${resultsDictName}['${listKey}']
-for __loop_index__, __loop_item__ in enumerate(_list):
-    ${resultsDictName}['__loop_item__'] = __loop_item__
-    ${resultsDictName}['__loop_index__'] = __loop_index__
+for __jupyphant_loop_index__, __jupyphant_loop_item__ in enumerate(_list):
+    ${resultsDictName}['__jupyphant_loop_item__'] = __jupyphant_loop_item__
+    ${resultsDictName}['__jupyphant_loop_index__'] = __jupyphant_loop_index__
 ${loopBodyCode}
 `;
 
@@ -1403,7 +1403,7 @@ except Exception as e:
                     if (loopBodyStartNode) {
                         const loopBodyNodes = this._getSubgraphExecutionOrder(loopBodyStartNode);
 
-                        codeLines.push(indent + `for loop_index, loop_item in enumerate(${listVarName}):`);
+                        codeLines.push(indent + `for jupyphant_loop_index, jupyphant_loop_item in enumerate(${listVarName}):`);
 
                         for (const bodyNode of loopBodyNodes) {
                             if (bodyNode instanceof JupyphantNode) {
@@ -1455,9 +1455,9 @@ except Exception as e:
                             if (originNode && (originNode as JupyphantNode).properties.item.code === '__UTIL_LOOP__') {
                                 const outputSlot = originNode.outputs[linkInfo.origin_slot];
                                 if (outputSlot.name === 'item') {
-                                    argumentValue = 'loop_item';
+                                    argumentValue = 'jupyphant_loop_item';
                                 } else if (outputSlot.name === 'index') {
-                                    argumentValue = 'loop_index';
+                                    argumentValue = 'jupyphant_loop_index';
                                 } else {
                                     argumentValue = 'None';
                                 }
