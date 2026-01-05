@@ -1005,34 +1005,15 @@ class JupyphantExtension {
 							return null;
 						}
 						console.log(`Param Value: ${param.value.trim()}`);
-						// TODO: hash to object
 						let code = `
 						import types
-						from jupyphant.kernelcode import get_neo_to_hash_dict
-
-						def get_notebook_variable(allowed_types=None):
-							g = globals()
-							variables = {}
-
-							for name, val in g.items():
-								if name.startswith('jupyphant'):
-									continue
-								if allowed_types is not None and not isinstance(val, allowed_types):
-									continue
-								if isinstance(val, types.ModuleType):
-									continue
-								variables[name] = val
-							return variables
-
+						from jupyphant.kernelcode import get_neo_obj_from_id
 						
-						neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
-						variables_in_notebook = get_notebook_variable()
-
-						jupyphant_found_obj = neo_hash_obj_dict.get("${param.value}")
-						
-						if jupyphant_found_obj is not None:
-							for key, value in variables_in_notebook.items():
-								if value is jupyphant_found_obj:
+						jupyphant_neo_hash_obj = get_neo_obj_from_id(jupyphant_entity, "${param.value}")
+						variables_in_notebook = globals().items()
+						if jupyphant_neo_hash_obj is not None:
+							for key, value in variables_in_notebook:
+								if jupyphant_neo_hash_obj is value:
 									print(key)
 									break
 						`;
