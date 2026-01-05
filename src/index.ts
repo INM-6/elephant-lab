@@ -995,6 +995,10 @@ class JupyphantExtension {
 			let selected_elephant_module = dropdownElephantModule.value;
 			let selected_elephant_function = dropdownElephantFunction.value;
 
+			if (!selected_elephant_module && !selected_elephant_function) {
+				return;
+			}
+
 			const paramArray = Array.from(paramContainer.children).map(async child => {
 				let param = child.querySelector('.form-row-input') as HTMLInputElement | HTMLSelectElement;
 				if (param.value !== "") {

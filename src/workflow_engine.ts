@@ -1333,6 +1333,10 @@ except Exception as e:
     // Inserts given string below the current active Cell
     // This may be used for Code or Comments
     private _insertNotebookCellBelow(context: string) {
+        if (!context) {
+            return;
+        }
+
         let currentNotebook = this.notebook_tracker.currentWidget?.content;
         if (!currentNotebook) {
             return;
