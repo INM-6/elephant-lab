@@ -1009,13 +1009,20 @@ class JupyphantExtension {
 						import types
 						from jupyphant.kernelcode import get_neo_obj_from_id
 						
-						jupyphant_neo_hash_obj = get_neo_obj_from_id(jupyphant_entity, "${param.value}")
-						variables_in_notebook = globals().items()
-						if jupyphant_neo_hash_obj is not None:
-							for key, value in variables_in_notebook:
-								if jupyphant_neo_hash_obj is value:
-									print(key)
-									break
+						jupyphant_neo_obj = get_neo_obj_from_id(jupyphant_entity, "${param.value}")
+						variables_in_notebook = globals().copy().items()
+						if jupyphant_neo_obj is not None:
+							matches = []
+							for key, jupyphant_value in variables_in_notebook:
+								if jupyphant_neo_obj is jupyphant_value:
+									matches.append(key)
+							
+							if matches:
+								non_jupyphant_keys = [k for k in matches if not k.startswith("jupyphant")]
+								if non_jupyphant_keys:
+									print(non_jupyphant_keys[0])
+								else:
+									print(matches[0])
 						`;
 
 						let future = session.session.kernel.requestExecute({ code });
