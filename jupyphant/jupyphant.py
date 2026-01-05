@@ -214,6 +214,8 @@ class Jupyphant:
         all_variable_names_in_current_kernel_namespace = self.nsm.who_ls()
         print(f"all_variable_names_in_current_kernel_namespace = {all_variable_names_in_current_kernel_namespace}")
         for variable_name in all_variable_names_in_current_kernel_namespace:
+            if variable_name.startswith("jupyphant"):
+                continue
             # Access objects created within the notebook
             # XXX Importing __main__ is in general considered bad practice
             # However here the explicit goal is to have access to
