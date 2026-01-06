@@ -482,7 +482,7 @@ class JupyphantExtension {
 			output_tabs.addWidget(output_widget_plot);
 			output_tabs.addWidget(output_widget_text);
 			output_tabs.addWidget(output_widget_error);
-			this.app.shell.add(output_tabs, 'left', { rank: 400 });
+			this.app.shell.add(output_tabs, 'right', { rank: 400 });
 			output_tabs.addClass('my-jupyphantWidget');
 			this.output_tabs = output_tabs;
 			if (!this.widget_tracker.has(output_tabs)) {
