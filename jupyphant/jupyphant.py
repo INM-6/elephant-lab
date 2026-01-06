@@ -7,7 +7,6 @@ import time
 
 import joblib
 import matplotlib.pyplot as plt
-import numpy as np
 import neo
 
 # neo abbreviations and font-awesome icons
@@ -104,7 +103,6 @@ class Jupyphant:
     plot_time_histogram = staticmethod(plot_time_histogram)
     plot_instantaneous_rates_colormesh = staticmethod(plot_instantaneous_rates_colormesh)
     plot_corrcoef = staticmethod(plot_corrcoef)
-    import matplotlib.pyplot as plt
     # Widgets used for display
     from ipywidgets import Output
     # ipytree provides a tree structure widget

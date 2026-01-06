@@ -3,13 +3,6 @@
 
 # Create an object of the JupyphantVisualization class
 # It is used to access and visualize the neo objects
-import ipympl
-import matplotlib
-import elephant
-import neo
-import numpy as np
-import quantities as pq
-
 def setup_env():
     from jupyphant.jupyphant import Jupyphant
     jupyphant_entity = Jupyphant()
@@ -43,7 +36,6 @@ def lfp_plot(jupyphant_entity):
 # Call to the function that initializes the ipytree widget with an empty tree
 def create_tree(jupyphant_entity):
     from IPython.display import display
-    from ipywidgets import widgets, interactive    
     jupyphant_entity.create_tree()
     jupyphant_entity.ipytree_of_neo_objects.layout.width = '100%'
     display(jupyphant_entity.ipytree_of_neo_objects)
@@ -107,8 +99,6 @@ def create_explorer_statistics(jupyphant_entity):
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_statistics, names='selected_nodes')
     display(output_node_statistic)
 
-import sys
-
 def get_selected_neo_ids(jupyphant_entity):
     selected_ids = [
         jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id]
@@ -120,8 +110,8 @@ def get_selected_neo_ids(jupyphant_entity):
 def get_object_of_ids(jupyphant_entity):
     selected_ids = get_selected_neo_ids(jupyphant_entity)
     if (isinstance(selected_ids, list)):
-        return [jupyphant_entity.map_neo_obj_hash_to_neo_obj[selected_id] for selected_id in selected_ids];
-    return jupyphant_entity.map_neo_obj_hash_to_neo_obj[selected_ids];
+        return [jupyphant_entity.map_neo_obj_hash_to_neo_obj[selected_id] for selected_id in selected_ids]
+    return jupyphant_entity.map_neo_obj_hash_to_neo_obj[selected_ids]
     
 def get_neo_obj_from_id(jupyphant_entity, obj_id):
     return jupyphant_entity.map_neo_obj_hash_to_neo_obj[obj_id]
