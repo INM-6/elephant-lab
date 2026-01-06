@@ -1276,7 +1276,7 @@ except Exception as e:
             return null;
         }
 
-        let future = this.session.session.kernel!.requestExecute({ code: codeToRun });
+        let future = this.session.session.kernel!.requestExecute({ code: codeToRun, store_history: false });
 
         let stdout_accumulator: string = "";
 
