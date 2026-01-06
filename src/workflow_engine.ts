@@ -8,6 +8,8 @@ import 'litegraph.js/css/litegraph.css';
 import { INotebookTracker, NotebookActions } from '@jupyterlab/notebook';
 import { IRenderMimeRegistry, MimeModel } from '@jupyterlab/rendermime';
 
+import '../style/workflow_engine.css';
+
 // Attributes of a Jupyphant Node to distinguish different types of nodes
 export type DraggableItem = {
     id: string;
@@ -307,110 +309,6 @@ export class WorkflowEngineWidget extends Widget {
             console.error("Error initializing LiteGraph:", e);
         }
 
-        // TODO: Outsource the whole style of buttons etc. into own .css
-        const style = document.createElement('style');
-        style.textContent = `
-        html, body, #main {
-            height: 100%;
-        }
-        .jp-workflowEngine {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            background-color: var(--jp-layout-color0);
-        }
-        .workflow-button-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            padding: 8px;
-            background-color: var(--jp-layout-color1);
-            border-bottom: 1px solid var(--jp-border-color2);
-            box-shadow: 0px 1px 2px 0px rgba(0,0,0,0.1);
-        }
-        .workflow-button, .workflow-select {
-            border: 1px solid var(--jp-border-color2);
-            border-radius: 3px;
-            padding: 5px 12px;
-            background-color: var(--jp-layout-color2);
-            color: var(--jp-ui-font-color1);
-            cursor: pointer;
-            font-size: var(--jp-ui-font-size1);
-            transition: background-color 0.15s, border-color 0.15s;
-        }
-        .workflow-button:hover, .workflow-select:hover {
-            background-color: var(--jp-layout-color3);
-            border-color: var(--jp-border-color1);
-        }
-        .workflow-button:active, .workflow-select:active {
-            background-color: var(--jp-layout-color1);
-        }
-        .workflow-button-run {
-            background-color: var(--jp-brand-color1);
-            color: white;
-            border-color: var(--jp-brand-color1);
-        }
-        .workflow-button-run:hover {
-            background-color: var(--jp-brand-color2);
-            border-color: var(--jp-brand-color2);
-        }
-        .workflow-button-clear {
-            background-color: var(--jp-error-color1);
-            color: white;
-            border-color: var(--jp-error-color1);
-        }
-        .workflow-button-clear:hover {
-            background-color: var(--jp-error-color2);
-            border-color: var(--jp-error-color2);
-        }
-        .workflow-button-debug {
-            background-color: var(--jp-border-color2);
-            color: var(--jp-ui-font-color1);
-            border-color: var(--jp-border-color2);
-        }
-        .workflow-button-debug:hover {
-            background-color: var(--jp-border-color1);
-        }
-        .workflow-button-generate {
-            background-color: var(--jp-accent-color1);
-            color: var(--jp-ui-inverse-font-color1);
-            border-color: var(--jp-accent-color1);
-        }
-        .workflow-button-generate:hover {
-            background-color: var(--jp-accent-color2);
-            border-color: var(--jp-accent-color2);
-        }
-        .workflow-button-io {
-            background-color: var(--jp-info-color1);
-            color: white;
-            border-color: var(--jp-info-color1);
-        }
-        .workflow-button-io:hover {
-            background-color: var(--jp-info-color2);
-            border-color: var(--jp-info-color2);
-        }
-        .workflow-button-debug {
-            background-color: var(--jp-warn-color2);
-            color: var(--jp-ui-font-color0);
-            border-color: var(--jp-warn-color1);
-        }
-        .workflow-button-debug:hover {
-            background-color: var(--jp-warn-color1);
-        }
-        .jp-workflowEngine > #workflow-canvas {
-            flex: 1 1 auto;
-            border-top: 1px solid var(--jp-border-color1);
-        }
-        .litegraph .graphnode {
-            background: var(--jp-layout-color1);
-            border: 1px solid var(--jp-border-color1);
-            color: var(--jp-ui-font-color1);
-        }
-        .litegraph .graphnode .node_title {
-            color: var(--jp-ui-font-color0);
-        }
-        `;
-        this.node.appendChild(style);
     }
 
     // Executed after Widget is opened
