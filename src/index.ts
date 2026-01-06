@@ -71,7 +71,7 @@ class JupyphantExtension {
 	private app: JupyterFrontEnd;
 	private command_palette: ICommandPalette;
 	private notebook_tracker: INotebookTracker;
-	private widget_tracker: WidgetTracker;
+	private widget_tracker: WidgetTracker<Widget>;
 	private myPanels: NotebookPanel[];
 	private myVisTabs: Widget[];
 	private widget: DockPanel;
@@ -88,7 +88,7 @@ class JupyphantExtension {
 
 	// Construct a new JupyphantExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-		widget_tracker: WidgetTracker, rendermime: IRenderMimeRegistry) {
+		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry) {
 		// save all constructor arguments
 		this.app = app;
 		this.command_palette = command_palette;
@@ -184,15 +184,15 @@ class JupyphantExtension {
 			return;
 		}
 
-		const mainWidgetId = 'jupyphant-workflow-main-widget';
-
+		const workflowId = 'jupyphant-workflow-main-widget';
+		const elephantId = 'jupyphant-elephant-analysis-widget';
 		const mainWidgets = Array.from(this.app.shell.widgets('main'));
-		let mainWidget = mainWidgets.find(widget => widget.id === mainWidgetId);
+		const workflowWidget = mainWidgets.find(w => w.id === workflowId);
+		const elephantWidget = mainWidgets.find(w => w.id === elephantId);
 
-		// If the main widget exists, just activate it and return
-		if (mainWidget) {
-			console.log("Jupyphant: Existing workflow engine found, activating it.");
-			this.app.shell.activateById(mainWidgetId);
+		if (workflowWidget && elephantWidget) {
+			console.log("Jupyphant: Existing widgets found, activating them.");
+			this.app.shell.activateById(workflowId);
 			return;
 		}
 
@@ -276,7 +276,7 @@ class JupyphantExtension {
 
 		this.widget.addClass('my-jupyphantWidget');
 		// Set HTML/DOM id
-		this.widget.id = 'Jupyphant, ' + new Date().toLocaleString();
+		this.widget.id = 'jupyphant-right-panel';
 		// Title of the tab
 		this.widget.title.label = 'Jupyphant';
 		// Adds the x to close the tab?
@@ -450,6 +450,9 @@ class JupyphantExtension {
 		elephantMain.title.label = 'Elephant Analysis';
 		elephantMain.title.closable = true;
 		this.app.shell.add(elephantMain, 'main');
+		if (!this.widget_tracker.has(elephantMain)) {
+			this.widget_tracker.add(elephantMain);
+		}
 
 
 		// OUTPUT-TABS (Plot, Error, Output)
@@ -482,6 +485,9 @@ class JupyphantExtension {
 			this.app.shell.add(output_tabs, 'left', { rank: 400 });
 			output_tabs.addClass('my-jupyphantWidget');
 			this.output_tabs = output_tabs;
+			if (!this.widget_tracker.has(output_tabs)) {
+				this.widget_tracker.add(output_tabs);
+			}
 		}
 
 		this.widget.addWidget(tree_widget);
@@ -492,6 +498,9 @@ class JupyphantExtension {
 		main.title.label = 'Jupyphant Workflow';
 		main.title.closable = true;
 		this.app.shell.add(main, 'main');
+		if (!this.widget_tracker.has(main)) {
+			this.widget_tracker.add(main);
+		}
 		this.app.shell.activateById(main.id);
 	}
 
@@ -1645,7 +1654,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	// Tracker has a namespace where everything is saved;
 	// this namespace needs to have the same name as in the last session
 	// to restore the last session
-	let widget_tracker = new WidgetTracker<Panel>({ namespace: 'jupyphant_namespace' });
+	let widget_tracker = new WidgetTracker<Widget>({ namespace: 'jupyphant_namespace' });
 
 	// create instance of JupyphantExtension
 	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry);
@@ -1658,8 +1667,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	// Restore from corresponding namespace
 	restorer.restore(widget_tracker, {
 		command,
-		//args: () => JSONExt.emptyObject,
-		name: () => 'jupyphant_namespace'
+		name: widget => 'jupyphant:' + widget.id
 	});
 
 }; // end of activate()
