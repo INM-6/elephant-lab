@@ -292,6 +292,7 @@ export class WorkflowEngineWidget extends Widget {
         try {
             this.graph = new LGraph();
             (this.graph as any).widget = this;
+            this.graph.change = () => this._saveWorkflowToLocalStorage();
             this.graphCanvas = new LGraphCanvas(this.canvasElement, this.graph);
             /*
             This prevents the default right click behavior of the lightgraph Canvas
@@ -415,6 +416,7 @@ export class WorkflowEngineWidget extends Widget {
     // Executed after Widget is opened
     protected onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
+        this._loadWorkflowFromLocalStorage();
         if (this.graph) { this.graph.start(); }
         this.onResize(Widget.ResizeMessage.UnknownSize);
     }
@@ -2020,6 +2022,85 @@ except Exception as e:
         }
     }
 
+    private _saveWorkflowToLocalStorage() {
+        if (!this.graph) {
+            return;
+        }
+
+        try {
+            const data = this.graph.serialize();
+            const dataStr = JSON.stringify(data, null, 2);
+            localStorage.setItem('jupyphant-workflow', dataStr);
+        } catch (err) {
+            console.error("Error serializing workflow to localStorage:", err);
+        }
+    }
+
+    private _loadWorkflowFromLocalStorage() {
+        if (!this.graph) {
+            return;
+        }
+        const dataStr = localStorage.getItem('jupyphant-workflow');
+        if (!dataStr) {
+            return;
+        }
+
+        try {
+            const data = JSON.parse(dataStr);
+            this._importWorkflowData(data);
+        } catch (err) {
+            console.error("Error parsing or configuring workflow from localStorage:", err);
+        }
+    }
+
+    private _importWorkflowData(data: any) {
+        if (this.graph) {
+            this.graph.clear();
+
+            if (data.nodes) {
+                for (const node_info of data.nodes) {
+                    if (!LiteGraph.registered_node_types[node_info.type]) {
+                        console.error("Node type not found: " + node_info.type);
+                        continue;
+                    }
+                    const node = LiteGraph.createNode(node_info.type) as JupyphantNode;
+                    if (node) {
+                        node.id = node_info.id;
+                        node.pos = node_info.pos;
+                        if (node_info.size) node.size = node_info.size;
+
+                        if (node_info.properties) {
+                            node.properties = Object.assign({}, node.properties, node_info.properties);
+
+                            if (node.properties.item) {
+                                node.setProperty("item", node.properties.item);
+                            }
+                        }
+
+                        this.graph.add(node);
+                    }
+                }
+            }
+
+            if (data.links) {
+                for (const link_info of data.links) {
+                    const origin_node = this.graph.getNodeById(link_info[1]);
+                    const target_node = this.graph.getNodeById(link_info[3]);
+                    if (origin_node && target_node) {
+                        const link = origin_node.connect(link_info[2], target_node, link_info[4]);
+                        if (link) {
+                            link.id = link_info[0];
+                        }
+                    } else {
+                        console.warn("Could not find nodes for link:", link_info);
+                    }
+                }
+            }
+            this.graph.setDirtyCanvas(true, true);
+        }
+    }
+
+
 
     private _exportWorkflow() {
         if (!this.graph) {
@@ -2065,50 +2146,7 @@ except Exception as e:
                         throw new Error("File could not be read as text.");
                     }
                     const data = JSON.parse(e.target.result);
-                    if (this.graph) {
-                        this.graph.clear();
-
-                        if (data.nodes) {
-                            for (const node_info of data.nodes) {
-                                if (!LiteGraph.registered_node_types[node_info.type]) {
-                                    console.error("Node type not found: " + node_info.type);
-                                    continue;
-                                }
-                                const node = LiteGraph.createNode(node_info.type) as JupyphantNode;
-                                if (node) {
-                                    node.id = node_info.id;
-                                    node.pos = node_info.pos;
-                                    if (node_info.size) node.size = node_info.size;
-
-                                    if (node_info.properties) {
-                                        node.properties = Object.assign({}, node.properties, node_info.properties);
-
-                                        if (node.properties.item) {
-                                            node.setProperty("item", node.properties.item);
-                                        }
-                                    }
-
-                                    this.graph.add(node);
-                                }
-                            }
-                        }
-
-                        if (data.links) {
-                            for (const link_info of data.links) {
-                                const origin_node = this.graph.getNodeById(link_info[1]);
-                                const target_node = this.graph.getNodeById(link_info[3]);
-                                if (origin_node && target_node) {
-                                    const link = origin_node.connect(link_info[2], target_node, link_info[4]);
-                                    if (link) {
-                                        link.id = link_info[0];
-                                    }
-                                } else {
-                                    console.warn("Could not find nodes for link:", link_info);
-                                }
-                            }
-                        }
-                        this.graph.setDirtyCanvas(true, true);
-                    }
+                    this._importWorkflowData(data);
                 } catch (err) {
                     console.error("Error parsing or configuring workflow file:", err);
                     showDialog({
