@@ -11,18 +11,6 @@ let setup_env =
 from jupyphant.kernelcode import setup_env
 jupyphant_entity = setup_env()`;
 
-// Dummy plot code for a single AnalogSignal
-let neo_plot =
-`from jupyphant.kernelcode import neo_plot
-neo_plot()
-`;
-
-// Dummy plot code for testing purposes
-// Does not rely on any data or neo objects from the Python kernel
-let plot_code = 
-`from jupyphant.kernelcode import plot_code
-plot_code()
-`;
 
 // Call to the function that creates a rasterplot from all spike trains
 let raster_plot =
@@ -70,16 +58,9 @@ let update_tree =
 update_tree(jupyphant_entity)
 `;
 
-let apply_elephant_analysis =
-`from jupyphant.kernelcode import apply_elephant_analysis
-apply_elephant_analysis(jupyphant_entity, function_name, selected_ids)
-`;
-
 // Make all strings publicly available in a dict
 // This dict is used in index.ts to actually execute the code
 export const pythonCode = {
-	'neoPlot': neo_plot,
-	'plotCode': plot_code,
 	'setupEnv': setup_env,
 	'rasterPlot': raster_plot,
 	'lfpPlot': lfp_plot,
@@ -88,5 +69,4 @@ export const pythonCode = {
 	'createExplorerRawPlot': create_explorer_raw_plot,
 	'createExplorerStatistics': create_explorer_statistics,
 	'updateTree': update_tree,
-	'applyElephantAnalysis': apply_elephant_analysis
 };
