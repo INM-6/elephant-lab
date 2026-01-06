@@ -124,13 +124,13 @@ class JupyphantExtension {
 		console.log("Jupyphant: Environment setup complete.");
 		try {
 			// Execute Jupyphant Code to create Neo Tree / Information and Plots  
-			await OutputArea.execute(pythonCode['createTree'], this.outarea_neo_tree!, session);
+			await this.executeCodeInOutputArea(pythonCode['createTree'], this.outarea_neo_tree!, session);
 			await this.executeCode(pythonCode['updateTree'], session);
-			await OutputArea.execute(pythonCode['createExplorerInfo'], this.outarea_nodeexplorer_info!, session);
-			await OutputArea.execute(pythonCode['createExplorerRawPlot'], this.outarea_nodeexplorer_raw!, session);
-			await OutputArea.execute(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
-			await OutputArea.execute(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, session);
-			await OutputArea.execute(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, session);
+			await this.executeCodeInOutputArea(pythonCode['createExplorerInfo'], this.outarea_nodeexplorer_info!, session);
+			await this.executeCodeInOutputArea(pythonCode['createExplorerRawPlot'], this.outarea_nodeexplorer_raw!, session);
+			await this.executeCodeInOutputArea(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
+			await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, session);
+			await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, session);
 			this.widget.title.label += ' (ready)'; // Indicates that the Jupyphant Extension is completly loaded
 
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
@@ -221,8 +221,8 @@ class JupyphantExtension {
 			console.log("Jupyphant: Cell executed, updating plots.");
 
 			await this.executeCode(pythonCode['updateTree'], initialSession);
-			await OutputArea.execute(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession);
-			await OutputArea.execute(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession);
+			await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession);
+			await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession);
 		});
 
 		// Listener for changed Kernel, waits for Kernel to be ready
@@ -785,7 +785,7 @@ class JupyphantExtension {
 			except requests.exceptions.RequestException as e:
 				pprint(f"Ein Verbindungsfehler ist aufgetreten: {e}")
 			`
-			await OutputArea.execute(code, outarea_content_text, session);
+			await this.executeCodeInOutputArea(code, outarea_content_text, session);
 		};
 
 		// Ping Server button and check for reachability
@@ -934,7 +934,7 @@ class JupyphantExtension {
 				except requests.exceptions.RequestException as e:
 					print(f"Ein Verbindungsfehler ist aufgetreten: {e}")
 			`
-			await OutputArea.execute(code, outarea_content_text, session);
+			await this.executeCodeInOutputArea(code, outarea_content_text, session);
 
 			if (!session?.session || !session.session.kernel) {
 				console.error("Kernel not found.");
@@ -1202,6 +1202,23 @@ class JupyphantExtension {
 		}
 		await future.done;
 	} // end of executeCode()
+
+	private async executeCodeInOutputArea(code: string, outputArea: OutputArea, sessionContext: ISessionContext) {
+		const kernel = sessionContext.session?.kernel;
+		if (!kernel) {
+			console.error("Kernel not available for execution.");
+			return;
+		}
+
+		const future = kernel.requestExecute({
+			code,
+			store_history: false
+		});
+
+		outputArea.future = future;
+		await future.done;
+	}
+
 
 	public async pingElephantServer(serverUrl: string): Promise<boolean> {
 		try {
