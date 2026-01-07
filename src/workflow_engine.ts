@@ -562,6 +562,7 @@ export class WorkflowEngineWidget extends Widget {
     /*Method used to generate python code string that should be run on the Jupyter Kernel
     fqn: function that should be called (needs to exist in jupyphant.graphLogic)
     fqnParam: parameter that should be passed to the function (needs to displayed as a string)
+    extra: additional code to be included in the generated Python code
     */
     private _generateCodeForFqn(fqn: string, fqnParam: string): string {
         return `
@@ -954,7 +955,7 @@ ${loopBodyCode}
         else {
             console.log("...using VARIABLE NAME (neo) execution logic");
             const varName = item.code;
-            codeToExecute = this._generateCodeForFqn("generatePythonCodeForNodeVariableName", `"${varName}", ${resultsDictName}, "${resultId}"`);
+            codeToExecute = this._generateCodeForFqn("generatePythonCodeForNodeOther", `"${varName}", ${resultsDictName}, "${resultId}"`);
         }
         return codeToExecute
     }
