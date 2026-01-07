@@ -11,26 +11,24 @@ def setup_env():
 
 # Call to the function that creates a rasterplot from all spike trains
 def raster_plot(jupyphant_entity):
-    import matplotlib.pyplot as plt
+    from IPython.display import display
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         fig = jupyphant_entity.create_rasterplot()
-        plt.figure(fig)
-        plt.show()
-        plt.close('all')
+        if fig:
+            display(fig)
 
 
 # Call to the function that plots AnalogSignals
 def lfp_plot(jupyphant_entity):
-    import matplotlib.pyplot as plt
+    from IPython.display import display
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         fig = jupyphant_entity.create_lfpplot()
-        plt.figure(fig)
-        plt.show()
-        plt.close('all')
+        if fig:
+            display(fig)
 
 
 # Call to the function that initializes the ipytree widget with an empty tree
@@ -57,45 +55,40 @@ def create_explorer_info(jupyphant_entity):
 
 
 def create_explorer_raw_plot(jupyphant_entity):
-    import matplotlib.pyplot as plt
     import IPython
     from IPython.display import display
     from ipywidgets import Output
 
     def on_selected_change_raw(change):
-        selected_ids = [jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] for node in jupyphant_entity.ipytree_of_neo_objects.selected_nodes if
-                        jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] is not None]
+        selected_ids = get_selected_neo_ids(jupyphant_entity)
         with output_node_raw_plot:
             IPython.display.clear_output()
             raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids)
             if raw_st:
-                plt.show()
+                display(raw_st)
             raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids)
             if raw_anasig:
-                plt.show()
+                display(raw_anasig)
 
-    output_node_raw_plot = Output(layout={'border': '1px solid orange', 'width': '900px' })
+    output_node_raw_plot = Output(layout={'border': '1px solid orange', 'width': 'auto' })
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_raw, names='selected_nodes')
     display(output_node_raw_plot)
 
 
 def create_explorer_statistics(jupyphant_entity):
-    import matplotlib.pyplot as plt
     import IPython
     from IPython.display import display
     from ipywidgets import Output, Layout
 
     def on_selected_change_statistics(change):
-        selected_ids = [jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] for node in jupyphant_entity.ipytree_of_neo_objects.selected_nodes if
-                        jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id] is not None]
+        selected_ids = get_selected_neo_ids(jupyphant_entity)
         with output_node_statistic:
             IPython.display.clear_output()
             fig = jupyphant_entity.statistics_of_selected_nodes(selected_ids=selected_ids)
             if fig:
-                plt.show()
-                plt.close('all')
+                display(fig)
 
-    output_node_statistic = Output(layout=Layout(border='1px solid orange', width='3572px'))  # 4 * 8inch * 96px/inch
+    output_node_statistic = Output(layout=Layout(border='1px solid orange', width='auto'))
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_statistics, names='selected_nodes')
     display(output_node_statistic)
 
