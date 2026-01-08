@@ -1,13 +1,14 @@
 import { ISessionContext, showDialog, Dialog } from '@jupyterlab/apputils';
-import { KernelMessage } from '@jupyterlab/services';
 import { Widget } from '@lumino/widgets';
 import { Message } from '@lumino/messaging';
 import { OutputArea } from '@jupyterlab/outputarea';
 import { LiteGraph, LGraph, LGraphCanvas, LGraphNode } from 'litegraph.js';
-import 'litegraph.js/css/litegraph.css';
 import { INotebookTracker, NotebookActions } from '@jupyterlab/notebook';
 import { IRenderMimeRegistry, MimeModel } from '@jupyterlab/rendermime';
 import { JupyphantNode, DraggableItem } from './jupyphant_node';
+import { createWorkflowToolbar } from './workflowEngine_toolbar';
+import { KernelBridge } from './kernel_bridge';
+import 'litegraph.js/css/litegraph.css';
 import '../style/workflow_engine.css';
 
 
@@ -16,6 +17,7 @@ import '../style/workflow_engine.css';
 export class WorkflowEngineWidget extends Widget {
     private graph: LGraph | null;
     private graphCanvas: LGraphCanvas | null;
+    private kernelBridge: KernelBridge;
     private canvasElement: HTMLCanvasElement;
     private outputArea: OutputArea;
     private notebook_tracker: INotebookTracker; // Current active Notebook -> used for Cell Injection
@@ -45,63 +47,8 @@ export class WorkflowEngineWidget extends Widget {
                 this._buildElephantMenu();
             });
         }
-
-        // Define general objects of the UI (Buttons & DropDowns)
-        // TODO: maybe outsource this to own function?
-        const header = document.createElement('h3');
-        header.textContent = 'Analysis Workflow';
-        header.style.textAlign = 'center';
-        this.node.appendChild(header);
-
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'workflow-button-container';
-
-        const runWorkflowButton = document.createElement('button');
-        runWorkflowButton.textContent = '▶ Run Workflow';
-        runWorkflowButton.title = 'Execute the entire workflow';
-        runWorkflowButton.className = 'workflow-button workflow-button-run';
-        runWorkflowButton.onclick = () => { this.execute_workflow(); };
-        buttonContainer.appendChild(runWorkflowButton);
-
-        const clearWorkflowButton = document.createElement('button');
-        clearWorkflowButton.textContent = '✖ Clear';
-        clearWorkflowButton.title = 'Clear the workflow canvas';
-        clearWorkflowButton.className = 'workflow-button workflow-button-clear';
-        clearWorkflowButton.onclick = () => { this.graph?.clear(); };
-        buttonContainer.appendChild(clearWorkflowButton)
-
-        const resetZoomButton = document.createElement('button');
-        resetZoomButton.textContent = '🔍 Reset Zoom';
-        resetZoomButton.title = 'Reset the zoom level of the canvas';
-        resetZoomButton.className = 'workflow-button workflow-button-debug';
-        resetZoomButton.onclick = () => { this.graphCanvas?.ds.reset(); };
-        buttonContainer.appendChild(resetZoomButton);
-
-        const generateCodeButton = document.createElement('button');
-        generateCodeButton.textContent = '</> Generate Code';
-        generateCodeButton.title = 'Generate Python code from the workflow and add it to a new notebook cell';
-        generateCodeButton.className = 'workflow-button workflow-button-generate';
-        generateCodeButton.onclick = () => {
-            this._generateCodeFromWorkflow();
-
-        };
-        buttonContainer.appendChild(generateCodeButton);
-
-        const importButton = document.createElement('button');
-        importButton.innerHTML = 'Upload workflow from file <i class="fa fa-upload" aria-hidden="true"></i>';
-        importButton.title = 'Import a workflow from a file';
-        importButton.className = 'workflow-button workflow-button-io';
-        importButton.onclick = () => this._importWorkflow();
-        buttonContainer.appendChild(importButton);
-
-        const exportButton = document.createElement('button');
-        exportButton.innerHTML = 'Download workflow as file <i class="fa fa-download" aria-hidden="true"></i>';
-        exportButton.title = 'Export the workflow to a file';
-        exportButton.className = 'workflow-button workflow-button-io';
-        exportButton.onclick = () => this._exportWorkflow();
-        buttonContainer.appendChild(exportButton);
-
-        this.node.appendChild(buttonContainer);
+        this.kernelBridge = new KernelBridge(this.session!);
+        this.node.appendChild(createWorkflowToolbar(this));
 
         this.canvasElement = document.createElement('canvas');
         this.canvasElement.id = 'workflow-canvas';
@@ -226,7 +173,7 @@ export class WorkflowEngineWidget extends Widget {
             }
 
             if (name) {
-                const details = await this._getDetailsForName(name);
+                const details = await this.kernelBridge.getDetailsForName(name);
                 if (details) {
                     details.code = name; fullItems.push(details);
                 } else {
@@ -257,7 +204,7 @@ export class WorkflowEngineWidget extends Widget {
                 // If item is a class additional information (such as methods) have to be examined
                 if (item.is_class) {
                     // Add DropDown for methods (if existing) 
-                    const methods = await this._getMethodsFromTarget(item.code, node.pos);
+                    const methods = await this.kernelBridge.getMethodsFromTarget(item.code);
                     if (methods && methods.length > 0) {
                         const methodNames = methods.map(m => m.name);
                         node.addWidget(
@@ -297,169 +244,6 @@ export class WorkflowEngineWidget extends Widget {
                     }
                 }
             }
-        }
-    }
-
-    /* Method used to get Details for given Object (determine whether Object is a class)
-    and get the Details (thus arguments) for this Object
-    TODO: currently inspect is used to gather all information of the parameters -> rewrite to use PyDantic models */
-    private async _getDetailsForName(fqn: string): Promise<DraggableItem | null> {
-        if (!this.session || !this.session.session) { return null; }
-        const code = `
-        import inspect, json, sys
-        def _get_params_for_obj(obj):
-            param_list_for_json = []
-            try:
-                if inspect.isclass(obj): 
-                    sig = inspect.signature(obj.__init__)
-                    params = list(sig.parameters.values())[1:]
-                else: 
-                    sig = inspect.signature(obj) 
-                    params = sig.parameters.values()
-            except (ValueError, TypeError): 
-                return []
-            for param in params:
-                if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
-                    default_val = param.default
-                    if default_val is inspect.Parameter.empty: 
-                        default_val = "__REQUIRED__" 
-                    param_list_for_json.append({"name": param.name, "default": str(default_val)})
-            return param_list_for_json
-        try:
-            fqn = "${fqn}"; parts = fqn.split('.')
-            func_name = parts.pop()
-            module_path = ".".join(parts)
-            __import__(module_path) 
-            import sys 
-            module_obj = sys.modules[module_path] 
-            target_obj = getattr(module_obj, func_name)
-            details = {"id": fqn, "name": fqn, "is_class": inspect.isclass(target_obj), "code": fqn, "parameters": _get_params_for_obj(target_obj)}
-            print(json.dumps(details))
-        except Exception as e:
-            try: __import__(module_path)
-            except Exception as e_import: 
-                print(f"Failed to import {module_path}: {e_import}", file=sys.stderr)
-            print(f"Error inspecting {fqn}: {e}", file=sys.stderr); print(json.dumps(None))
-        `;
-        let msg_content: string = "";
-        let future = this.session.session.kernel!.requestExecute({ code });
-        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-            if (KernelMessage.isStreamMsg(msg)) {
-                if (msg.content.name === 'stdout') { msg_content += msg.content.text; }
-                else { console.warn("Kernel STDERR:", msg.content.text); }
-            }
-        };
-        await future.done;
-        try { return JSON.parse(msg_content.trim()); }
-        catch (e) { console.error("Failed to parse details from kernel:", e, msg_content); return null; }
-    }
-
-    // If a Node is a class (thus is_class is true) we need to create a Dropdown for the methods
-    // and create new Nodes for them
-    private async _getMethodsFromTarget(target_id: string, parent_pos: [number, number]): Promise<any[] | null> {
-        if (!this.session || !this.session.session) { return null; }
-
-        const code = `
-        import inspect, json, sys, pickle
-        from jupyphant.kernelcode import get_neo_to_hash_dict
-
-        # Examine parameters for a given Object
-        def _get_params_for_obj(obj):
-            param_list_for_json = []
-            try:
-                sig = inspect.signature(obj)
-                params = sig.parameters.values()
-            except (ValueError, TypeError): 
-                return []
-
-            param_list_for_json.append({"name": "__self__", "default": "CONNECTION_REQUIRED"})
-            
-            for param in params:
-                if param.name == 'self': 
-                    continue 
-                if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
-                    default_val = param.default
-                    if default_val is inspect.Parameter.empty: 
-                        default_val = "__REQUIRED__" 
-                    param_list_for_json.append({"name": param.name, "default": str(default_val)})
-            return param_list_for_json
-        
-        item_list = []
-        target_id_str = "${target_id}"
-        
-        try:
-            target_obj = None
-            # result_*HASH* is the structure internally used to track objects / results
-            # so they dont need to be parsed everytime the get passed
-            if target_id_str.startswith("result_"):
-                global workflow_results
-                if 'workflow_results' in globals() and target_id_str in workflow_results:
-                    target_obj = workflow_results[target_id_str]
-                else:
-                    print(f"Info: Workflow not run, cannot inspect result key {target_id_str}", file=sys.stderr)
-
-            # Target is neo Object or Elephant Function / Class
-            elif "." in target_id_str and (target_id_str.startswith("neo.") or target_id_str.startswith("elephant.")):
-                parts = target_id_str.split('.')
-                func_name = parts.pop()
-                module_path = ".".join(parts)
-                __import__(module_path)
-                module_obj = sys.modules[module_path]
-                target_obj = getattr(module_obj, func_name)
-
-            # Target is a pickled string
-            elif target_id_str.startswith("b'"):
-                target_obj = pickle.loads(eval(target_id_str)) 
-                if isinstance(target_obj, list):
-                    target_obj = target_obj[0]
-
-            else:
-                # Try to get Object using Neo Hash
-                global jupyphant_entity 
-                neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
-                target_obj = neo_hash_obj_dict[target_id_str]
-
-            if target_obj is not None:
-                all_members = inspect.getmembers(target_obj)
-                for name, member_obj in all_members:
-                    # leave out private methods and the ones which are not callable
-                    if not name.startswith("_") and callable(member_obj):
-                        if inspect.isclass(member_obj):
-                            continue
-                        
-                        new_code = f"{target_id_str}.{name}"
-                        item_list.append({
-                            "id": f"{target_id_str}.{name}",
-                            "name": f".{name}()",
-                            "is_class": False,
-                            "code": new_code, 
-                            "parameters": _get_params_for_obj(member_obj)
-                        })
-            
-            print(json.dumps(item_list))
-
-        except Exception as e:
-            print(f"Error inspecting target {target_id_str}: {e}", file=sys.stderr)
-            print(json.dumps([]))
-        `;
-
-        let msg_content: string = "";
-        let future = this.session.session.kernel!.requestExecute({ code });
-        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-            if (KernelMessage.isStreamMsg(msg) && msg.content.name === 'stdout') {
-                msg_content += msg.content.text;
-            } else if (KernelMessage.isStreamMsg(msg)) {
-                console.warn("Kernel STDERR:", msg.content.text);
-            }
-        };
-        await future.done;
-        try {
-            const items = JSON.parse(msg_content.trim());
-            return items.map((item: any) => ({ ...item, parent_pos: parent_pos }));
-        }
-        catch (e) {
-            console.error("Failed to parse method list from kernel:", e, msg_content);
-            return null;
         }
     }
 
@@ -543,11 +327,13 @@ export class WorkflowEngineWidget extends Widget {
         outputArea.model.clear();
 
         const resultsDictName = "workflow_results";
-        await this.executeCode(
+        const result = await this.kernelBridge.executeCode(
             `import uuid, json, pickle, sys\n${resultsDictName} = {}`,
-            true,
-            outputArea
+            true
         );
+        if (result) {
+            this.handleOutputs(result.outputs, outputArea);
+        }
 
         const executionOrder = this._getExecutionOrder();
         console.log("2. Execution order:", executionOrder.map(n => n.title));
@@ -685,7 +471,10 @@ ${loopBodyCode}
 `;
 
             console.log("Executing loop code:\n", codeToExecute);
-            await this.executeCode(codeToExecute, true, outputArea);
+            const loopResult = await this.kernelBridge.executeCode(codeToExecute, true);
+            if (loopResult) {
+                this.handleOutputs(loopResult.outputs, outputArea);
+            }
 
             executed_nodes.set(jupyphantNode, null); // Loop node itself has no result
             return null;
@@ -726,7 +515,13 @@ ${loopBodyCode}
         }
 
         console.log("Executing code for", item.name);
-        const result_key = await this.executeCode(codeToExecute, true, outputArea);
+        const executionResult = await this.kernelBridge.executeCode(codeToExecute, true);
+        
+        let result_key: string | null = null;
+        if (executionResult) {
+            this.handleOutputs(executionResult.outputs, outputArea);
+            result_key = executionResult.resultKey;
+        }
 
         if (result_key && result_key.startsWith("result_")) {
             console.log("Got result key for", item.name, ":", result_key);
@@ -1002,63 +797,6 @@ except Exception as e:
         return sortedList;
     }
 
-    // Run Code in specific OutputArea (e.g. Jupyphants-Text-Output or -Plot-Output)
-    private async executeCode(code: string, executeCode = false, outputArea: OutputArea): Promise<string | null> {
-        let codeToRun: string;
-        if (executeCode) {
-            codeToRun = code;
-        }
-        else {
-            codeToRun = `print(${JSON.stringify(code)})`;
-        }
-        if (!this.session || !this.session.session) {
-            return null;
-        }
-
-        let future = this.session.session.kernel!.requestExecute({ code: codeToRun, store_history: false });
-
-        let stdout_accumulator: string = "";
-
-        // this code is in principal just used to execute Python Code in kernel
-        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-            const msg_type = msg.header.msg_type;
-            if (KernelMessage.isStreamMsg(msg)) {
-                if (msg.content.name === 'stdout') {
-                    const text = msg.content.text;
-                    const lines = text.split('\n');
-                    const lines_to_print: string[] = [];
-                    for (const line of lines) {
-                        if (line.trim().startsWith("JUPYPHANT_RESULT_KEY:")) {
-                            stdout_accumulator += line.trim().substring("JUPYPHANT_RESULT_KEY:".length);
-                        } else {
-                            lines_to_print.push(line);
-                        }
-                    }
-                    if (lines_to_print.length > 0) {
-                        const new_text = lines_to_print.join('\n');
-                        if (new_text.trim().length > 0) {
-                            const output: any = { ...msg.content, text: new_text, output_type: msg_type };
-                            outputArea.model.add(output);
-                        }
-                    }
-                } else if (msg.content.name === 'stderr') {
-                    console.warn("Kernel STDERR:", msg.content.text);
-                    const output: any = { ...msg.content, output_type: msg_type };
-                    outputArea.model.add(output);
-                }
-            } else if (msg_type === 'display_data' || msg_type === 'execute_result' || msg_type === 'error') {
-                const output: any = { ...msg.content, output_type: msg_type };
-                outputArea.model.add(output);
-            } else if (msg_type === 'clear_output') {
-                outputArea.model.clear(false);
-            }
-        };
-
-        await future.done;
-
-        return stdout_accumulator ? stdout_accumulator.trim() : null;
-    }
-
     // Helper function to get Text-OutputArea of Jupyphant (for Plot you may use another one)
     private _getWorkflowOutputArea(): OutputArea | null {
         try {
@@ -1066,6 +804,16 @@ except Exception as e:
         } catch (e) {
             console.error("Could not find OutputArea!", e);
             return null;
+        }
+    }
+
+    private handleOutputs(outputs: any[], outputArea: OutputArea) {
+        for (const output of outputs) {
+            if (output.output_type === 'clear_output') {
+                outputArea.model.clear(false);
+            } else {
+                outputArea.model.add(output);
+            }
         }
     }
 
@@ -1088,7 +836,7 @@ except Exception as e:
     }
 
 
-    private _generateCodeFromWorkflow() {
+    public generateCodeFromWorkflow() {
         const nodeResultNames = new Map<LGraphNode, string>();
         const codeLines: string[] = [];
         const imports = new Set<string>();
@@ -1298,76 +1046,10 @@ except Exception as e:
         this._insertNotebookCellBelow(fullCode);
     }
 
-    // Extract Docstring of passed code
-    private async _getDocstring(code: string): Promise<string | null> {
-        if (!this.session || !this.session.session) { return null; }
-        const pythonCode = `
-import inspect, json, sys, pprint
-
-target_obj = None
-md_output = []
-
-try:
-    fqn = "${code}"
-    parts = fqn.split('.')
-    func_name = parts.pop()
-    module_path = ".".join(parts)
-
-    if module_path:
-        try:
-            __import__(module_path)
-            module_obj = sys.modules[module_path]
-            target_obj = getattr(module_obj, func_name, None)
-        except ImportError:
-            pass # Module not found, will try eval
-
-    if target_obj is None:
-        try:
-            target_obj = eval(fqn)
-        except Exception:
-            md_output.append(f"Could not find object '**{fqn}**'")
-
-    if target_obj is not None:
-        # Get pretty-printed representation first
-        try:
-            representation = pprint.pformat(target_obj)
-            md_output.append("#### Representation:")
-            md_output.append(f"\`\`\`python\\n{representation}\\n\`\`\`")
-        except Exception as e:
-            md_output.append(f"*Could not get representation: {e}*")
-
-        # Then get docstring
-        docstring = inspect.getdoc(target_obj)
-        if docstring:
-            md_output.append("---")
-            md_output.append("#### Docstring:")
-            md_output.append(docstring)
-        else:
-             md_output.append("*No docstring found.*")
-    
-    final_md = "\\n\\n".join(md_output)
-    print(json.dumps(final_md if final_md else None))
-
-except Exception as e:
-    print(json.dumps(f"An error occurred: {e}"))
-`;
-        let msg_content: string = "";
-        let future = this.session.session.kernel!.requestExecute({ code: pythonCode });
-        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-            if (KernelMessage.isStreamMsg(msg)) {
-                if (msg.content.name === 'stdout') { msg_content += msg.content.text; }
-                else { console.warn("Kernel STDERR:", msg.content.text); }
-            }
-        };
-        await future.done;
-        try { return JSON.parse(msg_content.trim()); }
-        catch (e) { console.error("Failed to parse docstring from kernel:", e, msg_content); return null; }
-    }
-
     // Create docstring for given Node and display it
     public async showNodeInfo(node: JupyphantNode) {
         const code = node.properties.item.code;
-        const docstring = await this._getDocstring(code);
+        const docstring = await this.kernelBridge.getDocstring(code);
 
         const mimeType = 'text/markdown';
         const model = new MimeModel({
@@ -1598,7 +1280,7 @@ except Exception as e:
     }
 
     private async _buildElephantMenu() {
-        const elephantData = await this._getElephantMembers();
+        const elephantData = await this.kernelBridge.getElephantMembers();
         if (elephantData) {
             this.elephantMenu = this._createElephantMenu(elephantData);
         } else {
@@ -1623,7 +1305,7 @@ except Exception as e:
                 functionOptions.push({
                     content: member.name,
                     callback: async (value: any, options: any, event: any, parentMenu: any) => {
-                        const details = await this._getDetailsForName(fqn);
+                        const details = await this.kernelBridge.getDetailsForName(fqn);
                         if (details) {
                             const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
                             if (this.graph && this.graphCanvas) {
@@ -1633,7 +1315,7 @@ except Exception as e:
                                 this.graph.add(node);
                                 if (node.properties.item.is_class) {
                                     // Add DropDown for methods (if existing) 
-                                    const methods = await this._getMethodsFromTarget(node.properties.item.code, node.pos);
+                                    const methods = await this.kernelBridge.getMethodsFromTarget(node.properties.item.code);
                                     if (methods && methods.length > 0) {
                                         const methodNames = methods.map(m => m.name);
                                         node.addWidget(
@@ -1702,61 +1384,12 @@ except Exception as e:
         };
     }
 
-    // Get all available elephant modules + functions using Python Kernel
-    private async _getElephantMembers(): Promise<{ [moduleName: string]: { name: string, is_class: boolean }[] } | null> {
-        let code = `
-        import inspect
-        import pkgutil
-        import json
-        import elephant
-        import importlib
-        import sys
+    public clearGraph(): void {
+        this.graph?.clear();
+    }
 
-        elephant_module_func_dict = {}
-        try:
-            library = importlib.import_module("elephant")
-            library_path = library.__path__
-            for _, module_name, _ in pkgutil.iter_modules(library_path, prefix=library.__name__ + '.'):
-                try:
-                    module = importlib.import_module(module_name)
-                    for name, func in (inspect.getmembers(module, inspect.isfunction) + 
-                                    inspect.getmembers(module, inspect.isclass)):
-                        if func.__module__ == module_name:
-                            if not func.__name__.startswith("_"):
-                                is_class = inspect.isclass(func)
-                                elephant_module_func_dict.setdefault(module_name, []).append(
-                                    {"name": func.__name__, "is_class": is_class}
-                                )
-                except Exception as e:
-                    print(f"An error occurred while processing {module_name}: {e}", file=sys.stderr)
-            print(json.dumps(elephant_module_func_dict))
-        except ImportError:
-            print("Elephant not found!", file=sys.stderr)
-        except Exception as e:
-            print(f"An error occurred: {e}", file=sys.stderr)
-        `
-        let msg_content: string = "";
-        if (!this.session || !this.session.session) { return null; }
-        let future = this.session!.session!.kernel!.requestExecute({ code });
-        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-            if (KernelMessage.isStreamMsg(msg) && msg.content.name === 'stdout') {
-                msg_content += msg.content.text;
-            } else if (KernelMessage.isStreamMsg(msg)) {
-                console.warn("Kernel STDERR:", msg.content.text);
-            }
-        };
-        await future.done;
-        try {
-            const result = JSON.parse(msg_content.trim());
-            if (Object.keys(result).length === 0) {
-                return null;
-            }
-            return result;
-        }
-        catch (e) {
-            console.error("Failed to parse elephant members from kernel:", e, msg_content);
-            return null;
-        }
+    public resetZoom(): void {
+        this.graphCanvas?.ds.reset();
     }
 
     private _saveWorkflowToLocalStorage() {
@@ -1839,7 +1472,7 @@ except Exception as e:
 
 
 
-    private _exportWorkflow() {
+    public exportWorkflow() {
         if (!this.graph) {
             return;
         }
@@ -1867,7 +1500,7 @@ except Exception as e:
         }
     }
 
-    private _importWorkflow() {
+    public importWorkflow() {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json,application/json';
