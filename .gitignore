@@ -132,3 +132,5 @@ dmypy.json
 
 .yarnrc.yml
 yarn.lock
+
+.vscode/
