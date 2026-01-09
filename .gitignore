@@ -130,5 +130,5 @@ dmypy.json
 # IDE
 .idea/
 
-.yarncr.yml
+.yarnrc.yml
 yarn.lock
