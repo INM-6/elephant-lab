@@ -1,190 +1,35 @@
 import { ISessionContext, showDialog, Dialog } from '@jupyterlab/apputils';
-import { KernelMessage } from '@jupyterlab/services';
 import { Widget } from '@lumino/widgets';
 import { Message } from '@lumino/messaging';
 import { OutputArea } from '@jupyterlab/outputarea';
 import { LiteGraph, LGraph, LGraphCanvas, LGraphNode } from 'litegraph.js';
-import 'litegraph.js/css/litegraph.css';
 import { INotebookTracker, NotebookActions } from '@jupyterlab/notebook';
+import { IRenderMimeRegistry, MimeModel } from '@jupyterlab/rendermime';
+import { JupyphantNode, DraggableItem } from './jupyphant_node';
+import { createWorkflowToolbar } from './workflowEngine_toolbar';
+import { KernelBridge } from './kernel_bridge';
+import 'litegraph.js/css/litegraph.css';
+import '../style/workflow_engine.css';
 
-// Attributes of a Jupyphant Node to distinguish different types of nodes
-export type DraggableItem = {
-    id: string;
-    name: string;
-    code: string;
-    is_class: boolean;
-    parameters: { name: string, default: string }[];
-    type?: string;
-};
-type JupyphantNodeProperties = {
-    item: DraggableItem;
-    [key: string]: any;
-}
 
-// Own Jupyphant Node Class which adds additional properties to the regular LGraphNode
-class JupyphantNode extends LGraphNode {
-    properties: JupyphantNodeProperties = {
-        item: { id: '', name: '', code: '', is_class: false, parameters: [] }
-    };
-    constructor() {
-        super();
-    }
-
-    // Method used to set up input for classes / functions 
-    private setupInputs(): void {
-        this.inputs.length = 0;
-        // remove any already existing inputs and UI widgets 
-        // that might be present from a previous configuration 
-        if ((this as any).widgets) {
-            while ((this as any).widgets.length > 0) {
-                (this as any).removeWidget(0);
-            }
-        }
-        // reset outputs
-        this.outputs.length = 0;
-
-        if (this.properties.item?.code === '__UTIL_LOOP__') {
-            this.title = "For Loop";
-            this.addInput("exec in", LiteGraph.EVENT);
-            this.addInput("List", "");
-
-            this.addOutput("after loop", LiteGraph.EVENT);
-            this.addOutput("loop body", LiteGraph.EVENT);
-            this.addOutput("item", "");
-            this.addOutput("index", "number");
-            return;
-        }
-
-        // Add execution pins only to "processing" nodes, not "source/variable" nodes.
-        // This avoids cluttering the UI for nodes that just represent data.
-        let isProcessingNode = false;
-        const itemCode = this.properties.item?.code || '';
-        const itemName = this.properties.item?.name || '';
-
-        // Utility nodes (List, Print) are for processing, Data Types not 
-        // TODO: rename to distinguish between Data type and non Data type
-        if (itemCode.startsWith('__UTIL_') && itemCode !== '__UTIL_INTEGER__' && itemCode !== '__UTIL_LIST__') {
-            isProcessingNode = true;
-        }
-        // Method calls (like .mean()) are processing steps.
-        if (itemName.startsWith('.')) {
-            isProcessingNode = true;
-        }
-        // Most analysis functions are processing steps.
-        if (itemCode.startsWith('elephant.')) {
-            isProcessingNode = true;
-        }
-
-        if (isProcessingNode) {
-            this.addInput("exec in", -1);
-            this.addOutput("exec out", -1);
-        }
-
-        const params = this.properties.item?.parameters;
-        if (params && Array.isArray(params)) {
-            params.forEach(param => {
-                const propName = `param_${param.name}`;
-                // if parameter is required -> set it to the default (if existing) 
-                const defaultValue = (param.default === "__REQUIRED__") ? "" : param.default;
-                if (this.properties[propName] === undefined) {
-                    this.properties[propName] = defaultValue;
-                }
-
-                this.addInput(param.name, -1, { label: param.name });
-
-                if (param.name !== "__self__") {
-                    this.addWidget("text", param.name, this.properties[propName], (value: string) => {
-                        this.properties[propName] = value;
-                    }, {});
-                }
-            });
-        }
-        this.addOutput("result", -1);
-    }
-
-    // called when a new Node gets created
-    override onAdded(): void {
-        if (this.properties.item && this.properties.item.name) {
-            this.title = this.properties.item.name;
-            this.setupInputs();
-        } else {
-            console.warn("Node added without valid item property", this.properties);
-            this.title = "Error: Invalid Item";
-        }
-    }
-
-    // called when the node property changes
-    override onPropertyChanged(name: string, value: any): void {
-        if (name === "item") {
-            if (value && value.name) {
-                this.title = value.name;
-                this.setupInputs();
-            }
-        }
-    }
-
-    // This function is overwritten so that one can add additional items on the node (currently used for the information "i")
-    override onDrawForeground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
-        super.onDrawForeground?.(ctx, canvas);
-        if (this.flags.collapsed) {
-            return;
-        }
-
-        var icon_size = 16;
-        var margin = 5;
-        var x = this.size[0] - icon_size - margin;
-        var y = -LiteGraph.NODE_TITLE_HEIGHT + (LiteGraph.NODE_TITLE_HEIGHT - icon_size) / 2;
-
-        ctx.save();
-        ctx.fillStyle = "#4A90E2";
-        ctx.beginPath();
-        ctx.arc(x + icon_size / 2, y + icon_size / 2, icon_size / 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "white";
-        ctx.font = "bold 12px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("i", x + icon_size / 2, y + icon_size / 2);
-        ctx.restore();
-    };
-
-    override onMouseDown(e: MouseEvent, local_pos: [number, number], graphcanvas: LGraphCanvas): boolean {
-        const ctx = graphcanvas.canvas.getContext("2d")!;
-        ctx.font = 'bold 14px Arial';
-
-        var icon_size = 16;
-        var margin = 5;
-        var x = this.size[0] - icon_size - margin;
-        var y = -LiteGraph.NODE_TITLE_HEIGHT + (LiteGraph.NODE_TITLE_HEIGHT - icon_size) / 2;
-
-        if (local_pos[0] >= x && local_pos[0] <= x + icon_size &&
-            local_pos[1] >= y && local_pos[1] <= y + icon_size) {
-            const widget = (graphcanvas.graph as any).widget as WorkflowEngineWidget;
-            widget.showNodeInfo(this);
-            return true;
-        }
-        return false;
-
-    }
-}
-LiteGraph.registerNodeType("workflow/jupyphant_node", JupyphantNode);
 
 // Workflow Engine Class / Widget
 export class WorkflowEngineWidget extends Widget {
     private graph: LGraph | null;
     private graphCanvas: LGraphCanvas | null;
+    private kernelBridge: KernelBridge;
     private canvasElement: HTMLCanvasElement;
     private outputArea: OutputArea;
     private notebook_tracker: INotebookTracker; // Current active Notebook -> used for Cell Injection
     public session: ISessionContext | null; // used to execute Python Code in same session as Jupyphant 
     private elephantMenu: any = { content: "Elephant (loading...)", disabled: true };
+    private rendermime: IRenderMimeRegistry;
 
     /*
     session, widget and notebook_tracker are used to keep track of the notebook status 
     and communicate with Jupyphant (since the WorkflowEngine is a Widget of its own)
     */
-    constructor(session: ISessionContext | null = null, outputArea: OutputArea, notebook_tracker: INotebookTracker) {
+    constructor(session: ISessionContext | null = null, outputArea: OutputArea, notebook_tracker: INotebookTracker, rendermime: IRenderMimeRegistry) {
         super();
         this.id = 'workflowEngine';
         this.title.label = 'Workflow Engine';
@@ -192,6 +37,7 @@ export class WorkflowEngineWidget extends Widget {
         this.session = session;
         this.outputArea = outputArea;
         this.notebook_tracker = notebook_tracker;
+        this.rendermime = rendermime;
         this.graph = null;
         this.graphCanvas = null;
         this.addClass('jp-workflowEngine');
@@ -201,63 +47,8 @@ export class WorkflowEngineWidget extends Widget {
                 this._buildElephantMenu();
             });
         }
-
-        // Define general objects of the UI (Buttons & DropDowns)
-        // TODO: maybe outsource this to own function?
-        const header = document.createElement('h3');
-        header.textContent = 'Analysis Workflow';
-        header.style.textAlign = 'center';
-        this.node.appendChild(header);
-
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'workflow-button-container';
-
-        const runWorkflowButton = document.createElement('button');
-        runWorkflowButton.textContent = '▶ Run Workflow';
-        runWorkflowButton.title = 'Execute the entire workflow';
-        runWorkflowButton.className = 'workflow-button workflow-button-run';
-        runWorkflowButton.onclick = () => { this.execute_workflow(); };
-        buttonContainer.appendChild(runWorkflowButton);
-
-        const clearWorkflowButton = document.createElement('button');
-        clearWorkflowButton.textContent = '✖ Clear';
-        clearWorkflowButton.title = 'Clear the workflow canvas';
-        clearWorkflowButton.className = 'workflow-button workflow-button-clear';
-        clearWorkflowButton.onclick = () => { this.graph?.clear(); };
-        buttonContainer.appendChild(clearWorkflowButton)
-
-        const resetZoomButton = document.createElement('button');
-        resetZoomButton.textContent = '🔍 Reset Zoom';
-        resetZoomButton.title = 'Reset the zoom level of the canvas';
-        resetZoomButton.className = 'workflow-button workflow-button-debug';
-        resetZoomButton.onclick = () => { this.graphCanvas?.ds.reset(); };
-        buttonContainer.appendChild(resetZoomButton);
-
-        const generateCodeButton = document.createElement('button');
-        generateCodeButton.textContent = '</> Generate Code';
-        generateCodeButton.title = 'Generate Python code from the workflow and add it to a new notebook cell';
-        generateCodeButton.className = 'workflow-button workflow-button-generate';
-        generateCodeButton.onclick = () => {
-            this._generateCodeFromWorkflow();
-
-        };
-        buttonContainer.appendChild(generateCodeButton);
-
-        const importButton = document.createElement('button');
-        importButton.innerHTML = 'Upload workflow from file <i class="fa fa-upload" aria-hidden="true"></i>';
-        importButton.title = 'Import a workflow from a file';
-        importButton.className = 'workflow-button workflow-button-io';
-        importButton.onclick = () => this._importWorkflow();
-        buttonContainer.appendChild(importButton);
-
-        const exportButton = document.createElement('button');
-        exportButton.innerHTML = 'Download workflow as file <i class="fa fa-download" aria-hidden="true"></i>';
-        exportButton.title = 'Export the workflow to a file';
-        exportButton.className = 'workflow-button workflow-button-io';
-        exportButton.onclick = () => this._exportWorkflow();
-        buttonContainer.appendChild(exportButton);
-
-        this.node.appendChild(buttonContainer);
+        this.kernelBridge = new KernelBridge(this.session!);
+        this.node.appendChild(createWorkflowToolbar(this));
 
         this.canvasElement = document.createElement('canvas');
         this.canvasElement.id = 'workflow-canvas';
@@ -289,6 +80,7 @@ export class WorkflowEngineWidget extends Widget {
         try {
             this.graph = new LGraph();
             (this.graph as any).widget = this;
+            this.graph.change = () => this._saveWorkflowToLocalStorage();
             this.graphCanvas = new LGraphCanvas(this.canvasElement, this.graph);
             /*
             This prevents the default right click behavior of the lightgraph Canvas
@@ -303,115 +95,12 @@ export class WorkflowEngineWidget extends Widget {
             console.error("Error initializing LiteGraph:", e);
         }
 
-        // TODO: Outsource the whole style of buttons etc. into own .css
-        const style = document.createElement('style');
-        style.textContent = `
-        html, body, #main {
-            height: 100%;
-        }
-        .jp-workflowEngine {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            background-color: var(--jp-layout-color0);
-        }
-        .workflow-button-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            padding: 8px;
-            background-color: var(--jp-layout-color1);
-            border-bottom: 1px solid var(--jp-border-color2);
-            box-shadow: 0px 1px 2px 0px rgba(0,0,0,0.1);
-        }
-        .workflow-button, .workflow-select {
-            border: 1px solid var(--jp-border-color2);
-            border-radius: 3px;
-            padding: 5px 12px;
-            background-color: var(--jp-layout-color2);
-            color: var(--jp-ui-font-color1);
-            cursor: pointer;
-            font-size: var(--jp-ui-font-size1);
-            transition: background-color 0.15s, border-color 0.15s;
-        }
-        .workflow-button:hover, .workflow-select:hover {
-            background-color: var(--jp-layout-color3);
-            border-color: var(--jp-border-color1);
-        }
-        .workflow-button:active, .workflow-select:active {
-            background-color: var(--jp-layout-color1);
-        }
-        .workflow-button-run {
-            background-color: var(--jp-brand-color1);
-            color: white;
-            border-color: var(--jp-brand-color1);
-        }
-        .workflow-button-run:hover {
-            background-color: var(--jp-brand-color2);
-            border-color: var(--jp-brand-color2);
-        }
-        .workflow-button-clear {
-            background-color: var(--jp-error-color1);
-            color: white;
-            border-color: var(--jp-error-color1);
-        }
-        .workflow-button-clear:hover {
-            background-color: var(--jp-error-color2);
-            border-color: var(--jp-error-color2);
-        }
-        .workflow-button-debug {
-            background-color: var(--jp-border-color2);
-            color: var(--jp-ui-font-color1);
-            border-color: var(--jp-border-color2);
-        }
-        .workflow-button-debug:hover {
-            background-color: var(--jp-border-color1);
-        }
-        .workflow-button-generate {
-            background-color: var(--jp-accent-color1);
-            color: var(--jp-ui-inverse-font-color1);
-            border-color: var(--jp-accent-color1);
-        }
-        .workflow-button-generate:hover {
-            background-color: var(--jp-accent-color2);
-            border-color: var(--jp-accent-color2);
-        }
-        .workflow-button-io {
-            background-color: var(--jp-info-color1);
-            color: white;
-            border-color: var(--jp-info-color1);
-        }
-        .workflow-button-io:hover {
-            background-color: var(--jp-info-color2);
-            border-color: var(--jp-info-color2);
-        }
-        .workflow-button-debug {
-            background-color: var(--jp-warn-color2);
-            color: var(--jp-ui-font-color0);
-            border-color: var(--jp-warn-color1);
-        }
-        .workflow-button-debug:hover {
-            background-color: var(--jp-warn-color1);
-        }
-        .jp-workflowEngine > #workflow-canvas {
-            flex: 1 1 auto;
-            border-top: 1px solid var(--jp-border-color1);
-        }
-        .litegraph .graphnode {
-            background: var(--jp-layout-color1);
-            border: 1px solid var(--jp-border-color1);
-            color: var(--jp-ui-font-color1);
-        }
-        .litegraph .graphnode .node_title {
-            color: var(--jp-ui-font-color0);
-        }
-        `;
-        this.node.appendChild(style);
     }
 
     // Executed after Widget is opened
     protected onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
+        this._loadWorkflowFromLocalStorage();
         if (this.graph) { this.graph.start(); }
         this.onResize(Widget.ResizeMessage.UnknownSize);
     }
@@ -484,7 +173,7 @@ export class WorkflowEngineWidget extends Widget {
             }
 
             if (name) {
-                const details = await this._getDetailsForName(name);
+                const details = await this.kernelBridge.getDetailsForName(name);
                 if (details) {
                     details.code = name; fullItems.push(details);
                 } else {
@@ -515,7 +204,7 @@ export class WorkflowEngineWidget extends Widget {
                 // If item is a class additional information (such as methods) have to be examined
                 if (item.is_class) {
                     // Add DropDown for methods (if existing) 
-                    const methods = await this._getMethodsFromTarget(item.code, node.pos);
+                    const methods = await this.kernelBridge.getMethodsFromTarget(item.code);
                     if (methods && methods.length > 0) {
                         const methodNames = methods.map(m => m.name);
                         node.addWidget(
@@ -558,7 +247,6 @@ export class WorkflowEngineWidget extends Widget {
         }
     }
 
-
     /*Method used to generate python code string that should be run on the Jupyter Kernel
     fqn: function that should be called (needs to exist in jupyphant.graphLogic)
     fqnParam: parameter that should be passed to the function (needs to displayed as a string)
@@ -570,52 +258,6 @@ export class WorkflowEngineWidget extends Widget {
     import json
     ${fqn}(${fqnParam})
     `;
-    }
-
-    /* Method used to get Details for given Object (determine whether Object is a class)
-    and get the Details (thus arguments) for this Object
-    TODO: currently inspect is used to gather all information of the parameters -> rewrite to use PyDantic models */
-    private async _getDetailsForName(fqn: string): Promise<DraggableItem | null> {
-        if (!this.session || !this.session.session) { return null; }
-        const code = this._generateCodeForFqn("getDetailsForName", `"${fqn}"`);
-        let msg_content: string = "";
-        let future = this.session.session.kernel!.requestExecute({ code });
-        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-            if (KernelMessage.isStreamMsg(msg)) {
-                if (msg.content.name === 'stdout') { msg_content += msg.content.text; }
-                else { console.warn("Kernel STDERR:", msg.content.text); }
-            }
-        };
-        await future.done;
-        try { return JSON.parse(msg_content.trim()); }
-        catch (e) { console.error("Failed to parse details from kernel:", e, msg_content); return null; }
-    }
-
-    // If a Node is a class (thus is_class is true) we need to create a Dropdown for the methods
-    // and create new Nodes for them
-    private async _getMethodsFromTarget(target_id: string, parent_pos: [number, number]): Promise<any[] | null> {
-        if (!this.session || !this.session.session) { return null; }
-
-        const code = this._generateCodeForFqn("getMethodsFromTarget", `"${target_id}"`);
-
-        let msg_content: string = "";
-        let future = this.session.session.kernel!.requestExecute({ code });
-        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-            if (KernelMessage.isStreamMsg(msg) && msg.content.name === 'stdout') {
-                msg_content += msg.content.text;
-            } else if (KernelMessage.isStreamMsg(msg)) {
-                console.warn("Kernel STDERR:", msg.content.text);
-            }
-        };
-        await future.done;
-        try {
-            const items = JSON.parse(msg_content.trim());
-            return items.map((item: any) => ({ ...item, parent_pos: parent_pos }));
-        }
-        catch (e) {
-            console.error("Failed to parse method list from kernel:", e, msg_content);
-            return null;
-        }
     }
 
     /* This method returns a sorted list in what order the nodes should be executed
@@ -698,11 +340,13 @@ export class WorkflowEngineWidget extends Widget {
         outputArea.model.clear();
 
         const resultsDictName = "workflow_results";
-        await this.executeCode(
+        const result = await this.kernelBridge.executeCode(
             `import uuid, json, pickle, sys\n${resultsDictName} = {}`,
-            true,
-            outputArea
+            true
         );
+        if (result) {
+            this.handleOutputs(result.outputs, outputArea);
+        }
 
         const executionOrder = this._getExecutionOrder();
         console.log("2. Execution order:", executionOrder.map(n => n.title));
@@ -802,9 +446,9 @@ export class WorkflowEngineWidget extends Widget {
                                 if (originNode === jupyphantNode) {
                                     const outputSlot = jupyphantNode.outputs[linkInfo.origin_slot];
                                     if (outputSlot.name === 'item') {
-                                        value = '__loop_item__';
+                                        value = '__jupyphant_loop_item__';
                                     } else if (outputSlot.name === 'index') {
-                                        value = '__loop_index__';
+                                        value = '__jupyphant_loop_index__';
                                     }
                                 } else if (loopScopeExecutedNodes.has(originNode)) {
                                     value = loopScopeExecutedNodes.get(originNode)!;
@@ -833,14 +477,17 @@ export class WorkflowEngineWidget extends Widget {
             const resultsDictName = "workflow_results";
             const codeToExecute = `
 _list = ${resultsDictName}['${listKey}']
-for __loop_index__, __loop_item__ in enumerate(_list):
-    ${resultsDictName}['__loop_item__'] = __loop_item__
-    ${resultsDictName}['__loop_index__'] = __loop_index__
+for __jupyphant_loop_index__, __jupyphant_loop_item__ in enumerate(_list):
+    ${resultsDictName}['__jupyphant_loop_item__'] = __jupyphant_loop_item__
+    ${resultsDictName}['__jupyphant_loop_index__'] = __jupyphant_loop_index__
 ${loopBodyCode}
 `;
 
             console.log("Executing loop code:\n", codeToExecute);
-            await this.executeCode(codeToExecute, true, outputArea);
+            const loopResult = await this.kernelBridge.executeCode(codeToExecute, true);
+            if (loopResult) {
+                this.handleOutputs(loopResult.outputs, outputArea);
+            }
 
             executed_nodes.set(jupyphantNode, null); // Loop node itself has no result
             return null;
@@ -881,7 +528,13 @@ ${loopBodyCode}
         }
 
         console.log("Executing code for", item.name);
-        const result_key = await this.executeCode(codeToExecute, true, outputArea);
+        const executionResult = await this.kernelBridge.executeCode(codeToExecute, true);
+
+        let result_key: string | null = null;
+        if (executionResult) {
+            this.handleOutputs(executionResult.outputs, outputArea);
+            result_key = executionResult.resultKey;
+        }
 
         if (result_key && result_key.startsWith("result_")) {
             console.log("Got result key for", item.name, ":", result_key);
@@ -1002,63 +655,6 @@ ${loopBodyCode}
         return sortedList;
     }
 
-    // Run Code in specific OutputArea (e.g. Jupyphants-Text-Output or -Plot-Output)
-    private async executeCode(code: string, executeCode = false, outputArea: OutputArea): Promise<string | null> {
-        let codeToRun: string;
-        if (executeCode) {
-            codeToRun = code;
-        }
-        else {
-            codeToRun = `print(${JSON.stringify(code)})`;
-        }
-        if (!this.session || !this.session.session) {
-            return null;
-        }
-
-        let future = this.session.session.kernel!.requestExecute({ code: codeToRun });
-
-        let stdout_accumulator: string = "";
-
-        // this code is in principal just used to execute Python Code in kernel
-        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-            const msg_type = msg.header.msg_type;
-            if (KernelMessage.isStreamMsg(msg)) {
-                if (msg.content.name === 'stdout') {
-                    const text = msg.content.text;
-                    const lines = text.split('\n');
-                    const lines_to_print: string[] = [];
-                    for (const line of lines) {
-                        if (line.trim().startsWith("JUPYPHANT_RESULT_KEY:")) {
-                            stdout_accumulator += line.trim().substring("JUPYPHANT_RESULT_KEY:".length);
-                        } else {
-                            lines_to_print.push(line);
-                        }
-                    }
-                    if (lines_to_print.length > 0) {
-                        const new_text = lines_to_print.join('\n');
-                        if (new_text.trim().length > 0) {
-                            const output: any = { ...msg.content, text: new_text, output_type: msg_type };
-                            outputArea.model.add(output);
-                        }
-                    }
-                } else if (msg.content.name === 'stderr') {
-                    console.warn("Kernel STDERR:", msg.content.text);
-                    const output: any = { ...msg.content, output_type: msg_type };
-                    outputArea.model.add(output);
-                }
-            } else if (msg_type === 'display_data' || msg_type === 'execute_result' || msg_type === 'error') {
-                const output: any = { ...msg.content, output_type: msg_type };
-                outputArea.model.add(output);
-            } else if (msg_type === 'clear_output') {
-                outputArea.model.clear(false);
-            }
-        };
-
-        await future.done;
-
-        return stdout_accumulator ? stdout_accumulator.trim() : null;
-    }
-
     // Helper function to get Text-OutputArea of Jupyphant (for Plot you may use another one)
     private _getWorkflowOutputArea(): OutputArea | null {
         try {
@@ -1069,9 +665,23 @@ ${loopBodyCode}
         }
     }
 
+    private handleOutputs(outputs: any[], outputArea: OutputArea) {
+        for (const output of outputs) {
+            if (output.output_type === 'clear_output') {
+                outputArea.model.clear(false);
+            } else {
+                outputArea.model.add(output);
+            }
+        }
+    }
+
     // Inserts given string below the current active Cell
     // This may be used for Code or Comments
     private _insertNotebookCellBelow(context: string) {
+        if (!context) {
+            return;
+        }
+
         let currentNotebook = this.notebook_tracker.currentWidget?.content;
         if (!currentNotebook) {
             return;
@@ -1084,7 +694,7 @@ ${loopBodyCode}
     }
 
 
-    private _generateCodeFromWorkflow() {
+    public generateCodeFromWorkflow() {
         const nodeResultNames = new Map<LGraphNode, string>();
         const codeLines: string[] = [];
         const imports = new Set<string>();
@@ -1138,7 +748,7 @@ ${loopBodyCode}
                     if (loopBodyStartNode) {
                         const loopBodyNodes = this._getSubgraphExecutionOrder(loopBodyStartNode);
 
-                        codeLines.push(indent + `for loop_index, loop_item in enumerate(${listVarName}):`);
+                        codeLines.push(indent + `for jupyphant_loop_index, jupyphant_loop_item in enumerate(${listVarName}):`);
 
                         for (const bodyNode of loopBodyNodes) {
                             if (bodyNode instanceof JupyphantNode) {
@@ -1190,9 +800,9 @@ ${loopBodyCode}
                             if (originNode && (originNode as JupyphantNode).properties.item.code === '__UTIL_LOOP__') {
                                 const outputSlot = originNode.outputs[linkInfo.origin_slot];
                                 if (outputSlot.name === 'item') {
-                                    argumentValue = 'loop_item';
+                                    argumentValue = 'jupyphant_loop_item';
                                 } else if (outputSlot.name === 'index') {
-                                    argumentValue = 'loop_index';
+                                    argumentValue = 'jupyphant_loop_index';
                                 } else {
                                     argumentValue = 'None';
                                 }
@@ -1294,47 +904,23 @@ ${loopBodyCode}
         this._insertNotebookCellBelow(fullCode);
     }
 
-    // Extract Docstring of passed code
-    private async _getDocstring(code: string): Promise<string | null> {
-        if (!this.session || !this.session.session) { return null; }
-        const pythonCode = this._generateCodeForFqn("getDocstring", `"${code}"`);
-        let msg_content: string = "";
-        let future = this.session.session.kernel!.requestExecute({ code: pythonCode });
-        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-            if (KernelMessage.isStreamMsg(msg)) {
-                if (msg.content.name === 'stdout') { msg_content += msg.content.text; }
-                else { console.warn("Kernel STDERR:", msg.content.text); }
-            }
-        };
-        await future.done;
-        try { return JSON.parse(msg_content.trim()); }
-        catch (e) { console.error("Failed to parse docstring from kernel:", e, msg_content); return null; }
-    }
-
     // Create docstring for given Node and display it
     public async showNodeInfo(node: JupyphantNode) {
         const code = node.properties.item.code;
-        const docstring = await this._getDocstring(code);
+        const docstring = await this.kernelBridge.getDocstring(code);
 
-        const body = document.createElement('pre');
-        body.textContent = docstring || "No docstring found.";
-        body.style.whiteSpace = 'pre-wrap';
-        body.style.wordWrap = 'break-word';
-        body.style.maxHeight = '50vh';
-        body.style.overflowY = 'auto';
+        const mimeType = 'text/markdown';
+        const model = new MimeModel({
+            data: { [mimeType]: docstring || "*No docstring found.*" }
+        });
 
-        // Create a simple widget to hold the HTML
-        class HtmlBody extends Widget {
-            constructor(htmlContent: string) {
-                super();
-                this.node.innerHTML = htmlContent;
-            }
-        }
+        const renderer = this.rendermime.createRenderer(mimeType);
+        await renderer.renderModel(model);
 
         // Show the dialog
         showDialog({
             title: `Info for ${code}`,
-            body: new HtmlBody(docstring || "No docstring found.")
+            body: renderer
         });
     }
 
@@ -1552,7 +1138,7 @@ ${loopBodyCode}
     }
 
     private async _buildElephantMenu() {
-        const elephantData = await this._getElephantMembers();
+        const elephantData = await this.kernelBridge.getElephantMembers();
         if (elephantData) {
             this.elephantMenu = this._createElephantMenu(elephantData);
         } else {
@@ -1577,7 +1163,7 @@ ${loopBodyCode}
                 functionOptions.push({
                     content: member.name,
                     callback: async (value: any, options: any, event: any, parentMenu: any) => {
-                        const details = await this._getDetailsForName(fqn);
+                        const details = await this.kernelBridge.getDetailsForName(fqn);
                         if (details) {
                             const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
                             if (this.graph && this.graphCanvas) {
@@ -1587,7 +1173,7 @@ ${loopBodyCode}
                                 this.graph.add(node);
                                 if (node.properties.item.is_class) {
                                     // Add DropDown for methods (if existing) 
-                                    const methods = await this._getMethodsFromTarget(node.properties.item.code, node.pos);
+                                    const methods = await this.kernelBridge.getMethodsFromTarget(node.properties.item.code);
                                     if (methods && methods.length > 0) {
                                         const methodNames = methods.map(m => m.name);
                                         node.addWidget(
@@ -1656,35 +1242,95 @@ ${loopBodyCode}
         };
     }
 
-    // Get all available elephant modules + functions using Python Kernel
-    private async _getElephantMembers(): Promise<{ [moduleName: string]: { name: string, is_class: boolean }[] } | null> {
-        let code = this._generateCodeForFqn("getElephantMembers", "");
-        let msg_content: string = "";
-        if (!this.session || !this.session.session) { return null; }
-        let future = this.session!.session!.kernel!.requestExecute({ code });
-        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-            if (KernelMessage.isStreamMsg(msg) && msg.content.name === 'stdout') {
-                msg_content += msg.content.text;
-            } else if (KernelMessage.isStreamMsg(msg)) {
-                console.warn("Kernel STDERR:", msg.content.text);
-            }
-        };
-        await future.done;
-        try {
-            const result = JSON.parse(msg_content.trim());
-            if (Object.keys(result).length === 0) {
-                return null;
-            }
-            return result;
+    public clearGraph(): void {
+        this.graph?.clear();
+    }
+
+    public resetZoom(): void {
+        this.graphCanvas?.ds.reset();
+    }
+
+    private _saveWorkflowToLocalStorage() {
+        if (!this.graph) {
+            return;
         }
-        catch (e) {
-            console.error("Failed to parse elephant members from kernel:", e, msg_content);
-            return null;
+
+        try {
+            const data = this.graph.serialize();
+            const dataStr = JSON.stringify(data, null, 2);
+            localStorage.setItem('jupyphant-workflow', dataStr);
+        } catch (err) {
+            console.error("Error serializing workflow to localStorage:", err);
+        }
+    }
+
+    private _loadWorkflowFromLocalStorage() {
+        if (!this.graph) {
+            return;
+        }
+        const dataStr = localStorage.getItem('jupyphant-workflow');
+        if (!dataStr) {
+            return;
+        }
+
+        try {
+            const data = JSON.parse(dataStr);
+            this._importWorkflowData(data);
+        } catch (err) {
+            console.error("Error parsing or configuring workflow from localStorage:", err);
+        }
+    }
+
+    private _importWorkflowData(data: any) {
+        if (this.graph) {
+            this.graph.clear();
+
+            if (data.nodes) {
+                for (const node_info of data.nodes) {
+                    if (!LiteGraph.registered_node_types[node_info.type]) {
+                        console.error("Node type not found: " + node_info.type);
+                        continue;
+                    }
+                    const node = LiteGraph.createNode(node_info.type) as JupyphantNode;
+                    if (node) {
+                        node.id = node_info.id;
+                        node.pos = node_info.pos;
+                        if (node_info.size) node.size = node_info.size;
+
+                        if (node_info.properties) {
+                            node.properties = Object.assign({}, node.properties, node_info.properties);
+
+                            if (node.properties.item) {
+                                node.setProperty("item", node.properties.item);
+                            }
+                        }
+
+                        this.graph.add(node);
+                    }
+                }
+            }
+
+            if (data.links) {
+                for (const link_info of data.links) {
+                    const origin_node = this.graph.getNodeById(link_info[1]);
+                    const target_node = this.graph.getNodeById(link_info[3]);
+                    if (origin_node && target_node) {
+                        const link = origin_node.connect(link_info[2], target_node, link_info[4]);
+                        if (link) {
+                            link.id = link_info[0];
+                        }
+                    } else {
+                        console.warn("Could not find nodes for link:", link_info);
+                    }
+                }
+            }
+            this.graph.setDirtyCanvas(true, true);
         }
     }
 
 
-    private _exportWorkflow() {
+
+    public exportWorkflow() {
         if (!this.graph) {
             return;
         }
@@ -1712,7 +1358,7 @@ ${loopBodyCode}
         }
     }
 
-    private _importWorkflow() {
+    public importWorkflow() {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json,application/json';
@@ -1728,50 +1374,7 @@ ${loopBodyCode}
                         throw new Error("File could not be read as text.");
                     }
                     const data = JSON.parse(e.target.result);
-                    if (this.graph) {
-                        this.graph.clear();
-
-                        if (data.nodes) {
-                            for (const node_info of data.nodes) {
-                                if (!LiteGraph.registered_node_types[node_info.type]) {
-                                    console.error("Node type not found: " + node_info.type);
-                                    continue;
-                                }
-                                const node = LiteGraph.createNode(node_info.type) as JupyphantNode;
-                                if (node) {
-                                    node.id = node_info.id;
-                                    node.pos = node_info.pos;
-                                    if (node_info.size) node.size = node_info.size;
-
-                                    if (node_info.properties) {
-                                        node.properties = Object.assign({}, node.properties, node_info.properties);
-
-                                        if (node.properties.item) {
-                                            node.setProperty("item", node.properties.item);
-                                        }
-                                    }
-
-                                    this.graph.add(node);
-                                }
-                            }
-                        }
-
-                        if (data.links) {
-                            for (const link_info of data.links) {
-                                const origin_node = this.graph.getNodeById(link_info[1]);
-                                const target_node = this.graph.getNodeById(link_info[3]);
-                                if (origin_node && target_node) {
-                                    const link = origin_node.connect(link_info[2], target_node, link_info[4]);
-                                    if (link) {
-                                        link.id = link_info[0];
-                                    }
-                                } else {
-                                    console.warn("Could not find nodes for link:", link_info);
-                                }
-                            }
-                        }
-                        this.graph.setDirtyCanvas(true, true);
-                    }
+                    this._importWorkflowData(data);
                 } catch (err) {
                     console.error("Error parsing or configuring workflow file:", err);
                     showDialog({
