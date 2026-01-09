@@ -28,13 +28,12 @@ def getDetailsForName(fqn : str):
         module_obj = sys.modules[module_path] 
         target_obj = getattr(module_obj, func_name)
         details = {"id": fqn, "name": fqn, "is_class": inspect.isclass(target_obj), "code": fqn, "parameters": _get_params_for_obj(target_obj)}
-        return details
+        print(json.dumps(details))
     except Exception as e:
         try: __import__(module_path)
         except Exception as e_import: 
             print(f"Failed to import {module_path}: {e_import}", file=sys.stderr)
         print(f"Error inspecting {fqn}: {e}", file=sys.stderr)
-        return None
 
 def getMethodsFromTarget(target_id_str : str):
     import inspect, json, sys, pickle
@@ -293,3 +292,90 @@ def generatePythonCodeForNodeOther(varName: str, results, resultId: str):
             print(f"JUPYPHANT_RESULT_KEY:{resultId}")
     except Exception as e:
         print(f"Error getting object for variable {varName}: {e}", file=sys.stderr)
+
+def getDocstring(fqn : str):
+    import inspect, json, sys, pprint, html
+
+    target_obj = None
+    html_output = []
+
+    try:
+        parts = fqn.split('.')
+        func_name = parts.pop()
+        module_path = ".".join(parts)
+
+        if module_path:
+            try:
+                __import__(module_path)
+                module_obj = sys.modules[module_path]
+                target_obj = getattr(module_obj, func_name, None)
+            except ImportError:
+                pass # Module not found, will try eval
+
+        if target_obj is None:
+            try:
+                target_obj = eval(fqn)
+            except Exception:
+                safe_name = html.escape(fqn)
+                html_output.append(f"<p>Could not find object '<b>{safe_name}</b>'</p>")
+
+        if target_obj is not None:
+            # Get pretty-printed representation first
+            try:
+                representation = pprint.pformat(target_obj)
+                safe_rep = html.escape(representation)
+                
+                html_output.append("<h4>Representation:</h4>")
+                html_output.append(
+                    f"<pre style='background-color: var(--jp-layout-color2); padding: 8px; border-radius: 4px;'>{safe_rep}</pre>"
+                )
+            except Exception as e:
+                html_output.append(f"<p><i>Could not get representation: {html.escape(str(e))}</i></p>")
+
+            # Then get docstring
+            docstring = inspect.getdoc(target_obj)
+            if docstring:
+                safe_doc = html.escape(docstring)
+                html_output.append("<hr><h4>Docstring:</h4>")
+                html_output.append(
+                    f"<pre style='white-space: pre-wrap; font-family: var(--jp-code-font-family);'>{safe_doc}</pre>"
+                )
+            else:
+                html_output.append("<p><i>No docstring found.</i></p>")
+        
+        final_html = "".join(html_output)
+        print(json.dumps(final_html if final_html else None))
+
+    except Exception as e:
+        print(json.dumps(f"<p style='color:var(--jp-error-color)'>An error occurred: {html.escape(str(e))}</p>"))
+
+def getElephantMembers():
+    import inspect
+    import pkgutil
+    import json
+    import elephant
+    import importlib
+    import sys
+
+    elephant_module_func_dict = {}
+    try:
+        library = importlib.import_module("elephant")
+        library_path = library.__path__
+        for _, module_name, _ in pkgutil.iter_modules(library_path, prefix=library.__name__ + '.'):
+            try:
+                module = importlib.import_module(module_name)
+                for name, func in (inspect.getmembers(module, inspect.isfunction) + 
+                                inspect.getmembers(module, inspect.isclass)):
+                    if func.__module__ == module_name:
+                        if not func.__name__.startswith("_"):
+                            is_class = inspect.isclass(func)
+                            elephant_module_func_dict.setdefault(module_name, []).append(
+                                {"name": func.__name__, "is_class": is_class}
+                            )
+            except Exception as e:
+                print(f"An error occurred while processing {module_name}: {e}", file=sys.stderr)
+        print(json.dumps(elephant_module_func_dict))
+    except ImportError:
+        print("Elephant not found!", file=sys.stderr)
+    except Exception as e:
+        print(f"An error occurred: {e}", file=sys.stderr)
