@@ -34,6 +34,7 @@ def getDetailsForName(fqn : str):
         except Exception as e_import: 
             print(f"Failed to import {module_path}: {e_import}", file=sys.stderr)
         print(f"Error inspecting {fqn}: {e}", file=sys.stderr)
+        print(json.dumps(None))
 
 def getMethodsFromTarget(target_id_str : str):
     import inspect, json, sys, pickle
