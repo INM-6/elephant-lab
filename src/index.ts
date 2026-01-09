@@ -666,18 +666,15 @@ class JupyphantExtension {
 				except PackageNotFoundError:
 					print("nicht installiert")								
 				`
-				if (!session?.session || !session.session.kernel) {
-					console.error("Kernel not found.");
+				if (!this.kernelBridge) {
+					console.error("KernelBridge not initialized.");
 					return;
 				}
-				let future = session.session.kernel.requestExecute({ code, store_history: false });
-				let msg_content: string
-				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-					if (msg.header.msg_type === "stream" && "text" in msg.content)
-						msg_content = (msg as IJupyterMessage).content.text;
+				const result = await this.kernelBridge.executeCode(code, true);
+				if (result && result.outputs.length > 0 && result.outputs[0].text) {
+					let msg_content = result.outputs[0].text;
 					buttonRunAnalysisLocal.innerHTML = `run elephant analysis (locally)<br>Current local Elephant Version: "${msg_content.trim()}"`;
 				}
-				await future.done;
 			} else {
 				const response = await fetch(`${inputElephantServerAddress.value}`, { method: "GET" });
 				const data = await response.json();
@@ -949,8 +946,8 @@ class JupyphantExtension {
 			`
 			await this.executeCodeInOutputArea(code, outarea_content_text, session);
 
-			if (!session?.session || !session.session.kernel) {
-				console.error("Kernel not found.");
+			if (!this.kernelBridge) {
+				console.error("KernelBridge not initialized.");
 				return null;
 			}
 
@@ -971,15 +968,17 @@ class JupyphantExtension {
 			print(json.dumps(object_list))
 			`
 
-			const future = session.session.kernel.requestExecute({ code: my_code, store_history: false });
-			let msg_content: string
-			future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-				if (msg.header.msg_type === "stream" && "text" in msg.content) {
-					msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
-					this.workflowEngine!.updateItems(JSON.parse(msg_content));
+			const result = await this.kernelBridge.executeCode(my_code, true);
+			if (result && result.outputs) {
+				const msg_content = result.outputs.map(o => o.text || '').join('');
+				if (msg_content) {
+					try {
+						this.workflowEngine!.updateItems(JSON.parse(msg_content));
+					} catch (e) {
+						console.error("Failed to parse elephant object list from kernel:", e, msg_content);
+					}
 				}
 			}
-			await future.done;
 		}
 
 
@@ -1016,9 +1015,8 @@ class JupyphantExtension {
 				let param = child.querySelector('.form-row-input') as HTMLInputElement | HTMLSelectElement;
 				if (param.value !== "") {
 					try {
-						await session.ready;
-						if (!session?.session || !session.session.kernel) {
-							console.error("Kernel not found.");
+						if (!this.kernelBridge) {
+							console.error("KernelBridge not initialized.");
 							return null;
 						}
 						console.log(`Param Value: ${param.value.trim()}`);
@@ -1042,26 +1040,13 @@ class JupyphantExtension {
 									print(matches[0])
 						`;
 
-						let future = session.session.kernel.requestExecute({ code, store_history: false });
+						const result = await this.kernelBridge.executeCode(code, true);
 
-						const outputPromise = new Promise<string | null>((resolve, reject) => {
-							future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-								if (msg.header.msg_type === 'stream' && "text" in msg.content) {
-									const streamMsg = msg as KernelMessage.IStreamMsg;
-									resolve(streamMsg.content.text);
-								} else {
-									console.log(msg);
-								}
-							};
+						let kernelOutput: string | null = null;
+						if (result && result.outputs.length > 0 && result.outputs[0].text) {
+							kernelOutput = result.outputs[0].text;
+						}
 
-							future.done.then(() => {
-								resolve(null);
-							}).catch(err => {
-								reject(err);
-							});
-						});
-
-						const kernelOutput = await outputPromise;
 						console.log(`Kernel output was: ${kernelOutput}`);
 
 						return kernelOutput ? kernelOutput.trim() : param.value;
@@ -1258,8 +1243,8 @@ class JupyphantExtension {
 			var newPanel = this.notebook_tracker.currentWidget as NotebookPanel;
 			var session: ISessionContext = newPanel.sessionContext as unknown as ISessionContext;
 
-			if (!session?.session || !session.session.kernel) {
-				console.error("Kernel not found.");
+			if (!this.kernelBridge) {
+				console.error("KernelBridge not initialized.");
 				return;
 			}
 
@@ -1273,16 +1258,19 @@ class JupyphantExtension {
 			]
 			print(modules)
 			`
-			let future = session.session.kernel.requestExecute({ code, store_history: false });
-			let msg_content: string
-			future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-				if (msg.header.msg_type === "stream" && "text" in msg.content)
-					msg_content = (msg as IJupyterMessage).content.text;
-				let validJsonString = msg_content.replace(/'/g, '"');
-				let stringArray: string[] = JSON.parse(validJsonString);
-				this.createElephantDropdowns(elephant_modules_dropdown, stringArray);
+			const result = await this.kernelBridge.executeCode(code, true);
+			if (result && result.outputs) {
+				const msg_content = result.outputs.map(o => o.text || '').join('');
+				if (msg_content) {
+					try {
+						let validJsonString = msg_content.replace(/'/g, '"');
+						let stringArray: string[] = JSON.parse(validJsonString);
+						this.createElephantDropdowns(elephant_modules_dropdown, stringArray);
+					} catch (e) {
+						console.error("Failed to parse elephant modules list from kernel:", e, msg_content);
+					}
+				}
 			}
-			await future.done;
 
 
 			elephant_modules_dropdown.onchange = async () => {
@@ -1306,20 +1294,24 @@ class JupyphantExtension {
 				print(function_names)
 				
 			`
-				if (!session?.session || !session.session.kernel) {
-					console.error("Kernel not found.");
+				if (!this.kernelBridge) {
+					console.error("KernelBridge not initialized.");
 					return;
 				}
-				future = session.session.kernel.requestExecute({ code, store_history: false });
-				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-					if (msg.header.msg_type === "stream" && "text" in msg.content)
-						msg_content = (msg as IJupyterMessage).content.text;
-					let validJsonString = msg_content.replace(/'/g, '"');
-					let stringArray: string[] = JSON.parse(validJsonString);
-					console.log("FUNCTIONS: " + stringArray);
-					this.updateFunctionDropdown(elephant_functions_dropdown, stringArray);
+				const result = await this.kernelBridge.executeCode(code, true);
+				if (result && result.outputs) {
+					const msg_content = result.outputs.map(o => o.text || '').join('');
+					if (msg_content) {
+						try {
+							let validJsonString = msg_content.replace(/'/g, '"');
+							let stringArray: string[] = JSON.parse(validJsonString);
+							console.log("FUNCTIONS: " + stringArray);
+							this.updateFunctionDropdown(elephant_functions_dropdown, stringArray);
+						} catch (e) {
+							console.error("Failed to parse elephant functions list from kernel:", e, msg_content);
+						}
+					}
 				}
-				await future.done;
 			};
 
 
@@ -1380,23 +1372,24 @@ class JupyphantExtension {
 
 				get_separated_properties(schema_dict)
 				`
-				if (!session?.session || !session.session.kernel) {
-					console.error("Kernel not found.");
+				if (!this.kernelBridge) {
+					console.error("KernelBridge not initialized.");
 					return;
 				}
-				future = session.session.kernel.requestExecute({ code, store_history: false });
-				let data: unknown;
-				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-					if (msg.header.msg_type === "stream" && "text" in msg.content) {
-						data = JSON.parse((msg as IJupyterMessage).content.text);
-						console.log("PARAMS: " + data)
-						console.log("PARAMS_type: " + typeof data)
-
+				const result = await this.kernelBridge.executeCode(code, true);
+				if (result && result.outputs) {
+					const msg_content = result.outputs.map(o => o.text || '').join('');
+					if (msg_content) {
+						try {
+							const data = JSON.parse(msg_content);
+							console.log("PARAMS: " + data)
+							console.log("PARAMS_type: " + typeof data)
+							this.createInputFields(data, paramContainer, session);
+						} catch (e) {
+							console.error("Failed to parse schema from kernel:", e, msg_content);
+						}
 					}
 				}
-				await future.done.then(() => {
-					this.createInputFields(data, paramContainer, session);
-				})
 			};
 
 		}
@@ -1440,43 +1433,37 @@ class JupyphantExtension {
 			} else if (value.type === "string") {
 				input = document.createElement("input");
 				input.type = "text";
-				input.placeholder = value.default ? `default: ${value.default}` : "";
-				input.addEventListener("dragover", (event) => {
-					event.preventDefault();
-				});
-				input.addEventListener("drop", async (event) => {
-					event.preventDefault();
-					const itemString = event.dataTransfer?.getData('text/plain');
-					if (!itemString) {
-						return;
-					}
-					try {
-						const item = JSON.parse(itemString);
-						const nodeId = item.id;
-						if (!session?.session || !session.session.kernel) {
-							console.error("Kernel not found.");
-							return;
-						}
-						let code = `
-							node_id = "${nodeId}"
-							neo_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
-							if neo_hash:
-								print(neo_hash)
-							`;
-						const future = session.session.kernel.requestExecute({ code, store_history: false });
-						let msg_content: string
-						future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-							if (msg.header.msg_type === "stream" && "text" in msg.content)
-								msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
-							console.log(msg_content);
-							input.value = msg_content;
-						}
-						await future.done;
-					} catch (e) {
-						console.error("Failed to handle drop", e)
-					}
-				});
-
+				                input.placeholder = value.default ? `default: ${value.default}` : "";
+				                input.addEventListener("dragover", (event) => {
+				                    event.preventDefault();
+				                });
+				                input.addEventListener("drop", async (event) => {
+				                    event.preventDefault();
+				                    const itemString = event.dataTransfer?.getData('text/plain');
+				                    if (!itemString) {
+				                        return;
+				                    }
+				                    try {
+				                        const item = JSON.parse(itemString);
+				                        const nodeId = item.id;
+				                        if (!this.kernelBridge) {
+				                            console.error("KernelBridge not initialized.");
+				                            return;
+				                        }
+				                        let code = `
+				                            node_id = "${nodeId}"
+				                            neo_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
+				                            if neo_hash:
+				                                print(neo_hash)
+				                            `;
+				                        const result = await this.kernelBridge.executeCode(code, true);
+				                        if (result && result.outputs.length > 0 && result.outputs[0].text) {
+				                            input.value = result.outputs[0].text.replace("\n", "");
+				                        }
+				                    } catch (e) {
+				                        console.error("Failed to handle drop", e)
+				                    }
+				                });
 			} else if (value.type === "boolean") {
 				input = document.createElement("select");
 				const trueOption = document.createElement("option");
@@ -1505,8 +1492,8 @@ class JupyphantExtension {
 					try {
 						const item = JSON.parse(itemString);
 						const nodeId = item.id;
-						if (!session?.session || !session.session.kernel) {
-							console.error("Kernel not found.");
+						if (!this.kernelBridge) {
+							console.error("KernelBridge not initialized.");
 							return;
 						}
 						let code = `
@@ -1515,15 +1502,10 @@ class JupyphantExtension {
 							if neo_hash:
 								print(neo_hash)
 							`;
-						const future = session.session.kernel.requestExecute({ code, store_history: false });
-						let msg_content: string
-						future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-							if (msg.header.msg_type === "stream" && "text" in msg.content)
-								msg_content = (msg as IJupyterMessage).content.text.replace("\n", "");
-							console.log(msg_content);
-							input.value = msg_content;
+						const result = await this.kernelBridge.executeCode(code, true);
+						if (result && result.outputs.length > 0 && result.outputs[0].text) {
+							input.value = result.outputs[0].text.replace("\n", "");
 						}
-						await future.done;
 					} catch (e) {
 						console.error("Failed to handle drop", e)
 					}
