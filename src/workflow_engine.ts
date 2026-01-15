@@ -42,6 +42,29 @@ export class WorkflowEngineWidget extends Widget {
         this.graphCanvas = null;
         this.addClass('jp-workflowEngine');
 
+        const original_connect = LGraphNode.prototype.connect;
+        LGraphNode.prototype.connect = function (this: LGraphNode, slot: string | number, target_node: LGraphNode, target_slot: string | number): any {
+            const link: any = original_connect.call(this, slot, target_node, target_slot);
+            if (link) {
+                try {
+                    const from_slot = this.outputs[link.origin_slot];
+                    const to_slot = target_node.inputs[link.target_slot];
+                    const exec_out_names = ['exec out', 'after loop', 'loop body'];
+                    if (from_slot && 
+                        to_slot && 
+                        from_slot.type === LiteGraph.EVENT && 
+                        to_slot.type === LiteGraph.EVENT &&
+                        exec_out_names.includes(from_slot.name) &&
+                        to_slot.name === 'exec in') {
+                        link.color = "#0004ff";
+                    }
+                } catch (e) {
+                    console.error("Error coloring link:", e);
+                }
+            }
+            return link;
+        }
+
         if (this.session) {
             this.session.ready.then(() => {
                 this._buildElephantMenu();
