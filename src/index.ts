@@ -59,6 +59,7 @@ import {
 // Style from css
 import '../style/index.css';
 import '../style/sidebar.css';
+import { KernelBridge } from './kernel_bridge';
 
 export interface IJupyterMessage {
 	content: {
@@ -84,6 +85,7 @@ class JupyphantExtension {
 	private outarea_neo_tree: OutputArea | null;
 	private output_tabs: DockPanel | null;
 	private outarea_workflow: OutputArea | null;
+	private kernelBridge: KernelBridge | null;
 
 
 	// Construct a new JupyphantExtension
@@ -109,6 +111,7 @@ class JupyphantExtension {
 		this.outarea_neo_tree = null;
 		this.output_tabs = null;
 		this.outarea_workflow = null;
+		this.kernelBridge = null;
 	}; // end of constructor()
 
 
@@ -118,14 +121,15 @@ class JupyphantExtension {
 	// Create OutputAreas where Python-Code can be executed
 	private async initializeKernelState(session: ISessionContext) {
 		console.log("Jupyphant: Initializing kernel state...");
+		this.kernelBridge = new KernelBridge(session);
 
-		await this.executeCode(pythonCode['setupEnv'], session);
+		await this.executeCodeInOutputArea(pythonCode['setupEnv'], this.outarea_neo_tree!, session, false);
 
 		console.log("Jupyphant: Environment setup complete.");
 		try {
 			// Execute Jupyphant Code to create Neo Tree / Information and Plots  
 			await this.executeCodeInOutputArea(pythonCode['createTree'], this.outarea_neo_tree!, session);
-			await this.executeCode(pythonCode['updateTree'], session);
+			await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, session, false);
 			await this.executeCodeInOutputArea(pythonCode['createExplorerInfo'], this.outarea_nodeexplorer_info!, session);
 			await this.executeCodeInOutputArea(pythonCode['createExplorerRawPlot'], this.outarea_nodeexplorer_raw!, session);
 			await this.executeCodeInOutputArea(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
@@ -220,7 +224,7 @@ class JupyphantExtension {
 			}
 			console.log("Jupyphant: Cell executed, updating plots.");
 
-			await this.executeCode(pythonCode['updateTree'], initialSession);
+			await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, initialSession, false);
 			await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession);
 			await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession);
 		});
@@ -510,7 +514,7 @@ class JupyphantExtension {
 			toggle_neo_tree_objs(jupyphant_entity, "${checkbox_id}")
 			update_tree(jupyphant_entity)
 			`
-		this.executeCode(code, session);
+		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
 	}
 
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
@@ -523,7 +527,7 @@ class JupyphantExtension {
 				checked = False
 			expand_neo_tree(jupyphant_entity, checked)
 			`
-		this.executeCode(code, session);
+		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
 	}
 
 	public createElephantElements(session: ISessionContext, elephant_widget: Panel, tree_widget: Panel) {
@@ -666,7 +670,7 @@ class JupyphantExtension {
 					console.error("Kernel not found.");
 					return;
 				}
-				let future = session.session.kernel.requestExecute({ code });
+				let future = session.session.kernel.requestExecute({ code, store_history: false });
 				let msg_content: string
 				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
 					if (msg.header.msg_type === "stream" && "text" in msg.content)
@@ -967,7 +971,7 @@ class JupyphantExtension {
 			print(json.dumps(object_list))
 			`
 
-			const future = session.session.kernel.requestExecute({ code: my_code });
+			const future = session.session.kernel.requestExecute({ code: my_code, store_history: false });
 			let msg_content: string
 			future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
 				if (msg.header.msg_type === "stream" && "text" in msg.content) {
@@ -1038,7 +1042,7 @@ class JupyphantExtension {
 									print(matches[0])
 						`;
 
-						let future = session.session.kernel.requestExecute({ code });
+						let future = session.session.kernel.requestExecute({ code, store_history: false });
 
 						const outputPromise = new Promise<string | null>((resolve, reject) => {
 							future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
@@ -1176,57 +1180,39 @@ class JupyphantExtension {
 		});
 	} // end of registerComm()
 
-	//@ts-ignore: May be unused
-	async public executeCode(code: string, context: ISessionContext, callback?: any) {
-		/**
-		  * Executes Python code in the specified IPython session and executes a callback
-		  * processing the output after finishing the execution
-		
-		  * Parameters:
-		  * code: Code to be executed, provided as a string; possibly from kernelcode.ts
-		  * session: The IPython session (i. e., Python kernel) that will execute the code
-		  */
-		// Create a request that will be sent to the kernel
-		const kernel = context.session?.kernel;
-		if (!kernel) {
-			console.error("Kernel not available for execution.");
-			return;
-		}
-
-		let request: KernelMessage.IExecuteRequestMsg['content'] = {
-			code: code,
-			stop_on_error: false,
-			store_history: false,
-		};
-		// Request execution, stored as a future
-		let future = kernel.requestExecute(request);
-		// In case a callback function was provided, execute it upon completion of the request
-		if (callback) {
-			// When output is published from the request's future
-			future.onIOPub = ((msg: KernelMessage.IIOPubMessage) => {
-				// Execute callback
-				console.log(msg);
-				callback(msg);
-			});
-		}
-		await future.done;
-	} // end of executeCode()
-
-	private async executeCodeInOutputArea(code: string, outputArea: OutputArea, sessionContext: ISessionContext) {
+	/**
+	 * Executes a code snippet in a designated OutputArea and displays the results.
+	 *
+	 * @param code The string of code to be executed by the kernel.
+	 * @param outputArea The Jupyter OutputArea widget where the execution results will be displayed.
+	 * @param sessionContext The session context, used to access the active kernel session.
+	 * @param showOutput A boolean flag that determines whether to display the output. Defaults to `true`.
+	 * @private
+	 */
+	private async executeCodeInOutputArea(code: string, outputArea: OutputArea, sessionContext: ISessionContext, showOutput: boolean = true) {
 		const kernel = sessionContext.session?.kernel;
 		if (!kernel) {
 			console.error("Kernel not available for execution.");
 			return;
 		}
 
-		const future = kernel.requestExecute({
-			code,
-			store_history: false
-		});
-
-		outputArea.future = future;
-		await future.done;
+		let output = await this.kernelBridge?.executeCode(code, true);
+		
+		if (output && showOutput) {
+			this.handleOutputs(output.outputs, outputArea);
+		}
 	}
+
+	private handleOutputs(outputs: any[], outputArea: OutputArea) {
+		outputArea.model.clear();
+        for (const output of outputs) {
+            if (output.output_type === 'clear_output') {
+                outputArea.model.clear(false);
+            } else {
+                outputArea.model.add(output);
+            }
+        }
+    }
 
 
 	public async pingElephantServer(serverUrl: string): Promise<boolean> {
@@ -1287,7 +1273,7 @@ class JupyphantExtension {
 			]
 			print(modules)
 			`
-			let future = session.session.kernel.requestExecute({ code });
+			let future = session.session.kernel.requestExecute({ code, store_history: false });
 			let msg_content: string
 			future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
 				if (msg.header.msg_type === "stream" && "text" in msg.content)
@@ -1324,7 +1310,7 @@ class JupyphantExtension {
 					console.error("Kernel not found.");
 					return;
 				}
-				future = session.session.kernel.requestExecute({ code });
+				future = session.session.kernel.requestExecute({ code, store_history: false });
 				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
 					if (msg.header.msg_type === "stream" && "text" in msg.content)
 						msg_content = (msg as IJupyterMessage).content.text;
@@ -1398,7 +1384,7 @@ class JupyphantExtension {
 					console.error("Kernel not found.");
 					return;
 				}
-				future = session.session.kernel.requestExecute({ code });
+				future = session.session.kernel.requestExecute({ code, store_history: false });
 				let data: unknown;
 				future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
 					if (msg.header.msg_type === "stream" && "text" in msg.content) {
@@ -1477,7 +1463,7 @@ class JupyphantExtension {
 							if neo_hash:
 								print(neo_hash)
 							`;
-						const future = session.session.kernel.requestExecute({ code });
+						const future = session.session.kernel.requestExecute({ code, store_history: false });
 						let msg_content: string
 						future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
 							if (msg.header.msg_type === "stream" && "text" in msg.content)
@@ -1529,7 +1515,7 @@ class JupyphantExtension {
 							if neo_hash:
 								print(neo_hash)
 							`;
-						const future = session.session.kernel.requestExecute({ code });
+						const future = session.session.kernel.requestExecute({ code, store_history: false });
 						let msg_content: string
 						future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
 							if (msg.header.msg_type === "stream" && "text" in msg.content)
