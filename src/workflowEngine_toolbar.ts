@@ -1,6 +1,5 @@
-// 
-
 import { WorkflowEngineWidget } from "./workflow_engine";
+import { JupyphantNode } from "./jupyphant_node";
 
 function createWorkflowToolbar(engine: WorkflowEngineWidget): HTMLElement {
 
@@ -57,6 +56,28 @@ const header = document.createElement('h3');
         exportButton.className = 'workflow-button workflow-button-io';
         exportButton.onclick = () => engine.exportWorkflow();
         buttonContainer.appendChild(exportButton);
+
+        const toggleExecPinsContainer = document.createElement('div');
+        toggleExecPinsContainer.style.display = 'inline-block';
+        toggleExecPinsContainer.style.marginLeft = '10px';
+
+        const toggleExecPinsCheckbox = document.createElement('input');
+        toggleExecPinsCheckbox.type = 'checkbox';
+        toggleExecPinsCheckbox.id = 'toggle-exec-pins';
+        toggleExecPinsCheckbox.checked = JupyphantNode.showExecPins;
+
+        const toggleExecPinsLabel = document.createElement('label');
+        toggleExecPinsLabel.htmlFor = 'toggle-exec-pins';
+        toggleExecPinsLabel.textContent = ' Show Exec Pins';
+
+        toggleExecPinsCheckbox.onchange = (event) => {
+            const isChecked = (event.target as HTMLInputElement).checked;
+            engine.toggleExecPins(isChecked);
+        };
+
+        toggleExecPinsContainer.appendChild(toggleExecPinsCheckbox);
+        toggleExecPinsContainer.appendChild(toggleExecPinsLabel);
+        buttonContainer.appendChild(toggleExecPinsContainer);
 
         return buttonContainer;
 }

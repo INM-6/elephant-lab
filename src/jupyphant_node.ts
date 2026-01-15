@@ -18,6 +18,7 @@ export type JupyphantNodeProperties = {
 
 // Own Jupyphant Node Class which adds additional properties to the regular LGraphNode
 export class JupyphantNode extends LGraphNode {
+    public static showExecPins = true;
     properties: JupyphantNodeProperties = {
         item: { id: '', name: '', code: '', is_class: false, parameters: [] }
     };
@@ -64,44 +65,70 @@ export class JupyphantNode extends LGraphNode {
     }
 
     // Method used to set up input for classes / functions 
-    private setupInputs(): void {
+    public setupInputs(): void {
+        if (JupyphantNode.showExecPins) {
+            if (this.inputs.find(i => i.name === 'exec in')) { return; }
+            if (this.properties.item?.code === '__UTIL_LOOP__') {
+                this.addInput("exec in", LiteGraph.EVENT);
+                this.addOutput("after loop", LiteGraph.EVENT);
+                this.addOutput("loop body", LiteGraph.EVENT);
+            } else if (this._isProcessingNode()) {
+                this.addInput("exec in", -1);
+                this.addOutput("exec out", -1);
+            }
+        } else {
+            const execIn = this.inputs.findIndex(i => i.name === 'exec in');
+            if (execIn !== -1) { this.removeInput(execIn); }
+
+            const execOut = this.outputs.findIndex(o => o.name === 'exec out');
+            if (execOut !== -1) { this.removeOutput(execOut); }
+
+            const afterLoop = this.outputs.findIndex(o => o.name === 'after loop');
+            if (afterLoop !== -1) { this.removeOutput(afterLoop); }
+
+            const loopBody = this.outputs.findIndex(o => o.name === 'loop body');
+            if (loopBody !== -1) { this.removeOutput(loopBody); }
+        }
+    }
+
+    private rebuildNode() {
         this.inputs.length = 0;
-        // remove any already existing inputs and UI widgets 
-        // that might be present from a previous configuration 
         if ((this as any).widgets) {
             while ((this as any).widgets.length > 0) {
                 (this as any).removeWidget(0);
             }
         }
-        // reset outputs
         this.outputs.length = 0;
 
         if (this.properties.item?.code === '__UTIL_LOOP__') {
             this.title = "For Loop";
-            this.addInput("exec in", LiteGraph.EVENT);
+            if (JupyphantNode.showExecPins) {
+                this.addInput("exec in", LiteGraph.EVENT);
+            }
             this.addInput("List", "");
 
-            this.addOutput("after loop", LiteGraph.EVENT);
-            this.addOutput("loop body", LiteGraph.EVENT);
+            if (JupyphantNode.showExecPins) {
+                this.addOutput("after loop", LiteGraph.EVENT);
+                this.addOutput("loop body", LiteGraph.EVENT);
+            }
             this.addOutput("item", "");
             this.addOutput("index", "number");
             return;
         }
 
-        // Add execution pins only to "processing" nodes, not "source/variable" nodes.
-        // This avoids cluttering the UI for nodes that just represent data.
         const isProcessingNode = this._isProcessingNode()
 
         if (isProcessingNode) {
-            this.addInput("exec in", -1);
-            this.addOutput("exec out", -1);
+            if (JupyphantNode.showExecPins) {
+                this.addInput("exec in", -1);
+                this.addOutput("exec out", -1);
+            }
         }
 
         const params = this.properties.item?.parameters;
         if (params && Array.isArray(params)) {
             params.forEach(param => {
                 const propName = `param_${param.name}`;
-                // if parameter is required -> set it to the default (if existing) 
                 const defaultValue = (param.default === "__REQUIRED__") ? "" : param.default;
                 if (this.properties[propName] === undefined) {
                     this.properties[propName] = defaultValue;
@@ -123,7 +150,7 @@ export class JupyphantNode extends LGraphNode {
     override onAdded(): void {
         if (this.properties.item && this.properties.item.name) {
             this.title = this.properties.item.name;
-            this.setupInputs();
+            this.rebuildNode();
             this.updateNodeColor();
         } else {
             console.warn("Node added without valid item property", this.properties);
@@ -136,7 +163,7 @@ export class JupyphantNode extends LGraphNode {
         if (name === "item") {
             if (value && value.name) {
                 this.title = value.name;
-                this.setupInputs();
+                this.rebuildNode();
                 this.updateNodeColor();
             }
         }

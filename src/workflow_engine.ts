@@ -1392,6 +1392,20 @@ except Exception as e:
         this.graphCanvas?.ds.reset();
     }
 
+    public toggleExecPins(show: boolean): void {
+        JupyphantNode.showExecPins = show;
+        if (this.graph) {
+        const nodes: LGraphNode[] = (this.graph as any)._nodes;
+
+            for (const node of nodes) {
+                if (node instanceof JupyphantNode) {
+                    node.setupInputs();
+                }
+            }
+        }
+        this.graph!.setDirtyCanvas(true, true);
+    }
+
     private _saveWorkflowToLocalStorage() {
         if (!this.graph) {
             return;
@@ -1425,6 +1439,13 @@ except Exception as e:
 
     private _importWorkflowData(data: any) {
         if (this.graph) {
+            this.toggleExecPins(true);
+
+            const checkbox = document.getElementById('toggle-exec-pins') as HTMLInputElement;
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+
             this.graph.clear();
 
             if (data.nodes) {
