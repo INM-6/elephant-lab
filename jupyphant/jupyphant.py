@@ -271,12 +271,12 @@ class Jupyphant:
                 class_name = neo_obj.__class__.__name__
                 
                 if hasattr(neo_obj, 'name') and neo_obj.name:
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {neo_obj.name} :: [{hash_neo_obj[:5]}]")
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {neo_obj.name} :: ({class_name}) [{hash_neo_obj[:4]}]")
                     if neo_obj.name.lower() == "block":
                         node_neo_obj.opened = self.expand_all or (len(neo_obj.segments) < 5)
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 else:
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(neo_obj)} [{hash_neo_obj[:5]}]")
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(neo_obj)} ({class_name}) [{hash_neo_obj[:4]}]")
                     node_neo_obj.opened = True
                 node_neo_obj.metadata = {"data-neo-object": "true"}
                 node_neo_obj.icon = NEO_ABBREVIATIONS[class_name]['icon']
@@ -333,7 +333,7 @@ class Jupyphant:
                     if attr_value_list is not None and len(attr_value_list) > 0:
                         attr_value_hash = self.get_neo_hash(attr_value_list, hash_name='sha1')
                         self.map_neo_obj_hash_to_neo_obj[attr_value_hash] = attr_value_list                
-                        attr_node = self.Node(f"{attr_name.capitalize()} [{len(attr_value_list)}] :: [{attr_value_hash[:5]}]")
+                        attr_node = self.Node(f"{attr_name.capitalize()} [{len(attr_value_list)}] :: ({attr_name.capitalize()}) [{attr_value_hash[:4]}]")
                         attr_node.opened = self.expand_all or (len(attr_value_list) < 5)
                         attr_node.icon = 'folder' 
                         attr_node.metadata = {"data-neo-object": "true", "container-for": attr_name}
@@ -361,9 +361,9 @@ class Jupyphant:
                          class_name = 'Block'
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 if hasattr(child_obj, 'name') and child_obj.name:
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(child_obj)} #{i} :: {child_obj.name}::[{child_obj_hash[:5]}]")
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(child_obj)} #{i} :: {child_obj.name} :: ({class_name}) [{child_obj_hash[:4]}]")
                 else:
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(child_obj)} #{i} :: [{child_obj_hash[:5]}]")
+                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(child_obj)} #{i} :: ({class_name}) [{child_obj_hash[:4]}]")
                 
                 child_node.metadata = {"data-neo-object": "true"}
                 child_node.icon = NEO_ABBREVIATIONS[class_name]['icon']
