@@ -69,12 +69,12 @@ export class JupyphantNode extends LGraphNode {
         if (JupyphantNode.showExecPins) {
             if (this.inputs.find(i => i.name === 'exec in')) { return; }
             if (this.properties.item?.code === '__UTIL_LOOP__') {
-                this.addInput("exec in", LiteGraph.EVENT);
-                this.addOutput("after loop", LiteGraph.EVENT);
-                this.addOutput("loop body", LiteGraph.EVENT);
+                this.addInput("exec in", "jupy_exec");
+                this.addOutput("after loop", "jupy_exec");
+                this.addOutput("loop body", "jupy_exec");
             } else if (this._isProcessingNode()) {
-                this.addInput("exec in", -1);
-                this.addOutput("exec out", -1);
+                this.addInput("exec in", "jupy_exec");
+                this.addOutput("exec out", "jupy_exec");
             }
         } else {
             const execIn = this.inputs.findIndex(i => i.name === 'exec in');
@@ -103,13 +103,13 @@ export class JupyphantNode extends LGraphNode {
         if (this.properties.item?.code === '__UTIL_LOOP__') {
             this.title = "For Loop";
             if (JupyphantNode.showExecPins) {
-                this.addInput("exec in", LiteGraph.EVENT);
+                this.addInput("exec in", "jupy_exec");
             }
             this.addInput("List", "");
 
             if (JupyphantNode.showExecPins) {
-                this.addOutput("after loop", LiteGraph.EVENT);
-                this.addOutput("loop body", LiteGraph.EVENT);
+                this.addOutput("after loop", "jupy_exec");
+                this.addOutput("loop body", "jupy_exec");
             }
             this.addOutput("item", "");
             this.addOutput("index", "number");
@@ -120,8 +120,8 @@ export class JupyphantNode extends LGraphNode {
 
         if (isProcessingNode) {
             if (JupyphantNode.showExecPins) {
-                this.addInput("exec in", -1);
-                this.addOutput("exec out", -1);
+                this.addInput("exec in", "jupy_exec");
+                this.addOutput("exec out", "jupy_exec");
             }
         }
 
