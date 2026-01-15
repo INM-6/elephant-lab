@@ -25,6 +25,44 @@ export class JupyphantNode extends LGraphNode {
         super();
     }
 
+    private _isOutputNode(): boolean {
+        const itemName = this.properties.item?.name.toLowerCase() || '';
+        return itemName === 'print' || itemName === 'plot';
+    }
+
+    private _isProcessingNode(): boolean {
+        const itemCode = this.properties.item?.code || '';
+        const itemName = this.properties.item?.name || '';
+
+        if (itemCode.startsWith('__UTIL_') && itemCode !== '__UTIL_INTEGER__' && itemCode !== '__UTIL_LIST__') {
+            return true;
+        }
+        if (itemName.startsWith('.')) {
+            return true;
+        }
+        if (itemCode.startsWith('elephant.')) {
+            return true;
+        }
+        return false;
+    }
+
+    private updateNodeColor(): void {
+        if (this.properties.item?.is_class) {
+            this.color = '#3B73B1';
+            this.bgcolor = '#4A90E2';
+        } else if (this._isOutputNode()) {
+            this.color = '#A6742D';
+            this.bgcolor = '#D99A3D';
+        } else if (this._isProcessingNode()) {
+            this.color = '#3B813B';
+            this.bgcolor = '#4CAF50';
+        }
+        else {
+            this.color = "";
+            this.bgcolor = "";
+        }
+    }
+
     // Method used to set up input for classes / functions 
     private setupInputs(): void {
         this.inputs.length = 0;
@@ -52,23 +90,7 @@ export class JupyphantNode extends LGraphNode {
 
         // Add execution pins only to "processing" nodes, not "source/variable" nodes.
         // This avoids cluttering the UI for nodes that just represent data.
-        let isProcessingNode = false;
-        const itemCode = this.properties.item?.code || '';
-        const itemName = this.properties.item?.name || '';
-
-        // Utility nodes (List, Print) are for processing, Data Types not 
-        // TODO: rename to distinguish between Data type and non Data type
-        if (itemCode.startsWith('__UTIL_') && itemCode !== '__UTIL_INTEGER__' && itemCode !== '__UTIL_LIST__') {
-            isProcessingNode = true;
-        }
-        // Method calls (like .mean()) are processing steps.
-        if (itemName.startsWith('.')) {
-            isProcessingNode = true;
-        }
-        // Most analysis functions are processing steps.
-        if (itemCode.startsWith('elephant.')) {
-            isProcessingNode = true;
-        }
+        const isProcessingNode = this._isProcessingNode()
 
         if (isProcessingNode) {
             this.addInput("exec in", -1);
@@ -102,6 +124,7 @@ export class JupyphantNode extends LGraphNode {
         if (this.properties.item && this.properties.item.name) {
             this.title = this.properties.item.name;
             this.setupInputs();
+            this.updateNodeColor();
         } else {
             console.warn("Node added without valid item property", this.properties);
             this.title = "Error: Invalid Item";
@@ -114,6 +137,7 @@ export class JupyphantNode extends LGraphNode {
             if (value && value.name) {
                 this.title = value.name;
                 this.setupInputs();
+                this.updateNodeColor();
             }
         }
     }
