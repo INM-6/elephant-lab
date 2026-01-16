@@ -4,17 +4,18 @@ from IPython.display import display
 import warnings
 
 class PlotlyGraphFigure:
-    def __init__(self, data, width=1000, overlapping=False, shared_xaxes=True, title=None):
+    def __init__(self, data, overlapping=True, shared_xaxes=True, title=None, relayout_button_options=None):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
         """
         self.vertical_spacing = 0.02
+        self.default_height = 600
         
 
         self.shared_xaxes = shared_xaxes or overlapping
         self.nGraphs = len(data) if isinstance(data, list) and self.is_trace_list(data) else 1
-        self.height = 600
+        self.height = self.default_height
         if self.nGraphs > 2:
             self.height = 800
         self.traces = []
@@ -26,9 +27,6 @@ class PlotlyGraphFigure:
         )
 
         self.create_graphs(self.fig, data)
-        self.overlapping = False
-        if overlapping:
-            self.overlap()
 
         if title is None:
             title=getattr(data, 'name', None)
@@ -38,29 +36,13 @@ class PlotlyGraphFigure:
             dragmode="pan",
             height=self.height,
         )
+        
+        self.overlapping = False
+        if overlapping:
+            self.overlap()
 
         self.update_slider()
-        
-        if self.shared_xaxes:
-            self.fig.update_layout(
-                updatemenus=[
-                    dict(
-                        type="buttons",
-                        x=-0.02,
-                        y=1,
-                        showactive=False,
-                        buttons=list([
-                            dict(label="1%", method="relayout", args=["xaxis.range", [0,width*0.01]]),
-                            dict(label="5%", method="relayout", args=["xaxis.range", [0,width*0.05]]),
-                            dict(label="10%", method="relayout", args=["xaxis.range", [0,width*0.1]]),
-                            dict(label="20%", method="relayout", args=["xaxis.range", [0,width*0.2]]),
-                            dict(label="50%", method="relayout", args=["xaxis.range", [0,width*0.5]]),
-                            dict(label="75%", method="relayout", args=["xaxis.range", [0,width*0.75]]),
-                            dict(label="All", method="relayout", args=["xaxis.range", [0,width]])
-                        ])
-                    )
-                ]
-            )
+        self.create_xrange_buttons(relayout_button_options)
 
 
 
@@ -156,13 +138,15 @@ class PlotlyGraphFigure:
             return
         self.overlapping = True
 
-        base_domain = self.fig.layout.yaxis.domain
-
-        for i in range(2, self.nGraphs + 1):
+        for i in range(1, self.nGraphs + 1):
             self.fig.layout[f"yaxis{i}"].update(
                 visible=False,
-                domain=base_domain
+                domain=[0.0,1.0]
             )
+
+        self.fig.update_layout(
+            height=self.default_height,
+        )
         
         
     def stack(self):
@@ -187,6 +171,10 @@ class PlotlyGraphFigure:
                 domain=[start, end]
             )
 
+        self.fig.update_layout(
+            height=self.height,
+        )
+
     def update_slider(self):
         """Updates the range slider to the last x-axis if shared_xaxes is True"""
         n = self.nGraphs
@@ -194,6 +182,64 @@ class PlotlyGraphFigure:
             self.fig.layout[f"xaxis{i}"].update(
                 rangeslider=dict(visible=i==n and (self.shared_xaxes))
             )
+
+    def create_xrange_buttons(self, relayout_button_options):
+        """
+        Adds updatemenus buttons to the figure to quickly set x-axis range.
+
+        Parameters
+        ----------
+        relayout_button_options : list of tuples or dicts, optional
+            If list of tuples: [(label, fraction_of_width), ...]
+            If None, default percentages are used.
+        """
+        # Default percentages
+        if relayout_button_options is None:
+            x_vals = [x for trace, _ in self.traces for x in trace.x]
+            start = min(x_vals)
+            width = max(x_vals) - start
+            relayout_button_options = [
+                ("1%", [start, start+width*0.01]),
+                ("5%", [start, start+width*0.05]),
+                ("10%", [start, start+width*0.1]),
+                ("20%", [start, start+width*0.2]),
+                ("50%", [start, start+width*0.5]),
+                ("75%", [start, start+width*0.75]),
+                ("All", [start, start+width])
+            ]
+
+        # Convert to Plotly button dicts
+        buttons = []
+        for item in relayout_button_options:
+            if isinstance(item, dict):
+                # If already a dict with label/range
+                buttons.append(dict(
+                    label=item["label"],
+                    method="relayout",
+                    args=["xaxis.range", item["range"]]
+                ))
+            elif isinstance(item, (list, tuple)) and len(item) == 2:
+                label, rng = item
+                buttons.append(dict(
+                    label=label,
+                    method="relayout",
+                    args=["xaxis.range", rng]
+                ))
+            else:
+                raise ValueError("Each relayout_button_option must be a dict or (label, fraction) tuple")
+
+        # Add buttons to the figure
+        self.fig.update_layout(
+            updatemenus=[
+                dict(
+                    type="buttons",
+                    x=-0.02,
+                    y=1,
+                    showactive=False,
+                    buttons=buttons
+                )
+            ]
+        )
 
     def display(self):
         """Displays the Plotly figure in a Jupyter notebook."""
