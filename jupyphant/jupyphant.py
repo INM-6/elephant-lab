@@ -270,15 +270,17 @@ class Jupyphant:
                 self.map_neo_obj_hash_to_neo_obj[hash_neo_obj] = neo_obj
                 class_name = neo_obj.__class__.__name__
                 
+                variable_name = self.names_for(neo_obj)
+
                 if hasattr(neo_obj, 'name') and neo_obj.name:
                     node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {neo_obj.name} :: ({class_name}) [{hash_neo_obj[:4]}]")
                     if neo_obj.name.lower() == "block":
                         node_neo_obj.opened = self.expand_all or (len(neo_obj.segments) < 5)
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 else:
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(neo_obj)} ({class_name}) [{hash_neo_obj[:4]}]")
+                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {variable_name} ({class_name}) [{hash_neo_obj[:4]}]")
                     node_neo_obj.opened = True
-                node_neo_obj.metadata = {"data-neo-object": "true"}
+                node_neo_obj.metadata = {"data-neo-object": "true", "variable_name": variable_name}
                 node_neo_obj.icon = NEO_ABBREVIATIONS[class_name]['icon']
                 node_neo_obj.open_icon_style = 'success'
                 node_neo_obj.close_icon_style = 'danger'

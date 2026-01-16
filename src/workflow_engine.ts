@@ -186,7 +186,7 @@ export class WorkflowEngineWidget extends Widget {
                     fullItems.push(instanceItem); continue;
                 }
                 else if (typeof item.id === 'string' && item.id.length > 20) {
-                    const neoItem: DraggableItem = { id: item.id, name: item.name, code: item.id, is_class: false, parameters: [] };
+                    const neoItem: DraggableItem = { id: item.id, name: item.name, code: item.id, is_class: false, parameters: [], type: 'neo-object' };
                     fullItems.push(neoItem); continue;
                 }
             }
@@ -760,14 +760,18 @@ except Exception as e:
             const varName = item.code;
             codeToExecute = `try:
     node_id = "${varName}"
-    if node_id in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash:
-        neo_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node_id]
-        result = jupyphant_entity.map_neo_obj_hash_to_neo_obj[neo_hash]
-    elif node_id in globals():
-        result = globals()[node_id]
-    else:
-        result = None
-        print(f"Error: Variable or node id '{varName}' not found.", file=sys.stderr)
+    result = None
+    if 'jupyphant_entity' in globals() and hasattr(jupyphant_entity, 'map_ipytree_node_id_to_neo_obj_hash'):
+        obj_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
+        if obj_hash:
+            result = jupyphant_entity.map_neo_obj_hash_to_neo_obj.get(obj_hash)
+
+    if result is None:
+        if node_id in globals():
+            result = globals()[node_id]
+        else:
+            result = None
+            print(f"Error: Variable or node id '{varName}' not found.", file=sys.stderr)
     
     if result is not None:
         ${resultsDictName}["${resultId}"] = result
@@ -859,12 +863,13 @@ except Exception as e:
     }
 
 
-    public generateCodeFromWorkflow() {
+    public async generateCodeFromWorkflow() {
         const nodeResultNames = new Map<LGraphNode, string>();
         const codeLines: string[] = [];
         const imports = new Set<string>();
         let varCounter = 0;
         const generatedNodes = new Set<LGraphNode>();
+        const preExecutionPromises: Promise<any>[] = [];
 
         const sanitizeVarName = (name: string) => {
             const namePart = name.split(' ')[0];
@@ -874,7 +879,7 @@ except Exception as e:
                 .replace(/^_+|_+$/g, '')
                 .replace(/^[^a-z_]*/, '');
             if (!sanitized || sanitized === 'list' || sanitized === 'print') {
-                return `result_${varCounter++}`;
+                return `jupyphant_result_${varCounter++}`;
             }
             return sanitized;
         };
@@ -885,6 +890,12 @@ except Exception as e:
             }
 
             const item = jupyphantNode.properties.item;
+
+            if (item.variable_name && item.variable_name !== "") {
+                nodeResultNames.set(jupyphantNode, item.variable_name);
+                generatedNodes.add(jupyphantNode);
+                return;
+            }
 
             if (!item || !item.code) {
                 generatedNodes.add(jupyphantNode);
@@ -1016,7 +1027,9 @@ except Exception as e:
                 lineOfCode = `${resultVarName} = ${intValue}`;
             } else if (item.code === '__UTIL_PRINT__') {
                 const arg_to_print = processedArgs.length > 0 ? processedArgs[0].value : "''";
-                lineOfCode = `print(${arg_to_print})`;
+                if (arg_to_print !== 'None') {
+                    lineOfCode = `print(${arg_to_print})`;
+                }
             } else if (item.name.startsWith(".")) {
                 const methodName = item.name.substring(1).replace('()', '');
                 const self_arg = processedArgs.find(arg => arg.isSelf)?.value;
@@ -1046,7 +1059,21 @@ except Exception as e:
                     .join(', ');
                 lineOfCode = `${resultVarName} = ${fqn}(${processed_args})`;
             } else {
-                // loadedObjects.set(resultVarName, item.name);
+                const varName = item.code;
+                const isNeoObject = varName.length > 20 && varName.includes('-');
+
+                if (isNeoObject) {
+                    const tempVar = `jupyphant_var_${varCounter++}`;
+
+                    const command = `${tempVar} = jupyphant_entity.map_neo_obj_hash_to_neo_obj.get(jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get('${varName}'))`;
+                    
+                    const executionPromise = this.kernelBridge.executeCode(command, true);
+                    preExecutionPromises.push(executionPromise);
+                    
+                    lineOfCode = `${resultVarName} = ${tempVar}`;
+                } else {
+                    lineOfCode = `${resultVarName} = ${varName}`;
+                }
             }
 
             if (lineOfCode) {
@@ -1062,6 +1089,8 @@ except Exception as e:
                 generateCodeForNode(node);
             }
         }
+
+        await Promise.all(preExecutionPromises);
 
         const importLines = Array.from(imports).join('\n');
         const fullCode = (importLines ? importLines + '\n\n' : '') + codeLines.join('\n');

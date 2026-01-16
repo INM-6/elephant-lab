@@ -9,6 +9,7 @@ export type DraggableItem = {
     is_class: boolean;
     parameters: { name: string, default: string }[];
     type?: string;
+    variable_name?: string;
 };
 
 export type JupyphantNodeProperties = {
