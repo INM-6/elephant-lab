@@ -22,13 +22,12 @@ def raster_plot(jupyphant_entity):
 
 # Call to the function that plots AnalogSignals
 def lfp_plot(jupyphant_entity):
-    from IPython.display import display
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        fig = jupyphant_entity.create_lfpplot()
-        if fig:
-            display(fig)
+        plotlyGraphFig = jupyphant_entity.create_lfpplot()
+        if plotlyGraphFig:
+            plotlyGraphFig.display()
 
 
 # Call to the function that initializes the ipytree widget with an empty tree
@@ -65,12 +64,12 @@ def create_explorer_raw_plot(jupyphant_entity):
             IPython.display.clear_output()
             raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids)
             if raw_st:
-                display(raw_st)
+                raw_st.display()
             raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids)
             if raw_anasig:
-                display(raw_anasig)
+                raw_anasig.display()
 
-    output_node_raw_plot = Output(layout={'border': '1px solid orange', 'width': 'auto' })
+    output_node_raw_plot = Output(layout={'border': '1px solid orange', 'width': 'auto', 'height': 'auto'})
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_raw, names='selected_nodes')
     display(output_node_raw_plot)
 
@@ -88,7 +87,7 @@ def create_explorer_statistics(jupyphant_entity):
             if fig:
                 display(fig)
 
-    output_node_statistic = Output(layout=Layout(border='1px solid orange', width='auto'))
+    output_node_statistic = Output(layout=Layout(border='1px solid orange', width='auto', height='auto'))
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_statistics, names='selected_nodes')
     display(output_node_statistic)
 

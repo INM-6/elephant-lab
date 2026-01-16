@@ -6,6 +6,10 @@ import __main__
 import time
 
 import joblib
+
+from .PlotlyGraphFigure import PlotlyGraphFigure
+from .PlotlyGraphDataTypes import *
+
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import neo
@@ -457,25 +461,18 @@ class Jupyphant:
         else:
             n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
             if n_subplots > 0:
-                subplot_titles = [key for key in spiketrains.keys() if spiketrains[key]]
-                fig = make_subplots(rows=1, cols=n_subplots, subplot_titles=subplot_titles)
-                fig.update_layout(title_text=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in")
-
-                subplot_col = 1
+                #subplot_titles = [key for key in spiketrains.keys() if spiketrains[key]]
+                data = []
                 for top_node, st_list in spiketrains.items():
                     if st_list:
-                        for i, st in enumerate(st_list):
-                            fig.add_trace(go.Scatter(x=st.times.magnitude, y=self.np.full_like(st.times.magnitude, i),
-                                                     mode='markers', marker=dict(size=3),
-                                                     showlegend=False),
-                                          row=1, col=subplot_col)
-                        fig.update_yaxes(title_text="Spike Train Index", row=1, col=subplot_col)
-                        fig.update_xaxes(title_text=f"Time ({st_list[0].units.dimensionality.string})", row=1, col=subplot_col)
-                        subplot_col += 1
+                        for st in st_list:
+                            data.append(SpikeTrainRasterPlot(st))
+
+                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in")
 
                 if selected_ids is None:
-                    self.spiketrain_overview = fig
-                return fig
+                    self.spiketrain_overview = plotlyGraphFigure
+                return plotlyGraphFigure
             else:
                 return None
 
