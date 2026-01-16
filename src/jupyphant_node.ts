@@ -177,35 +177,57 @@ export class JupyphantNode extends LGraphNode {
             return;
         }
 
-        var icon_size = 16;
-        var margin = 5;
-        var x = this.size[0] - icon_size - margin;
-        var y = -LiteGraph.NODE_TITLE_HEIGHT + (LiteGraph.NODE_TITLE_HEIGHT - icon_size) / 2;
+        const icon_size = 16;
+        const margin = 5;
+        const y = -LiteGraph.NODE_TITLE_HEIGHT + (LiteGraph.NODE_TITLE_HEIGHT - icon_size) / 2;
 
+        // Draw the 'X' icon on the far right
+        const delete_x = this.size[0] - icon_size - margin;
         ctx.save();
-        ctx.fillStyle = "#4A90E2";
+        ctx.fillStyle = "#E24A4A";
         ctx.beginPath();
-        ctx.arc(x + icon_size / 2, y + icon_size / 2, icon_size / 2, 0, Math.PI * 2);
+        ctx.arc(delete_x + icon_size / 2, y + icon_size / 2, icon_size / 2, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.fillStyle = "white";
         ctx.font = "bold 12px Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("i", x + icon_size / 2, y + icon_size / 2);
+        ctx.fillText("X", delete_x + icon_size / 2, y + icon_size / 2);
+        ctx.restore();
+
+        // Draw the 'i' icon to the left of the 'X' icon
+        const info_x = this.size[0] - (icon_size + margin) * 2;
+        ctx.save();
+        ctx.fillStyle = "#4A90E2";
+        ctx.beginPath();
+        ctx.arc(info_x + icon_size / 2, y + icon_size / 2, icon_size / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "white";
+        ctx.font = "bold 12px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("i", info_x + icon_size / 2, y + icon_size / 2);
         ctx.restore();
     };
 
     override onMouseDown(e: MouseEvent, local_pos: [number, number], graphcanvas: LGraphCanvas): boolean {
-        const ctx = graphcanvas.canvas.getContext("2d")!;
-        ctx.font = 'bold 14px Arial';
+        const icon_size = 16;
+        const margin = 5;
+        const y = -LiteGraph.NODE_TITLE_HEIGHT + (LiteGraph.NODE_TITLE_HEIGHT - icon_size) / 2;
 
-        var icon_size = 16;
-        var margin = 5;
-        var x = this.size[0] - icon_size - margin;
-        var y = -LiteGraph.NODE_TITLE_HEIGHT + (LiteGraph.NODE_TITLE_HEIGHT - icon_size) / 2;
+        const delete_x = this.size[0] - icon_size - margin;
+        if (local_pos[0] >= delete_x && local_pos[0] <= delete_x + icon_size &&
+            local_pos[1] >= y && local_pos[1] <= y + icon_size) {
+            if ((graphcanvas.graph as any)) {
+                (graphcanvas.graph as any).remove(this);
+            }
+            return true;
+        }
 
-        if (local_pos[0] >= x && local_pos[0] <= x + icon_size &&
+        const info_x = this.size[0] - (icon_size + margin) * 2;
+        if (local_pos[0] >= info_x && local_pos[0] <= info_x + icon_size &&
             local_pos[1] >= y && local_pos[1] <= y + icon_size) {
             const widget = (graphcanvas.graph as any).widget as WorkflowEngineWidget;
             widget.showNodeInfo(this);
