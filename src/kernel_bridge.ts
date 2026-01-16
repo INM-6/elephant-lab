@@ -247,53 +247,92 @@ export class KernelBridge {
         if (!this.session || !this.session.session) { return null; }
         const pythonCode = `
         import inspect, json, sys, pprint
+        from jupyphant.kernelcode import get_neo_to_hash_dict
 
-        target_obj = None
-        md_output = []
+        target_id_str = "${code}"
 
-        try:
-            fqn = "${code}"
-            parts = fqn.split('.')
-            func_name = parts.pop()
-            module_path = ".".join(parts)
+        # Manual docstrings for utility nodes
+        util_docstrings = {
+            'UTIL_LOOP': '### For Loop\\n\\nIterates over a list of items.\\n\\n**Inputs:**\\n- \`exec in\`: Execution input\\n- \`List\`: The list to iterate over\\n\\n**Outputs:**\\n- \`after loop\`: Execution output after the loop is finished\\n- \`loop body\`: Execution path for each iteration\\n- \`item\`: The current item in the iteration\\n- \`index\`: The index of the current item.',
+            'UTIL_PRINT': '### Print Node\\n\\nPrints the string representation of the input value.',
+            'UTIL_LIST': '### List Node\\n\\nCreates a Python list from the inputs.'
+        }
+        
+        util_docstrings['__UTIL_LOOP__'] = util_docstrings['UTIL_LOOP']
+        util_docstrings['__UTIL_LIST__'] = util_docstrings['UTIL_LIST']
+        util_docstrings['__UTIL_PRINT__'] = util_docstrings['UTIL_PRINT']
 
-            if module_path:
-                try:
-                    __import__(module_path)
-                    module_obj = sys.modules[module_path]
-                    target_obj = getattr(module_obj, func_name, None)
-                except ImportError:
-                    pass # Module not found, will try eval
+        if target_id_str in util_docstrings:
+            print(json.dumps(util_docstrings[target_id_str]))
+        else:
+            target_obj = None
+            md_output = []
 
-            if target_obj is None:
-                try:
-                    target_obj = eval(fqn)
-                except Exception:
-                    md_output.append(f"Could not find object '**{fqn}**'")
+            try:
+                if target_id_str.startswith("result_"):
+                    global workflow_results
+                    if 'workflow_results' in globals() and target_id_str in workflow_results:
+                        target_obj = workflow_results[target_id_str]
+                    else:
+                        md_output.append(f"Info: Workflow not run, cannot inspect result key {target_id_str}")
 
-            if target_obj is not None:
-                # Get pretty-printed representation first
-                try:
-                    representation = pprint.pformat(target_obj)
-                    md_output.append("#### Representation:")
-                    md_output.append(f"\`\`\`python\\n{representation}\\n\`\`\`")
-                except Exception as e:
-                    md_output.append(f"*Could not get representation: {e}*")
+                elif "." in target_id_str:
+                    try:
+                        parts = target_id_str.split('.')
+                        func_name = parts.pop()
+                        module_path = ".".join(parts)
+                        __import__(module_path)
+                        module_obj = sys.modules[module_path]
+                        target_obj = getattr(module_obj, func_name)
+                    except (ImportError, AttributeError):
+                        pass
+                
+                if target_obj is None:
+                    try:
+                        target_obj = eval(target_id_str)
+                    except Exception:
+                        pass
 
-                # Then get docstring
-                docstring = inspect.getdoc(target_obj)
-                if docstring:
-                    md_output.append("---")
-                    md_output.append("#### Docstring:")
-                    md_output.append(docstring)
-                else:
-                    md_output.append("*No docstring found.*")
-            
-            final_md = "\\n\\n".join(md_output)
-            print(json.dumps(final_md if final_md else None))
+                if target_obj is None:
+                    try:
+                        global jupyphant_entity 
+                        if 'jupyphant_entity' in globals():
+                            neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
+                            
+                            if target_id_str in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash:
+                                sha1_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[target_id_str]
+                                if sha1_hash in neo_hash_obj_dict:
+                                    target_obj = neo_hash_obj_dict[sha1_hash]
+                            elif target_id_str in neo_hash_obj_dict:
+                                target_obj = neo_hash_obj_dict[target_id_str]
 
-        except Exception as e:
-            print(json.dumps(f"An error occurred: {e}"))
+                    except Exception as e:
+                        md_output.append(f"*Error during neo hash lookup: {e}*")
+
+                if target_obj is None:
+                     md_output.append(f"Could not find object '**{target_id_str}**'")
+
+                if target_obj is not None:
+                    try:
+                        representation = pprint.pformat(target_obj)
+                        md_output.append("#### Representation:")
+                        md_output.append(f"\`\`\`python\\n{representation}\\n\`\`\`")
+                    except Exception as e:
+                        md_output.append(f"*Could not get representation: {e}*")
+
+                    docstring = inspect.getdoc(target_obj)
+                    if docstring:
+                        md_output.append("---")
+                        md_output.append("#### Docstring:")
+                        md_output.append(docstring)
+                    else:
+                        md_output.append("*No docstring found.*")
+                
+                final_md = "\\n\\n".join(md_output)
+                print(json.dumps(final_md if final_md else None))
+
+            except Exception as e:
+                print(json.dumps(f"An error occurred: {e}"))
         `;
         let msg_content: string = "";
         let future = this.session.session.kernel!.requestExecute({ code: pythonCode });
