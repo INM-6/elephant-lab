@@ -31,7 +31,6 @@ class PlotlyGraphFigure:
                 shared_xaxes=self.shared_xaxes
             ))
 
-        #self.minX = 
         self.create_graphs(self.fig, data)
 
         if title is None:
@@ -107,6 +106,24 @@ class PlotlyGraphFigure:
                 offset_index = row-1
                 if offset_index > 0:
                     y_values = [y + offset_index * subplotHeight for y in y_values.copy()]
+            minX = min(data.x)
+            maxX = max(data.x)
+            minY = min(y_values)
+            maxY = max(y_values)
+            if hasattr(self, "minX"):
+                if minX < self.minX:
+                    self.minX = minX
+                if maxX > self.maxX:
+                    self.maxX = maxX
+                if minY < self.minY:
+                    self.minY = minY
+                if maxY > self.maxY:
+                    self.maxY = maxY
+            else:
+                self.minX = minX
+                self.maxX = maxX
+                self.minY = minY
+                self.maxY = maxY
             trace  = go.Scattergl(
                 x=data.x,
                 y=y_values,
@@ -210,14 +227,10 @@ class PlotlyGraphFigure:
                 ),
             )
             import ipywidgets as widgets
-            from IPython.display import display
-            y_vals = [y for trace, _ in self.traces for y in trace.y]
-            min_value = min(y_vals)
-            max_value = max(y_vals)
             self.y_slider = widgets.FloatRangeSlider(
-                value=[min_value, max_value],
-                min=min_value,
-                max=max_value,
+                value=[self.minY, self.maxY],
+                min=self.minY,
+                max=self.maxY,
                 step=0.1,
                 orientation='vertical',
                 continuous_update=True,
@@ -253,9 +266,8 @@ class PlotlyGraphFigure:
 
         # Default percentages
         if relayout_button_options is None:
-            x_vals = [x for trace, _ in self.traces for x in trace.x]
-            start = min(x_vals)
-            width = max(x_vals) - start
+            start = self.minX
+            width = self.maxX - start
             relayout_button_options = [
                 ("1%", [start, start+width*0.01]),
                 ("5%", [start, start+width*0.05]),
