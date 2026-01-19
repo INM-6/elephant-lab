@@ -245,14 +245,6 @@ class PlotlyGraphFigure:
         """Displays the Plotly figure in a Jupyter notebook."""
         if self.fig:
             display(self.fig)
-            from IPython.display import Javascript
-            # Trigger a resize after it has been rendered
-            display(Javascript("""
-                setTimeout(function(){
-                    var el = document.querySelector('.js-plotly-plot');
-                    if(el && el._fullLayout) Plotly.Plots.resize(el);
-                }, 5000);
-            """))
 
     def getSubplotHeight(self, height=None):
         """Returns the height of each subplot in pixels."""

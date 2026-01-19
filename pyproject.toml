@@ -43,7 +43,8 @@ dependencies = [
 "elephant @ git+https://github.com/JanNolten/elephant.git@feature/pydantic",
 "viziphant",
 "quantities",
-"traitlets"
+"traitlets",
+"plotly<6"
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 
