@@ -273,7 +273,7 @@ class Jupyphant:
                 variable_name = self.names_for(neo_obj)
 
                 if hasattr(neo_obj, 'name') and neo_obj.name:
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {neo_obj.name} :: ({class_name}) [{hash_neo_obj[:4]}]")
+                    node_neo_obj = self.Node(f"{variable_name} :: {NEO_ABBREVIATIONS[class_name]['abbr']} {neo_obj.name} :: ({class_name}) [{hash_neo_obj[:4]}]")
                     if neo_obj.name.lower() == "block":
                         node_neo_obj.opened = self.expand_all or (len(neo_obj.segments) < 5)
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
@@ -335,7 +335,7 @@ class Jupyphant:
                     if attr_value_list is not None and len(attr_value_list) > 0:
                         attr_value_hash = self.get_neo_hash(attr_value_list, hash_name='sha1')
                         self.map_neo_obj_hash_to_neo_obj[attr_value_hash] = attr_value_list                
-                        attr_node = self.Node(f"{attr_name.capitalize()} [{len(attr_value_list)}] :: ({attr_name.capitalize()}) [{attr_value_hash[:4]}]")
+                        attr_node = self.Node(f"{self.names_for(attr_value_list)} {attr_name.capitalize()} [{len(attr_value_list)}] :: ({attr_name.capitalize()}) [{attr_value_hash[:4]}]")
                         attr_node.opened = self.expand_all or (len(attr_value_list) < 5)
                         attr_node.icon = 'folder' 
                         attr_node.metadata = {"data-neo-object": "true", "container-for": attr_name}
@@ -629,9 +629,9 @@ class Jupyphant:
         # extract those neo objects that are instances of the given 'neo_class'
         for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
             if isinstance(neo_obj, neo_class):
-                collected_neo_objs[f"{neo_obj.name} :: {self.get_neo_hash(neo_obj, hash_name='sha1')}"] = [neo_obj]
+                collected_neo_objs[f"{self.names_for(neo_obj)} {neo_obj.name} :: {self.get_neo_hash(neo_obj, hash_name='sha1')}"] = [neo_obj]
             elif issubclass(type(neo_obj), self.Container):
-                collected_neo_objs[f"{neo_obj.name} :: {self.get_neo_hash(neo_obj, hash_name='sha1')}"] = neo_obj.list_children_by_class(neo_class)
+                collected_neo_objs[f"{self.names_for(neo_obj)} {neo_obj.name} :: {self.get_neo_hash(neo_obj, hash_name='sha1')}"] = neo_obj.list_children_by_class(neo_class)
             else:
                 pass
         # keep only neo_obj which are selected, i.e. their hash ID was provided via 'selected_ids'
