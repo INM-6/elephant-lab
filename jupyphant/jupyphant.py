@@ -649,6 +649,49 @@ class Jupyphant:
         return {self.map_ipytree_node_id_to_neo_obj_hash[node._id]: node.name
                 for node in self.ipytree_of_neo_objects.selected_nodes}
 
+    def _print_as_table(self, data, pp):
+        """
+        Prints a list of lists as a formatted table using the provided pretty-printer.
+        """
+        if not data:
+            return
+
+        num_columns = len(data[0]) if data else 0
+        if num_columns == 0:
+            return
+
+        table_data = []
+        for row in data:
+            str_row = [str(item) for item in row]
+            padded_row = str_row[:num_columns] + [''] * (num_columns - len(str_row))
+            table_data.append(padded_row)
+
+        col_widths = [0] * num_columns
+        for row in table_data:
+            for i, cell in enumerate(row):
+                if len(cell) > col_widths[i]:
+                    col_widths[i] = len(cell)
+
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        header_cells = [
+            f"{{:<{col_widths[i]}}}".format(table_data[0][i])
+            for i in range(num_columns)
+        ]
+        bold_header_line = " | ".join([f"{bold}{cell}{reset}" for cell in header_cells])
+        pp.text(bold_header_line)
+        pp.text("\n")
+
+        separator = "-+-".join("-" * width for width in col_widths)
+        pp.text(separator)
+        pp.text("\n")
+
+        row_format = " | ".join(f"{{:<{width}}}" for width in col_widths)
+        for row in table_data[1:]:
+            pp.text(row_format.format(*row))
+            pp.text("\n")
+
     def _repr_pretty_neo_objects(self, neo_obj, node_name, pp, cycle):
         """
         Handle pretty-printing of any neo class and python built-in list.
@@ -658,6 +701,9 @@ class Jupyphant:
             pp: instance of RepresentationPrinter
             cyle: boolean; False -> no self-recursion; True -> self-recursion
         """
+        import pprint
+        bold = '\033[1m'
+        reset = '\033[0m'
 
         def _repr_pretty_recommended_attrs(neo_obj):
             if hasattr(neo_obj, '_recommended_attrs'):
@@ -714,11 +760,13 @@ class Jupyphant:
         elif isinstance(neo_obj, list):
             python_list_type_occurences = [type(ele) for ele in neo_obj]
             type_counter = self.Counter(python_list_type_occurences)
-            pp.text(f"{neo_obj.__class__.__name__} with the type occurrence frequencies:\n")
-            for key, value in type_counter.items():
-                pp.text(f"type: {key} --> #occ: {value}\n")
-            pp.text("\n\n")
-        
+            pp.text(f"{bold}{neo_obj.__class__.__name__} contents:{reset}\n")
+            table_data = [["Type", "Count"]]
+            for type_obj, count in type_counter.items():
+                table_data.append([type_obj.__name__, count])
+            self._print_as_table(table_data, pp)
+            pp.text("\n")
+
         elif neo_obj.__class__.__name__ == 'ObjectList':
             class_name = neo_obj.__class__.__name__
             
@@ -728,6 +776,127 @@ class Jupyphant:
             else:
                 pp.text(f"{class_name} (empty)")
             pp.text("\n\n")
+            
+        elif isinstance(neo_obj, self.AnalogSignal):
+            pp.text(f"{bold}AnalogSignal:{reset} {neo_obj.shape[1]} channels, {neo_obj.shape[0]} samples; units {neo_obj.units.dimensionality.string}; datatype {neo_obj.dtype}\n\n")
+
+            if neo_obj.name:
+                pp.text(f"{bold}Name:{reset} {neo_obj.name}\n")
+            if neo_obj.description:
+                pp.text(f"{bold}Description:{reset} {neo_obj.description}\n")
+            if neo_obj.annotations:
+                pp.text(f"{bold}Annotations:{reset}\n{pprint.pformat(neo_obj.annotations, indent=2)}\n")
+
+            pp.text(f"{bold}Sampling Rate:{reset} {neo_obj.sampling_rate}\n")
+            pp.text(f"{bold}Time Range:{reset} {neo_obj.t_start} to {neo_obj.t_stop}\n\n")
+            
+            if neo_obj.shape[1] > 1:
+                pp.text(f"(Showing data for first of {neo_obj.shape[1]} channels)\n")
+            
+            pp.text(f"{bold}Data ({neo_obj.units}):{reset}\n")
+            table_data = [["Index", "Time", "Value (Ch 0)"]]
+            times = neo_obj.times
+            signal = neo_obj[:, 0]
+
+            if len(signal) > 10:
+                for i in range(5):
+                    table_data.append([i, f"{times[i]:.4f}", f"{signal[i].item():.4f}"])
+                table_data.append(["...", "...", "..."])
+                for i in range(len(signal) - 5, len(signal)):
+                    table_data.append([i, f"{times[i]:.4f}", f"{signal[i].item():.4f}"])
+            else:
+                for i in range(len(signal)):
+                    table_data.append([i, f"{times[i]:.4f}", f"{signal[i].item():.4f}"])
+            self._print_as_table(table_data, pp)
+            pp.text("\n\n")
+
+        elif isinstance(neo_obj, self.SpikeTrain):
+            pp.text(f"{bold}SpikeTrain:{reset} {len(neo_obj)} spikes; units {neo_obj.units.dimensionality.string}; datatype {neo_obj.dtype}\n\n")
+
+            if neo_obj.name:
+                pp.text(f"{bold}Name:{reset} {neo_obj.name}\n")
+            if neo_obj.description:
+                pp.text(f"{bold}Description:{reset} {neo_obj.description}\n")
+            if neo_obj.annotations:
+                pp.text(f"{bold}Annotations:{reset}\n{pprint.pformat(neo_obj.annotations, indent=2)}\n")
+
+            pp.text(f"{bold}Time Range:{reset} {neo_obj.t_start} to {neo_obj.t_stop}\n\n")
+            
+            pp.text(f"{bold}Spike Times ({neo_obj.units}):{reset}\n")
+            table_data = [["Index", "Time"]]
+            times = neo_obj.times
+
+            if len(times) > 10:
+                for i in range(5):
+                    table_data.append([i, f"{times[i]:.4f}"])
+                table_data.append(["...", "..."])
+                for i in range(len(times) - 5, len(times)):
+                    table_data.append([i, f"{times[i]:.4f}"])
+            else:
+                for i in range(len(times)):
+                    table_data.append([i, f"{times[i]:.4f}"])
+
+            self._print_as_table(table_data, pp)
+            pp.text("\n\n")
+
+        elif isinstance(neo_obj, self.Epoch):
+            pp.text(f"{bold}Epoch:{reset} {len(neo_obj)} epochs; units {neo_obj.units.dimensionality.string}; datatype {neo_obj.dtype}\n\n")
+
+            if neo_obj.name:
+                pp.text(f"{bold}Name:{reset} {neo_obj.name}\n")
+            if neo_obj.description:
+                pp.text(f"{bold}Description:{reset} {neo_obj.description}\n")
+            if neo_obj.annotations:
+                pp.text(f"{bold}Annotations:{reset}\n{pprint.pformat(neo_obj.annotations, indent=2)}\n\n")
+
+            pp.text(f"{bold}Data:{reset}\n")
+            table_data = [["Index", f"Time ({neo_obj.units})", f"Duration ({neo_obj.units})", "Label"]]
+            times = neo_obj.times
+            durations = neo_obj.durations
+            labels = neo_obj.labels
+
+            num_epochs = len(times)
+            if num_epochs > 10:
+                for i in range(5):
+                    table_data.append([i, f"{times[i]:.4f}", f"{durations[i]:.4f}", labels[i]])
+                table_data.append(["...", "...", "...", "..."])
+                for i in range(num_epochs - 5, num_epochs):
+                    table_data.append([i, f"{times[i]:.4f}", f"{durations[i]:.4f}", labels[i]])
+            else:
+                for i in range(num_epochs):
+                    table_data.append([i, f"{times[i]:.4f}", f"{durations[i]:.4f}", labels[i]])
+
+            self._print_as_table(table_data, pp)
+            pp.text("\n\n")
+
+        elif isinstance(neo_obj, self.Event):
+            pp.text(f"{bold}Event:{reset} {len(neo_obj)} events; units {neo_obj.units.dimensionality.string}; datatype {neo_obj.dtype}\n\n")
+            
+            if neo_obj.name:
+                pp.text(f"{bold}Name:{reset} {neo_obj.name}\n")
+            if neo_obj.description:
+                pp.text(f"{bold}Description:{reset} {neo_obj.description}\n")
+            if neo_obj.annotations:
+                pp.text(f"{bold}Annotations:{reset}\n{pprint.pformat(neo_obj.annotations, indent=2)}\n\n")
+
+            pp.text(f"{bold}Data:{reset}\n")
+            table_data = [["Index", f"Time ({neo_obj.units})", "Label"]]
+            times = neo_obj.times
+            labels = neo_obj.labels
+
+            num_events = len(times)
+            if num_events > 10:
+                for i in range(5):
+                    table_data.append([i, f"{times[i]:.4f}", labels[i]])
+                table_data.append(["...", "...", "..."])
+                for i in range(num_events - 5, num_events):
+                    table_data.append([i, f"{times[i]:.4f}", labels[i]])
+            else:
+                for i in range(num_events):
+                    table_data.append([i, f"{times[i]:.4f}", labels[i]])
+
+            self._print_as_table(table_data, pp)
+            pp.text("\n\n")
 
         elif isinstance(neo_obj, self.BaseNeo):
             pp.text(str(neo_obj))
@@ -735,46 +904,12 @@ class Jupyphant:
 
         # any other neo object will be represented with their own / inherited '_repr_pretty_' method
         else:
-            neo_obj._repr_pretty_(pp, cycle)
-            pp.text("\n")
-            # display also first and last five data values
-            if isinstance(neo_obj, self.AnalogSignal):
-                if len(neo_obj.magnitude) > 10:
-                    pp.text(f"signal: {neo_obj.magnitude[:5]} ... {neo_obj.magnitude[-5:]} {neo_obj.units}\n")
-                else:
-                    pp.text(f"signal: {neo_obj.magnitude} {neo_obj.units}\n")
-                if len(neo_obj.times) > 10:
-                    pp.text(f"times: {neo_obj.times[:5]} ... {neo_obj.times[-5:]}\n")
-                else:
-                    pp.text(f"times: {neo_obj.times}\n")
-            if isinstance(neo_obj, self.SpikeTrain):
-                if len(neo_obj.times) > 10:
-                    pp.text(f"times: {neo_obj.times[:5]} ... {neo_obj.times[-5:]}\n")
-                else:
-                    pp.text(f"times: {neo_obj.times}\n")
-            if isinstance(neo_obj, self.Epoch):
-                if len(neo_obj.times) > 10:
-                    pp.text(f"times: {neo_obj.times[:5]} ... {neo_obj.times[-5:]}\n")
-                else:
-                    pp.text(f"times: {neo_obj.times}\n")
-                if len(neo_obj.durations) > 10:
-                    pp.text(f"durations: {neo_obj.durations[:5]} ... {neo_obj.durations[-5:]}\n")
-                else:
-                    pp.text(f"durations: {neo_obj.durations}\n")
-                if len(neo_obj.labels) > 10:
-                    pp.text(f"labels: {neo_obj.labels[:5]} ... {neo_obj.labels[-5:]}\n")
-                else:
-                    pp.text(f"labels: {neo_obj.labels}\n")
-            if isinstance(neo_obj, self.Event):
-                if len(neo_obj.times) > 10:
-                    pp.text(f"times: {neo_obj.times[:5]} ... {neo_obj.times[-5:]}\n")
-                else:
-                    pp.text(f"times: {neo_obj.times}\n")
-                if len(neo_obj.labels) > 10:
-                    pp.text(f"labels: {neo_obj.labels[:5]} ... {neo_obj.labels[-5:]}\n")
-                else:
-                    pp.text(f"labels: {neo_obj.labels}\n")
-            pp.text("\n\n")
+            try:
+                neo_obj._repr_pretty_(pp, cycle)
+                pp.text("\n\n")
+            except AttributeError:
+                pp.text(f"Object of type {type(neo_obj)} could not be pretty-printed.")
+                pp.text("\n\n")
 
     def pretty_print_of_selected_neo_objects(self):
         from io import StringIO
