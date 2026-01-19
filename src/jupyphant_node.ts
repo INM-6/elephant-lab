@@ -50,14 +50,14 @@ export class JupyphantNode extends LGraphNode {
 
     private updateNodeColor(): void {
         if (this.properties.item?.is_class) {
-            this.color = '#3B73B1';
-            this.bgcolor = '#4A90E2';
+            this.color = '#3b72b148';
+            this.bgcolor = '#4a91e23b';
         } else if (this._isOutputNode()) {
-            this.color = '#A6742D';
-            this.bgcolor = '#D99A3D';
+            this.color = '#a6742d3f';
+            this.bgcolor = '#d99b3d46';
         } else if (this._isProcessingNode()) {
-            this.color = '#3B813B';
-            this.bgcolor = '#4CAF50';
+            this.color = '#3b813b3f';
+            this.bgcolor = '#4caf4f36';
         }
         else {
             this.color = "";
