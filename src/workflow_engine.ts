@@ -49,7 +49,7 @@ export class WorkflowEngineWidget extends Widget {
                 try {
                     const from_slot = this.outputs[link.origin_slot];
                     const to_slot = target_node.inputs[link.target_slot];
-                    const exec_out_names = ['exec out', 'after loop', 'loop body'];
+                    const exec_out_names = ['exec out', 'after loop', 'loop body', 'after if/else', 'if body', 'else body'];
                     if (from_slot && 
                         to_slot && 
                         from_slot.type === LiteGraph.EVENT && 
@@ -279,6 +279,31 @@ export class WorkflowEngineWidget extends Widget {
         }
 
         const nodes: LGraphNode[] = (this.graph as any)._nodes;
+        const subgraphNodes = new Set<LGraphNode>();
+
+        // Find all nodes within subgraphs (if/else/loop bodies)
+        for (const node of nodes) {
+            if (node instanceof JupyphantNode) {
+                if (node.properties.item.code === '__UTIL_IF__' || node.properties.item.code === '__UTIL_LOOP__') {
+                    const bodyOutputs = node.outputs.filter(o => o.name === 'if body' || o.name === 'else body' || o.name === 'loop body');
+                    for (const output of bodyOutputs) {
+                        if (output.links) {
+                            for (const linkId of output.links) {
+                                const link = this.graph.links[linkId];
+                                if (link) {
+                                    const startNode = this.graph.getNodeById(link.target_id);
+                                    if (startNode) {
+                                        const bodyNodes = this._getSubgraphExecutionOrder(startNode);
+                                        bodyNodes.forEach(n => subgraphNodes.add(n));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         const sortedList: LGraphNode[] = [];
         const visited = new Set<LGraphNode>();
 
@@ -286,7 +311,7 @@ export class WorkflowEngineWidget extends Widget {
         const startNodes = nodes.filter(node => {
             // A node is a start node if its 'exec in' slot is not connected
             const execInput = node.inputs.find(input => input.type === -1);
-            return !execInput || execInput.link === null;
+            return (!execInput || execInput.link === null) && !subgraphNodes.has(node);
         });
 
         if (startNodes.length === 0 && nodes.length > 0) {
@@ -310,6 +335,8 @@ export class WorkflowEngineWidget extends Widget {
             let execOutput;
             if ((currentNode as JupyphantNode).properties?.item.code === '__UTIL_LOOP__') {
                 execOutput = currentNode.outputs.find(output => output.name === 'after loop');
+            } else if ((currentNode as JupyphantNode).properties?.item.code === '__UTIL_IF__') {
+                execOutput = currentNode.outputs.find(output => output.name === 'after if/else');
             } else {
                 execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'loop body');
             }
@@ -327,7 +354,7 @@ export class WorkflowEngineWidget extends Widget {
         }
 
         for (const node of nodes) {
-            if (!visited.has(node)) {
+            if (!visited.has(node) && !subgraphNodes.has(node)) {
                 sortedList.push(node);
                 console.warn(`Node "${node.title}" is not connected to the execution path and will be appended to the end.`);
             }
@@ -501,6 +528,64 @@ ${loopBodyCode}
 
             executed_nodes.set(jupyphantNode, null); // Loop node itself has no result
             return null;
+        } else if (item.code === '__UTIL_IF__') {
+            const conditionInput = jupyphantNode.inputs.find(i => i.name === 'condition');
+            if (!conditionInput || conditionInput.link === null) {
+                console.error("If/Else node has no condition connected.");
+                executed_nodes.set(jupyphantNode, null);
+                return null;
+            }
+            const conditionLink = this.graph!.links[conditionInput.link];
+            const conditionOriginNode = this.graph!.getNodeById(conditionLink.origin_id);
+            if (!conditionOriginNode) {
+                executed_nodes.set(jupyphantNode, null);
+                return null;
+            }
+
+            const conditionKey = await this.executeNode(conditionOriginNode, executed_nodes, outputArea);
+            if (!conditionKey) {
+                console.error("Condition for If/Else node did not execute properly.");
+                executed_nodes.set(jupyphantNode, null);
+                return null;
+            }
+
+            const checkConditionCode = `
+_condition_val = workflow_results.get('${conditionKey}')
+if isinstance(_condition_val, str):
+    _is_true = _condition_val.lower() not in ('false', '0', 'f', '', 'none')
+else:
+    _is_true = bool(_condition_val)
+if _is_true:
+    print("JUPYPHANT_IF_TRUE")
+`;
+            const conditionResult = await this.kernelBridge.executeCode(checkConditionCode, true);
+            let conditionIsTrue = false;
+            if (conditionResult && conditionResult.outputs) {
+                for (const output of conditionResult.outputs) {
+                    if (output.output_type === 'stream' && output.name === 'stdout' && typeof output.text === 'string' && output.text.includes('JUPYPHANT_IF_TRUE')) {
+                        conditionIsTrue = true;
+                        break;
+                    }
+                }
+            }
+            
+            const branch = conditionIsTrue ? 'if body' : 'else body';
+            const bodyExecOutput = jupyphantNode.outputs.find(o => o.name === branch);
+            
+            if (bodyExecOutput && bodyExecOutput.links && bodyExecOutput.links.length > 0) {
+                const bodyStartLink = this.graph!.links[bodyExecOutput.links[0]];
+                const bodyStartNode = this.graph!.getNodeById(bodyStartLink.target_id);
+
+                if (bodyStartNode) {
+                    const bodyNodes = this._getSubgraphExecutionOrder(bodyStartNode);
+                    for (const bodyNode of bodyNodes) {
+                        await this.executeNode(bodyNode, executed_nodes, outputArea);
+                    }
+                }
+            }
+
+            executed_nodes.set(jupyphantNode, null); 
+            return null;
         }
 
         const args: (string | null)[] = [];
@@ -650,6 +735,8 @@ try:
     print(f"JUPYPHANT_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error in Print node: {e}", file=sys.stderr)`;
+        } else if (item.code === '__UTIL_IF__') {
+            return "";
         }
 
         // Node is class method logic
@@ -777,13 +864,16 @@ except Exception as e:
         ${resultsDictName}["${resultId}"] = result
         print(f"JUPYPHANT_RESULT_KEY:${resultId}")
 except Exception as e:
-    print(f"Error getting object for variable ${varName}: {e}", file=sys.stderr)`;
+    print(f"Error getting object for variable '${varName}': {e}", file=sys.stderr)`;
         }
         return codeToExecute
     }
 
 
     private _getSubgraphExecutionOrder(startNode: LGraphNode): LGraphNode[] {
+        if (!this.graph) {
+            return [];
+        }
         const sortedList: LGraphNode[] = [];
         if (!startNode) {
             return sortedList;
@@ -804,6 +894,8 @@ except Exception as e:
             let execOutput;
             if ((currentNode as JupyphantNode).properties?.item.code === '__UTIL_LOOP__') {
                 execOutput = currentNode.outputs.find(output => output.name === 'after loop');
+            } else if ((currentNode as JupyphantNode).properties?.item.code === '__UTIL_IF__') {
+                execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'if body' && output.name !== 'else body');
             } else {
                 execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'loop body');
             }
@@ -931,6 +1023,54 @@ except Exception as e:
                                 generateCodeForNode(bodyNode, indent + "    ");
                             }
                         }
+                    }
+                }
+                return;
+            } else if (item.code === '__UTIL_IF__') {
+                generatedNodes.add(jupyphantNode);
+
+                const conditionInput = jupyphantNode.inputs.find(i => i.name === 'condition');
+                if (!conditionInput || conditionInput.link === null) return;
+                const conditionLink = this.graph!.links[conditionInput.link];
+                const conditionOriginNode = this.graph!.getNodeById(conditionLink.origin_id);
+
+                if (conditionOriginNode instanceof JupyphantNode) {
+                    generateCodeForNode(conditionOriginNode, indent);
+                    const conditionVarName = nodeResultNames.get(conditionOriginNode);
+                    if (!conditionVarName) return;
+
+                    codeLines.push(indent + `if ${conditionVarName}:`);
+
+                    const ifBodyExecOutput = jupyphantNode.outputs.find(o => o.name === 'if body');
+                    if (ifBodyExecOutput && ifBodyExecOutput.links && ifBodyExecOutput.links.length > 0) {
+                        const ifBodyStartLink = this.graph!.links[ifBodyExecOutput.links[0]];
+                        const ifBodyStartNode = this.graph!.getNodeById(ifBodyStartLink.target_id);
+                        if (ifBodyStartNode) {
+                            const ifBodyNodes = this._getSubgraphExecutionOrder(ifBodyStartNode);
+                            for (const bodyNode of ifBodyNodes) {
+                                if (bodyNode instanceof JupyphantNode) {
+                                    generateCodeForNode(bodyNode, indent + "    ");
+                                }
+                            }
+                        }
+                    }
+
+                    codeLines.push(indent + `else:`);
+
+                    const elseBodyExecOutput = jupyphantNode.outputs.find(o => o.name === 'else body');
+                    if (elseBodyExecOutput && elseBodyExecOutput.links && elseBodyExecOutput.links.length > 0) {
+                        const elseBodyStartLink = this.graph!.links[elseBodyExecOutput.links[0]];
+                        const elseBodyStartNode = this.graph!.getNodeById(elseBodyStartLink.target_id);
+                        if (elseBodyStartNode) {
+                            const elseBodyNodes = this._getSubgraphExecutionOrder(elseBodyStartNode);
+                            for (const bodyNode of elseBodyNodes) {
+                                if (bodyNode instanceof JupyphantNode) {
+                                    generateCodeForNode(bodyNode, indent + "    ");
+                                }
+                            }
+                        }
+                    } else {
+                        codeLines.push(indent + "    pass");
                     }
                 }
                 return;
@@ -1122,38 +1262,59 @@ except Exception as e:
     private _generateNodeMenu() {
 
         return () => {
-            return [
-                {
-                    content: "Loop",
-                    submenu: {
-                        options: [
+                        return [
                             {
-                                content: "For Loop",
-                                callback: (value: any, options: any, event: any, parentMenu: any) => {
-                                    const item: DraggableItem = {
-                                        id: "util/for_loop",
-                                        name: "For Loop",
-                                        code: "__UTIL_LOOP__",
-                                        is_class: false,
-                                        parameters: [
-                                            // No standard parameters here, we will set up inputs/outputs manually
-                                        ]
-                                    };
-                                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
-                                    if (this.graph && this.graphCanvas) {
-                                        node.properties.item = item;
-                                        node.setProperty("item", item);
-                                        node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
-                                        this.graph.add(node);
-                                    }
+                                content: "Control Flow",
+                                submenu: {
+                                    options: [
+                                        {
+                                            content: "If/Else",
+                                            callback: (value: any, options: any, event: any, parentMenu: any) => {
+                                                const item: DraggableItem = {
+                                                    id: "util/if_else",
+                                                    name: "If/Else",
+                                                    code: "__UTIL_IF__",
+                                                    is_class: false,
+                                                    parameters: [
+                                                        // No standard parameters here, we will set up inputs/outputs manually
+                                                    ]
+                                                };
+                                                const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                                if (this.graph && this.graphCanvas) {
+                                                    node.properties.item = item;
+                                                    node.setProperty("item", item);
+                                                    node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
+                                                    this.graph.add(node);
+                                                }
+                                            }
+                                        },
+                                        {
+                                            content: "For Loop",
+                                            callback: (value: any, options: any, event: any, parentMenu: any) => {
+                                                const item: DraggableItem = {
+                                                    id: "util/for_loop",
+                                                    name: "For Loop",
+                                                    code: "__UTIL_LOOP__",
+                                                    is_class: false,
+                                                    parameters: [
+                                                        // No standard parameters here, we will set up inputs/outputs manually
+                                                    ]
+                                                };
+                                                const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                                if (this.graph && this.graphCanvas) {
+                                                    node.properties.item = item;
+                                                    node.setProperty("item", item);
+                                                    node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
+                                                    this.graph.add(node);
+                                                }
+                                            }
+                                        }
+                                    ]
                                 }
-                            }
-                        ]
-                    }
-                },
-                {
-                    content: "Output",
-                    submenu: {
+                            },
+                            {
+                                content: "Output",
+                                submenu: {
                         options: [
                             {
                                 content: "Print",

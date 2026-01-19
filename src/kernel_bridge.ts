@@ -254,11 +254,13 @@ export class KernelBridge {
         # Manual docstrings for utility nodes
         util_docstrings = {
             'UTIL_LOOP': '### For Loop\\n\\nIterates over a list of items.\\n\\n**Inputs:**\\n- \`exec in\`: Execution input\\n- \`List\`: The list to iterate over\\n\\n**Outputs:**\\n- \`after loop\`: Execution output after the loop is finished\\n- \`loop body\`: Execution path for each iteration\\n- \`item\`: The current item in the iteration\\n- \`index\`: The index of the current item.',
+            'UTIL_IF': '### If/Else\\n\\nExecutes one of two branches based on a condition.\\n\\n**Inputs:**\\n- \`exec in\`: Execution input\\n- \`condition\`: The boolean condition to evaluate.\\n\\n**Outputs:**\\n- \`if body\`: Execution path if the condition is true.\\n- \`else body\`: Execution path if the condition is false.\\n- \`after if/else\`: Execution output after either branch is finished.',
             'UTIL_PRINT': '### Print Node\\n\\nPrints the string representation of the input value.',
             'UTIL_LIST': '### List Node\\n\\nCreates a Python list from the inputs.'
         }
         
         util_docstrings['__UTIL_LOOP__'] = util_docstrings['UTIL_LOOP']
+        util_docstrings['__UTIL_IF__'] = util_docstrings['UTIL_IF']
         util_docstrings['__UTIL_LIST__'] = util_docstrings['UTIL_LIST']
         util_docstrings['__UTIL_PRINT__'] = util_docstrings['UTIL_PRINT']
 
