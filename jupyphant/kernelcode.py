@@ -15,17 +15,22 @@ def raster_plot(jupyphant_entity):
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        fig = jupyphant_entity.create_rasterplot()
-        if fig:
-            display(fig)
-
+        from IPython import get_ipython
+        user_ns = get_ipython().user_ns
+        overlap = user_ns.get('raw_plot_overlap', False)
+        plotlyGraphFig = jupyphant_entity.create_rasterplot(overlap=overlap)
+        if plotlyGraphFig:
+            plotlyGraphFig.display()
 
 # Call to the function that plots AnalogSignals
 def lfp_plot(jupyphant_entity):
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        plotlyGraphFig = jupyphant_entity.create_lfpplot()
+        from IPython import get_ipython
+        user_ns = get_ipython().user_ns
+        overlap = user_ns.get('raw_plot_overlap', False)
+        plotlyGraphFig = jupyphant_entity.create_lfpplot(overlap=overlap)
         if plotlyGraphFig:
             plotlyGraphFig.display()
 

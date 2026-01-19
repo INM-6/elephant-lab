@@ -15,17 +15,23 @@ class PlotlyGraphFigure:
 
         self.shared_xaxes = shared_xaxes or overlapping
         self.nGraphs = len(data) if isinstance(data, list) and self.is_trace_list(data) else 1
+        self.compress = self.nGraphs > 10
+
         self.height = self.default_height
         if self.nGraphs > 2:
             self.height = 800
         self.traces = []
-        self.fig = go.FigureWidget(make_subplots(
-            rows=self.nGraphs,
-            cols=1,
-            vertical_spacing=self.vertical_spacing,
-            shared_xaxes=self.shared_xaxes
-        ))
+        if self.compress:
+            self.fig = go.FigureWidget(go.Figure())
+        else:
+            self.fig = go.FigureWidget(make_subplots(
+                rows=self.nGraphs,
+                cols=1,
+                vertical_spacing=self.vertical_spacing,
+                shared_xaxes=self.shared_xaxes
+            ))
 
+        #self.minX = 
         self.create_graphs(self.fig, data)
 
         if title is None:
@@ -35,7 +41,8 @@ class PlotlyGraphFigure:
             title=title,
             dragmode="pan",
             height= self.height,
-            autosize = True
+            autosize = True,
+            template = "plotly_dark"
         )
 
         self.overlapping = False
@@ -50,6 +57,9 @@ class PlotlyGraphFigure:
         """
         Recursively adds traces to a Plotly figure from various data types.
         Supports PlotlyDataType, lists of traces, dicts, pandas objects, or lists of points.
+
+        If self.compress==True, all traces are plotted in the same row, 
+        with y-values offset by spacing * trace_index.
         """
         # If data is a list of traces, recurse
         if isinstance(data, list) and self.is_trace_list(data):
@@ -87,24 +97,33 @@ class PlotlyGraphFigure:
             # Merge with user-provided dicts (data.marker / data.line)
             marker_settings = default_marker | getattr(data, "marker", {})
             line_settings   = default_line   | getattr(data, "line", {})
+            subplotHeight = self.getSubplotHeight()
             if callable(marker_settings["size"]):
-                marker_settings["size"] = marker_settings["size"](self.getSubplotHeight())
+                marker_settings["size"] = marker_settings["size"](subplotHeight)
             
+            row = len(self.traces) + 1
+            y_values = data.y
+            if self.compress:
+                offset_index = row-1
+                if offset_index > 0:
+                    y_values = [y + offset_index * subplotHeight for y in y_values.copy()]
             trace  = go.Scattergl(
                 x=data.x,
-                y=data.y,
+                y=y_values,
                 name=getattr(data, 'name', 'Trace'),
                 mode=getattr(data, "mode", "markers"),
                 marker=marker_settings,
                 line=line_settings
             )
-            row = len(self.traces) + 1
             self.traces.append((trace, row))
-            fig.add_trace(
-                    trace, 
-                    row=row,
-                    col=1
-                )
+            if self.compress:
+                fig.add_trace(trace)
+            else:      
+                fig.add_trace(
+                        trace, 
+                        row=row,
+                        col=1
+                    )
         except Exception as e:
             warnings.warn(f"Failed to add trace '{data.name}': {e}")
 
@@ -144,7 +163,7 @@ class PlotlyGraphFigure:
     
     def overlap(self):
         """Overlapps the graphs (needs shared x-axes)"""
-        if self.overlapping or not self.shared_xaxes:
+        if self.overlapping or not self.shared_xaxes or self.compress:
             return
         self.overlapping = True
 
@@ -159,7 +178,7 @@ class PlotlyGraphFigure:
         
     def stack(self):
         """Stacks the graphs"""
-        if not self.overlapping:
+        if not self.overlapping or self.compress:
             return
         self.overlapping = False
 
@@ -184,10 +203,40 @@ class PlotlyGraphFigure:
     def update_slider(self):
         """Updates the range slider to the last x-axis if shared_xaxes is True"""
         n = self.nGraphs
-        for i in range(1, n + 1):
-            self.fig.layout[f"xaxis{i}"].update(
-                rangeslider=dict(visible=i==n and (self.shared_xaxes))
+        if self.compress:
+            self.fig.update_layout(
+                xaxis=dict(
+                    rangeslider=dict(visible=True)
+                ),
             )
+            import ipywidgets as widgets
+            from IPython.display import display
+            y_vals = [y for trace, _ in self.traces for y in trace.y]
+            min_value = min(y_vals)
+            max_value = max(y_vals)
+            self.y_slider = widgets.FloatRangeSlider(
+                value=[min_value, max_value],
+                min=min_value,
+                max=max_value,
+                step=0.1,
+                orientation='vertical',
+                continuous_update=True,
+                layout={'height': f'480px', 'margin': '120px 0 0 0'}
+            )
+
+            
+            # Callback to update y-axis
+            def update_y_range(change):
+                # Use batch_update to avoid flickering
+                with self.fig.batch_update():
+                    self.fig.update_yaxes(range=change['new'])
+
+            self.y_slider.observe(update_y_range, names='value')
+        else:
+            for i in range(1, n + 1):
+                self.fig.layout[f"xaxis{i}"].update(
+                    rangeslider=dict(visible=i==n and (self.shared_xaxes))
+                )
 
     def create_xrange_buttons(self, relayout_button_options):
         """
@@ -199,6 +248,9 @@ class PlotlyGraphFigure:
             If list of tuples: [(label, fraction_of_width), ...]
             If None, default percentages are used.
         """
+        if self.compress:
+            return
+
         # Default percentages
         if relayout_button_options is None:
             x_vals = [x for trace, _ in self.traces for x in trace.x]
@@ -250,7 +302,11 @@ class PlotlyGraphFigure:
     def display(self):
         """Displays the Plotly figure in a Jupyter notebook."""
         if self.fig:
-            display(self.fig)
+            if hasattr(self, "y_slider"):
+                from ipywidgets import HBox
+                display(HBox([self.y_slider,self.fig]))
+            else:
+                display(self.fig)
 
     def getSubplotHeight(self, height=None):
         """Returns the height of each subplot in pixels."""
