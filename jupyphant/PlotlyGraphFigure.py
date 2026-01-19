@@ -4,7 +4,7 @@ from IPython.display import display
 import warnings
 
 class PlotlyGraphFigure:
-    def __init__(self, data, overlapping=True, shared_xaxes=True, title=None, relayout_button_options=None):
+    def __init__(self, data, overlapping=False, shared_xaxes=True, title=None, relayout_button_options=None):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -19,12 +19,12 @@ class PlotlyGraphFigure:
         if self.nGraphs > 2:
             self.height = 800
         self.traces = []
-        self.fig = make_subplots(
+        self.fig = go.FigureWidget(make_subplots(
             rows=self.nGraphs,
             cols=1,
             vertical_spacing=self.vertical_spacing,
             shared_xaxes=self.shared_xaxes
-        )
+        ))
 
         self.create_graphs(self.fig, data)
 
@@ -34,16 +34,16 @@ class PlotlyGraphFigure:
         self.fig.update_layout(
             title=title,
             dragmode="pan",
-            height=self.height,
+            height= self.height,
+            autosize = True
         )
-        
+
         self.overlapping = False
         if overlapping:
             self.overlap()
 
         self.update_slider()
         self.create_xrange_buttons(relayout_button_options)
-
 
 
     def create_graphs(self, fig, data):
@@ -158,7 +158,7 @@ class PlotlyGraphFigure:
         n = self.nGraphs
         vertical_spacing = self.vertical_spacing
 
-        subplot_height = self.getSubplotHeight()
+        subplot_height = self.getSubplotHeight(1.0)
 
         for i in range(1, n + 1):
             # Domain goes from bottom to top
@@ -245,13 +245,23 @@ class PlotlyGraphFigure:
         """Displays the Plotly figure in a Jupyter notebook."""
         if self.fig:
             display(self.fig)
+            from IPython.display import Javascript
+            # Trigger a resize after it has been rendered
+            display(Javascript("""
+                setTimeout(function(){
+                    var el = document.querySelector('.js-plotly-plot');
+                    if(el && el._fullLayout) Plotly.Plots.resize(el);
+                }, 5000);
+            """))
 
-    def getSubplotHeight(self):
+    def getSubplotHeight(self, height=None):
         """Returns the height of each subplot in pixels."""
         if self.nGraphs == 0:
             return 0
+        if height is None:
+            height = self.height
         total_gap = self.vertical_spacing * (self.nGraphs - 1)
-        subplot_height = (self.height - total_gap) / self.nGraphs
+        subplot_height = (height - total_gap) / self.nGraphs
         return subplot_height
 
 class PlotlyGraphDataType:

@@ -365,6 +365,68 @@ class JupyphantExtension {
 		tree_widget.node.prepend(filterContainer);
 	}
 
+	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+		const checked_style = {
+			color: "#2cbb00ff",
+			fontWeight: "bold",
+			cursor: "pointer",
+			padding: "4px",
+			userSelect: "none",
+		}
+
+		const unchecked_style = {
+			color: "#727272ff",
+			fontWeight: "normal",
+			cursor: "pointer",
+			padding: "4px",
+			userSelect: "none",
+		}
+
+		const myButtonContainer = document.createElement('div');
+		myButtonContainer.classList.add('sticky-filter');
+
+		const myToggle = document.createElement('label');
+		myToggle.dataset.checked = 'false';
+		Object.assign(myToggle.style, unchecked_style);
+		myToggle.innerHTML = `<i class="fa fa-bolt"></i> Overlap`;
+
+		myToggle.onclick = () => {
+			const isNowChecked = myToggle.dataset.checked === 'false';
+			myToggle.dataset.checked = isNowChecked ? 'true' : 'false';
+			isNowChecked ? Object.assign(myToggle.style, checked_style) : Object.assign(myToggle.style, unchecked_style);
+			console.log(isNowChecked)
+			// Send Python command to flip the boolean
+			const code = `
+			from jupyphant.kernelcode import set_raw_plot_overlap
+			set_raw_plot_overlap(${isNowChecked ? "True" : "False"})
+			`
+
+			// Send to kernel
+			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
+
+			// Listen for output / errors
+			future.onIOPub = (msg: any) => {
+				const msgType = msg.header.msg_type;
+				switch (msgType) {
+					case "stream":
+						console.log("stdout:", msg.content.text);
+						break;
+					case "error":
+						console.error("Python error:", msg.content.ename, msg.content.evalue);
+						console.error(msg.content.traceback.join("\n"));
+						break;
+					case "execute_result":
+					case "display_data":
+						console.log("Result:", msg.content.data);
+						break;
+				}
+			};
+		};
+
+		myButtonContainer.appendChild(myToggle);
+		raw_plot_widget.node.prepend(myButtonContainer);
+	}
+
 	// Sets up the DragAndDrop Listeners on the Neo Tree Objects 
 	public setupDragAndDrop(treeWidget: Panel) {
 		const observer = new MutationObserver((mutationsList, observer) => {
@@ -437,6 +499,7 @@ class JupyphantExtension {
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
 		explorer_widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
+		this.create_raw_plot_options(session, explorer_widget_raw_plot);
 		// STATISTICS
 		let explorer_widget_statistics = new Panel();
 		explorer_widget_statistics.title.label = 'Statistics';
@@ -1197,7 +1260,7 @@ class JupyphantExtension {
 		}
 
 		let output = await this.kernelBridge?.executeCode(code, true);
-		
+
 		if (output && showOutput) {
 			this.handleOutputs(output.outputs, outputArea);
 		}
@@ -1205,14 +1268,14 @@ class JupyphantExtension {
 
 	private handleOutputs(outputs: any[], outputArea: OutputArea) {
 		outputArea.model.clear();
-        for (const output of outputs) {
-            if (output.output_type === 'clear_output') {
-                outputArea.model.clear(false);
-            } else {
-                outputArea.model.add(output);
-            }
-        }
-    }
+		for (const output of outputs) {
+			if (output.output_type === 'clear_output') {
+				outputArea.model.clear(false);
+			} else {
+				outputArea.model.add(output);
+			}
+		}
+	}
 
 
 	public async pingElephantServer(serverUrl: string): Promise<boolean> {
