@@ -132,6 +132,16 @@ class PlotlyGraphFigure:
         # Otherwise, treat it as a single trace (list of points)
         return False
     
+    def change_height_after_render(self, height):
+        if self.fig.layout.height == height:
+            return
+        
+        self.fig.update_layout(
+            height = height,
+            autosize = True
+        )
+        self.fig._send_relayout_msg({"autosize": True})
+    
     def overlap(self):
         """Overlapps the graphs (needs shared x-axes)"""
         if self.overlapping or not self.shared_xaxes:
@@ -144,9 +154,7 @@ class PlotlyGraphFigure:
                 domain=[0.0,1.0]
             )
 
-        self.fig.update_layout(
-            height=self.default_height,
-        )
+        self.change_height_after_render(self.default_height)
         
         
     def stack(self):
@@ -171,9 +179,7 @@ class PlotlyGraphFigure:
                 domain=[start, end]
             )
 
-        self.fig.update_layout(
-            height=self.height,
-        )
+        self.change_height_after_render(self.height)
 
     def update_slider(self):
         """Updates the range slider to the last x-axis if shared_xaxes is True"""
