@@ -501,12 +501,13 @@ class Jupyphant:
                 channel_data = data[:, ch_idx]
 
                 plotly_data.append(AnalogSignalLFPPlot(dict(
-                    channel_data=channel_data,
-                    times=times, 
-                    name=f"{names[trial_id]}",
+                        channel_data=channel_data,
+                        times=times, 
+                        name=f"{names[trial_id]}",
+                    ), 
                     title_x = 'Time ({0})'.format(times.dimensionality),
                     title_y = lfp.units.__str__()
-                )))
+                ))
 
         return plotly_data
 

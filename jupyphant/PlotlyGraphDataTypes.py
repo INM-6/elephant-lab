@@ -15,16 +15,13 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
         self.marker = dict(symbol='line-ns-open', size=calcSize)
         self.x = spiketrain.times.magnitude
         self.y = [0] * len(self.x)
+        self.title_x = 'Time ({0})'.format(spiketrain.times.dimensionality)
 
 class AnalogSignalLFPPlot(PlotlyGraphDataType):
     import numpy as np
     def extract_data(self, analogsignal_dict):
         """Extracts AnalogSignalLFPPlotData from a dict containing info about an AnalogSignal"""
         self.name = analogsignal_dict.get('name', 'AnalogSignal')
-        if 'title_x' in analogsignal_dict:
-            self.title_x = analogsignal_dict['title_x']
-        if 'title_y' in analogsignal_dict:
-            self.title_y = analogsignal_dict['title_y']
         self.mode = 'lines'
 
         channel_data = analogsignal_dict['channel_data']

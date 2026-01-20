@@ -49,7 +49,7 @@ class PlotlyGraphFigure:
             self.overlap()
 
         self.update_slider()
-        self.move_common_xaxis_title_to_last()
+        self.manage_axis_titles()
         #self.create_xrange_buttons(relayout_button_options)
 
 
@@ -136,6 +136,18 @@ class PlotlyGraphFigure:
             self.traces.append((trace, row))
             if self.compress:
                 fig.add_trace(trace)
+                if hasattr(data, 'title_x'):
+                    if hasattr(self, 'compress_title_x'):
+                        if self.compress_title_x != data.title_x:
+                            self.compress_title_x = None
+                    else:
+                        self.compress_title_x = data.title_x
+                if hasattr(data, 'title_y'):
+                    if hasattr(self, 'compress_title_y'):
+                        if self.compress_title_y != data.title_y:
+                            self.compress_title_y = None
+                    else:
+                        self.compress_title_y = data.title_y
             else:      
                 fig.add_trace(
                         trace, 
@@ -256,9 +268,15 @@ class PlotlyGraphFigure:
                     rangeslider=dict(visible=i==n and (self.shared_xaxes))
                 )
 
-    def move_common_xaxis_title_to_last(self):
+    def manage_axis_titles(self):
         """If all x-axes have the same title, move it to the last axis only."""
         if self.compress:
+            if hasattr(self, 'compress_title_x'):
+                if self.compress_title_x is not None:
+                    self.fig.layout.xaxis.update(title=self.compress_title_x)
+            if hasattr(self, 'compress_title_y'):
+                if self.compress_title_y is not None:
+                    self.fig.layout.yaxis.update(title=self.compress_title_y)
             return
 
         def get_title(axis):
@@ -367,8 +385,11 @@ class PlotlyGraphFigure:
         return subplot_height
 
 class PlotlyGraphDataType:
-    def __init__(self, data):
+    def __init__(self, data, **kwargs):
         self.extract_data(data)
+        # Override / add attributes from kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def extract_data(self, data):
         """Generic extraction of x, y, mode, and name from various simple data types."""
