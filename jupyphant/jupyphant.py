@@ -477,7 +477,7 @@ class Jupyphant:
                 return None
             
         # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
-    def plot_lfp(self,lfps, times):
+    def plot_lfp(self,lfps, times, names):
         """
         Plot LFPs using plotly.
 
@@ -500,7 +500,13 @@ class Jupyphant:
                 
                 channel_data = data[:, ch_idx]
 
-                plotly_data.append(AnalogSignalLFPPlot((channel_data, times)))
+                plotly_data.append(AnalogSignalLFPPlot(dict(
+                    channel_data=channel_data,
+                    times=times, 
+                    name=f"{names[trial_id]}",
+                    title_x = 'Time ({0})'.format(times.dimensionality),
+                    title_y = lfp.units.__str__()
+                )))
 
         return plotly_data
 
@@ -527,8 +533,6 @@ class Jupyphant:
         else:
             n_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
             if n_subplots > 0:
-                #subplot_titles = [key for key in analogsignals.keys() if analogsignals[key]]
-                
                 max_duration_limit = 10 * self.pq.s 
 
                 subplot_col = 1
@@ -554,24 +558,11 @@ class Jupyphant:
                         plotly_data += self.plot_lfp(
                             sliced_signals, 
                             times=plot_times,
+                            names=[sig.name for sig in raw_signals]
                         )
                         subplot_col += 1
 
                 plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlap)
-                """title = "Signal Trace Index"
-                fig.update_xaxes(title_text='Time ({0})'.format(times.dimensionality), row=row, col=col)
-
-                # Defines plot parameters for y-axis
-                if trace_idx > 1 and spacing > 0:
-                    # Set ticks at the baseline of each signal
-                    fig.update_yaxes(tickvals=[i * spacing for i in range(trace_idx)],
-                                    ticktext=list(range(trace_idx)),
-                                    title_text="Signal Trace Index",
-                                    range=[-0.1, (trace_idx - 1) * spacing + 1.2],
-                                    row=row, col=col)
-                else:
-                    # Fallback for single plot
-                    fig.update_yaxes(title_text=f'AnaSig ({lfps[0].units.__str__()})', row=row, col=col)"""
                 if selected_ids is None:
                     self.analogsignal_overview = plotlyGraphFigure
                 return plotlyGraphFigure

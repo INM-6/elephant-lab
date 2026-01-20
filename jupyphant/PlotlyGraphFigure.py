@@ -9,7 +9,7 @@ class PlotlyGraphFigure:
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
         """
-        self.vertical_spacing = 0.02
+        self.vertical_spacing = 0.075
         self.default_height = 600
         
 
@@ -49,7 +49,8 @@ class PlotlyGraphFigure:
             self.overlap()
 
         self.update_slider()
-        self.create_xrange_buttons(relayout_button_options)
+        self.move_common_xaxis_title_to_last()
+        #self.create_xrange_buttons(relayout_button_options)
 
 
     def create_graphs(self, fig, data):
@@ -105,7 +106,7 @@ class PlotlyGraphFigure:
             if self.compress:
                 offset_index = row-1
                 if offset_index > 0:
-                    y_values = [y + offset_index * subplotHeight for y in y_values.copy()]
+                    y_values = [y + offset_index for y in y_values.copy()]
             minX = min(data.x)
             maxX = max(data.x)
             minY = min(y_values)
@@ -141,6 +142,10 @@ class PlotlyGraphFigure:
                         row=row,
                         col=1
                     )
+                if hasattr(data, 'title_x'):
+                    fig.layout[f"xaxis{row}"].update(title=data.title_x)
+                if hasattr(data, 'title_y'):
+                    fig.layout[f"yaxis{row}"].update(title=data.title_y)
         except Exception as e:
             warnings.warn(f"Failed to add trace '{data.name}': {e}")
 
@@ -251,6 +256,39 @@ class PlotlyGraphFigure:
                     rangeslider=dict(visible=i==n and (self.shared_xaxes))
                 )
 
+    def move_common_xaxis_title_to_last(self):
+        """If all x-axes have the same title, move it to the last axis only."""
+        if self.compress:
+            return
+
+        def get_title(axis):
+            t = axis.title
+            if t is None:
+                return None
+            return t.text if hasattr(t, "text") else t
+        
+        n=self.nGraphs
+
+        # Collect titles
+        titles = []
+        for i in range(1, n + 1):
+            axis = self.fig.layout[f"xaxis{i}"]
+            titles.append(get_title(axis))
+
+        # Normalize (remove empty strings)
+        titles = [t for t in titles if t not in ("", None)]
+
+        # If different titles exist → do nothing
+        if len(set(titles)) > 1:
+            return
+
+        # Use the common title (or None)
+        common_title = titles[0] if titles else None
+
+        # Clear all titles
+        for i in range(1, n):
+            self.fig.layout[f"xaxis{i}"].title = None
+
     def create_xrange_buttons(self, relayout_button_options):
         """
         Adds updatemenus buttons to the figure to quickly set x-axis range.
@@ -261,8 +299,6 @@ class PlotlyGraphFigure:
             If list of tuples: [(label, fraction_of_width), ...]
             If None, default percentages are used.
         """
-        if self.compress:
-            return
 
         # Default percentages
         if relayout_button_options is None:
@@ -346,6 +382,10 @@ class PlotlyGraphDataType:
             self.marker = data.marker
         if hasattr(data, 'line'):
             self.line = data.line
+        if hasattr(data, 'title_x'):
+            self.title_x = data.title_x
+        if hasattr(data, 'title_y'):
+            self.title_y = data.title_y
 
         try:
             # Objects with x/y attributes

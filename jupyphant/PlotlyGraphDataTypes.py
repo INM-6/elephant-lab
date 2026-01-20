@@ -18,12 +18,16 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
 
 class AnalogSignalLFPPlot(PlotlyGraphDataType):
     import numpy as np
-    def extract_data(self, analogsignal):
-        """Extracts AnalogSignalLFPPlotData from an AnalogSignal"""
-        self.name = getattr(analogsignal,'name', 'AnalogSignal')
+    def extract_data(self, analogsignal_dict):
+        """Extracts AnalogSignalLFPPlotData from a dict containing info about an AnalogSignal"""
+        self.name = analogsignal_dict.get('name', 'AnalogSignal')
+        if 'title_x' in analogsignal_dict:
+            self.title_x = analogsignal_dict['title_x']
+        if 'title_y' in analogsignal_dict:
+            self.title_y = analogsignal_dict['title_y']
         self.mode = 'lines'
 
-        channel_data = analogsignal[0]
+        channel_data = analogsignal_dict['channel_data']
 
         min_val = self.np.min(channel_data)
         max_val = self.np.max(channel_data)
@@ -34,5 +38,5 @@ class AnalogSignalLFPPlot(PlotlyGraphDataType):
         else:
             norm_data = channel_data - min_val
         
-        self.x = analogsignal[1]
+        self.x = analogsignal_dict['times']
         self.y = norm_data
