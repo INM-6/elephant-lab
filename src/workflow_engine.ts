@@ -1,4 +1,6 @@
 import { ISessionContext, showDialog, Dialog } from '@jupyterlab/apputils';
+import { FileDialog } from '@jupyterlab/filebrowser';
+import { IDocumentManager } from '@jupyterlab/docmanager';
 import { Widget } from '@lumino/widgets';
 import { Message } from '@lumino/messaging';
 import { OutputArea } from '@jupyterlab/outputarea';
@@ -24,12 +26,13 @@ export class WorkflowEngineWidget extends Widget {
     public session: ISessionContext | null; // used to execute Python Code in same session as Jupyphant 
     private elephantMenu: any = { content: "Elephant (loading...)", disabled: true };
     private rendermime: IRenderMimeRegistry;
+    private docManager: IDocumentManager;
 
     /*
     session, widget and notebook_tracker are used to keep track of the notebook status 
     and communicate with Jupyphant (since the WorkflowEngine is a Widget of its own)
     */
-    constructor(session: ISessionContext | null = null, outputArea: OutputArea, notebook_tracker: INotebookTracker, rendermime: IRenderMimeRegistry) {
+    constructor(session: ISessionContext | null = null, outputArea: OutputArea, notebook_tracker: INotebookTracker, rendermime: IRenderMimeRegistry, docManager: IDocumentManager) {
         super();
         this.id = 'workflowEngine';
         this.title.label = 'Workflow Engine';
@@ -38,6 +41,7 @@ export class WorkflowEngineWidget extends Widget {
         this.outputArea = outputArea;
         this.notebook_tracker = notebook_tracker;
         this.rendermime = rendermime;
+        this.docManager = docManager;
         this.graph = null;
         this.graphCanvas = null;
         this.addClass('jp-workflowEngine');
@@ -377,12 +381,13 @@ export class WorkflowEngineWidget extends Widget {
         outputArea.model.clear();
 
         const resultsDictName = "workflow_results";
+        const collected_outputs: any[] = [];
         const result = await this.kernelBridge.executeCode(
-            `import uuid, json, pickle, sys\n${resultsDictName} = {}`,
+            `import uuid, json, pickle, sys, gc\n${resultsDictName} = {}\ngc.collect()`,
             true
         );
-        if (result) {
-            this.handleOutputs(result.outputs, outputArea);
+        if (result && result.outputs) {
+            collected_outputs.push(...result.outputs);
         }
 
         const executionOrder = this._getExecutionOrder();
@@ -391,8 +396,10 @@ export class WorkflowEngineWidget extends Widget {
         const executed_nodes = new Map<LGraphNode, string | null>();
 
         for (const node of executionOrder) {
-            await this.executeNode(node, executed_nodes, outputArea);
+            await this.executeNode(node, executed_nodes, outputArea, collected_outputs);
         }
+
+        this.handleOutputs(collected_outputs, outputArea);
 
         let last_result_key: string | null = null;
         if (executionOrder.length > 0) {
@@ -406,7 +413,7 @@ export class WorkflowEngineWidget extends Widget {
         }
     }
 
-    private async executeNode(node: LGraphNode, executed_nodes: Map<LGraphNode, string | null>, outputArea: OutputArea): Promise<string | null> {
+    private async executeNode(node: LGraphNode, executed_nodes: Map<LGraphNode, string | null>, outputArea: OutputArea, collected_outputs?: any[]): Promise<string | null> {
         if (executed_nodes.has(node)) {
             return executed_nodes.get(node) || null;
         }
@@ -440,7 +447,7 @@ export class WorkflowEngineWidget extends Widget {
                 executed_nodes.set(jupyphantNode, null);
                 return null;
             }
-            const listKey = await this.executeNode(listOriginNode, executed_nodes, outputArea);
+            const listKey = await this.executeNode(listOriginNode, executed_nodes, outputArea, collected_outputs);
             if (!listKey) {
                 executed_nodes.set(jupyphantNode, null);
                 return null;
@@ -492,7 +499,7 @@ export class WorkflowEngineWidget extends Widget {
                                 } else if (executed_nodes.has(originNode)) {
                                     value = executed_nodes.get(originNode)!;
                                 } else {
-                                    value = await this.executeNode(originNode, executed_nodes, outputArea);
+                                    value = await this.executeNode(originNode, executed_nodes, outputArea, collected_outputs);
                                 }
                             }
                         } else {
@@ -523,7 +530,11 @@ ${loopBodyCode}
             console.log("Executing loop code:\n", codeToExecute);
             const loopResult = await this.kernelBridge.executeCode(codeToExecute, true);
             if (loopResult) {
-                this.handleOutputs(loopResult.outputs, outputArea);
+                if (collected_outputs) {
+                    collected_outputs.push(...loopResult.outputs);
+                } else {
+                    this.handleOutputs(loopResult.outputs, outputArea);
+                }
             }
 
             executed_nodes.set(jupyphantNode, null); // Loop node itself has no result
@@ -542,7 +553,7 @@ ${loopBodyCode}
                 return null;
             }
 
-            const conditionKey = await this.executeNode(conditionOriginNode, executed_nodes, outputArea);
+            const conditionKey = await this.executeNode(conditionOriginNode, executed_nodes, outputArea, collected_outputs);
             if (!conditionKey) {
                 console.error("Condition for If/Else node did not execute properly.");
                 executed_nodes.set(jupyphantNode, null);
@@ -579,7 +590,7 @@ if _is_true:
                 if (bodyStartNode) {
                     const bodyNodes = this._getSubgraphExecutionOrder(bodyStartNode);
                     for (const bodyNode of bodyNodes) {
-                        await this.executeNode(bodyNode, executed_nodes, outputArea);
+                        await this.executeNode(bodyNode, executed_nodes, outputArea, collected_outputs);
                     }
                 }
             }
@@ -601,7 +612,7 @@ if _is_true:
                         const originNode = this.graph!.getNodeById(linkInfo.origin_id);
                         if (originNode) {
                             console.log(`... ${item.name} depends on ${originNode.title}`);
-                            value = await this.executeNode(originNode, executed_nodes, outputArea);
+                            value = await this.executeNode(originNode, executed_nodes, outputArea, collected_outputs);
                         }
                     }
                 } else {
@@ -627,7 +638,11 @@ if _is_true:
         
         let result_key: string | null = null;
         if (executionResult) {
-            this.handleOutputs(executionResult.outputs, outputArea);
+            if (collected_outputs) {
+                collected_outputs.push(...executionResult.outputs);
+            } else {
+                this.handleOutputs(executionResult.outputs, outputArea);
+            }
             result_key = executionResult.resultKey;
         }
 
@@ -659,8 +674,8 @@ if _is_true:
             console.log("...using INSTANCE (pickle) execution logic");
             codeToExecute = `try:
     data = pickle.loads(${item.code})
-    result = data[0]
-    ${resultsDictName}["${resultId}"] = result
+    jupyphant_result = data[0]
+    ${resultsDictName}["${resultId}"] = jupyphant_result
     print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
 except Exception as e:
     print(f"Error loading instance ${item.name}: {e}", file=sys.stderr)`;
@@ -712,6 +727,36 @@ try:
     print(f"JUPYPHANT_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error in Integer node: {e}", file=sys.stderr)`;
+        } else if (item.code === '__UTIL_GETITEM__') {
+            console.log("...using UTILITY (Get Item) execution logic");
+            codeToExecute = `try:
+    _prepare_arg
+except NameError:
+    def _prepare_arg(arg_str):
+        global ${resultsDictName}
+        if isinstance(arg_str, str):
+            if arg_str in ${resultsDictName}: return ${resultsDictName}[arg_str]
+            if arg_str == "" or arg_str == "__REQUIRED__": return None
+            try: return eval(arg_str)
+            except: return arg_str
+        return arg_str
+try:
+    raw_args = json.loads('''${args_json_string}''')
+    processed_args = [_prepare_arg(arg) for arg in raw_args]
+    
+    jupyphant_target_list = processed_args[0]
+    index = int(processed_args[1])
+
+    if not isinstance(jupyphant_target_list, list):
+        raise TypeError("Input 'list' must be a list.")
+
+    jupyphant_result = jupyphant_target_list[index]
+    
+    ${resultsDictName}["${resultId}"] = jupyphant_result
+    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+
+except Exception as e:
+    print(f"Error in Get Item node: {e}", file=sys.stderr)`;
         } else if (item.code === '__UTIL_PRINT__') {
             console.log("...using UTILITY (Print) execution logic");
             codeToExecute = `try: 
@@ -729,12 +774,52 @@ try:
     raw_args = json.loads('''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     printed_results = [arg for arg in processed_args if arg is not None]
-    for res in printed_results:
-        print(res)
+    for jupyphant_res in printed_results:
+        print(jupyphant_res)
     ${resultsDictName}["${resultId}"] = printed_results
     print(f"JUPYPHANT_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error in Print node: {e}", file=sys.stderr)`;
+        } else if (item.code === '__NEO_READ_FILE__') {
+            console.log("...using NEO IO execution logic");
+
+            codeToExecute = `try:
+    _prepare_arg
+except NameError:
+    def _prepare_arg(arg_str):
+        global ${resultsDictName}
+        if isinstance(arg_str, str):
+            if arg_str in ${resultsDictName}: return ${resultsDictName}[arg_str]
+            if arg_str == "" or arg_str == "__REQUIRED__": return None
+            try: return eval(arg_str)
+            except: return arg_str
+        return arg_str
+
+try:
+    import neo
+    raw_args = json.loads('''${args_json_string}''')
+    processed_args = [_prepare_arg(arg) for arg in raw_args]
+    
+    io_class_name = processed_args[0]
+    filename = processed_args[1]
+
+    if not filename:
+        raise ValueError("filename is required.")
+
+    reader = None
+    if io_class_name and io_class_name != "__REQUIRED__" and io_class_name.strip() != "":
+        io_class = getattr(neo.io, io_class_name)
+        reader = io_class(filename=filename)
+    else:
+        reader = neo.get_io(filename)
+
+    jupyphant_result = reader.read_block()
+    
+    ${resultsDictName}["${resultId}"] = jupyphant_result
+    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+
+except Exception as e:
+    print(f"Error in Neo File Reader: {e}", file=sys.stderr)`;
         } else if (item.code === '__UTIL_IF__') {
             return "";
         }
@@ -773,9 +858,9 @@ try:
     method_args = raw_args[1:]
     processed_args = [_prepare_arg(arg) for arg in method_args]
 
-    result = method_to_run(*processed_args)
+    jupyphant_result = method_to_run(*processed_args)
         
-    ${resultsDictName}["${resultId}"] = result
+    ${resultsDictName}["${resultId}"] = jupyphant_result
     print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
 
 except Exception as e:
@@ -831,9 +916,9 @@ try:
         if "${functionName}" == "SpikeTrain" and isinstance(kwargs.get('times'), list):
             kwargs['times'] = np.array(kwargs['times'], dtype=np.float64)
 
-        result = method_to_run(**kwargs)
+        jupyphant_result = method_to_run(**kwargs)
 
-        ${resultsDictName}["${resultId}"] = result
+        ${resultsDictName}["${resultId}"] = jupyphant_result
         print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
     else:
         print(f"Error: Module ${modulePath} not loaded.", file=sys.stderr)
@@ -847,21 +932,21 @@ except Exception as e:
             const varName = item.code;
             codeToExecute = `try:
     node_id = "${varName}"
-    result = None
+    jupyphant_result = None
     if 'jupyphant_entity' in globals() and hasattr(jupyphant_entity, 'map_ipytree_node_id_to_neo_obj_hash'):
         obj_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
         if obj_hash:
-            result = jupyphant_entity.map_neo_obj_hash_to_neo_obj.get(obj_hash)
+            jupyphant_result = jupyphant_entity.map_neo_obj_hash_to_neo_obj.get(obj_hash)
 
-    if result is None:
+    if jupyphant_result is None:
         if node_id in globals():
-            result = globals()[node_id]
+            jupyphant_result = globals()[node_id]
         else:
-            result = None
+            jupyphant_result = None
             print(f"Error: Variable or node id '{varName}' not found.", file=sys.stderr)
     
-    if result is not None:
-        ${resultsDictName}["${resultId}"] = result
+    if jupyphant_result is not None:
+        ${resultsDictName}["${resultId}"] = jupyphant_result
         print(f"JUPYPHANT_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error getting object for variable '${varName}': {e}", file=sys.stderr)`;
@@ -970,7 +1055,7 @@ except Exception as e:
                 .replace(/[^a-z0-9_]/g, '_')
                 .replace(/^_+|_+$/g, '')
                 .replace(/^[^a-z_]*/, '');
-            if (!sanitized || sanitized === 'list' || sanitized === 'print') {
+            if (!sanitized || sanitized === 'list' || sanitized === 'print' || sanitized === 'neo') {
                 return `jupyphant_result_${varCounter++}`;
             }
             return sanitized;
@@ -1093,7 +1178,7 @@ except Exception as e:
                 }
             }
 
-            let resultVarName = sanitizeVarName(item.name);
+            let resultVarName = item.code === '__NEO_READ_FILE__' ? 'neo_data' : sanitizeVarName(item.name);
             const originalName = resultVarName;
             let counter = 1;
             while (Array.from(nodeResultNames.values()).includes(resultVarName)) {
@@ -1170,6 +1255,22 @@ except Exception as e:
                 if (arg_to_print !== 'None') {
                     lineOfCode = `print(${arg_to_print})`;
                 }
+            } else if (item.code === '__NEO_READ_FILE__') {
+                imports.add('import neo');
+                const io_class_arg = processedArgs.find(p => p.name === 'io_class');
+                const filename_arg = processedArgs.find(p => p.name === 'filename');
+
+                const io_class_val = io_class_arg ? io_class_arg.value : 'None';
+                const filename_val = filename_arg ? filename_arg.value : 'None';
+                
+                const reader_var = `reader_${varCounter++}`;
+
+                let block: string[] = [];
+                block.push(`_tmp_io_class = ${io_class_val}`);
+                block.push(`_tmp_filename = ${filename_val}`);
+                block.push(`${reader_var} = getattr(neo.io, _tmp_io_class)(filename=_tmp_filename)`);
+                block.push(`${resultVarName} = ${reader_var}.read_block()`);
+                lineOfCode = block.join(`\n${indent}`);
             } else if (item.name.startsWith(".")) {
                 const methodName = item.name.substring(1).replace('()', '');
                 const self_arg = processedArgs.find(arg => arg.isSelf)?.value;
@@ -1410,23 +1511,18 @@ except Exception as e:
                                     }
                                 }
                             },
-
-                        ]
-                    }
-                },
-                {
-                    content: "Neo",
-                    submenu: {
-                        options: [
                             {
-                                content: "neo.io.nixio",
+                                content: "Get Item",
                                 callback: (value: any, options: any, event: any, parentMenu: any) => {
                                     const item: DraggableItem = {
-                                        id: "util/neoio",
-                                        name: "to be implemented...",
-                                        code: "NeoIO",
+                                        id: "util/getitem",
+                                        name: "Get Item",
+                                        code: "__UTIL_GETITEM__",
                                         is_class: false,
-                                        parameters: []
+                                        parameters: [
+                                            { name: "list", default: "__REQUIRED__" },
+                                            { name: "index", default: "0" },
+                                        ]
                                     };
                                     const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
                                     if (this.graph && this.graphCanvas) {
@@ -1436,7 +1532,36 @@ except Exception as e:
                                         this.graph.add(node);
                                     }
                                 }
+                            },
 
+                        ]
+                    }
+                },
+                {
+                    content: "Neo",
+                    submenu: {
+                        options: [
+                            {
+                                content: "Neo File Reader",
+                                callback: (value: any, options: any, event: any, parentMenu: any) => {
+                                    const item: DraggableItem = {
+                                        id: "neo/read_file",
+                                        name: "Neo File Reader",
+                                        code: "__NEO_READ_FILE__",
+                                        is_class: true,
+                                        parameters: [
+                                            { name: "io_class", default: "" },
+                                            { name: "filename", default: "__REQUIRED__" },
+                                        ]
+                                    };
+                                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    if (this.graph && this.graphCanvas) {
+                                        node.properties.item = item;
+                                        node.setProperty("item", item);
+                                        node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
+                                        this.graph.add(node);
+                                    }
+                                }
                             },
                             {
                                 content: "neo.SpikeTrain",
@@ -1763,5 +1888,86 @@ except Exception as e:
             reader.readAsText(file);
         };
         input.click();
+    }
+
+    public createNeoNode(ioClass: string, filePath: string) {
+        const item: DraggableItem = {
+            id: "neo/read_file",
+            name: "Neo File Reader",
+            code: "__NEO_READ_FILE__",
+            is_class: true,
+            parameters: [
+                { name: "io_class", default: ioClass },
+                { name: "filename", default: filePath },
+            ]
+        };
+
+        const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+        if (this.graph && this.graphCanvas) {
+            node.properties.item = item;
+            node.setProperty("item", item);
+            
+            node.properties['param_io_class'] = ioClass;
+            node.properties['param_filename'] = filePath;
+
+            let x = 100;
+            let y = 100;
+            const current_nodes = this.graph!.findNodesByClass(JupyphantNode as any);
+            if(current_nodes && current_nodes.length > 0) {
+                const last_node = current_nodes[current_nodes.length - 1];
+                x = last_node.pos[0];
+                y = last_node.pos[1] + last_node.size[1] + 20;
+            }
+            
+            node.pos = [x, y];
+            this.graph.add(node);
+        }
+    }
+
+    public loadNeoFile() {
+        FileDialog.getOpenFiles({
+            manager: this.docManager
+        }).then(result => {
+            if (result.button.accept && result.value && result.value.length > 0) {
+                const selectedFile = result.value[0];
+                const filePath = selectedFile.path;
+
+                const body = document.createElement('div');
+                const input = document.createElement('input');
+                input.className = 'jp-input';
+                input.placeholder = 'e.g. Spike2IO';
+                body.appendChild(input);
+
+                showDialog({
+                    title: 'Enter neo IO class',
+                    body: new Widget({ node: body }),
+                    buttons: [
+                        Dialog.cancelButton(),
+                        Dialog.okButton({ label: 'OK' }),
+                        Dialog.createButton({ label: 'Automatic' })
+                    ],
+                    hasClose: true
+                }).then(dialogResult => {
+                    if (dialogResult.button.label === 'OK') {
+                        const ioClass = input.value;
+                        if (ioClass) {
+                            this.createNeoNode(ioClass, filePath);
+                        }
+                    } else if (dialogResult.button.label === 'Automatic') {
+                        this.kernelBridge.getNeoIOClass(filePath).then(ioClass => {
+                            if (ioClass) {
+                                this.createNeoNode(ioClass, filePath);
+                            } else {
+                                showDialog({
+                                    title: 'Error',
+                                    body: 'Could not automatically determine IO class.',
+                                    buttons: [Dialog.okButton()]
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        });
     }
 }

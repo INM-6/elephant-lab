@@ -14,6 +14,30 @@ export class KernelBridge {
         this.session = session;
     }
 
+    public async getNeoIOClass(filename: string): Promise<string | null> {
+        if (!this.session || !this.session.session) { return null; }
+        const code = `
+import neo, json, sys
+try:
+    io = neo.get_io("${filename}")
+    print(json.dumps(io.__class__.__name__))
+except Exception as e:
+    print(f"Error getting IO for {filename}: {e}", file=sys.stderr)
+    print(json.dumps(null))
+        `;
+        let msg_content: string = "";
+        const future = this.session.session.kernel!.requestExecute({ code });
+        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+            if (KernelMessage.isStreamMsg(msg)) {
+                if (msg.content.name === 'stdout') { msg_content += msg.content.text; }
+                else { console.warn("Kernel STDERR:", msg.content.text); }
+            }
+        };
+        await future.done;
+        try { return JSON.parse(msg_content.trim()); }
+        catch (e) { console.error("Failed to parse io class from kernel:", e, msg_content); return null; }
+    }
+
     /**
      * Fetches details for a fully qualified Python object name (e.g., 'elephant.statistics.isi').
      * It executes Python's `inspect` module in the kernel to determine if the object is a
@@ -359,15 +383,15 @@ export class KernelBridge {
      * and an array of output messages. Returns null if the session is not available.
      */
     public async executeCode(code: string, executeCode = false): Promise<IExecutionResult | null> {
+        if (!this.session || !this.session.session) {
+            return null;
+        }
         let codeToRun: string;
         if (executeCode) {
-            codeToRun = code;
+            codeToRun = "import gc; gc.collect()\n" + code;
         }
         else {
             codeToRun = `print(${JSON.stringify(code)})`;
-        }
-        if (!this.session || !this.session.session) {
-            return null;
         }
 
         const future = this.session.session.kernel!.requestExecute({ code: codeToRun, store_history: false });

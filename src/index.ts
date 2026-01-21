@@ -14,6 +14,10 @@ import {
 } from '@jupyterlab/apputils';
 
 import {
+	IDocumentManager
+} from '@jupyterlab/docmanager';
+
+import {
 	INotebookTracker,
 	NotebookActions,
 	NotebookPanel
@@ -76,6 +80,7 @@ class JupyphantExtension {
 	private myPanels: NotebookPanel[];
 	private myVisTabs: Widget[];
 	private widget: DockPanel;
+	private _updateTimer: number | null = null;
 	private workflowEngine: WorkflowEngineWidget | null;
 	private outarea_content_rasterplot: OutputArea | null;
 	private outarea_content_lfpplot: OutputArea | null;
@@ -85,17 +90,19 @@ class JupyphantExtension {
 	private outarea_neo_tree: OutputArea | null;
 	private output_tabs: DockPanel | null;
 	private outarea_workflow: OutputArea | null;
+	private docManager: IDocumentManager;
 	private kernelBridge: KernelBridge | null;
 
 
 	// Construct a new JupyphantExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry) {
+		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry, docManager: IDocumentManager) {
 		// save all constructor arguments
 		this.app = app;
 		this.command_palette = command_palette;
 		this.notebook_tracker = notebook_tracker;
 		this.widget_tracker = widget_tracker;
+		this.docManager = docManager;
 		// Store references to all tabs containing notebooks
 		this.myPanels = [];
 		// Store references to all tabs created by this extension
@@ -218,15 +225,21 @@ class JupyphantExtension {
 		await this.initializeKernelState(initialSession);
 
 		// Listener for cell execution
-		NotebookActions.executed.connect(async (sender, exec_data) => {
+		NotebookActions.executed.connect((sender, exec_data) => {
 			if (exec_data.notebook !== newPanel.content) {
 				return;
 			}
 			console.log("Jupyphant: Cell executed, updating plots.");
 
-			await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, initialSession, false);
-			await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession);
-			await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession);
+			if (this._updateTimer) {
+				window.clearTimeout(this._updateTimer);
+			}
+	
+			this._updateTimer = window.setTimeout(async () => {
+				await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, initialSession, false);
+				await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession);
+				await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession);
+			}, 500);
 		});
 
 		// Listener for changed Kernel, waits for Kernel to be ready
@@ -496,7 +509,7 @@ class JupyphantExtension {
 
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget, { mode: 'split-bottom', ref: tree_widget });
-		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker, rendermime);
+		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker, rendermime, this.docManager);
 		const main = new MainAreaWidget({ content: this.workflowEngine });
 		main.id = 'jupyphant-workflow-main-widget';
 		main.title.label = 'Jupyphant Workflow';
@@ -1601,7 +1614,7 @@ class JupyphantExtension {
 * Activate the JupyphantWidget extension
 */
 function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer) {
+	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer, docManager: IDocumentManager) {
 	/**
 	 * Performs the initialization of the extension
 	 * Parameters:
@@ -1625,7 +1638,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	let widget_tracker = new WidgetTracker<Widget>({ namespace: 'jupyphant_namespace' });
 
 	// create instance of JupyphantExtension
-	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry);
+	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager);
 
 	// Add an application command: this is placed into CommandPalette and by clicking on the corresponding button
 	// this command will open the jupyphant tab
@@ -1647,7 +1660,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 	id: 'Jupyphant',
 	autoStart: true,
 	// What to pass to the activate function
-	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer],
+	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager],
 	// activate: Function that is called upon startup of the extension
 	// Parameters are passed by the extension framework as specified in 'requires'
 	activate: activate
