@@ -109,6 +109,7 @@ export class WorkflowEngineWidget extends Widget {
             (this.graph as any).widget = this;
             this.graph.change = () => this._saveWorkflowToLocalStorage();
             this.graphCanvas = new LGraphCanvas(this.canvasElement, this.graph);
+            this.graphCanvas.always_render_background = true;
             /*
             This prevents the default right click behavior of the lightgraph Canvas
             One may want to change this behavior but to prevent improper inputs, this will be prevented for now
@@ -813,13 +814,58 @@ try:
     else:
         reader = neo.get_io(filename)
 
-    jupyphant_result = reader.read_block()
+    blocks = reader.read()
+    jupyphant_result = blocks[0] if blocks else None
     
     ${resultsDictName}["${resultId}"] = jupyphant_result
     print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
 
 except Exception as e:
     print(f"Error in Neo File Reader: {e}", file=sys.stderr)`;
+        } else if (item.code.startsWith('__NEO_GET_')) {
+            const type = item.code.replace('__NEO_GET_', '').slice(0, -2);
+            const neoClassNameMap: { [key: string]: string } = {
+                'SPIKETRAINS': 'SpikeTrain',
+                'ANALOGSIGNALS': 'AnalogSignal',
+                'SEGMENTS': 'Segment',
+                'EVENTS': 'Event',
+                'EPOCHS': 'Epoch'
+            };
+            const neoClassName = neoClassNameMap[type];
+        
+            if (!neoClassName) {
+                console.error(`Invalid NEO_GET type: ${type}`);
+                return "";
+            }
+            
+            console.log(`...using NEO GET (${neoClassName}) execution logic`);
+            codeToExecute = `try:
+    _prepare_arg
+except NameError:
+    def _prepare_arg(arg_str):
+        global ${resultsDictName}
+        if isinstance(arg_str, str):
+            if arg_str in ${resultsDictName}: return ${resultsDictName}[arg_str]
+            if arg_str == "" or arg_str == "__REQUIRED__": return None
+            try: return eval(arg_str)
+            except: return arg_str
+        return arg_str
+try:
+    raw_args = json.loads('''${args_json_string}''')
+    processed_args = [_prepare_arg(arg) for arg in raw_args]
+    
+    jupyphant_neo_object = processed_args[0]
+    
+    if jupyphant_neo_object is None:
+        raise ValueError("Input 'jupyphant_neo_object' is not connected or is None.")
+
+    jupyphant_result = jupyphant_neo_object.list_children_by_class('${neoClassName}')
+    
+    ${resultsDictName}["${resultId}"] = jupyphant_result
+    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+
+except Exception as e:
+    print(f"Error in ${item.name} node: {e}", file=sys.stderr)`;
         } else if (item.code === '__UTIL_IF__') {
             return "";
         }
@@ -1269,8 +1315,32 @@ except Exception as e:
                 block.push(`_tmp_io_class = ${io_class_val}`);
                 block.push(`_tmp_filename = ${filename_val}`);
                 block.push(`${reader_var} = getattr(neo.io, _tmp_io_class)(filename=_tmp_filename)`);
-                block.push(`${resultVarName} = ${reader_var}.read_block()`);
+                block.push(`_blocks = ${reader_var}.read()`);
+                block.push(`${resultVarName} = _blocks[0] if _blocks else None`);
                 lineOfCode = block.join(`\n${indent}`);
+            } else if (item.code.startsWith('__NEO_GET_')) {
+                const type = item.code.replace('__NEO_GET_', '').slice(0, -2);
+                const neoClassName = {
+                    'SPIKETRAINS': 'SpikeTrain',
+                    'ANALOGSIGNALS': 'AnalogSignal',
+                    'SEGMENTS': 'Segment',
+                    'EVENTS': 'Event',
+                    'EPOCHS': 'Epoch'
+                }[type];
+
+                if (neoClassName) {
+                    const paramName = item.parameters[0]?.name;
+                    const self_arg = processedArgs.find(arg => arg.name === paramName)?.value;
+                    if (self_arg && self_arg !== 'None') {
+                        lineOfCode = `${resultVarName} = ${self_arg}.list_children_by_class('${neoClassName}')`;
+                    }
+                }
+            } else if (item.code === '__UTIL_GETITEM__') {
+                const list_arg = processedArgs.find(p => p.name === 'list')?.value;
+                const index_arg = processedArgs.find(p => p.name === 'index')?.value;
+                if (list_arg && list_arg !== 'None' && index_arg && index_arg !== 'None') {
+                    lineOfCode = `${resultVarName} = ${list_arg}[int(${index_arg})]`;
+                }
             } else if (item.name.startsWith(".")) {
                 const methodName = item.name.substring(1).replace('()', '');
                 const self_arg = processedArgs.find(arg => arg.isSelf)?.value;

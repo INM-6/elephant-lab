@@ -280,13 +280,27 @@ except Exception as e:
             'UTIL_LOOP': '### For Loop\\n\\nIterates over a list of items.\\n\\n**Inputs:**\\n- \`exec in\`: Execution input\\n- \`List\`: The list to iterate over\\n\\n**Outputs:**\\n- \`after loop\`: Execution output after the loop is finished\\n- \`loop body\`: Execution path for each iteration\\n- \`item\`: The current item in the iteration\\n- \`index\`: The index of the current item.',
             'UTIL_IF': '### If/Else\\n\\nExecutes one of two branches based on a condition.\\n\\n**Inputs:**\\n- \`exec in\`: Execution input\\n- \`condition\`: The boolean condition to evaluate.\\n\\n**Outputs:**\\n- \`if body\`: Execution path if the condition is true.\\n- \`else body\`: Execution path if the condition is false.\\n- \`after if/else\`: Execution output after either branch is finished.',
             'UTIL_PRINT': '### Print Node\\n\\nPrints the string representation of the input value.',
-            'UTIL_LIST': '### List Node\\n\\nCreates a Python list from the inputs.'
+            'UTIL_LIST': '### List Node\\n\\nCreates a Python list from the inputs.',
+            'NEO_READ_FILE': '### Neo File Reader\\n\\nReads a neo-supported file and provides the content as a neo object.',
+            'UTIL_GETITEM': '### Get Item\\n\\nGets an item from an iterable at a specified index.',
+            'NEO_GET_SPIKETRAINS': '### Get Spiketrains\\n\\nExtracts spiketrains from a neo object.',
+            'NEO_GET_ANALOGSIGNALS': '### Get Analogsignals\\n\\nExtracts analogsignals from a neo object.',
+            'NEO_GET_EVENTS': '### Get Events\\n\\nExtracts events from a neo object.',
+            'NEO_GET_EPOCHS': '### Get Epochs\\n\\nExtracts epochs from a neo object.',
+            'NEO_GET_SEGMENTS': '### Get Segments\\n\\nExtracts segments from a neo object.'
         }
         
         util_docstrings['__UTIL_LOOP__'] = util_docstrings['UTIL_LOOP']
         util_docstrings['__UTIL_IF__'] = util_docstrings['UTIL_IF']
         util_docstrings['__UTIL_LIST__'] = util_docstrings['UTIL_LIST']
         util_docstrings['__UTIL_PRINT__'] = util_docstrings['UTIL_PRINT']
+        util_docstrings['__NEO_READ_FILE__'] = util_docstrings['NEO_READ_FILE']
+        util_docstrings['__UTIL_GETITEM__'] = util_docstrings['UTIL_GETITEM']
+        util_docstrings['__NEO_GET_SPIKETRAINS__'] = util_docstrings['NEO_GET_SPIKETRAINS']
+        util_docstrings['__NEO_GET_ANALOGSIGNALS__'] = util_docstrings['NEO_GET_ANALOGSIGNALS']
+        util_docstrings['__NEO_GET_EVENTS__'] = util_docstrings['NEO_GET_EVENTS']
+        util_docstrings['__NEO_GET_EPOCHS__'] = util_docstrings['NEO_GET_EPOCHS']
+        util_docstrings['__NEO_GET_SEGMENTS__'] = util_docstrings['NEO_GET_SEGMENTS']
 
         if target_id_str in util_docstrings:
             print(json.dumps(util_docstrings[target_id_str]))

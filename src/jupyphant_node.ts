@@ -180,6 +180,59 @@ export class JupyphantNode extends LGraphNode {
             this.title = this.properties.item.name;
             this.rebuildNode();
             this.updateNodeColor();
+
+            if (this.properties.item.code === '__NEO_READ_FILE__') {
+                const extractable = ['spiketrains', 'analogsignals', 'segments', 'events', 'epochs'];
+                this.addWidget(
+                    "combo",
+                    "Extract",
+                    "+ extract",
+                    (value: string, widget: any, node: LGraphNode) => {
+                        if (value === "+ extract" || !node.graph) {
+                            setTimeout(() => { widget.value = "+ extract"; }, 0);
+                            return;
+                        }
+
+                        const extractorItem: DraggableItem = {
+                            id: `neo/get_${value}`,
+                            name: `Get ${value}`,
+                            code: `__NEO_GET_${value.toUpperCase()}__`,
+                            is_class: false,
+                            parameters: [{ name: 'neo_object', default: '__REQUIRED__' }]
+                        };
+
+                        const extractorNode = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                        extractorNode.properties.item = extractorItem;
+                        extractorNode.setProperty("item", extractorItem);
+
+                        let x = node.pos[0] + node.size[0] + 30;
+                        let y = node.pos[1];
+
+                        // avoid collision
+                        while (node.graph.getNodeOnPos(x, y)) {
+                            y += 30;
+                        }
+                        extractorNode.pos = [x, y];
+
+                        node.graph.add(extractorNode);
+
+                        // connect output of reader to input of extractor
+                        const outputSlot = node.outputs.findIndex(o => o.name === 'result');
+                        const inputSlot = extractorNode.inputs.findIndex(i => i.name === 'neo_object');
+                        if (outputSlot !== -1 && inputSlot !== -1) {
+                            node.connect(outputSlot, extractorNode, inputSlot);
+                        }
+
+                        setTimeout(() => {
+                            widget.value = "+ extract";
+                            if ((node.graph as any)._canvas) {
+                                (node.graph as any)._canvas.draw(true, true);
+                            }
+                        }, 0);
+                    },
+                    { values: ["+ extract", ...extractable] }
+                );
+            }
         } else {
             console.warn("Node added without valid item property", this.properties);
             this.title = "Error: Invalid Item";
