@@ -128,3 +128,40 @@ def toggle_neo_tree_objs(jupyphant_entity, neo_obj):
 
 def expand_neo_tree(jupyphant_entity, opened):
     jupyphant_entity.expand_neo_tree(opened)
+    
+def save_selected_neo_objects(jupyphant_entity, filepath="output_file.nix"):
+    from neo import Block, Segment, SpikeTrain, AnalogSignal
+    from neo.io import NixIO
+    
+    if not filepath.endswith('.nix'):
+        filepath += '.nix'
+    
+    selected_ids = get_selected_neo_ids(jupyphant_entity)
+    neo_objs_to_export = [get_neo_obj_from_id(jupyphant_entity, selected_id) for selected_id in selected_ids]
+
+    export_block = Block(name="Exported Data")
+    export_segment = Segment(name="Exported Segment")
+    export_block.segments.append(export_segment)
+
+    blocks_to_write = []
+
+    for obj in neo_objs_to_export:
+        if isinstance(obj, Block):
+            blocks_to_write.append(obj)
+        
+        elif isinstance(obj, Segment):
+            export_block.segments.append(obj)
+            
+        elif isinstance(obj, (SpikeTrain, AnalogSignal)):
+            obj_copy = obj.copy() 
+            
+            if isinstance(obj, SpikeTrain):
+                export_segment.spiketrains.append(obj_copy)
+            else:
+                export_segment.analogsignals.append(obj_copy)
+
+    if len(export_segment.spiketrains) > 0 or len(export_segment.analogsignals) > 0:
+        blocks_to_write.append(export_block)
+
+    with NixIO(filename=filepath, mode='ow') as nix_io:
+        nix_io.write_all_blocks(blocks_to_write)

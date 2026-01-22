@@ -75,13 +75,6 @@ const header = document.createElement('h3');
             engine.toggleExecPins(isChecked);
         };
 
-        const loadDataButton = document.createElement('button');
-        loadDataButton.innerHTML = 'Load neo file <i class="fa fa-file-import" aria-hidden="true"></i>';
-        loadDataButton.title = 'Create a neoIO for given Path';
-        loadDataButton.className = 'workflow-button workflow-button-io';
-        loadDataButton.onclick = () => engine.loadNeoFile();
-        buttonContainer.appendChild(loadDataButton);
-
         toggleExecPinsContainer.appendChild(toggleExecPinsCheckbox);
         toggleExecPinsContainer.appendChild(toggleExecPinsLabel);
         buttonContainer.appendChild(toggleExecPinsContainer);

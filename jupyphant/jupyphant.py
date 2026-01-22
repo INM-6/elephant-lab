@@ -639,6 +639,18 @@ class Jupyphant:
             for top_node in collected_neo_objs.keys():
                 collected_neo_objs[top_node] = [neo_obj for neo_obj in collected_neo_objs[top_node] if
                                                 self.get_neo_hash(neo_obj, hash_name='sha1') in selected_ids]
+                
+        # remove duplicate neo objects (e.g., if same neo object is referenced in multiple containers)
+        processed_hashes = set()
+        for key in list(collected_neo_objs.keys()):
+            unique_objs = []
+            for neo_obj in collected_neo_objs[key]:
+                obj_hash = self.get_neo_hash(neo_obj, hash_name='sha1')
+                if obj_hash not in processed_hashes:
+                    unique_objs.append(neo_obj)
+                    processed_hashes.add(obj_hash)
+            collected_neo_objs[key] = unique_objs
+
         # remove top-nodes / neo-containers with no object of the specified neo_class
         for key in list(collected_neo_objs):
             if len(collected_neo_objs[key]) == 0:

@@ -11,11 +11,15 @@ import {
 	SessionContext,
 	WidgetTracker,
 	MainAreaWidget,
+	showDialog,
+	Dialog
 } from '@jupyterlab/apputils';
 
 import {
 	IDocumentManager
 } from '@jupyterlab/docmanager';
+
+import { FileDialog } from '@jupyterlab/filebrowser';
 
 import {
 	INotebookTracker,
@@ -374,7 +378,138 @@ class JupyphantExtension {
 
 			filterContainer.appendChild(label);
 		});
+		
+		const loadNeoFileButton = document.createElement('button');
+		loadNeoFileButton.innerHTML = 'Load neo file <i class="fa fa-file-import" aria-hidden="true"></i>';
+        loadNeoFileButton.title = 'Create a neoIO for given Path';
+        loadNeoFileButton.className = 'workflow-button workflow-button-io';
+		loadNeoFileButton.onclick = () => {
+			FileDialog.getOpenFiles({
+				manager: this.docManager
+			}).then(result => {
+				if (result.button.accept && result.value && result.value.length > 0) {
+					const selectedFile = result.value[0];
+					const filePath = selectedFile.path;
+	
+					const body = document.createElement('div');
+					const input = document.createElement('input');
+					input.className = 'jp-input';
+					input.placeholder = 'e.g. Spike2IO';
+					body.appendChild(input);
+	
+					showDialog({
+						title: 'Enter neo IO class',
+						body: new Widget({ node: body }),
+						buttons: [
+							Dialog.cancelButton(),
+							Dialog.okButton({ label: 'OK' }),
+							Dialog.createButton({ label: 'Automatic' })
+						],
+						hasClose: true
+					}).then(async dialogResult => {
+						let ioClass: string | null = null;
+						if (dialogResult.button.label === 'OK') {
+							ioClass = input.value;
+						} else if (dialogResult.button.label === 'Automatic') {
+							ioClass = await this.kernelBridge!.getNeoIOClass(filePath);
+						}
+	
+						if (ioClass !== null) {
+							const varName = `neo_data_${Date.now()}`;
+							let code = '';
+							if (ioClass) {
+								code = `
+import neo
+io_class = getattr(neo.io, '${ioClass}')
+reader = io_class(filename='${filePath}')
+${varName} = reader.read_block()
+									`;
+							} else {
+								code = `
+import neo
+${varName} = neo.get_io('${filePath}').read()
+if (isinstance(${varName}, list)):
+	${varName} = ${varName}[0]
+elif (isinstance(${varName}, dict)):
+	${varName} = ${varName}['blocks'][0]
+print(${varName}, type(${varName}))
+self.update_tree()
+
+`;
+							}
+							await this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
+							await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, session, false);
+						} else if (dialogResult.button.label === 'Automatic') {
+							showDialog({
+								title: 'Error',
+								body: 'Could not automatically determine IO class.',
+								buttons: [Dialog.okButton()]
+							});
+						}
+					});
+				}
+			});
+		};
+
+		const saveNeoObjectsButton = document.createElement('button');
+		saveNeoObjectsButton.innerHTML = 'Save selected neo objects to nix-file <i class="fa fa-file-export" aria-hidden="true"></i>';
+		saveNeoObjectsButton.title = 'Save selected neo objects to nix-file';
+		saveNeoObjectsButton.className = 'workflow-button workflow-button-io';
+		saveNeoObjectsButton.onclick = () => {
+			const body = document.createElement('div');
+			const input = document.createElement('input');
+			input.className = 'jp-input';
+			input.placeholder = 'e.g. output_file.nix';
+			body.appendChild(input);
+			showDialog({
+				title: 'Enter file name',
+				body: new Widget({ node: body }),
+				buttons: [
+					Dialog.cancelButton(),
+					Dialog.okButton({ label: 'OK' })
+				],
+				hasClose: true
+			}).then(dialogResult => {
+				if (dialogResult.button.label === 'OK') {
+					const filePath = input.value;
+					if (!filePath) {
+						showDialog({
+							title: 'Error',
+							body: 'No file path provided.',
+							buttons: [Dialog.okButton()]
+						});
+						return;
+					}
+
+					const code = `
+from jupyphant.kernelcode import save_selected_neo_objects
+save_selected_neo_objects(jupyphant_entity, '${filePath}')
+					`;
+					this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false)
+					.then(() => {
+                    showDialog({
+                        title: 'Export Successful',
+                        body: `The Neo objects have been saved to: ${filePath}`,
+                        buttons: [Dialog.okButton()]
+                    });
+                })
+                .catch(err => {
+                    showDialog({
+                        title: 'Export Failed',
+                        body: `An error occurred: ${err}`,
+                        buttons: [Dialog.okButton()]
+                    });
+                });
+				}
+			});
+		};
+		
 		filterContainer.classList.add('sticky-filter');
+		filterContainer.appendChild(document.createElement('br'));
+		filterContainer.appendChild(document.createElement('br'));
+		filterContainer.appendChild(loadNeoFileButton);
+		filterContainer.appendChild(saveNeoObjectsButton);
+		
 		tree_widget.node.prepend(filterContainer);
 	}
 
