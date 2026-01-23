@@ -97,9 +97,8 @@ class PlotlyGraphFigure:
             # Merge with user-provided dicts (data.marker / data.line)
             marker_settings = default_marker | getattr(data, "marker", {})
             line_settings   = default_line   | getattr(data, "line", {})
-            subplotHeight = self.getSubplotHeight()
             if callable(marker_settings["size"]):
-                marker_settings["size"] = marker_settings["size"](subplotHeight)
+                marker_settings["size"] = marker_settings["size"](self.getSubplotHeight())
             
             row = len(self.traces) + 1
             y_values = data.y
@@ -382,8 +381,9 @@ class PlotlyGraphFigure:
             height = self.height
         total_gap = self.vertical_spacing * (self.nGraphs - 1)
         subplot_height = (height - total_gap) / self.nGraphs
+        if self.compress:
+            subplot_height = subplot_height/3.
         return subplot_height
-
 class PlotlyGraphDataType:
     def __init__(self, data, **kwargs):
         self.extract_data(data)
