@@ -26,7 +26,7 @@ export class WorkflowEngineWidget extends Widget {
     public session: ISessionContext | null; // used to execute Python Code in same session as Jupyphant 
     private elephantMenu: any = { content: "Elephant (loading...)", disabled: true };
     private rendermime: IRenderMimeRegistry;
-    private docManager: IDocumentManager;
+    public docManager: IDocumentManager;
 
     /*
     session, widget and notebook_tracker are used to keep track of the notebook status 
@@ -93,6 +93,7 @@ export class WorkflowEngineWidget extends Widget {
                     const item: DraggableItem = JSON.parse(itemString);
                     const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
                     if (this.graph && this.graphCanvas) {
+                        node.docManager = this.docManager;
                         node.properties.item = item;
                         node.setProperty("item", item);
                         node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
@@ -216,6 +217,7 @@ export class WorkflowEngineWidget extends Widget {
         for (const [index, item] of fullItems.entries()) {
             const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
             if (node) {
+                node.docManager = this.docManager;
                 node.properties.item = item;
                 node.setProperty("item", item);
 
@@ -246,6 +248,7 @@ export class WorkflowEngineWidget extends Widget {
                                 const selectedMethod = methods.find(m => m.name === methodName);
                                 if (selectedMethod) {
                                     const methodNode = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    methodNode.docManager = this.docManager;
                                     methodNode.properties.item = selectedMethod;
                                     methodNode.setProperty("item", selectedMethod);
 
@@ -1452,6 +1455,7 @@ except Exception as e:
                                                 };
                                                 const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
                                                 if (this.graph && this.graphCanvas) {
+                                                    node.docManager = this.docManager;
                                                     node.properties.item = item;
                                                     node.setProperty("item", item);
                                                     node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
@@ -1473,6 +1477,7 @@ except Exception as e:
                                                 };
                                                 const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
                                                 if (this.graph && this.graphCanvas) {
+                                                    node.docManager = this.docManager;
                                                     node.properties.item = item;
                                                     node.setProperty("item", item);
                                                     node.pos = this.graphCanvas.convertEventToCanvasOffset(event);

@@ -1,5 +1,7 @@
 import { LiteGraph, LGraphNode, LGraphCanvas } from 'litegraph.js';
 import { WorkflowEngineWidget } from './workflow_engine';
+import { IDocumentManager } from '@jupyterlab/docmanager';
+import { FileDialog } from '@jupyterlab/filebrowser';
 
 // Attributes of a Jupyphant Node to distinguish different types of nodes
 export type DraggableItem = {
@@ -20,6 +22,7 @@ export type JupyphantNodeProperties = {
 // Own Jupyphant Node Class which adds additional properties to the regular LGraphNode
 export class JupyphantNode extends LGraphNode {
     public static showExecPins = false;
+    public docManager?: IDocumentManager;
     properties: JupyphantNodeProperties = {
         item: { id: '', name: '', code: '', is_class: false, parameters: [] }
     };
@@ -165,9 +168,35 @@ export class JupyphantNode extends LGraphNode {
                 this.addInput(param.name, -1, { label: param.name });
 
                 if (param.name !== "__self__") {
-                    this.addWidget("text", param.name, this.properties[propName], (value: string) => {
+                    const widget = this.addWidget("text", param.name, this.properties[propName], (value: string) => {
                         this.properties[propName] = value;
                     }, {});
+
+                    if (this.properties.item?.code === '__NEO_READ_FILE__' && param.name === 'filename') {
+                        this.addWidget("button", "Browse...", "", () => {
+                            if (!this.docManager && this.graph && (this.graph as any).widget) {
+                                this.docManager = ((this.graph as any).widget as WorkflowEngineWidget).docManager;
+                            }
+
+                            if (this.docManager) {
+                                FileDialog.getOpenFiles({
+                                    manager: this.docManager
+                                }).then(result => {
+                                    if (result.button.accept && result.value && result.value.length > 0) {
+                                        const selectedFile = result.value[0];
+                                        const filePath = selectedFile.path;
+                                        widget.value = filePath;
+                                        this.properties['param_filename'] = filePath;
+                                        if (this.graph) {
+                                            (this.graph as any).setDirtyCanvas(true, true);
+                                        }
+                                    }
+                                });
+                            } else {
+                                console.error("docManager is not available on this JupyphantNode.");
+                            }
+                        });
+                    }
                 }
             });
         }
