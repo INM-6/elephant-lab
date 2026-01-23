@@ -48,7 +48,7 @@ class PlotlyGraphFigure:
         if overlapping:
             self.overlap()
 
-        self.update_slider()
+        self.create_sliders()
         self.manage_axis_titles()
         #self.create_xrange_buttons(relayout_button_options)
 
@@ -207,6 +207,7 @@ class PlotlyGraphFigure:
             )
 
         self.change_height_after_render(self.default_height)
+        self.update_y_slider()
         
         
     def stack(self):
@@ -232,8 +233,9 @@ class PlotlyGraphFigure:
             )
 
         self.change_height_after_render(self.height)
+        self.update_y_slider()
 
-    def update_slider(self):
+    def create_sliders(self):
         """Updates the range slider to the last x-axis if shared_xaxes is True"""
         n = self.nGraphs
         if self.compress:
@@ -242,30 +244,48 @@ class PlotlyGraphFigure:
                     rangeslider=dict(visible=True)
                 ),
             )
-            import ipywidgets as widgets
-            self.y_slider = widgets.FloatRangeSlider(
-                value=[self.minY, self.maxY],
-                min=self.minY,
-                max=self.maxY,
-                step=0.1,
-                orientation='vertical',
-                continuous_update=True,
-                layout={'height': f'480px', 'margin': '120px 0 0 0'}
-            )
-
-            
-            # Callback to update y-axis
-            def update_y_range(change):
-                # Use batch_update to avoid flickering
-                with self.fig.batch_update():
-                    self.fig.update_yaxes(range=change['new'])
-
-            self.y_slider.observe(update_y_range, names='value')
         else:
             for i in range(1, n + 1):
                 self.fig.layout[f"xaxis{i}"].update(
                     rangeslider=dict(visible=i==n and (self.shared_xaxes))
                 )
+        
+        import ipywidgets as widgets
+
+        y_slider_height = self.calculate_y_slider_height()
+
+        self.y_slider = widgets.FloatRangeSlider(
+            value=[self.minY, self.maxY],
+            min=self.minY,
+            max=self.maxY,
+            step=0.1,
+            orientation='vertical',
+            continuous_update=True,
+            layout={'height': f'{y_slider_height}px', 'margin': '100px 0 0 0'}
+        )
+
+        # Callback to update y-axis
+        def update_y_range(change):
+            # Use batch_update to avoid flickering
+            with self.fig.batch_update():
+                self.fig.update_yaxes(range=change['new'])
+
+        self.y_slider.observe(update_y_range, names='value')
+        self.update_y_slider()
+
+    def update_y_slider(self):
+        """Updates the y-axis slider height and visibility."""
+        if hasattr(self, "y_slider"):
+            # Update existing slider
+            y_slider_height = self.calculate_y_slider_height()
+            if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
+                self.y_slider.layout.height = f'{y_slider_height}px'
+            display_mode = 'flex' if self.overlapping or self.compress or self.nGraphs==1 else 'none'
+            if self.y_slider.layout.display != display_mode:
+                self.y_slider.layout.display = display_mode
+
+    def calculate_y_slider_height(self):
+        return int(0.875 * self.fig.layout.height - 165)
 
     def manage_axis_titles(self):
         """If all x-axes have the same title, move it to the last axis only."""
@@ -298,9 +318,6 @@ class PlotlyGraphFigure:
         # If different titles exist → do nothing
         if len(set(titles)) > 1:
             return
-
-        # Use the common title (or None)
-        common_title = titles[0] if titles else None
 
         # Clear all titles
         for i in range(1, n):
