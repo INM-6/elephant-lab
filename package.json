@@ -56,6 +56,7 @@
   "dependencies": {
     "@jupyterlab/application": "^4.2.0",
     "@jupyterlab/apputils": "^4.3.0",
+    "@jupyterlab/filebrowser": "^4.2.0",
     "@jupyterlab/notebook": "^4.2.0",
     "@jupyterlab/outputarea": "^4.2.0",
     "@jupyterlab/rendermime": "^4.2.0",
