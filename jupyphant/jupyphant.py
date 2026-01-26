@@ -208,6 +208,8 @@ class Jupyphant:
         neo_objs_hash_before_update = self.get_neo_hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
                                                   hash_name='sha1')
 
+        self.neo_objs_and_lists_of_neo_objs_with_var_name.clear()
+
         # Get ALL variables in current kernel namespace
         all_variable_names_in_current_kernel_namespace = self.nsm.who_ls()
         print(f"all_variable_names_in_current_kernel_namespace = {all_variable_names_in_current_kernel_namespace}")
@@ -222,7 +224,10 @@ class Jupyphant:
             # I.e. no imports, by running this code directly inside the notebook
             # This requires to have this whole file as a string in the TypeScript code
             # Objects are accessed using their name returned by who_ls() and the dict
-            obj_from_kernel_ns = __main__.__dict__[variable_name]
+            try:
+                obj_from_kernel_ns = __main__.__dict__[variable_name]
+            except KeyError:
+                continue
             # Select only neo objects and SpikeTrainLists / lists with neo objects
             is_BaseNeo_instance = isinstance(obj_from_kernel_ns, self.BaseNeo)
             is_RegionOfInterest_subclass = issubclass(type(obj_from_kernel_ns), self.RegionOfInterest)
