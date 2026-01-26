@@ -269,26 +269,58 @@ class Jupyphant:
                 hash_neo_obj = self.get_neo_hash(neo_obj, hash_name='sha1')
                 self.map_neo_obj_hash_to_neo_obj[hash_neo_obj] = neo_obj
                 class_name = neo_obj.__class__.__name__
-                
+
                 variable_name = self.names_for(neo_obj)
 
+                # Define styles for node names
+                NODE_STYLE = "border: 1px dotted var(--jp-border-color2); padding: 1px 4px; background-color: var(--jp-layout-color2); border-radius: 4px;"
+                SECONDARY_STYLE = "color:var(--jp-ui-font-color2);"
+
                 if hasattr(neo_obj, 'name') and neo_obj.name:
-                    node_neo_obj = self.Node(f"{variable_name} :: {NEO_ABBREVIATIONS[class_name]['abbr']} {neo_obj.name} :: ({class_name}) [{hash_neo_obj[:4]}]")
+                    main_text = neo_obj.name
+                    node_name = f"<span style='{NODE_STYLE}'>{main_text}</span> <i style='{SECONDARY_STYLE}'>({class_name})</i> <small style='{SECONDARY_STYLE}'>[{hash_neo_obj[:4]}]</small>"
+                    plain_description = f"{variable_name} -> {neo_obj.name} :: ({class_name}) [{hash_neo_obj[:4]}]"
+                    node_neo_obj = self.Node(node_name)
                     if neo_obj.name.lower() == "block":
                         node_neo_obj.opened = self.expand_all or (len(neo_obj.segments) < 5)
+                    node_neo_obj.metadata = {"data-neo-object": "true", "variable_name": variable_name,
+                                             "plain_description": plain_description}
+                    node_neo_obj.icon = NEO_ABBREVIATIONS[class_name]['icon']
+                    node_neo_obj.open_icon_style = 'success'
+                    node_neo_obj.close_icon_style = 'danger'
+                    self._add_sub_nodes(node_neo_obj, neo_obj)
+                    if any(node.name == node_neo_obj.name for node in nodes):
+                        continue
+                    nodes.append(node_neo_obj)
+                    self.map_ipytree_node_id_to_neo_obj_hash[node_neo_obj._id] = hash_neo_obj
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 else:
-                    node_neo_obj = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {variable_name} ({class_name}) [{hash_neo_obj[:4]}]")
+                    is_analog_signal_list = isinstance(neo_obj, list) and len(neo_obj) > 0 and all(
+                        isinstance(item, self.AnalogSignal) for item in neo_obj)
+                    is_spike_train_list = isinstance(neo_obj, (list, self.SpikeTrainList)) and len(
+                        neo_obj) > 0 and all(isinstance(item, self.SpikeTrain) for item in neo_obj)
+                    if is_analog_signal_list or is_spike_train_list:
+                        container_name = "AnalogSignals" if is_analog_signal_list else "SpikeTrains"
+                        main_text = f'{container_name}'
+                        node_name = f"<span style='{NODE_STYLE}'>{main_text}</span> <b style='color:var(--jp-brand-color1);'>[{len(neo_obj)}]</b>"
+                        plain_description = f"{container_name} [{len(neo_obj)}]"
+                        node_neo_obj = self.Node(node_name)
+                    else:
+                        main_text = f'{variable_name}'
+                        node_name = f"<span style='{NODE_STYLE}'>{main_text}</span> <i style='{SECONDARY_STYLE}'>({class_name})</i> <small style='{SECONDARY_STYLE}'>[{hash_neo_obj[:4]}]</small>"
+                        plain_description = f"{variable_name} :: ({class_name}) [{hash_neo_obj[:4]}]"
+                        node_neo_obj = self.Node(node_name)
                     node_neo_obj.opened = True
-                node_neo_obj.metadata = {"data-neo-object": "true", "variable_name": variable_name}
-                node_neo_obj.icon = NEO_ABBREVIATIONS[class_name]['icon']
-                node_neo_obj.open_icon_style = 'success'
-                node_neo_obj.close_icon_style = 'danger'
-                self._add_sub_nodes(node_neo_obj, neo_obj)
-                if any(node.name == node_neo_obj.name for node in nodes):
-                    continue
-                nodes.append(node_neo_obj)
-                self.map_ipytree_node_id_to_neo_obj_hash[node_neo_obj._id] = hash_neo_obj
+                    node_neo_obj.metadata = {"data-neo-object": "true", "variable_name": variable_name, "plain_description": plain_description}
+                    node_neo_obj.icon = NEO_ABBREVIATIONS[class_name]['icon']
+                    node_neo_obj.open_icon_style = 'success'
+                    node_neo_obj.close_icon_style = 'danger'
+                    self._add_sub_nodes(node_neo_obj, neo_obj)
+                    if any(node.name == node_neo_obj.name for node in nodes):
+                        continue
+                    nodes.append(node_neo_obj)
+                    self.map_ipytree_node_id_to_neo_obj_hash[node_neo_obj._id] = hash_neo_obj
+
             print(f"After Blocks: {time.time() - start}")
             # print(f"Nodes After Blocks: {nodes}")
 
@@ -334,8 +366,22 @@ class Jupyphant:
                         pass
                     if attr_value_list is not None and len(attr_value_list) > 0:
                         attr_value_hash = self.get_neo_hash(attr_value_list, hash_name='sha1')
-                        self.map_neo_obj_hash_to_neo_obj[attr_value_hash] = attr_value_list                
-                        attr_node = self.Node(f"{self.names_for(attr_value_list)} {attr_name.capitalize()} [{len(attr_value_list)}] :: ({attr_name.capitalize()}) [{attr_value_hash[:4]}]")
+                        self.map_neo_obj_hash_to_neo_obj[attr_value_hash] = attr_value_list
+
+                        # Define styles
+                        NODE_STYLE = "border: 1px dotted var(--jp-border-color2); padding: 1px 4px; background-color: var(--jp-layout-color2); border-radius: 4px;"
+                        COUNT_STYLE = "color:var(--jp-brand-color1);"
+
+                        # Capitalize name, and handle special cases
+                        capitalized_name = attr_name.capitalize()
+                        if attr_name == 'irregularlysampledsignals':
+                            capitalized_name = 'IrregularlySampledSignals'
+                        elif attr_name == 'channel_indexes':
+                            capitalized_name = 'Channel Indexes'
+
+                        main_text = f'{capitalized_name}'
+                        node_name = f"<span style='{NODE_STYLE}'>{main_text}</span> <b style='{COUNT_STYLE}'>[{len(attr_value_list)}]</b>"
+                        attr_node = self.Node(node_name)
                         attr_node.opened = self.expand_all or (len(attr_value_list) < 5)
                         attr_node.icon = 'folder' 
                         attr_node.metadata = {"data-neo-object": "true", "container-for": attr_name}
@@ -361,11 +407,19 @@ class Jupyphant:
                     class_name = 'list' if isinstance(child_obj, list) else 'SpikeTrainList'
                     if class_name not in NEO_ABBREVIATIONS:
                          class_name = 'Block'
+                # Define styles
+                NODE_STYLE = "border: 1px dotted var(--jp-border-color2); padding: 1px 4px; background-color: var(--jp-layout-color2); border-radius: 4px;"
+                SECONDARY_STYLE = "color:var(--jp-ui-font-color2);"
+
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 if hasattr(child_obj, 'name') and child_obj.name:
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(child_obj)} #{i} :: {child_obj.name} :: ({class_name}) [{child_obj_hash[:4]}]")
+                    main_text = f'#{i} → <b>{child_obj.name}</b>'
+                    node_name = f"<span style='{NODE_STYLE}'>{main_text}</span> <i style='{SECONDARY_STYLE}'>({class_name})</i> <small style='{SECONDARY_STYLE}'>[{child_obj_hash[:4]}]</small>"
+                    child_node = self.Node(node_name)
                 else:
-                    child_node = self.Node(f"{NEO_ABBREVIATIONS[class_name]['abbr']} {self.names_for(child_obj)} #{i} :: ({class_name}) [{child_obj_hash[:4]}]")
+                    main_text = f'#{i}'
+                    node_name = f"<span style='{NODE_STYLE}'>{main_text}</span> <i style='{SECONDARY_STYLE}'>({class_name})</i> <small style='{SECONDARY_STYLE}'>[{child_obj_hash[:4]}]</small>"
+                    child_node = self.Node(node_name)
                 
                 child_node.metadata = {"data-neo-object": "true"}
                 child_node.icon = NEO_ABBREVIATIONS[class_name]['icon']
@@ -388,7 +442,6 @@ class Jupyphant:
         Initialize the tree
 
         """  # TODO: rewrite docstring
-        self.ipytree_of_neo_objects = None
         # Alternating dark and light stripes for better better visibility
         self.ipytree_of_neo_objects = self.Tree()
         self.ipytree_of_neo_objects.stripes = True
@@ -714,6 +767,7 @@ class Jupyphant:
             cyle: boolean; False -> no self-recursion; True -> self-recursion
         """
         import pprint
+        import re
         bold = '\033[1m'
         reset = '\033[0m'
 
@@ -723,8 +777,9 @@ class Jupyphant:
                 pp.text("\n".join([f"{attr[0]}: {getattr(neo_obj, attr[0])}"
                                    for attr in neo_obj._recommended_attrs if attr[0] not in neo_obj._repr_pretty_attrs_keys_
                                    and getattr(neo_obj, attr[0]) is not None]))
-
-        pp.text(f"selected node: {node_name}\n")
+        
+        clean_node_name = re.sub(r'<[^>]+>', '', node_name)
+        pp.text(f"selected node: {clean_node_name}\n")
 
         # neo-container: Block, Segment, Group
         if isinstance(neo_obj, self.Container):
