@@ -68,6 +68,7 @@ import {
 import '../style/index.css';
 import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
+import { COLORS } from "./style/colors";
 
 export interface IJupyterMessage {
 	content: {
@@ -380,8 +381,9 @@ class JupyphantExtension {
 		});
 		
 		const loadNeoFileButton = document.createElement('button');
-		loadNeoFileButton.innerHTML = 'Load neo file <i class="fa fa-file-import" aria-hidden="true"></i>';
+		loadNeoFileButton.innerHTML = 'Load <i class="fa fa-file-import" aria-hidden="true"></i>';
         loadNeoFileButton.title = 'Create a neoIO for given Path';
+		loadNeoFileButton.style.backgroundColor = COLORS["Teal"]
         loadNeoFileButton.className = 'workflow-button workflow-button-io';
 		loadNeoFileButton.onclick = () => {
 			FileDialog.getOpenFiles({
@@ -452,8 +454,9 @@ self.update_tree()
 		};
 
 		const saveNeoObjectsButton = document.createElement('button');
-		saveNeoObjectsButton.innerHTML = 'Save selected neo objects to nix-file <i class="fa fa-file-export" aria-hidden="true"></i>';
+		saveNeoObjectsButton.innerHTML = 'Save <i class="fa fa-file-export" aria-hidden="true"></i>';
 		saveNeoObjectsButton.title = 'Save selected neo objects to nix-file';
+		saveNeoObjectsButton.style.backgroundColor = COLORS["Teal"]
 		saveNeoObjectsButton.className = 'workflow-button workflow-button-io';
 		saveNeoObjectsButton.onclick = () => {
 			const body = document.createElement('div');
