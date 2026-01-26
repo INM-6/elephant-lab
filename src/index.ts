@@ -497,7 +497,7 @@ class JupyphantExtension {
 		let explorer_widget_raw_plot = new Panel();
 		explorer_widget_raw_plot.title.label = 'Raw Plot';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
+		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class', 'no-left-spacing'], 'jup_vis_out_id_2.2', session);
 		explorer_widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
 		this.create_raw_plot_options(session, explorer_widget_raw_plot);
 		// STATISTICS

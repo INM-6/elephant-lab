@@ -30,3 +30,8 @@
   padding: 8px;
   border-bottom: 1px solid var(--jp-border-color1);
 }
+
+
+.no-left-spacing .jp-OutputArea-prompt {
+  display: none !important;
+}
