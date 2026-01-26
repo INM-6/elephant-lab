@@ -385,8 +385,16 @@ class PlotlyGraphFigure:
         """Displays the Plotly figure in a Jupyter notebook."""
         if self.fig:
             if hasattr(self, "y_slider"):
-                from ipywidgets import HBox
-                display(HBox([self.y_slider,self.fig]))
+                from ipywidgets import HBox, Layout, Output
+                output_fig = Output(layout={'width': "100%", 'height': 'auto'})
+                with output_fig:
+                    display(self.fig)
+                hbox = HBox([self.y_slider, output_fig], 
+                    layout=Layout(
+                        width='100%',
+                    ),
+                )
+                display(hbox)
             else:
                 display(self.fig)
 
