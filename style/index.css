@@ -1,1 +1,22 @@
 @import url('base.css');
+
+.jupyphant-panel-container.p-Panel {
+    padding: 0px;
+}
+
+.my-outarea-class .jp-OutputArea-prompt,
+.my-outarea-class .jp-OutputPrompt {
+    display: none !important;
+}
+
+.my-outarea-class .jp-OutputArea-child {
+    padding-left: 0px !important;
+}
+
+.my-outarea-class .jp-OutputArea-output,
+.my-outarea-class .jp-RenderedHTMLCommon,
+.my-outarea-class .jstree-container-ul {
+    padding-left: 0px;
+    padding-inline-start: 0px;
+    margin-inline-start: 0px;
+}
