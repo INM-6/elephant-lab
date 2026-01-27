@@ -7,7 +7,7 @@
 // It is used to access and visualize the neo objects
 let setup_env =
 `# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
-%matplotlib ipympl
+%matplotlib inline
 from jupyphant.kernelcode import setup_env
 jupyphant_entity = setup_env()`;
 
