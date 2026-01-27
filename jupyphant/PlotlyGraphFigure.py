@@ -246,10 +246,12 @@ class PlotlyGraphFigure:
             )
         else:
             for i in range(1, n + 1):
+                # Adding this range slider makes it impossible to manually zoom in vertically for this graph
+                addX_slider = i == n and (self.shared_xaxes)
                 self.fig.layout[f"xaxis{i}"].update(
-                    rangeslider=dict(visible=i==n and (self.shared_xaxes))
+                    rangeslider=dict(visible=addX_slider)
                 )
-        
+
         import ipywidgets as widgets
 
         y_slider_height = self.calculate_y_slider_height()
@@ -280,9 +282,12 @@ class PlotlyGraphFigure:
             y_slider_height = self.calculate_y_slider_height()
             if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
                 self.y_slider.layout.height = f'{y_slider_height}px'
-            display_mode = 'flex' if self.overlapping or self.compress or self.nGraphs==1 else 'none'
+            visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
+            if self.y_slider.layout.visibility != visible:
+                self.y_slider.layout.visibility = visible
+            """display_mode = 'flex' if self.overlapping or self.compress or self.nGraphs==1 else 'none'
             if self.y_slider.layout.display != display_mode:
-                self.y_slider.layout.display = display_mode
+                self.y_slider.layout.display = display_mode"""
 
     def calculate_y_slider_height(self):
         return int(0.875 * self.fig.layout.height - 165)
@@ -386,7 +391,7 @@ class PlotlyGraphFigure:
         if self.fig:
             if hasattr(self, "y_slider"):
                 from ipywidgets import HBox, Layout, Output
-                output_fig = Output(layout={'width': "100%", 'height': 'auto'})
+                output_fig = Output(layout={'width': "100%", 'height': 'auto', 'min_width': '0px'})
                 with output_fig:
                     display(self.fig)
                 hbox = HBox([self.y_slider, output_fig], 
