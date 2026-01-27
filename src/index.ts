@@ -97,6 +97,7 @@ class JupyphantExtension {
 	private outarea_workflow: OutputArea | null;
 	private docManager: IDocumentManager;
 	private kernelBridge: KernelBridge | null;
+	private topBar: Widget | null = null;
 
 
 	// Construct a new JupyphantExtension
@@ -177,7 +178,7 @@ class JupyphantExtension {
 
 	// Function to react on command 'Jupyphant'
 	// Called only after the command is clicked from CommandPalette
-	public async newTab() {
+	public async newTab(force: boolean = false) {
 		/**
 	  * This function actually starts the extension itself.
 	  * It creates a new Jupyphant tab that is connected to the notebook active when this function is executed
@@ -206,10 +207,15 @@ class JupyphantExtension {
 		const workflowWidget = mainWidgets.find(w => w.id === workflowId);
 		const elephantWidget = mainWidgets.find(w => w.id === elephantId);
 
-		if (workflowWidget && elephantWidget) {
+		if (!force && workflowWidget && elephantWidget) {
 			console.log("Jupyphant: Existing widgets found, activating them.");
 			this.app.shell.activateById(workflowId);
 			return;
+		}
+
+		if (force) {
+			if (workflowWidget) workflowWidget.dispose();
+			if (elephantWidget) elephantWidget.dispose();
 		}
 
 		console.log("Jupyphant: Creating new Jupyphant instance.");
@@ -312,6 +318,65 @@ class JupyphantExtension {
 		this.createWidgets(rendermime, session);
 
 	} // end of initializeTab()
+
+	public createTopBar(session: ISessionContext) {
+		if (this.topBar) {
+			this.topBar.dispose();
+		}
+
+		const currentFilename = session.path.split('/').pop() || "Unknown Notebook";
+
+		const switchNotebookButton = document.createElement('button');
+		switchNotebookButton.innerHTML = `${currentFilename} <i class="fa fa-exchange" aria-hidden="true"></i>`;
+		switchNotebookButton.title = 'Switch Jupyphant to current active notebook';
+		switchNotebookButton.style.backgroundColor = COLORS["Orange"];
+		switchNotebookButton.className = 'workflow-button workflow-button-io';
+		switchNotebookButton.style.marginRight = '5px';
+		switchNotebookButton.onclick = () => {
+			this.newTab(true);
+		};
+
+		session.propertyChanged.connect((sender, prop) => {
+			if (prop === 'path') {
+				const newFilename = sender.path.split('/').pop() || "Unknown Notebook";
+				switchNotebookButton.innerHTML = `${newFilename} <i class="fa fa-exchange" aria-hidden="true"></i>`;
+			}
+		});
+
+		const infoButton = document.createElement('button');
+		infoButton.innerHTML = 'About Jupyphant <i class="fa fa-info-circle" aria-hidden="true"></i>';
+		infoButton.title = 'About Jupyphant';
+		infoButton.style.backgroundColor = "#3498db";
+		infoButton.className = 'workflow-button workflow-button-io';
+		infoButton.onclick = () => {
+			const body = document.createElement('div');
+			body.style.textAlign = 'center';
+			// TODO: hardcoded version number
+			body.innerHTML = `
+				<p>You are using Jupyphant Version 0.1.0</p>
+				<img src="https://raw.githubusercontent.com/INM-6/elephant/master/doc/images/elephant_logo.png" alt="Jupyphant Logo" style="width: 400px; margin-top: 10px;">
+			`;
+			showDialog({
+				title: 'Info',
+				body: new Widget({ node: body }),
+				buttons: [Dialog.okButton()]
+			});
+		};
+
+		const container = document.createElement('div');
+		container.style.display = 'flex';
+		container.style.alignItems = 'center';
+		container.style.padding = '2px';
+		container.appendChild(switchNotebookButton);
+		container.appendChild(infoButton);
+
+		this.topBar = new Widget();
+		this.topBar.node.appendChild(container);
+		this.topBar.id = 'jupyphant-top-bar';
+		this.topBar.node.style.marginLeft = 'auto';
+
+		this.app.shell.add(this.topBar, 'top', { rank: 1000 });
+	}
 
 	public create_tree_filter(session: ISessionContext, tree_widget: Panel) {
 		const neo_obj_filter_dict = {
@@ -571,6 +636,7 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 		this.outarea_neo_tree = this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
 		this.create_tree_filter(session, tree_widget);
 		this.setupDragAndDrop(tree_widget);
+		this.createTopBar(session);
 
 		// NODE EXPLORER
 		let explorer_widget = new DockPanel({ tabsMovable: false });
