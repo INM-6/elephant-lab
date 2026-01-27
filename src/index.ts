@@ -398,7 +398,7 @@ class JupyphantExtension {
 			// Send Python command to flip the boolean
 			const code = `
 			from jupyphant.kernelcode import set_raw_plot_overlap
-			set_raw_plot_overlap(${isNowChecked ? "True" : "False"})
+			set_raw_plot_overlap(jupyphant_entity, ${isNowChecked ? "True" : "False"})
 			`
 
 			// Send to kernel

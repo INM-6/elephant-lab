@@ -4,14 +4,13 @@ from IPython.display import display
 import warnings
 
 class PlotlyGraphFigure:
-    def __init__(self, data, overlapping=False, shared_xaxes=True, title=None, relayout_button_options=None):
+    def __init__(self, jupyphant_entity, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
         """
         self.vertical_spacing = 0.075
         self.default_height = 600
-        
 
         self.shared_xaxes = shared_xaxes or overlapping
         self.nGraphs = len(data) if isinstance(data, list) and self.is_trace_list(data) else 1
@@ -41,8 +40,12 @@ class PlotlyGraphFigure:
             dragmode="pan",
             height= self.height,
             autosize = True,
-            template = "plotly_dark"
         )
+
+        theme_name = "plotly_white"
+        if jupyphant_entity is not None and hasattr(jupyphant_entity, 'jupyterlab_theme'):
+            theme_name = jupyphant_entity.jupyterlab_theme
+        self.update_jupyterlab_theme(theme_name)
 
         self.overlapping = False
         if overlapping:
@@ -385,6 +388,13 @@ class PlotlyGraphFigure:
                 )
             ]
         )
+
+    def update_jupyterlab_theme(self, theme_name):
+        """Updates the Plotly figure theme based on JupyterLab theme name."""
+        if "dark" in theme_name.lower():
+            self.fig.update_layout(template="plotly_dark")
+        else:
+            self.fig.update_layout(template="plotly_white")
 
     def display(self):
         """Displays the Plotly figure in a Jupyter notebook."""

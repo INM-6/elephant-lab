@@ -437,7 +437,7 @@ class Jupyphant:
         else:
             return None
 
-    def create_rasterplot(self, selected_ids=None, overlap=True):
+    def create_rasterplot(self, selected_ids=None):
         """
         Create for each top-node a rasterplot for the contained spike trains.
 
@@ -467,8 +467,10 @@ class Jupyphant:
                     if st_list:
                         for st in st_list:
                             data.append(SpikeTrainRasterPlot(st))
-
-                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlap)
+                overlapping = False
+                if hasattr(self, 'raw_plot_overlap'):
+                    overlapping = self.raw_plot_overlap
+                plotlyGraphFigure = PlotlyGraphFigure(self, data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping)
 
                 if selected_ids is None:
                     self.spiketrain_overview = plotlyGraphFigure
@@ -511,7 +513,7 @@ class Jupyphant:
 
         return plotly_data
 
-    def create_lfpplot(self, selected_ids=None, overlap=True):
+    def create_lfpplot(self, selected_ids=None):
         """
         Wrapper for plot_lfp to update the lfp plot
 
@@ -563,7 +565,10 @@ class Jupyphant:
                         )
                         subplot_col += 1
 
-                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlap)
+                overlapping = False
+                if hasattr(self, 'raw_plot_overlap'):
+                    overlapping = self.raw_plot_overlap
+                plotlyGraphFigure = PlotlyGraphFigure(self, plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping)
                 if selected_ids is None:
                     self.analogsignal_overview = plotlyGraphFigure
                 return plotlyGraphFigure

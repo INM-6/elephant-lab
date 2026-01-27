@@ -67,19 +67,16 @@ def create_explorer_raw_plot(jupyphant_entity):
         selected_ids = get_selected_neo_ids(jupyphant_entity)
         with output_node_raw_plot:
             IPython.display.clear_output()
-            from IPython import get_ipython
-            user_ns = get_ipython().user_ns
-            overlap = user_ns.get('raw_plot_overlap', False)
-            raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids, overlap=overlap)
-            user_ns["raw_st"] = raw_st
+            raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids)
+            jupyphant_entity.raw_st = raw_st
             if raw_st:
                 raw_st.display()
-            raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids, overlap=overlap)
-            user_ns["raw_anasig"] = raw_anasig
+            raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids)
+            jupyphant_entity.raw_anasig = raw_anasig
             if raw_anasig:
                 raw_anasig.display()
 
-    output_node_raw_plot = Output(layout={'border': '1px solid orange', 'width': "100%", 'height': 'auto'})
+    output_node_raw_plot = Output(layout={'width': "100%", 'height': 'auto'})
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_raw, names='selected_nodes')
     display(output_node_raw_plot)
 
@@ -131,19 +128,27 @@ def toggle_neo_tree_objs(jupyphant_entity, neo_obj):
 def expand_neo_tree(jupyphant_entity, opened):
     jupyphant_entity.expand_neo_tree(opened)
 
-def set_raw_plot_overlap(overlap):
-    from IPython import get_ipython
-    user_ns = get_ipython().user_ns
-    user_ns["raw_plot_overlap"] = overlap
-    raw_st = user_ns.get('raw_st', None)
+def set_raw_plot_overlap(jupyphant_entity, overlap):
+    jupyphant_entity.raw_plot_overlap = overlap
+    def update_overlap(fig):
+        if overlap:
+            fig.overlap()
+        else:
+            fig.stack()
+    update_plotly_figures(jupyphant_entity, update_overlap)
+
+def update_jupyterlab_theme(jupyphant_entity, theme_name):
+    jupyphant_entity.jupyterlab_theme = theme_name
+    update_plotly_figures(jupyphant_entity, lambda fig: fig.update_jupyterlab_theme(theme_name))
+
+def update_plotly_figures(jupyphant_entity, to_update):
+    raw_st = None
+    if hasattr(jupyphant_entity, 'raw_st'):
+        raw_st = jupyphant_entity.raw_st
     if raw_st:
-        if overlap:
-            raw_st.overlap()
-        else:
-            raw_st.stack()
-    raw_anasig = user_ns.get('raw_anasig', None)
+        to_update(raw_st)
+    raw_anasig = None
+    if hasattr(jupyphant_entity, 'raw_anasig'):
+        raw_anasig = jupyphant_entity.raw_anasig
     if raw_anasig:
-        if overlap:
-            raw_anasig.overlap()
-        else:
-            raw_anasig.stack()
+        to_update(raw_anasig)
