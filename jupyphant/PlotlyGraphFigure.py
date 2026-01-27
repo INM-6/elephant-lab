@@ -22,6 +22,7 @@ class PlotlyGraphFigure:
         self.traces = []
         if self.compress:
             self.fig = go.FigureWidget(go.Figure())
+            self.ticktext=[]
         else:
             self.fig = go.FigureWidget(make_subplots(
                 rows=self.nGraphs,
@@ -42,7 +43,7 @@ class PlotlyGraphFigure:
             autosize = True,
         )
 
-        theme_name = "plotly_white"
+        theme_name = "plotly_dark"
         if jupyphant_entity is not None and hasattr(jupyphant_entity, 'jupyterlab_theme'):
             theme_name = jupyphant_entity.jupyterlab_theme
         self.update_jupyterlab_theme(theme_name)
@@ -51,10 +52,19 @@ class PlotlyGraphFigure:
         if overlapping:
             self.overlap()
 
+        if self.compress and len(self.ticktext)==self.nGraphs:
+            self.fig.update_layout(
+                yaxis=dict(
+                    showticklabels=False,
+                    tickvals=list(range(self.nGraphs)),
+                    ticktext=self.ticktext,
+                )
+            )
+            self.hide_legend = True
+        self.update_legend()
         self.create_sliders()
         self.manage_axis_titles()
         #self.create_xrange_buttons(relayout_button_options)
-
 
     def create_graphs(self, fig, data):
         """
@@ -150,6 +160,8 @@ class PlotlyGraphFigure:
                             self.compress_title_y = None
                     else:
                         self.compress_title_y = data.title_y
+                if hasattr(data, 'use_name_as_ticklabels'):
+                    self.ticktext.append(data.name)
             else:      
                 fig.add_trace(
                         trace, 
@@ -160,6 +172,18 @@ class PlotlyGraphFigure:
                     fig.layout[f"xaxis{row}"].update(title=data.title_x)
                 if hasattr(data, 'title_y'):
                     fig.layout[f"yaxis{row}"].update(title=data.title_y)
+                if hasattr(data, 'use_name_as_ticklabels'):
+                    if data.use_name_as_ticklabels:
+                        fig.layout[f"yaxis{row}"].update(
+                            tickvals=[0],
+                            ticktext=[data.name]
+                        )
+                        if hasattr(self, 'hide_legend'):
+                            if self.hide_legend:
+                                if not data.use_name_as_ticklabels:
+                                    self.hide_legend = False
+                        else:
+                            self.hide_legend = data.use_name_as_ticklabels
         except Exception as e:
             warnings.warn(f"Failed to add trace '{data.name}': {e}")
 
@@ -211,6 +235,7 @@ class PlotlyGraphFigure:
 
         self.change_height_after_render(self.default_height)
         self.update_y_slider()
+        self.update_legend()
         
         
     def stack(self):
@@ -237,6 +262,7 @@ class PlotlyGraphFigure:
 
         self.change_height_after_render(self.height)
         self.update_y_slider()
+        self.update_legend()
 
     def create_sliders(self):
         """Updates the range slider to the last x-axis if shared_xaxes is True"""
@@ -271,12 +297,29 @@ class PlotlyGraphFigure:
 
         # Callback to update y-axis
         def update_y_range(change):
+            new_range = change['new']
             # Use batch_update to avoid flickering
             with self.fig.batch_update():
-                self.fig.update_yaxes(range=change['new'])
+                self.fig.update_yaxes(range=new_range)
+
+            if self.compress and len(self.ticktext)==self.nGraphs:
+                self.fig.update_layout(
+                    yaxis=dict(
+                        showticklabels=new_range[1]-new_range[0]<26,
+                    )
+                )
 
         self.y_slider.observe(update_y_range, names='value')
         self.update_y_slider()
+
+    def update_legend(self):
+        if self.overlapping and not self.compress:
+            if not self.fig.layout.showlegend:
+                self.fig.update_layout(showlegend=True)
+        else:
+            if hasattr(self, 'hide_legend'):
+                if self.hide_legend:
+                    self.fig.update_layout(showlegend=False)
 
     def update_y_slider(self):
         """Updates the y-axis slider height and visibility."""
@@ -288,9 +331,6 @@ class PlotlyGraphFigure:
             visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
             if self.y_slider.layout.visibility != visible:
                 self.y_slider.layout.visibility = visible
-            """display_mode = 'flex' if self.overlapping or self.compress or self.nGraphs==1 else 'none'
-            if self.y_slider.layout.display != display_mode:
-                self.y_slider.layout.display = display_mode"""
 
     def calculate_y_slider_height(self):
         return int(0.875 * self.fig.layout.height - 165)

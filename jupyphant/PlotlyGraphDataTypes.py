@@ -18,6 +18,7 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
         self.x = spiketrain.times.magnitude
         self.y = [0] * len(self.x)
         self.title_x = 'Time ({0})'.format(spiketrain.times.dimensionality)
+        self.use_name_as_ticklabels = True
 
 class AnalogSignalLFPPlot(PlotlyGraphDataType):
     import numpy as np

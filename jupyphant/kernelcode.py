@@ -15,10 +15,7 @@ def raster_plot(jupyphant_entity):
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        from IPython import get_ipython
-        user_ns = get_ipython().user_ns
-        overlap = user_ns.get('raw_plot_overlap', False)
-        plotlyGraphFig = jupyphant_entity.create_rasterplot(overlap=overlap)
+        plotlyGraphFig = jupyphant_entity.create_rasterplot()
         if plotlyGraphFig:
             plotlyGraphFig.display()
 
@@ -27,10 +24,7 @@ def lfp_plot(jupyphant_entity):
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        from IPython import get_ipython
-        user_ns = get_ipython().user_ns
-        overlap = user_ns.get('raw_plot_overlap', False)
-        plotlyGraphFig = jupyphant_entity.create_lfpplot(overlap=overlap)
+        plotlyGraphFig = jupyphant_entity.create_lfpplot()
         if plotlyGraphFig:
             plotlyGraphFig.display()
 
