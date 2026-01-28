@@ -1059,4 +1059,4 @@ class Jupyphant:
 
         _iterate_over_neo_objects(self.neo_objs_and_lists_of_neo_objs_with_var_name.values())
 
-        display(print(output.getvalue()))
+        print(output.getvalue())
