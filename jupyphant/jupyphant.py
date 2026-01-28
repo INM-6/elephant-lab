@@ -470,7 +470,7 @@ class Jupyphant:
                 overlapping = False
                 if hasattr(self, 'raw_plot_overlap'):
                     overlapping = self.raw_plot_overlap
-                plotlyGraphFigure = PlotlyGraphFigure(self, data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping)
+                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping)
 
                 if selected_ids is None:
                     self.spiketrain_overview = plotlyGraphFigure
@@ -568,7 +568,7 @@ class Jupyphant:
                 overlapping = False
                 if hasattr(self, 'raw_plot_overlap'):
                     overlapping = self.raw_plot_overlap
-                plotlyGraphFigure = PlotlyGraphFigure(self, plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping)
+                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping)
                 if selected_ids is None:
                     self.analogsignal_overview = plotlyGraphFigure
                 return plotlyGraphFigure

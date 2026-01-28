@@ -4,7 +4,7 @@ from IPython.display import display
 import warnings
 
 class PlotlyGraphFigure:
-    def __init__(self, jupyphant_entity, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None):
+    def __init__(self, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark"):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -43,9 +43,6 @@ class PlotlyGraphFigure:
             autosize = True,
         )
 
-        theme_name = "plotly_dark"
-        if jupyphant_entity is not None and hasattr(jupyphant_entity, 'jupyterlab_theme'):
-            theme_name = jupyphant_entity.jupyterlab_theme
         self.update_jupyterlab_theme(theme_name)
 
         self.overlapping = False
@@ -276,7 +273,7 @@ class PlotlyGraphFigure:
         else:
             for i in range(1, n + 1):
                 # Adding this range slider makes it impossible to manually zoom in vertically for this graph
-                addX_slider = i == n and (self.shared_xaxes)
+                addX_slider = i == n and (self.shared_xaxes or self.compress)
                 self.fig.layout[f"xaxis{i}"].update(
                     rangeslider=dict(visible=addX_slider)
                 )
@@ -285,8 +282,9 @@ class PlotlyGraphFigure:
 
         y_slider_height = self.calculate_y_slider_height()
 
+        totalrange = [self.minY, self.maxY]
         self.y_slider = widgets.FloatRangeSlider(
-            value=[self.minY, self.maxY],
+            value=totalrange,
             min=self.minY,
             max=self.maxY,
             step=0.1,
@@ -295,22 +293,28 @@ class PlotlyGraphFigure:
             layout={'height': f'{y_slider_height}px', 'margin': '100px 0 0 0'}
         )
 
+        def update_ticklabels(new_range):
+            if self.compress and len(self.ticktext)==self.nGraphs:
+                showticklabels = new_range[1]-new_range[0]<26
+                self.fig.update_layout(
+                    yaxis=dict(
+                        showticklabels=showticklabels,
+                        zeroline=showticklabels,
+                        showgrid=showticklabels
+                    )
+                )
+
         # Callback to update y-axis
         def update_y_range(change):
             new_range = change['new']
             # Use batch_update to avoid flickering
             with self.fig.batch_update():
                 self.fig.update_yaxes(range=new_range)
-
-            if self.compress and len(self.ticktext)==self.nGraphs:
-                self.fig.update_layout(
-                    yaxis=dict(
-                        showticklabels=new_range[1]-new_range[0]<26,
-                    )
-                )
+            update_ticklabels(new_range)
 
         self.y_slider.observe(update_y_range, names='value')
         self.update_y_slider()
+        update_ticklabels(totalrange)
 
     def update_legend(self):
         if self.overlapping and not self.compress:
@@ -381,6 +385,8 @@ class PlotlyGraphFigure:
             If list of tuples: [(label, fraction_of_width), ...]
             If None, default percentages are used.
         """
+        if not self.shared_xaxes:
+            return
 
         # Default percentages
         if relayout_button_options is None:
