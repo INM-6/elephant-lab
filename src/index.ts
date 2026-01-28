@@ -569,6 +569,15 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 		insertCodeButton.style.backgroundColor = COLORS["Teal"];
 		insertCodeButton.className = 'workflow-button workflow-button-io';
 		insertCodeButton.onclick = async () => {
+			const currentNotebook = this.notebook_tracker.currentWidget;
+			if (!currentNotebook || currentNotebook.sessionContext.path !== session.path) {
+				showDialog({
+					title: 'Incorrect Notebook',
+					body: 'Jupyphant is not connected to this notebook. Please switch to the notebook Jupyphant is attached to.',
+					buttons: [Dialog.okButton()]
+				});
+				return;
+			}
 			const code = `
 import json
 import __main__
