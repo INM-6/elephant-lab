@@ -212,7 +212,6 @@ class Jupyphant:
 
         # Get ALL variables in current kernel namespace
         all_variable_names_in_current_kernel_namespace = self.nsm.who_ls()
-        print(f"all_variable_names_in_current_kernel_namespace = {all_variable_names_in_current_kernel_namespace}")
         for variable_name in all_variable_names_in_current_kernel_namespace:
             if variable_name.startswith("jupyphant"):
                 continue
@@ -238,7 +237,6 @@ class Jupyphant:
             if is_BaseNeo_instance or is_RegionOfInterest_subclass or is_list_with_neo_objs:
                 self.neo_objs_and_lists_of_neo_objs_with_var_name[variable_name] = obj_from_kernel_ns
 
-        print(f"self.neo_objs_and_lists_of_neo_objs_with_var_name = {self.neo_objs_and_lists_of_neo_objs_with_var_name}")
         neo_objs_hash_after_update = self.get_neo_hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
                                                  hash_name='sha1')
 

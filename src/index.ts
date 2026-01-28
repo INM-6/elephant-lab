@@ -327,7 +327,7 @@ class JupyphantExtension {
 			// TODO: hardcoded version number
 			body.innerHTML = `
 				<p>You are using Jupyphant Version 0.1.0</p>
-				<img src="https://raw.githubusercontent.com/INM-6/elephant/master/doc/images/elephant_logo.png" alt="Jupyphant Logo" style="width: 400px; margin-top: 10px;">
+				<img src="https://user-images.githubusercontent.com/56024817/227979272-bfdf6c7e-4102-4990-9f7e-08108616459d.png" alt="Jupyphant Logo" style="width: 400px; margin-top: 10px;">
 			`;
 			showDialog({
 				title: 'About Jupyphant',
@@ -544,13 +544,120 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 				}
 			});
 		};
+		const insertCodeButton = document.createElement('button');
+		insertCodeButton.innerHTML = 'Insert <i class="fa fa-code" aria-hidden="true"></i>';
+		insertCodeButton.style.backgroundColor = COLORS["Teal"];
+		insertCodeButton.className = 'workflow-button workflow-button-io';
+		insertCodeButton.onclick = async () => {
+			const code = `
+import json
+import __main__
+import re
+
+try:
+    if 'jupyphant_entity' in __main__.__dict__:
+        jupyphant = __main__.__dict__['jupyphant_entity']
+        selected_nodes = jupyphant.ipytree_of_neo_objects.selected_nodes
+        
+        if not selected_nodes:
+            print(json.dumps({"code_to_insert": "", "error": "No nodes selected in the Neo tree."}))
+        else:
+            new_vars = []
+            all_vars = list(__main__.__dict__.keys())
+            
+            for node in selected_nodes:
+                if node._id in jupyphant.map_ipytree_node_id_to_neo_obj_hash:
+                    obj_hash = jupyphant.map_ipytree_node_id_to_neo_obj_hash[node._id]
+                    neo_obj = jupyphant.map_neo_obj_hash_to_neo_obj[obj_hash]
+                    
+                    base_name = ""
+                    if hasattr(neo_obj, 'name') and neo_obj.name:
+                        sanitized_name = re.sub(r'[^\\w_]', '', neo_obj.name.replace(' ', '_')).lower()
+                        if re.match(r'^\\d', sanitized_name):
+                            sanitized_name = '_' + sanitized_name
+                        if not sanitized_name:
+                             sanitized_name = "unnamed"
+                        base_name = f"jupyphant_{sanitized_name}"
+                    else:
+                        class_name = neo_obj.__class__.__name__
+                        if 'list' in class_name.lower():
+                            base_name = f"jupyphant_list"
+                        else:
+                            base_name = f"jupyphant_{class_name.lower()}"
+
+                    new_var_name = base_name
+                    counter = 1
+                    while new_var_name in all_vars:
+                        new_var_name = f"{base_name}_{counter}"
+                        counter += 1
+                    
+                    __main__.__dict__[new_var_name] = neo_obj
+                    new_vars.append(new_var_name)
+                    all_vars.append(new_var_name)
+            
+            code_to_insert = ""
+            if len(new_vars) > 1:
+                list_base_name = "jupyphant_list"
+                counter = 0
+                list_var_name = f"{list_base_name}_{counter}"
+                while list_var_name in all_vars:
+                    counter += 1
+                    list_var_name = f"{list_base_name}_{counter}"
+
+                __main__.__dict__[list_var_name] = [__main__.__dict__[var_name] for var_name in new_vars]
+                
+                code_to_insert = f"{list_var_name} = [{', '.join(new_vars)}]"
+            elif len(new_vars) == 1:
+                code_to_insert = new_vars[0]
+
+            print(json.dumps({"code_to_insert": code_to_insert}))
+    else:
+        print(json.dumps({"code_to_insert": "", "error": "jupyphant_entity not found"}))
+
+except Exception as e:
+    import sys, traceback
+    print(json.dumps({"code_to_insert": "", "error": str(e), "traceback": traceback.format_exc()}), file=sys.stdout)
+			`;
+			
+			const result = await this.kernelBridge!.executeCode(code, true);
+
+			if (result && result.outputs.length > 0) {
+				const output = result.outputs[0];
+				if (output.output_type === 'stream' && output.name === 'stdout') {
+					const data = JSON.parse(output.text);
+
+					if (data.error) {
+						console.error("Jupyphant: Error creating variables from selection:", data.error);
+						if (data.traceback) {
+							console.error(data.traceback);
+						}
+						return;
+					}
+
+					if (data.code_to_insert) {
+						const notebookPanel = this.notebook_tracker.currentWidget;
+						if (notebookPanel) {
+							NotebookActions.insertBelow(notebookPanel.content);
+							const activeCell = notebookPanel.content.activeCell;
+							if (activeCell) {
+								activeCell.model.sharedModel.setSource(data.code_to_insert);
+							}
+	
+							console.log(`Jupyphant: Created and inserted code in new cell.`);
+						}
+					}
+				}
+			}
+		}
+
 		
 		filterContainer.classList.add('sticky-filter');
 		filterContainer.appendChild(document.createElement('br'));
 		filterContainer.appendChild(document.createElement('br'));
 		filterContainer.appendChild(loadNeoFileButton);
 		filterContainer.appendChild(saveNeoObjectsButton);
-		
+		filterContainer.appendChild(insertCodeButton);
+
 		tree_widget.node.prepend(filterContainer);
 	}
 
