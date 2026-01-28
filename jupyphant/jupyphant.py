@@ -814,14 +814,15 @@ class Jupyphant:
 
         # SpikeTrainList
         if isinstance(neo_obj, self.SpikeTrainList):
+            pp.text(f"{bold}SpikeTrainList{reset}")
             if neo_obj._items is None:
                 if neo_obj._spike_time_array is None:
-                    pp.text(str([]))
+                    pp.text(" (empty)")
                 else:
-                    pp.text(f"SpikeTrainList containing {neo_obj._spike_time_array.size} spikes from\
-                            {len(neo_obj._all_channel_ids)} neurons")
+                    pp.text(f"\n  {bold}Spikes:{reset} {neo_obj._spike_time_array.size}")
+                    pp.text(f"\n  {bold}Neurons:{reset} {len(neo_obj._all_channel_ids)}")
             else:
-                pp.text(f"SpikeTrainList containing {len(neo_obj._items)} Spiketrains")
+                pp.text(f"\n  {bold}SpikeTrains:{reset} {len(neo_obj._items)}")
             pp.text("\n\n")
             return
 
@@ -853,12 +854,14 @@ class Jupyphant:
 
         if neo_obj.__class__.__name__ == 'ObjectList':
             class_name = neo_obj.__class__.__name__
+            pp.text(f"{bold}{class_name}{reset}")
             
             if len(neo_obj) > 0:
                 item_type = neo_obj[0].__class__.__name__
-                pp.text(f"{class_name} containing {len(neo_obj)} {item_type} object(s)")
+                pp.text(f"\n  {bold}Items:{reset} {len(neo_obj)}")
+                pp.text(f"\n  {bold}Type:{reset} {item_type}")
             else:
-                pp.text(f"{class_name} (empty)")
+                pp.text(" (empty)")
             pp.text("\n\n")
             return
             
