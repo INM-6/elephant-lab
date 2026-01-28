@@ -280,7 +280,10 @@ class Jupyphant:
                 SECONDARY_STYLE = "color:var(--jp-ui-font-color2);"
 
                 if hasattr(neo_obj, 'name') and neo_obj.name:
-                    main_text = neo_obj.name
+                    if variable_name and variable_name != neo_obj.name:
+                        main_text = f"<b>{variable_name}</b> → {neo_obj.name}"
+                    else:
+                        main_text = neo_obj.name
                     node_name = f"<span style='{NODE_STYLE}'>{main_text}</span> <i style='{SECONDARY_STYLE}'>({class_name})</i> <small style='{SECONDARY_STYLE}'>[{hash_neo_obj[:4]}]</small>"
                     plain_description = f"{variable_name} -> {neo_obj.name} :: ({class_name}) [{hash_neo_obj[:4]}]"
                     node_neo_obj = self.Node(node_name)

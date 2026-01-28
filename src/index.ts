@@ -98,7 +98,7 @@ class JupyphantExtension {
 		// Store references to all tabs created by this extension
 		this.myVisTabs = [];
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
-		this.widget = new DockPanel();
+		this.widget = new DockPanel({ tabsMovable: false });
 		this.outarea_content_rasterplot = null;
 		this.outarea_content_lfpplot = null;
 		this.outarea_nodeexplorer_info = null;
@@ -455,7 +455,27 @@ class JupyphantExtension {
 						}
 	
 						if (ioClass !== null) {
-							const varName = `neo_data_${Date.now()}`;
+							const getVarsCode = `import json, __main__; print(json.dumps(list(__main__.__dict__.keys())))`;
+							const varsResult = await this.kernelBridge!.executeCode(getVarsCode, true);
+							let allVars: string[] = [];
+							if (varsResult && varsResult.outputs.length > 0) {
+								const output = varsResult.outputs[0];
+								if (output.output_type === 'stream' && output.name === 'stdout') {
+									try {
+										allVars = JSON.parse(output.text);
+									} catch (e) {
+										console.error("Failed to parse kernel variables", e);
+									}
+								}
+							}
+							
+							let counter = 0;
+							let varName = `loaded_data_${counter}`;
+							while(allVars.includes(varName)) {
+								counter++;
+								varName = `loaded_data_${counter}`;
+							}
+
 							let code = '';
 							if (ioClass) {
 								code = `
@@ -670,32 +690,28 @@ except Exception as e:
 		this.create_tree_filter(session, tree_widget);
 		this.createTopBar(session);
 
-		// NODE EXPLORER
-		let explorer_widget = new DockPanel({ tabsMovable: false });
-		explorer_widget.title.label = 'Node Explorer';
-		explorer_widget.node.style.cssText = explorer_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		// INFO
 		let explorer_widget_info = new Panel();
 		explorer_widget_info.title.label = 'Details';
 		explorer_widget_info.node.style.cssText = explorer_widget_info.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_info = this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1', session);
-		explorer_widget.addWidget(explorer_widget_info);
+		
 		// RAW
 		let explorer_widget_raw_plot = new Panel();
 		explorer_widget_raw_plot.title.label = 'Visualize';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
-		explorer_widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
+		
 		// STATISTICS
 		let explorer_widget_statistics = new Panel();
 		explorer_widget_statistics.title.label = 'Statistics';
 		explorer_widget_statistics.node.style.cssText = explorer_widget_statistics.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_statistics = this.createOutputArea(rendermime, explorer_widget_statistics, ['my-outarea-class'], 'jup_vis_out_id_2.3', session);
-		explorer_widget.addWidget(explorer_widget_statistics, { mode: 'tab-after', ref: explorer_widget_raw_plot });
-
 
 		this.widget.addWidget(tree_widget);
-		this.widget.addWidget(explorer_widget, { mode: 'split-bottom', ref: tree_widget });
+		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
+		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
+		this.widget.addWidget(explorer_widget_statistics, { mode: 'tab-after', ref: explorer_widget_raw_plot });
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
