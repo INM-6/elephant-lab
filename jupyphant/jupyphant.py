@@ -477,41 +477,6 @@ class Jupyphant:
                 return plotlyGraphFigure
             else:
                 return None
-            
-        # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
-    def plot_lfp(self,lfps, times, names):
-        """
-        Plot LFPs using plotly.
-
-        lfps:       LFP signals with trial_id as first dimension and sample_id as second dimension.
-                    LFP signals must be arranged according to trial ID.
-        times:      time stamps of the recorded LFP samples. Must be of same length as second dimenion of lfps
-        """
-
-        plotly_data = []
-        
-        for trial_id, lfp in enumerate(lfps):
-            data = lfp.magnitude
-            
-            if data.ndim == 1:
-                data = data.reshape(-1, 1)
-            
-            num_channels = data.shape[1]
-            
-            for ch_idx in range(num_channels):
-                
-                channel_data = data[:, ch_idx]
-
-                plotly_data.append(AnalogSignalLFPPlot(dict(
-                        channel_data=channel_data,
-                        times=times, 
-                        name=f"{names[trial_id]}",
-                    ), 
-                    title_x = 'Time ({0})'.format(times.dimensionality),
-                    title_y = lfp.units.__str__()
-                ))
-
-        return plotly_data
 
     def create_lfpplot(self, selected_ids=None):
         """
@@ -536,35 +501,7 @@ class Jupyphant:
         else:
             n_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
             if n_subplots > 0:
-                max_duration_limit = 10 * self.pq.s 
-
-                subplot_col = 1
-
-                plotly_data = []
-                for i, top_node in enumerate(analogsignals.keys()):
-                    raw_signals = analogsignals[top_node]
-                    
-                    if raw_signals:
-                        durations = [(sig.t_stop - sig.t_start) for sig in raw_signals]
-                        
-                        min_available_duration = min(durations)
-
-                        cut_duration = min(max_duration_limit, min_available_duration)
-
-                        sliced_signals = [
-                            sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
-                            for sig in raw_signals
-                        ]
-
-                        plot_times = sliced_signals[0].times - sliced_signals[0].t_start
-                        
-                        plotly_data += self.plot_lfp(
-                            sliced_signals, 
-                            times=plot_times,
-                            names=[sig.name for sig in raw_signals]
-                        )
-                        subplot_col += 1
-
+                plotly_data = AnalogSignalLFPPlotList(analogsignals)
                 overlapping = False
                 if hasattr(self, 'raw_plot_overlap'):
                     overlapping = self.raw_plot_overlap

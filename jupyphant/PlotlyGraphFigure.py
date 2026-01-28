@@ -13,7 +13,12 @@ class PlotlyGraphFigure:
         self.default_height = 600
 
         self.shared_xaxes = shared_xaxes or overlapping
-        self.nGraphs = len(data) if isinstance(data, list) and self.is_trace_list(data) else 1
+        self.nGraphs = 1
+        if isinstance(data, list) and self.is_trace_list(data):
+            self.nGraphs = len(data) 
+        if isinstance(data, PlotlyGraphDataTypeList):
+            self.nGraphs = len(data.data_list)
+
         self.compress = self.nGraphs > 10
 
         self.height = self.default_height
@@ -72,8 +77,12 @@ class PlotlyGraphFigure:
         with y-values offset by spacing * trace_index.
         """
         # If data is a list of traces, recurse
-        if isinstance(data, list) and self.is_trace_list(data):
+        if (isinstance(data, list) and self.is_trace_list(data)):
             for d in data:
+                self.create_graphs(fig, d)
+            return
+        if isinstance(data, PlotlyGraphDataTypeList):
+            for d in data.data_list:
                 self.create_graphs(fig, d)
             return
 
@@ -531,3 +540,17 @@ class PlotlyGraphDataType:
         except Exception as e:
             warnings.warn(f"Error extracting data for trace '{self.name}': {e}")
             self.x, self.y = None, None
+
+class PlotlyGraphDataTypeList():
+    def __init__(self, data):
+        self.data_list = []
+        self.extract_data(data)
+
+    def extract_data(self, data):
+        for d in data:
+            try:
+                if not isinstance(d, PlotlyGraphDataType):
+                    d = PlotlyGraphDataType(d)
+                self.data_list.append(d)
+            except Exception as e:
+                warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
