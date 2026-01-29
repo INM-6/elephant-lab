@@ -300,7 +300,7 @@ class JupyphantExtension {
 		const currentFilename = session.path.split('/').pop() || "Unknown Notebook";
 
 		const switchNotebookButton = document.createElement('button');
-		switchNotebookButton.innerHTML = `${currentFilename} <i class="fa fa-exchange" aria-hidden="true"></i>`;
+		switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${currentFilename}`;
 		switchNotebookButton.title = 'Switch Jupyphant to current active notebook';
 		switchNotebookButton.style.backgroundColor = COLORS["Orange"];
 		switchNotebookButton.className = 'workflow-button workflow-button-io';
@@ -312,22 +312,34 @@ class JupyphantExtension {
 		session.propertyChanged.connect((sender, prop) => {
 			if (prop === 'path') {
 				const newFilename = sender.path.split('/').pop() || "Unknown Notebook";
-				switchNotebookButton.innerHTML = `${newFilename} <i class="fa fa-exchange" aria-hidden="true"></i>`;
+				switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${newFilename}`;
 			}
 		});
 
 		const infoButton = document.createElement('button');
-		infoButton.innerHTML = 'About Jupyphant <i class="fa fa-info-circle" aria-hidden="true"></i>';
+		infoButton.innerHTML = '<i class="fa fa-info-circle" aria-hidden="true"></i> Jupyphant';
 		infoButton.title = 'About Jupyphant';
-		infoButton.style.backgroundColor = COLORS["Bright Blue"];
+		infoButton.style.backgroundColor = COLORS["Orange"];
 		infoButton.className = 'workflow-button workflow-button-io';
-		infoButton.onclick = () => {
+				infoButton.onclick = async () => {
+			let code =
+			`
+from jupyphant import __version__
+print(__version__)
+			`
+			const result = await this.kernelBridge!.executeCode(code, true);
+
 			const body = document.createElement('div');
 			body.style.textAlign = 'center';
-			// TODO: hardcoded version number
 			body.innerHTML = `
-				<p>You are using Jupyphant Version 0.1.0</p>
-				<img src="https://user-images.githubusercontent.com/56024817/227979272-bfdf6c7e-4102-4990-9f7e-08108616459d.png" alt="Jupyphant Logo" style="width: 400px; margin-top: 10px;">
+				<p>You are using <a href="https://github.com/INM-6/jupyphant">Jupyphant</a> ${result?.outputs[0].text}<br>
+				This version is a public preview version. Further Analysis functions will be added in later releases.</p>
+
+				<p>Tobias Michels<br>Jan Nolten<br>Maximilian Kramer<br>Björn Müller<br>Michael Denker<br></p>
+				<p><a href="https://www.fz-juelich.de/en/ias/ias-6">
+				Institute for Advanced Simulation (IAS-6), <br>
+				Computational and Systems Neuroscience, Forschungszentrum Jülich GmbH</a></p><br>
+				<img src="https://user-images.githubusercontent.com/56024817/227979272-bfdf6c7e-4102-4990-9f7e-08108616459d.png" alt="Jupyphant Logo" style="width: 500px; margin-top: 10px;" class="center">
 			`;
 			showDialog({
 				title: 'About Jupyphant',
@@ -419,9 +431,9 @@ class JupyphantExtension {
 		});
 		
 		const loadNeoFileButton = document.createElement('button');
-		loadNeoFileButton.innerHTML = 'Load <i class="fa fa-file-import" aria-hidden="true"></i>';
+		loadNeoFileButton.innerHTML = '<i class="fa fa-file-import" aria-hidden="true"></i> Load';
         loadNeoFileButton.title = 'Create a neoIO for given Path';
-		loadNeoFileButton.style.backgroundColor = COLORS["Teal"]
+		loadNeoFileButton.style.backgroundColor = COLORS["Orange"]
         loadNeoFileButton.className = 'workflow-button workflow-button-io';
 		loadNeoFileButton.onclick = () => {
 			FileDialog.getOpenFiles({
@@ -512,9 +524,9 @@ self.update_tree()
 		};
 
 		const saveNeoObjectsButton = document.createElement('button');
-		saveNeoObjectsButton.innerHTML = 'Save <i class="fa fa-file-export" aria-hidden="true"></i>';
+		saveNeoObjectsButton.innerHTML = '<i class="fa fa-file-export" aria-hidden="true"></i> Save';
 		saveNeoObjectsButton.title = 'Save selected neo objects to nix-file';
-		saveNeoObjectsButton.style.backgroundColor = COLORS["Teal"]
+		saveNeoObjectsButton.style.backgroundColor = COLORS["Orange"]
 		saveNeoObjectsButton.className = 'workflow-button workflow-button-io';
 		saveNeoObjectsButton.onclick = () => {
 			const body = document.createElement('div');
@@ -565,8 +577,9 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 			});
 		};
 		const insertCodeButton = document.createElement('button');
-		insertCodeButton.innerHTML = 'Insert <i class="fa fa-code" aria-hidden="true"></i>';
-		insertCodeButton.style.backgroundColor = COLORS["Teal"];
+		insertCodeButton.innerHTML = '<i class="fa fa-code" aria-hidden="true"></i> Insert';
+		insertCodeButton.title = 'Insert selected neo objects into current notebook';
+		insertCodeButton.style.backgroundColor = COLORS["Orange"];
 		insertCodeButton.className = 'workflow-button workflow-button-io';
 		insertCodeButton.onclick = async () => {
 			const currentNotebook = this.notebook_tracker.currentWidget;
