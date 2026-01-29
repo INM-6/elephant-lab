@@ -1,4 +1,4 @@
-from .PlotlyGraphFigure import PlotlyGraphDataType, PlotlyGraphDataTypeList
+from .PlotlyGraphFigure import PlotlyGraphDataType, PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
 
 class SpikeTrainRasterPlot(PlotlyGraphDataType):
     def extract_data(self, spiketrain):
@@ -101,3 +101,32 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                     names=[sig.name for sig in raw_signals]
                 )
                 subplot_col += 1
+
+
+class EventAnnotations(PlotlyGraphAnnotations):
+    import numpy as np
+
+    def __init__(self, events):
+        x=[]
+        text=[]
+        for top_node, event_list in events.items():
+            if event_list:
+                for event in event_list:
+                    x.append(event.times.magnitude)
+                    text.append(event.labels)
+        super().__init__(self.np.concatenate(x), self.np.concatenate(text))
+
+class EpochIntervals(PlotlyGraphAnnotationIntervals):
+    import numpy as np
+
+    def __init__(self, epochs):
+        x=[]
+        duration=[]
+        text=[]
+        for top_node, epoch_list in epochs.items():
+            if epoch_list:
+                for epoch in epoch_list:
+                    x.append(epoch.times.magnitude)
+                    duration.append(epoch.durations.magnitude)
+                    text.append(epoch.labels)
+        super().__init__(self.np.concatenate(x), self.np.concatenate(duration), self.np.concatenate(text))

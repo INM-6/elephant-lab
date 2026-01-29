@@ -4,7 +4,7 @@ from IPython.display import display
 import warnings
 
 class PlotlyGraphFigure:
-    def __init__(self, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark"):
+    def __init__(self, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -18,6 +18,8 @@ class PlotlyGraphFigure:
             self.nGraphs = len(data) 
         if isinstance(data, PlotlyGraphDataTypeList):
             self.nGraphs = len(data.data_list)
+        self.annotation_data = annotation_data
+        self.annotation_interavals_data = annotation_interavals_data
 
         self.compress = self.nGraphs > 10
 
@@ -54,18 +56,21 @@ class PlotlyGraphFigure:
         if overlapping:
             self.overlap()
 
-        if self.compress and len(self.ticktext)==self.nGraphs:
-            self.fig.update_layout(
-                yaxis=dict(
-                    showticklabels=False,
-                    tickvals=list(range(self.nGraphs)),
-                    ticktext=self.ticktext,
+        if self.compress:
+            if len(self.ticktext)==self.nGraphs:
+                self.fig.update_layout(
+                    yaxis=dict(
+                        showticklabels=False,
+                        tickvals=list(range(self.nGraphs)),
+                        ticktext=self.ticktext,
+                    )
                 )
-            )
-            self.hide_legend = True
+                self.hide_legend = True
         self.update_legend()
         self.create_sliders()
         self.manage_axis_titles()
+        self.create_annotations()
+        self.create_anntotation_intervals()
         #self.create_xrange_buttons(relayout_button_options)
 
     def create_graphs(self, fig, data):
@@ -226,6 +231,7 @@ class PlotlyGraphFigure:
             autosize = True
         )
         self.fig._send_relayout_msg({"autosize": True})
+        self.update_y_slider()
     
     def overlap(self):
         """Overlapps the graphs (needs shared x-axes)"""
@@ -240,7 +246,6 @@ class PlotlyGraphFigure:
             )
 
         self.change_height_after_render(self.default_height)
-        self.update_y_slider()
         self.update_legend()
         
         
@@ -267,7 +272,6 @@ class PlotlyGraphFigure:
             )
 
         self.change_height_after_render(self.height)
-        self.update_y_slider()
         self.update_legend()
 
     def create_sliders(self):
@@ -333,6 +337,42 @@ class PlotlyGraphFigure:
             if hasattr(self, 'hide_legend'):
                 if self.hide_legend:
                     self.fig.update_layout(showlegend=False)
+
+    def create_annotations(self):
+        """Updates the graph annotations."""
+        if self.annotation_data is None:
+            return
+        
+        l = len(self.annotation_data.x)
+        for i in range(l):
+            self.fig.add_vline(
+                x=self.annotation_data.x[i],
+                line_width=0.5,
+                line_dash="dash",
+                line_color="green",
+                annotation_text=self.annotation_data.text[i],          # <--- label text
+                annotation_position="top right",     # <--- where the label appears
+                annotation_font=dict(size=8, color="red")  # optional styling
+            )
+
+    def create_anntotation_intervals(self):
+        """Updates the graph annotation intervals."""
+        if self.annotation_interavals_data is None:
+            return
+        
+        l = len(self.annotation_interavals_data.x0)
+        for i in range(l):
+            self.fig.add_vrect(
+                x0=self.annotation_interavals_data.x0[i],
+                x1=self.annotation_interavals_data.x1[i],
+                fillcolor="LightSalmon",
+                opacity=0.05,
+                line_width=0,
+                annotation_text=self.annotation_interavals_data.text[i],          # <--- label text
+                annotation_position="top right",     # <--- where the label appears
+                annotation_font=dict(size=8, color="red")  # optional styling
+            )
+        
 
     def update_y_slider(self):
         """Updates the y-axis slider height and visibility."""
@@ -554,3 +594,14 @@ class PlotlyGraphDataTypeList():
                 self.data_list.append(d)
             except Exception as e:
                 warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
+
+class PlotlyGraphAnnotations():
+    def __init__(self, x, text):
+        self.x = x
+        self.text = text
+
+class PlotlyGraphAnnotationIntervals():
+    def __init__(self, x0, x1, text):
+        self.x0 = x0
+        self.x1 = x1
+        self.text = text

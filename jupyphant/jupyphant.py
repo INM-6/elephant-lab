@@ -467,10 +467,20 @@ class Jupyphant:
                     if st_list:
                         for st in st_list:
                             data.append(SpikeTrainRasterPlot(st))
+                events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
+                event_annotations = None
+                n_events = sum(1 for v in events.values() if len(v) > 0)
+                if n_events > 0:
+                    event_annotations = EventAnnotations(events)
+                epochs = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
+                epoch_intervals = None
+                n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
+                if n_epochs > 0:
+                    epoch_intervals = EpochIntervals(epochs)
                 overlapping = False
                 if hasattr(self, 'raw_plot_overlap'):
                     overlapping = self.raw_plot_overlap
-                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping)
+                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals)
 
                 if selected_ids is None:
                     self.spiketrain_overview = plotlyGraphFigure
@@ -502,10 +512,20 @@ class Jupyphant:
             n_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
             if n_subplots > 0:
                 plotly_data = AnalogSignalLFPPlotList(analogsignals)
+                events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
+                event_annotations = None
+                n_events = sum(1 for v in events.values() if len(v) > 0)
+                if n_events > 0:
+                    event_annotations = EventAnnotations(events)
+                epochs = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
+                epoch_intervals = None
+                n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
+                if n_epochs > 0:
+                    epoch_intervals = EpochIntervals(epochs)
                 overlapping = False
                 if hasattr(self, 'raw_plot_overlap'):
                     overlapping = self.raw_plot_overlap
-                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping)
+                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals)
                 if selected_ids is None:
                     self.analogsignal_overview = plotlyGraphFigure
                 return plotlyGraphFigure

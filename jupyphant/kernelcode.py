@@ -11,7 +11,6 @@ def setup_env():
 
 # Call to the function that creates a rasterplot from all spike trains
 def raster_plot(jupyphant_entity):
-    from IPython.display import display
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
