@@ -11,6 +11,7 @@ class PlotlyGraphFigure:
         """
         self.vertical_spacing = 0.075
         self.default_height = 600
+        self.layout_options = dict()
 
         self.shared_xaxes = shared_xaxes or overlapping
         self.nGraphs = 1
@@ -43,12 +44,11 @@ class PlotlyGraphFigure:
         if title is None:
             title=getattr(data, 'name', None)
 
-        self.fig.update_layout(
-            title=title,
-            dragmode="pan",
-            height= self.height,
-            autosize = True,
-        )
+
+        self.layout_options["title"] = title
+        self.layout_options["dragmode"] = "pan"
+        self.layout_options["height"] = self.height
+        self.layout_options["autosize"] = True
 
         self.update_jupyterlab_theme(theme_name)
 
@@ -58,20 +58,36 @@ class PlotlyGraphFigure:
 
         if self.compress:
             if len(self.ticktext)==self.nGraphs:
-                self.fig.update_layout(
-                    yaxis=dict(
-                        showticklabels=False,
-                        tickvals=list(range(self.nGraphs)),
-                        ticktext=self.ticktext,
-                    )
+                yaxis_options = dict(
+                    showticklabels=False,
+                    tickvals=list(range(self.nGraphs)),
+                    ticktext=self.ticktext,
                 )
-                self.hide_legend = True
+                self.update_layout_options_dict("yaxis", yaxis_options)
+            self.hide_legend = True
         self.update_legend()
         self.create_sliders()
         self.manage_axis_titles()
         self.create_annotations()
         self.create_anntotation_intervals()
+        self.update_layout()
         #self.create_xrange_buttons(relayout_button_options)
+
+    def update_layout_options_dict(self, key, options_dict):
+        if key in self.layout_options:
+            self.layout_options[key].update(options_dict)
+        else:
+            self.layout_options[key] = options_dict
+
+    def update_layout_options_list(self, key, options_list):
+        if key in self.layout_options:
+            self.layout_options[key].extend(options_list)
+        else:
+            self.layout_options[key] = options_list
+
+    def update_layout(self):
+        self.fig.update_layout(**self.layout_options)
+        self.layout_options = dict()
 
     def create_graphs(self, fig, data):
         """
@@ -240,13 +256,14 @@ class PlotlyGraphFigure:
         self.overlapping = True
 
         for i in range(1, self.nGraphs + 1):
-            self.fig.layout[f"yaxis{i}"].update(
+            self.update_layout_options_dict(f"yaxis{i}", dict(
                 visible=False,
                 domain=[0.0,1.0]
-            )
+            ))
 
         self.change_height_after_render(self.default_height)
         self.update_legend()
+        self.update_layout()
         
         
     def stack(self):
@@ -266,31 +283,34 @@ class PlotlyGraphFigure:
             start = end - subplot_height
             if(start<0): start=0 #floating point precision issue
 
-            self.fig.layout[f"yaxis{i}"].update(
-                visible=True,
-                domain=[start, end]
+            self.update_layout_options_dict(f"yaxis{i}", 
+                dict(
+                    visible=True,
+                    domain=[start, end]
+                )
             )
 
         self.change_height_after_render(self.height)
         self.update_legend()
+        self.update_layout()
 
     def create_sliders(self):
         """Updates the range slider to the last x-axis if shared_xaxes is True"""
         n = self.nGraphs
         if self.compress:
-            self.fig.update_layout(
-                xaxis=dict(
-                    rangeslider=dict(visible=True)
-                ),
+            xaxis_options = dict(
+                rangeslider=dict(visible=True)
             )
+            self.update_layout_options_dict("xaxis", xaxis_options)
         else:
             for i in range(1, n + 1):
                 # Adding this range slider makes it impossible to manually zoom in vertically for this graph
                 addX_slider = i == n and (self.shared_xaxes or self.compress)
-                self.fig.layout[f"xaxis{i}"].update(
+                axis_key = f'xaxis{i}'
+                xaxis_options = dict(
                     rangeslider=dict(visible=addX_slider)
                 )
-
+                self.update_layout_options_dict(axis_key, xaxis_options)
         import ipywidgets as widgets
 
         y_slider_height = self.calculate_y_slider_height()
@@ -309,13 +329,13 @@ class PlotlyGraphFigure:
         def update_ticklabels(new_range):
             if self.compress and len(self.ticktext)==self.nGraphs:
                 showticklabels = new_range[1]-new_range[0]<26
-                self.fig.update_layout(
-                    yaxis=dict(
-                        showticklabels=showticklabels,
-                        zeroline=showticklabels,
-                        showgrid=showticklabels
-                    )
-                )
+                self.update_layout_options_dict("yaxis", dict(
+                    showticklabels=showticklabels,
+                    zeroline=showticklabels,
+                    showgrid=showticklabels
+                ))
+                return True
+            return False
 
         # Callback to update y-axis
         def update_y_range(change):
@@ -323,7 +343,8 @@ class PlotlyGraphFigure:
             # Use batch_update to avoid flickering
             with self.fig.batch_update():
                 self.fig.update_yaxes(range=new_range)
-            update_ticklabels(new_range)
+            if update_ticklabels(new_range):
+                self.update_layout()
 
         self.y_slider.observe(update_y_range, names='value')
         self.update_y_slider()
@@ -332,46 +353,123 @@ class PlotlyGraphFigure:
     def update_legend(self):
         if self.overlapping and not self.compress:
             if not self.fig.layout.showlegend:
-                self.fig.update_layout(showlegend=True)
+                self.layout_options["showlegend"] = True
         else:
             if hasattr(self, 'hide_legend'):
                 if self.hide_legend:
-                    self.fig.update_layout(showlegend=False)
+                    self.layout_options["showlegend"] = False
 
     def create_annotations(self):
         """Updates the graph annotations."""
         if self.annotation_data is None:
             return
         
-        l = len(self.annotation_data.x)
-        for i in range(l):
-            self.fig.add_vline(
-                x=self.annotation_data.x[i],
-                line_width=0.5,
-                line_dash="dash",
-                line_color="green",
-                annotation_text=self.annotation_data.text[i],          # <--- label text
-                annotation_position="top right",     # <--- where the label appears
-                annotation_font=dict(size=8, color="red")  # optional styling
+        xs = self.annotation_data.x
+        texts = self.annotation_data.text
+
+        shapes = []
+        annotations = []
+
+        for x, text in zip(xs, texts):
+            shapes.append(dict(
+                type="line",
+                x0=x,
+                x1=x,
+                y0=0,
+                y1=1,
+                xref="x",
+                yref="paper",
+                line=dict(
+                    width=0.5,
+                    dash="dash",
+                    color="green"
+                )
+            ))
+
+            annotations.append(dict(
+                x=x,
+                y=1,
+                xref="x",
+                yref="paper",
+                text=text,
+                showarrow=False,
+                font=dict(size=8, color="red"),
+                xanchor="left",
+                yanchor="bottom"
+            ))
+
+        """
+        # Convert paper y to data y for hover scatter
+        y_range = [self.minY, self.maxY]
+
+        x_trace = []
+        y_trace = []
+        for x in xs:
+            x_trace.extend([x, x, None])  # None to break the line
+            y_trace.extend([y_range[0], y_range[1], None])
+
+        # Add invisible scatter for hover
+        annotation_hovertext_trace = go.Scattergl(
+            x=x_trace,
+            y=y_trace,
+            mode='markers',
+            marker=dict(opacity=0),
+            hovertemplate=f"X: %{{x}}<extra></extra>",
+            showlegend=False
+        )
+        if self.compress:
+            self.fig.add_trace(annotation_hovertext_trace)
+        else:
+            self.fig.add_trace(
+                annotation_hovertext_trace,
+                row=1,
+                col=1
             )
+        """
+
+        self.update_layout_options_list("shapes", shapes)
+        self.update_layout_options_list("annotations", annotations)
 
     def create_anntotation_intervals(self):
         """Updates the graph annotation intervals."""
         if self.annotation_interavals_data is None:
             return
         
-        l = len(self.annotation_interavals_data.x0)
-        for i in range(l):
-            self.fig.add_vrect(
-                x0=self.annotation_interavals_data.x0[i],
-                x1=self.annotation_interavals_data.x1[i],
+        x0s = self.annotation_interavals_data.x0
+        x1s = self.annotation_interavals_data.x1
+        texts = self.annotation_interavals_data.text
+
+        shapes = []
+        annotations = []
+
+        for x0, x1, text in zip(x0s, x1s, texts):
+            shapes.append(dict(
+                type="rect",
+                x0=x0,
+                x1=x1,
+                y0=0,
+                y1=1,
+                xref="x",
+                yref="paper",
                 fillcolor="LightSalmon",
                 opacity=0.05,
-                line_width=0,
-                annotation_text=self.annotation_interavals_data.text[i],          # <--- label text
-                annotation_position="top right",     # <--- where the label appears
-                annotation_font=dict(size=8, color="red")  # optional styling
-            )
+                line_width=0
+            ))
+
+            annotations.append(dict(
+                x=(x0 + x1) / 2,     # center label in the interval
+                y=1,
+                xref="x",
+                yref="paper",
+                text=text,
+                showarrow=False,
+                font=dict(size=8, color="red"),
+                xanchor="center",
+                yanchor="bottom"
+            ))
+
+        self.update_layout_options_list("shapes", shapes)
+        self.update_layout_options_list("annotations", annotations)
         
 
     def update_y_slider(self):
@@ -386,17 +484,28 @@ class PlotlyGraphFigure:
                 self.y_slider.layout.visibility = visible
 
     def calculate_y_slider_height(self):
-        return int(0.875 * self.fig.layout.height - 165)
+        return int(0.875 * self.get_height() - 165)
+    
+    def get_height(self):
+        """Returns the current height of the figure."""
+        height = self.fig.layout.height
+        if height is None:
+            height = self.layout_options["height"]
+        return height
 
     def manage_axis_titles(self):
         """If all x-axes have the same title, move it to the last axis only."""
         if self.compress:
             if hasattr(self, 'compress_title_x'):
                 if self.compress_title_x is not None:
-                    self.fig.layout.xaxis.update(title=self.compress_title_x)
+                    self.update_layout_options_dict("xaxis", dict(
+                        title=self.compress_title_x
+                    ))
             if hasattr(self, 'compress_title_y'):
                 if self.compress_title_y is not None:
-                    self.fig.layout.yaxis.update(title=self.compress_title_y)
+                    self.update_layout_options_dict("yaxis", dict(
+                        title=self.compress_title_y
+                    ))
             return
 
         def get_title(axis):
@@ -422,7 +531,7 @@ class PlotlyGraphFigure:
 
         # Clear all titles
         for i in range(1, n):
-            self.fig.layout[f"xaxis{i}"].title = None
+            self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
 
     def create_xrange_buttons(self, relayout_button_options):
         """
@@ -472,17 +581,15 @@ class PlotlyGraphFigure:
                 raise ValueError("Each relayout_button_option must be a dict or (label, fraction) tuple")
 
         # Add buttons to the figure
-        self.fig.update_layout(
-            updatemenus=[
-                dict(
-                    type="buttons",
-                    x=-0.02,
-                    y=1,
-                    showactive=False,
-                    buttons=buttons
-                )
-            ]
-        )
+        self.update_layout_options_dict("updatemenus", [
+            dict(
+                type="buttons",
+                x=-0.02,
+                y=1,
+                showactive=False,
+                buttons=buttons
+            )
+        ])
 
     def update_jupyterlab_theme(self, theme_name):
         """Updates the Plotly figure theme based on JupyterLab theme name."""

@@ -129,4 +129,6 @@ class EpochIntervals(PlotlyGraphAnnotationIntervals):
                     x.append(epoch.times.magnitude)
                     duration.append(epoch.durations.magnitude)
                     text.append(epoch.labels)
-        super().__init__(self.np.concatenate(x), self.np.concatenate(duration), self.np.concatenate(text))
+        x = self.np.concatenate(x)
+        duration = self.np.concatenate(duration)
+        super().__init__(x, x+duration, self.np.concatenate(text))
