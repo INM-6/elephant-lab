@@ -70,6 +70,7 @@ class PlotlyGraphFigure:
         self.manage_axis_titles()
         self.create_annotations()
         self.create_anntotation_intervals()
+        self.format_annotations()
         self.update_layout()
         #self.create_xrange_buttons(relayout_button_options)
 
@@ -382,10 +383,11 @@ class PlotlyGraphFigure:
                 line=dict(
                     width=0.5,
                     dash="dash",
-                    color="green"
+                    color="rgba(255,0,0,1)"
                 )
             ))
 
+            # Top annotation: main label
             annotations.append(dict(
                 x=x,
                 y=1,
@@ -393,9 +395,22 @@ class PlotlyGraphFigure:
                 yref="paper",
                 text=text,
                 showarrow=False,
-                font=dict(size=8, color="red"),
-                xanchor="left",
-                yanchor="bottom"
+                font=dict(size=10, color="blue"),
+                xanchor="center",
+                yanchor="bottom",
+            ))
+
+            # Bottom annotation: x value
+            annotations.append(dict(
+                x=x,
+                y=0,
+                xref="x",
+                yref="paper",
+                text=f"{x:.2f}",
+                showarrow=False,
+                font=dict(size=9, color="#666"),
+                xanchor="center",
+                yanchor="top"
             ))
 
         """
@@ -456,20 +471,94 @@ class PlotlyGraphFigure:
                 line_width=0
             ))
 
+            # Top annotation: main label
             annotations.append(dict(
-                x=(x0 + x1) / 2,     # center label in the interval
+                x=(x0 + x1) / 2,
                 y=1,
                 xref="x",
                 yref="paper",
                 text=text,
                 showarrow=False,
-                font=dict(size=8, color="red"),
+                font=dict(size=10, color="#4C9ED9"),
                 xanchor="center",
                 yanchor="bottom"
             ))
 
+            # Bottom annotation: x value
+            annotations.append(dict(
+                x=x0,
+                y=0,
+                xref="x",
+                yref="paper",
+                text=f"{x0:.2f}",
+                showarrow=False,
+                font=dict(size=9, color="#666"),
+                xanchor="center",
+                yanchor="top"
+            ))
+            annotations.append(dict(
+                x=x1,
+                y=0,
+                xref="x",
+                yref="paper",
+                text=f"{x1:.2f}",
+                showarrow=False,
+                font=dict(size=9, color="#666"),
+                xanchor="center",
+                yanchor="top"
+            ))
+
         self.update_layout_options_list("shapes", shapes)
         self.update_layout_options_list("annotations", annotations)
+
+    def format_annotations(self):
+        """Formats existing annotations to have consistent style."""
+        if "annotations" not in self.layout_options:
+            return
+        all_annotations = self.layout_options["annotations"]
+
+        # Parameters
+        min_x_distance_percent = 0.02 # minimum horizontal distance as percent of x-axis range
+        min_x_distance = (self.maxX - self.minX) * min_x_distance_percent
+        y_shift = 0.025         # vertical shift amount if overlapping
+        max_y_shift = 0.75    # maximum vertical shift
+
+        # Sort annotations by x coordinate
+        all_annotations.sort(key=lambda ann: ann.get("x", 0))
+
+        # Track positions to detect collisions
+        placed_annotations = []
+
+        for ann in all_annotations:
+            x = ann.get("x", 0)
+            y = ann.get("y", 1)  # default top if missing
+
+            # Check previous annotations for horizontal overlap
+            for prev in placed_annotations:
+                prev_x = prev.get("x", 0)
+                prev_y = prev.get("y", 1)
+
+                if abs(x - prev_x) < min_x_distance and abs(y - prev_y) < 0.5:
+                    # Collision detected → shift vertically
+                    if y > 0.5:
+                        # Top annotations → move up
+                        y = prev_y + y_shift
+                        if y > 1+max_y_shift:  # prevent going too far off top
+                            y = 1
+                    else:
+                        # Bottom annotations → move down
+                        y = prev_y - y_shift
+                        if y < -max_y_shift:  # prevent going too far below
+                            y = 0
+
+            # Apply adjusted y
+            ann["y"] = y
+
+            # Add to placed list
+            placed_annotations.append(ann)
+
+        # Save back
+        self.layout_options["annotations"] = all_annotations
         
 
     def update_y_slider(self):

@@ -480,7 +480,10 @@ class Jupyphant:
                 overlapping = False
                 if hasattr(self, 'raw_plot_overlap'):
                     overlapping = self.raw_plot_overlap
-                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals)
+                theme_name = 'plotly_dark'
+                if hasattr(self, 'jupyterlab_theme'):
+                    theme_name = self.jupyterlab_theme
+                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name)
 
                 if selected_ids is None:
                     self.spiketrain_overview = plotlyGraphFigure
@@ -525,7 +528,10 @@ class Jupyphant:
                 overlapping = False
                 if hasattr(self, 'raw_plot_overlap'):
                     overlapping = self.raw_plot_overlap
-                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals)
+                theme_name = 'plotly_dark'
+                if hasattr(self, 'jupyterlab_theme'):
+                    theme_name = self.jupyterlab_theme
+                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name)
                 if selected_ids is None:
                     self.analogsignal_overview = plotlyGraphFigure
                 return plotlyGraphFigure

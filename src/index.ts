@@ -382,19 +382,26 @@ class JupyphantExtension {
 			userSelect: "none",
 		}
 
-		const myButtonContainer = document.createElement('div');
-		myButtonContainer.classList.add('sticky-filter');
+		// Single sticky container for both buttons
+		const buttonContainer = document.createElement('div');
+		buttonContainer.classList.add('sticky-filter');
+		buttonContainer.style.display = "flex";     // horizontal layout
+		buttonContainer.style.gap = "8px";          // spacing between buttons
 
-		const myToggle = document.createElement('label');
-		myToggle.dataset.checked = 'false';
-		Object.assign(myToggle.style, unchecked_style);
-		myToggle.innerHTML = `<i class="fa fa-bolt"></i> Overlap`;
+		const overlapToggle = document.createElement('label');
+		overlapToggle.dataset.checked = 'false';
+		Object.assign(overlapToggle.style, unchecked_style);
+		overlapToggle.innerHTML = `<i class="fa fa-bolt"></i> Overlap`;
 
-		myToggle.onclick = () => {
-			const isNowChecked = myToggle.dataset.checked === 'false';
-			myToggle.dataset.checked = isNowChecked ? 'true' : 'false';
-			isNowChecked ? Object.assign(myToggle.style, checked_style) : Object.assign(myToggle.style, unchecked_style);
-			console.log(isNowChecked)
+		const darkmodeToggle = document.createElement('label');
+		darkmodeToggle.dataset.checked = 'true';
+		Object.assign(darkmodeToggle.style, checked_style);
+		darkmodeToggle.innerHTML = `<i class="fa fa-moon"></i> Dark`;
+
+		overlapToggle.onclick = () => {
+			const isNowChecked = overlapToggle.dataset.checked === 'false';
+			overlapToggle.dataset.checked = isNowChecked ? 'true' : 'false';
+			isNowChecked ? Object.assign(overlapToggle.style, checked_style) : Object.assign(overlapToggle.style, unchecked_style);
 			// Send Python command to flip the boolean
 			const code = `
 			from jupyphant.kernelcode import set_raw_plot_overlap
@@ -423,8 +430,41 @@ class JupyphantExtension {
 			};
 		};
 
-		myButtonContainer.appendChild(myToggle);
-		raw_plot_widget.node.prepend(myButtonContainer);
+		darkmodeToggle.onclick = () => {
+			const isNowChecked = darkmodeToggle.dataset.checked === 'false';
+			darkmodeToggle.dataset.checked = isNowChecked ? 'true' : 'false';
+			isNowChecked ? Object.assign(darkmodeToggle.style, checked_style) : Object.assign(darkmodeToggle.style, unchecked_style);
+			// Send Python command to flip the boolean
+			const code = `
+			from jupyphant.kernelcode import update_jupyterlab_theme
+			update_jupyterlab_theme(jupyphant_entity, ${isNowChecked ? '"dark"' : '"white"'})
+			`
+
+			// Send to kernel
+			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
+
+			// Listen for output / errors
+			future.onIOPub = (msg: any) => {
+				const msgType = msg.header.msg_type;
+				switch (msgType) {
+					case "stream":
+						console.log("stdout:", msg.content.text);
+						break;
+					case "error":
+						console.error("Python error:", msg.content.ename, msg.content.evalue);
+						console.error(msg.content.traceback.join("\n"));
+						break;
+					case "execute_result":
+					case "display_data":
+						console.log("Result:", msg.content.data);
+						break;
+				}
+			};
+		};
+
+		buttonContainer.appendChild(overlapToggle);
+		buttonContainer.appendChild(darkmodeToggle);
+		raw_plot_widget.node.prepend(buttonContainer);
 	}
 
 	// Sets up the DragAndDrop Listeners on the Neo Tree Objects 
