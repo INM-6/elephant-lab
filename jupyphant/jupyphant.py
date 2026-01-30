@@ -899,11 +899,24 @@ class Jupyphant:
         pp.text(f"    {bold}Min:{reset} {min(all_t_starts)}\n")
         pp.text(f"    {bold}Max:{reset} {max(all_t_stops)}\n")
 
-        all_spike_times = self.np.concatenate([st.times for st in spiketrains if len(st.times) > 0])
-        if len(all_spike_times) > 0:
-            pp.text(f"  {bold}Spike Times:{reset}\n")
-            pp.text(f"    {bold}Min:{reset} {min(all_spike_times)}\n")
-            pp.text(f"    {bold}Max:{reset} {max(all_spike_times)}\n")
+        if spiketrains:
+            target_units = spiketrains[0].units
+            all_times_list = []
+            for st in spiketrains:
+                if len(st) > 0:
+                    all_times_list.append(st.times.rescale(target_units))
+
+            if all_times_list:
+                all_spike_times_magnitude = self.np.concatenate([q.magnitude for q in all_times_list])
+                all_spike_times = self.pq.Quantity(all_spike_times_magnitude, units=target_units)
+                
+                unit_str = all_spike_times.units.dimensionality
+                min_val = self.np.min(all_spike_times).magnitude
+                max_val = self.np.max(all_spike_times).magnitude
+
+                pp.text(f"  {bold}Spike Times:{reset}\n")
+                pp.text(f"    {bold}Min:{reset} {min_val} {unit_str}\n")
+                pp.text(f"    {bold}Max:{reset} {max_val} {unit_str}\n")
 
         # Firing Rate Statistics
         firing_rates = [self.statistics.mean_firing_rate(st) for st in spiketrains if st.t_stop > st.t_start]
@@ -1201,7 +1214,7 @@ class Jupyphant:
                 pp.text("\n")
 
             
-            table_data = [[f"Index ({len(neo_obj)} spikes)", f"Time (in {neo_obj.units.dimensionality.string}, {neo_obj.dtype})"]]
+            table_data = [[f"Index ({len(neo_obj)} spikes)", f"Time (in {neo_obj.units.dimensionality}, {neo_obj.dtype})"]]
             times = neo_obj.times
 
             if len(times) > 20:
