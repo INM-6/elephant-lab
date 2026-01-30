@@ -298,14 +298,14 @@ class PlotlyGraphFigure:
     def create_sliders(self):
         """Updates the range slider to the last x-axis if shared_xaxes is True"""
         n = self.nGraphs
+        x_bgcolor = "#1e7fcc"
+        x_height = 0.05
         if self.compress:
             xaxis_options = dict(
                 rangeslider=dict(
                     visible=True,
-                    bgcolor="#E6F0FF",        # light blue background
-                    borderwidth=1,
-                    bordercolor="#4A90E2",    # subtle border to make it pop
-                    thickness=0.05             # height of the range slider
+                    bgcolor=x_bgcolor,
+                    thickness=x_height
                 )
             )
             self.update_layout_options_dict("xaxis", xaxis_options)
@@ -313,17 +313,16 @@ class PlotlyGraphFigure:
             for i in range(1, n + 1):
                 # Adding this range slider makes it impossible to manually zoom in vertically for this graph
                 addX_slider = i == n and (self.shared_xaxes or self.compress)
-                axis_key = f'xaxis{i}'
-                xaxis_options = dict(
+                if addX_slider:
+                    axis_key = f'xaxis{i}'
+                    xaxis_options = dict(
                         rangeslider=dict(
-                        visible=addX_slider,
-                        bgcolor="#E6F0FF",        # light blue background
-                        borderwidth=1,
-                        bordercolor="#4A90E2",    # subtle border to make it pop
-                        thickness=0.05             # height of the range slider
+                            visible=True,
+                            bgcolor=x_bgcolor,
+                            thickness=x_height
+                        )
                     )
-                )
-                self.update_layout_options_dict(axis_key, xaxis_options)
+                    self.update_layout_options_dict(axis_key, xaxis_options)
         import ipywidgets as widgets
 
         y_slider_height = self.calculate_y_slider_height()
@@ -479,7 +478,7 @@ class PlotlyGraphFigure:
                 xref="x",
                 yref="paper",
                 fillcolor="LightSalmon",
-                opacity=0.05,
+                opacity=0.15,
                 line_width=0
             ))
 
@@ -528,49 +527,49 @@ class PlotlyGraphFigure:
         if "annotations" not in self.layout_options:
             return
         all_annotations = self.layout_options["annotations"]
+        # Separate annotations by y (top vs bottom)
+        top_annotations = [ann for ann in all_annotations if ann.get("y", 1) > 0.5]
+        bottom_annotations = [ann for ann in all_annotations if ann.get("y", 1) <= 0.5]
+
+        # Sort each list by x coordinate
+        top_annotations.sort(key=lambda ann: ann.get("x", 0))
+        bottom_annotations.sort(key=lambda ann: ann.get("x", 0))
 
         # Parameters
         min_x_distance_percent = 0.02 # minimum horizontal distance as percent of x-axis range
         min_x_distance = (self.maxX - self.minX) * min_x_distance_percent
-        y_shift = 0.025         # vertical shift amount if overlapping
-        max_y_shift = 0.75    # maximum vertical shift
+        y_shift = 0.0175         # vertical shift amount if overlapping
+        max_y_shift = y_shift * 2.5    # maximum vertical shift
 
-        # Sort annotations by x coordinate
-        all_annotations.sort(key=lambda ann: ann.get("x", 0))
+        l_bottom = len(top_annotations)
+        for i in range(1, l_bottom):
+            current = top_annotations[i]
+            x = current.get("x", 0)
+            y = current.get("y", 1)  # default top if missing
+            previous = top_annotations[i - 1]
+            prev_x = previous.get("x", 0)
+            prev_y = previous.get("y", 1)
+            if abs(x - prev_x) < min_x_distance:
+                # Collision detected → shift vertically
+                y = prev_y + y_shift
+                if y > 1+max_y_shift:  # prevent going too far off top
+                    y = 1
+                current["y"] = y
 
-        # Track positions to detect collisions
-        placed_annotations = []
-
-        for ann in all_annotations:
-            x = ann.get("x", 0)
-            y = ann.get("y", 1)  # default top if missing
-
-            # Check previous annotations for horizontal overlap
-            for prev in placed_annotations:
-                prev_x = prev.get("x", 0)
-                prev_y = prev.get("y", 1)
-
-                if abs(x - prev_x) < min_x_distance and abs(y - prev_y) < 0.5:
-                    # Collision detected → shift vertically
-                    if y > 0.5:
-                        # Top annotations → move up
-                        y = prev_y + y_shift
-                        if y > 1+max_y_shift:  # prevent going too far off top
-                            y = 1
-                    else:
-                        # Bottom annotations → move down
-                        y = prev_y - y_shift
-                        if y < -max_y_shift:  # prevent going too far below
-                            y = 0
-
-            # Apply adjusted y
-            ann["y"] = y
-
-            # Add to placed list
-            placed_annotations.append(ann)
-
-        # Save back
-        self.layout_options["annotations"] = all_annotations
+        l_bottom = len(bottom_annotations)
+        for i in range(1, l_bottom):
+            current = bottom_annotations[i]
+            x = current.get("x", 0)
+            y = current.get("y", 0)  # default bottom if missing
+            previous = bottom_annotations[i - 1]
+            prev_x = previous.get("x", 0)
+            prev_y = previous.get("y", 1)
+            if abs(x - prev_x) < min_x_distance:
+                # Collision detected → shift vertically
+                y = prev_y - y_shift
+                if y < 0-max_y_shift:  # prevent going too far off bottom
+                    y = 0
+                current["y"] = y
         
 
     def update_y_slider(self):
