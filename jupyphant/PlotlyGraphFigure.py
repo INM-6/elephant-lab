@@ -300,7 +300,13 @@ class PlotlyGraphFigure:
         n = self.nGraphs
         if self.compress:
             xaxis_options = dict(
-                rangeslider=dict(visible=True)
+                rangeslider=dict(
+                    visible=True,
+                    bgcolor="#E6F0FF",        # light blue background
+                    borderwidth=1,
+                    bordercolor="#4A90E2",    # subtle border to make it pop
+                    thickness=0.05             # height of the range slider
+                )
             )
             self.update_layout_options_dict("xaxis", xaxis_options)
         else:
@@ -309,7 +315,13 @@ class PlotlyGraphFigure:
                 addX_slider = i == n and (self.shared_xaxes or self.compress)
                 axis_key = f'xaxis{i}'
                 xaxis_options = dict(
-                    rangeslider=dict(visible=addX_slider)
+                        rangeslider=dict(
+                        visible=addX_slider,
+                        bgcolor="#E6F0FF",        # light blue background
+                        borderwidth=1,
+                        bordercolor="#4A90E2",    # subtle border to make it pop
+                        thickness=0.05             # height of the range slider
+                    )
                 )
                 self.update_layout_options_dict(axis_key, xaxis_options)
         import ipywidgets as widgets
@@ -395,7 +407,7 @@ class PlotlyGraphFigure:
                 yref="paper",
                 text=text,
                 showarrow=False,
-                font=dict(size=10, color="blue"),
+                font=dict(size=10, color="#194D89"),
                 xanchor="center",
                 yanchor="bottom",
             ))
