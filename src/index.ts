@@ -594,7 +594,6 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 			const code = `
 import json
 import __main__
-import re
 
 try:
     if 'jupyphant_entity' in __main__.__dict__:
@@ -604,53 +603,33 @@ try:
         if not selected_nodes:
             print(json.dumps({"code_to_insert": "", "error": "No nodes selected in the Neo tree."}))
         else:
-            new_vars = []
-            all_vars = list(__main__.__dict__.keys())
-            
+            paths = []
+            objects_for_list = []
             for node in selected_nodes:
                 if node._id in jupyphant.map_ipytree_node_id_to_neo_obj_hash:
                     obj_hash = jupyphant.map_ipytree_node_id_to_neo_obj_hash[node._id]
                     neo_obj = jupyphant.map_neo_obj_hash_to_neo_obj[obj_hash]
                     
-                    base_name = ""
-                    if hasattr(neo_obj, 'name') and neo_obj.name:
-                        sanitized_name = re.sub(r'[^\\w_]', '', neo_obj.name.replace(' ', '_')).lower()
-                        if re.match(r'^\\d', sanitized_name):
-                            sanitized_name = '_' + sanitized_name
-                        if not sanitized_name:
-                             sanitized_name = "unnamed"
-                        base_name = f"jupyphant_{sanitized_name}"
-                    else:
-                        class_name = neo_obj.__class__.__name__
-                        if 'list' in class_name.lower():
-                            base_name = f"jupyphant_list"
-                        else:
-                            base_name = f"jupyphant_{class_name.lower()}"
+                    path = jupyphant._get_obj_path(neo_obj)
+                    if path:
+                        paths.append(path)
+                        objects_for_list.append(neo_obj)
 
-                    new_var_name = base_name
-                    counter = 1
-                    while new_var_name in all_vars:
-                        new_var_name = f"{base_name}_{counter}"
-                        counter += 1
-                    
-                    __main__.__dict__[new_var_name] = neo_obj
-                    new_vars.append(new_var_name)
-                    all_vars.append(new_var_name)
-            
             code_to_insert = ""
-            if len(new_vars) > 1:
+            if len(paths) > 1:
+                all_vars = list(__main__.__dict__.keys())
                 list_base_name = "jupyphant_list"
                 counter = 0
                 list_var_name = f"{list_base_name}_{counter}"
                 while list_var_name in all_vars:
                     counter += 1
                     list_var_name = f"{list_base_name}_{counter}"
-
-                __main__.__dict__[list_var_name] = [__main__.__dict__[var_name] for var_name in new_vars]
                 
-                code_to_insert = f"{list_var_name} = [{', '.join(new_vars)}]"
-            elif len(new_vars) == 1:
-                code_to_insert = new_vars[0]
+                __main__.__dict__[list_var_name] = objects_for_list
+                
+                code_to_insert = list_var_name
+            elif len(paths) == 1:
+                code_to_insert = paths[0]
 
             print(json.dumps({"code_to_insert": code_to_insert}))
     else:
@@ -679,13 +658,13 @@ except Exception as e:
 					if (data.code_to_insert) {
 						const notebookPanel = this.notebook_tracker.currentWidget;
 						if (notebookPanel) {
-							NotebookActions.insertBelow(notebookPanel.content);
 							const activeCell = notebookPanel.content.activeCell;
-							if (activeCell) {
-								activeCell.model.sharedModel.setSource(data.code_to_insert);
-							}
-	
-							console.log(`Jupyphant: Created and inserted code in new cell.`);
+							if (activeCell && activeCell.editor) {
+								activeCell.editor.replaceSelection!(data.code_to_insert);
+								console.log(`Jupyphant: Inserted code at cursor.`);
+							} else {
+								console.log(`Jupyphant: No active cell or editor found. Could not insert code.`);
+							}	
 						}
 					}
 				}
@@ -720,20 +699,13 @@ except Exception as e:
 		
 		// RAW
 		let explorer_widget_raw_plot = new Panel();
-		explorer_widget_raw_plot.title.label = 'Visualize';
+		explorer_widget_raw_plot.title.label = 'Explore';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
 		
-		// STATISTICS
-		let explorer_widget_statistics = new Panel();
-		explorer_widget_statistics.title.label = 'Statistics';
-		explorer_widget_statistics.node.style.cssText = explorer_widget_statistics.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.outarea_nodeexplorer_statistics = this.createOutputArea(rendermime, explorer_widget_statistics, ['my-outarea-class'], 'jup_vis_out_id_2.3', session);
-
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
-		this.widget.addWidget(explorer_widget_statistics, { mode: 'tab-after', ref: explorer_widget_raw_plot });
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {

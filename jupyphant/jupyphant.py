@@ -83,7 +83,7 @@ class Jupyphant:
     from neo.core.regionofinterest import RegionOfInterest, CircularRegionOfInterest, RectangularRegionOfInterest, \
         PolygonRegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
-    from neo import Block, SpikeTrain, AnalogSignal, Event, Epoch
+    from neo import Block, Segment, Group, SpikeTrain, AnalogSignal, Event, Epoch
     from collections import Counter
     from neo.test.tools import assert_same_sub_schema
     assert_same_sub_schema = staticmethod(assert_same_sub_schema)
@@ -129,12 +129,75 @@ class Jupyphant:
         self.map_neo_obj_hash_to_neo_obj = {}
         self.filter_changed = False
         self.expand_all = False
+        self.last_known_hashes = []
 
     def names_for(self, obj):
         for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
             if obj is value:
                 return key
         return ""
+
+    def _get_obj_path(self, obj):
+        path = []
+        curr = obj
+
+        if hasattr(curr, 'segment') and curr.segment is not None:
+            segment = curr.segment
+            found_in_segment = False
+            for attr in ('analogsignals', 'spiketrains', 'events', 'epochs', 'irregularlysampledsignals', 'imagesequences'):
+                if hasattr(segment, attr):
+                    container = getattr(segment, attr)
+                    for i, item in enumerate(container):
+                        if item is curr:
+                            path.insert(0, f'{attr}[{i}]')
+                            curr = segment
+                            found_in_segment = True
+                            break
+                if found_in_segment:
+                    break
+        
+        if hasattr(curr, 'block') and curr.block is not None:
+            block = curr.block
+            if isinstance(curr, self.Segment):
+                for i, item in enumerate(block.segments):
+                    if item is curr:
+                        path.insert(0, f'segments[{i}]')
+                        curr = block
+                        break
+            elif isinstance(curr, self.Group):
+                for i, item in enumerate(block.groups):
+                    if item is curr:
+                        path.insert(0, f'groups[{i}]')
+                        curr = block
+                        break
+        
+        if path:
+            var_name = self.names_for(curr)
+            if var_name:
+                path.insert(0, var_name)
+                return '.'.join(path)
+
+            if hasattr(curr, 'name') and curr.name:
+                path.insert(0, curr.name)
+            else:
+                path.insert(0, 'unnamed_root')
+            return '.'.join(path)
+
+        for name, l in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
+            if isinstance(l, (list, self.SpikeTrainList)) or l.__class__.__name__ == 'ObjectList':
+                for i, item in enumerate(l):
+                    if item is obj:
+                        return f'{name}[{i}]'
+
+        var_name = self.names_for(obj)
+        if var_name:
+            return var_name
+
+        if hasattr(obj, 'name') and obj.name:
+            return obj.name
+        
+        return ""
+    
     
     def expand_neo_tree(self, opened):
         self.expand_all = opened
@@ -190,23 +253,28 @@ class Jupyphant:
             return joblib.hash(hashable_summary, hash_name=hash_name)
         
         elif isinstance(neo_obj, (neo.Block, neo.Segment)):
-            hashable_summary = (
+            hashable_summary = [
                 neo_obj.name,
                 neo_obj.description,
                 neo_obj.annotations
-            )
-            return joblib.hash(hashable_summary, hash_name=hash_name)
+            ]
+            for child_container_name in neo_obj._child_containers:
+                child_container = getattr(neo_obj, child_container_name)
+                for child in child_container:
+                    hashable_summary.append(self.get_neo_hash(child, hash_name))
+            
+            return joblib.hash(tuple(hashable_summary), hash_name=hash_name)
             
         return joblib.hash(neo_obj, hash_name)
         
     def update(self):
-        """  # TODO: rewrite docstring
+        """
         Updates the neo persistent neo structure to represent the current neo structure
         created by the notebook user.
         Called before updating plots, thus, usually at every cell execution.
         """
-        neo_objs_hash_before_update = self.get_neo_hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
-                                                  hash_name='sha1')
+
+        neo_objs_hash_before_update = joblib.hash(self.last_known_hashes, hash_name='sha1')
 
         self.neo_objs_and_lists_of_neo_objs_with_var_name.clear()
 
@@ -237,13 +305,16 @@ class Jupyphant:
             if is_BaseNeo_instance or is_RegionOfInterest_subclass or is_list_with_neo_objs:
                 self.neo_objs_and_lists_of_neo_objs_with_var_name[variable_name] = obj_from_kernel_ns
 
-        neo_objs_hash_after_update = self.get_neo_hash(list(self.neo_objs_and_lists_of_neo_objs_with_var_name.values()),
-                                                 hash_name='sha1')
+
+        current_hashes = [self.get_neo_hash(obj, 'sha1') for obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values()]
+        neo_objs_hash_after_update = joblib.hash(current_hashes, hash_name='sha1')
 
         if neo_objs_hash_before_update != neo_objs_hash_after_update or self.filter_changed:
             self.neo_objs_changed_after_update = True
         else:
             self.neo_objs_changed_after_update = False
+        
+        self.last_known_hashes = current_hashes
         self.filter_changed = False
 
     def update_tree(self):
@@ -281,7 +352,7 @@ class Jupyphant:
 
                 if hasattr(neo_obj, 'name') and neo_obj.name:
                     if variable_name and variable_name != neo_obj.name:
-                        main_text = f"<b>{variable_name}</b> → {neo_obj.name}"
+                        main_text = f"<b>{variable_name}</b> → <b>{neo_obj.name}</b>"
                     else:
                         main_text = neo_obj.name
                     node_name = f"<span style='{NODE_STYLE}'>{main_text}</span> <i style='{SECONDARY_STYLE}'>({class_name})</i> <small style='{SECONDARY_STYLE}'>[{hash_neo_obj[:4]}]</small>"
@@ -419,7 +490,7 @@ class Jupyphant:
 
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 if hasattr(child_obj, 'name') and child_obj.name:
-                    main_text = f'#{i} → <b>{child_obj.name}</b>'
+                    main_text = f'<b>#{i}</b> → <b>{child_obj.name}</b>'
                     node_name = f"<span style='{NODE_STYLE}'>{main_text}</span> <i style='{SECONDARY_STYLE}'>({class_name})</i> <small style='{SECONDARY_STYLE}'>[{child_obj_hash[:4]}]</small>"
                     child_node = self.Node(node_name)
                 else:
@@ -763,6 +834,183 @@ class Jupyphant:
             pp.text(row_format.format(*row))
             pp.text("\n")
 
+    def _repr_pretty_annotations_overview(self, all_annotations, count, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        if not all_annotations:
+            return
+            
+        all_keys = set()
+        for anno in all_annotations:
+            if anno:
+                all_keys.update(anno.keys())
+        
+        common_annos = {}
+        different_annos = []
+        partial_annos = []
+
+        for key in all_keys:
+            values_with_key = [anno.get(key) for anno in all_annotations if anno and key in anno]
+            
+            if len(values_with_key) == count: # present in all
+                try:
+                    first_val_str = str(values_with_key[0])
+                    if all(str(v) == first_val_str for v in values_with_key[1:]):
+                        common_annos[key] = values_with_key[0]
+                    else:
+                        different_annos.append(key)
+                except:
+                    different_annos.append(key)
+            else:
+                partial_annos.append(key)
+        
+        if common_annos:
+            pp.text(f"  \n{bold}Common Annotations:{reset}\n")
+            for k, v in common_annos.items():
+                pp.text(f"    {bold}{k}:{reset} {v}\n")
+        
+        if different_annos:
+            pp.text(f"  \n{bold}Annotations with different values:{reset} {', '.join(different_annos)}\n")
+        
+        if partial_annos:
+            pp.text(f"  \n{bold}Annotations not in all objects:{reset} {', '.join(partial_annos)}\n")
+
+    def _repr_pretty_spiketrain_overview(self, items, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        spiketrains = [item['obj'] for item in items]
+        count = len(spiketrains)
+        total_spikes = sum(len(st) for st in spiketrains)
+        
+        pp.text(f"{bold}SpikeTrain Overview{reset}\n")
+        pp.text(f"  {bold}Count:{reset} {count}\n")
+        pp.text(f"  {bold}Total Spikes:{reset} {total_spikes}\n")
+
+        # Units Check
+        units = set(str(st.units.dimensionality) for st in spiketrains)
+        pp.text(f"  {bold}Units:{reset} {', '.join(units)}\n")
+        
+        # Time Range
+        all_t_starts = [st.t_start for st in spiketrains]
+        all_t_stops = [st.t_stop for st in spiketrains]
+        pp.text(f"  {bold}Time Range (t_start to t_stop):{reset}\n")
+        pp.text(f"    {bold}Min:{reset} {min(all_t_starts)}\n")
+        pp.text(f"    {bold}Max:{reset} {max(all_t_stops)}\n")
+
+        all_spike_times = self.np.concatenate([st.times for st in spiketrains if len(st.times) > 0])
+        if len(all_spike_times) > 0:
+            pp.text(f"  {bold}Spike Times:{reset}\n")
+            pp.text(f"    {bold}Min:{reset} {min(all_spike_times)}\n")
+            pp.text(f"    {bold}Max:{reset} {max(all_spike_times)}\n")
+
+        # Firing Rate Statistics
+        firing_rates = [self.statistics.mean_firing_rate(st) for st in spiketrains if st.t_stop > st.t_start]
+        if firing_rates:
+            rate_units = firing_rates[0].units.dimensionality
+            pp.text(f"  {bold}Firing Rates ({rate_units}):{reset}\n")
+            pp.text(f"    {bold}Min:{reset} {min(fr.magnitude for fr in firing_rates):.4f}\n")
+            pp.text(f"    {bold}Max:{reset} {max(fr.magnitude for fr in firing_rates):.4f}\n")
+            pp.text(f"    {bold}Average:{reset} {self.np.mean([fr.magnitude for fr in firing_rates]):.4f}\n")
+
+        # ISI Statistics
+        isis_list = [self.statistics.isi(st) for st in spiketrains if len(st) > 1]
+        if isis_list:
+            cvs = [self.statistics.cv(isis) for isis in isis_list]
+                        
+            if cvs:
+                pp.text(f"  {bold}Coefficient of Variation (CV):{reset}\n")
+                pp.text(f"    {bold}Min:{reset} {min(cvs):.4f}\n")
+                pp.text(f"    {bold}Max:{reset} {max(cvs):.4f}\n")
+                pp.text(f"    {bold}Average:{reset} {self.np.mean(cvs):.4f}\n")
+
+        all_annotations = [st.annotations for st in spiketrains]
+        self._repr_pretty_annotations_overview(all_annotations, count, pp)
+
+        pp.text("\n")
+
+    def _repr_pretty_analogsignal_overview(self, items, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        signals = [item['obj'] for item in items]
+        count = len(signals)
+        
+        pp.text(f"{bold}AnalogSignal Overview{reset}\n")
+        pp.text(f"  {bold}Count:{reset} {count}\n")
+        pp.text(f"  {bold}Total Channels:{reset} {sum(s.shape[1] for s in signals)}\n")
+
+        sampling_rates = set(str(s.sampling_rate) for s in signals)
+        pp.text(f"  {bold}Sampling Rates:{reset} {', '.join(map(str, sampling_rates))}\n")
+
+        durations = [s.duration for s in signals]
+        pp.text(f"  {bold}Durations:{reset}\n")
+        pp.text(f"    {bold}Min:{reset} {min(durations)}\n")
+        pp.text(f"    {bold}Max:{reset} {max(durations)}\n")
+
+        all_t_starts = [s.t_start for s in signals]
+        all_t_stops = [s.t_stop for s in signals]
+        pp.text(f"  {bold}Time Range (t_start to t_stop):{reset}\n")
+        pp.text(f"    {bold}Min:{reset} {min(all_t_starts)}\n")
+        pp.text(f"    {bold}Max:{reset} {max(all_t_stops)}\n")
+
+        all_annotations = [s.annotations for s in signals]
+        self._repr_pretty_annotations_overview(all_annotations, count, pp)
+
+        pp.text("\n")
+
+    def _repr_pretty_mixed_overview(self, items, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        pp.text(f"{bold}Multiple Object Types Selected{reset}\n")
+        pp.text(f"  {bold}Total Objects:{reset} {len(items)}\n")
+        
+        from collections import Counter
+        type_counts = Counter(type(item['obj']).__name__ for item in items)
+        
+        pp.text(f"  {bold}Object Types:{reset}\n")
+        for type_name, count in type_counts.items():
+            pp.text(f"    - {type_name}: {count}\n")
+        pp.text("\n")
+
+    def _repr_pretty_generic_overview(self, items, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        count = len(items)
+        obj_type_name = items[0]['obj'].__class__.__name__
+        
+        pp.text(f"{bold}{obj_type_name} Overview{reset}\n")
+        pp.text(f"  {bold}Count:{reset} {count}\n")
+        
+        all_annotations = [item['obj'].annotations for item in items if hasattr(item['obj'], 'annotations')]
+        if all_annotations:
+             self._repr_pretty_annotations_overview(all_annotations, count, pp)
+        
+        pp.text("\n")
+
+    def _format_array_annotation_value(self, value):
+        if isinstance(value, self.np.ndarray):
+            if value.ndim == 1:
+                if len(value) > 10:
+                    return f"{', '.join(map(str, value[:5]))}, ..., {', '.join(map(str, value[-5:]))}"
+                return ', '.join(map(str, value))
+            else:
+                return f"{value.ndim}D array of shape {value.shape}"
+        return str(value)
+
+    def _repr_pretty_array_annotations(self, neo_obj, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+
+        if hasattr(neo_obj, 'array_annotations') and neo_obj.array_annotations:
+            pp.text(f"\n{bold}Array Annotations:{reset}\n")
+            for key, value in neo_obj.array_annotations.items():
+                formatted_value = self._format_array_annotation_value(value)
+                pp.text(f"  {bold}{key}{reset}: {formatted_value}\n")
+
     def _repr_pretty_neo_objects(self, neo_obj, node_name, pp, cycle):
         """
         Handle pretty-printing of any neo class and python built-in list.
@@ -784,8 +1032,12 @@ class Jupyphant:
                                    for attr in neo_obj._recommended_attrs if attr[0] not in neo_obj._repr_pretty_attrs_keys_
                                    and getattr(neo_obj, attr[0]) is not None]))
 
+        path = self._get_obj_path(neo_obj)
+        if path:
+            pp.text(f"{bold}{path}\n")
+        
         clean_node_name = re.sub(r'<[^>]+>', '', node_name)
-        pp.text(f"{clean_node_name}\n")
+        pp.text(f"{bold}{clean_node_name}{reset}\n")
 
         # neo-container: Block, Segment, Group
         if isinstance(neo_obj, self.Container):
@@ -884,23 +1136,50 @@ class Jupyphant:
 
             pp.text(f"{bold}Sampling Rate:{reset} {neo_obj.sampling_rate}\n\n")
             
-            if neo_obj.shape[1] > 1:
-                pp.text(f"(Showing data for first of {neo_obj.shape[1]} channels)\n")
+            num_channels = neo_obj.shape[1]
+            channel_indices = list(range(num_channels))
             
-            table_data = [["Index", f"Time (in {neo_obj.units.dimensionality.string}, {neo_obj.dtype})", "Value (Ch 0)"]]
-            times = neo_obj.times
-            signal = neo_obj[:, 0]
+            if num_channels > 4:
+                pp.text(f"(Showing data for first 2 and last 2 of {num_channels} channels)\n")
+                channel_indices = list(range(2)) + list(range(num_channels - 2, num_channels))
+            elif num_channels > 1:
+                pp.text(f"(Showing data for all {num_channels} channels)\n")
 
-            if len(signal) > 20:
+            header = ["Index", f"Time ({neo_obj.units.dimensionality.string})"]
+            for i in channel_indices:
+                header.append(f"Ch{i}")
+            
+            table_data = [header]
+            times = neo_obj.times
+
+            if len(times) > 20:
+                # Add first 10 rows
                 for i in range(10):
-                    table_data.append([i, f"{times[i]:.4f}", f"{signal[i].item():.4f}"])
-                table_data.append(["...", "...", "..."])
-                for i in range(len(signal) - 10, len(signal)):
-                    table_data.append([i, f"{times[i]:.4f}", f"{signal[i].item():.4f}"])
+                    row = [i, f"{times[i]:.3f}"]
+                    for ch_idx in channel_indices:
+                        row.append(f"{neo_obj[i, ch_idx].item():.3f}")
+                    table_data.append(row)
+                
+                # Add ellipsis
+                table_data.append(["..."] * len(header))
+                
+                # Add last 10 rows
+                for i in range(len(times) - 10, len(times)):
+                    row = [i, f"{times[i]:.3f}"]
+                    for ch_idx in channel_indices:
+                        row.append(f"{neo_obj[i, ch_idx].item():.3f}")
+                    table_data.append(row)
             else:
-                for i in range(len(signal)):
-                    table_data.append([i, f"{times[i]:.4f}", f"{signal[i].item():.4f}"])
+                for i in range(len(times)):
+                    row = [i, f"{times[i]:.3f}"]
+                    for ch_idx in channel_indices:
+                        row.append(f"{neo_obj[i, ch_idx].item():.3f}")
+                    table_data.append(row)
+            
             self._print_as_table(table_data, pp)
+
+            self._repr_pretty_array_annotations(neo_obj, pp)
+
             pp.text("\n\n")
             return
 
@@ -936,6 +1215,8 @@ class Jupyphant:
                     table_data.append([i, f"{times[i]:.4f}"])
 
             self._print_as_table(table_data, pp)
+            self._repr_pretty_array_annotations(neo_obj, pp)
+            
             pp.text("\n\n")
             return
 
@@ -972,6 +1253,9 @@ class Jupyphant:
                     table_data.append([i, f"{times[i]:.4f}", f"{durations[i]:.4f}", labels[i]])
 
             self._print_as_table(table_data, pp)
+
+            self._repr_pretty_array_annotations(neo_obj, pp)
+
             pp.text("\n\n")
             return
 
@@ -1007,6 +1291,9 @@ class Jupyphant:
                     table_data.append([i, f"{times[i]:.4f}", labels[i]])
 
             self._print_as_table(table_data, pp)
+
+            self._repr_pretty_array_annotations(neo_obj, pp)
+
             pp.text("\n\n")
             return
 
@@ -1025,41 +1312,47 @@ class Jupyphant:
 
     def pretty_print_of_selected_neo_objects(self):
         from io import StringIO
-        from contextlib import redirect_stdout
-        from IPython.display import display
         from IPython.lib.pretty import RepresentationPrinter
-
-        def _iterate_over_neo_objects(neo_objs):
-            for neo_obj in neo_objs:
-                if len(hashes_and_names_of_selected_nodes) == 0:
-                    break
-                hash_neo_obj = self.get_neo_hash(neo_obj, hash_name='sha1')
-                # neo data objects, containers, lists / SpikeTrainList
-                if hash_neo_obj in hashes_and_names_of_selected_nodes.keys():
-                    with redirect_stdout(output):
-                        self._repr_pretty_neo_objects(neo_obj=neo_obj, pp=pp, cycle=False,
-                                                      node_name=hashes_and_names_of_selected_nodes[hash_neo_obj])
-                    hashes_and_names_of_selected_nodes.pop(hash_neo_obj)
-                if issubclass(type(neo_obj), self.Container):
-                    for child_container_name in neo_obj._child_containers:
-                        if len(hashes_and_names_of_selected_nodes) == 0:
-                            break
-                        child_container = getattr(neo_obj, child_container_name)
-                        hash_child_container = self.get_neo_hash(child_container, hash_name='sha1')
-                        if hash_child_container in hashes_and_names_of_selected_nodes.keys():
-                            with redirect_stdout(output):
-                                self._repr_pretty_neo_objects(neo_obj=child_container, pp=pp, cycle=False,
-                                                              node_name=hashes_and_names_of_selected_nodes[hash_child_container])
-                            hashes_and_names_of_selected_nodes.pop(hash_child_container)
-                        _iterate_over_neo_objects(child_container)
-                if isinstance(neo_obj, (list, self.SpikeTrainList)):
-                    _iterate_over_neo_objects(neo_obj)
+        from collections import defaultdict
 
         output = StringIO()
         pp = RepresentationPrinter(output)
 
         hashes_and_names_of_selected_nodes = self._get_neo_obj_hash_and_node_name_of_selected_nodes()
+        if not hashes_and_names_of_selected_nodes:
+            return
 
-        _iterate_over_neo_objects(self.neo_objs_and_lists_of_neo_objs_with_var_name.values())
+        selected_objects_with_node_name = []
+        for h, name in hashes_and_names_of_selected_nodes.items():
+             if h in self.map_neo_obj_hash_to_neo_obj:
+                selected_objects_with_node_name.append({'obj': self.map_neo_obj_hash_to_neo_obj[h], 'node_name': name})
 
-        print(output.getvalue())
+        if len(selected_objects_with_node_name) <= 1:
+            # Existing logic for single selection or no selection
+            if selected_objects_with_node_name:
+                item = selected_objects_with_node_name[0]
+                self._repr_pretty_neo_objects(item['obj'], item['node_name'], pp, cycle=False)
+            print(output.getvalue())
+            return
+        
+        grouped_objects = defaultdict(list)
+        for item in selected_objects_with_node_name:
+            # Handle lists of objects as a special type
+            if isinstance(item['obj'], list):
+                grouped_objects[list].append(item)
+            else:
+                grouped_objects[type(item['obj'])].append(item)
+
+        if len(grouped_objects) > 1:
+            self._repr_pretty_mixed_overview(selected_objects_with_node_name, pp)
+        
+        for obj_type, items in grouped_objects.items():
+            if len(items) > 1:
+                # Multiple objects of the same type
+                if issubclass(obj_type, self.SpikeTrain):
+                    self._repr_pretty_spiketrain_overview(items, pp)
+                elif issubclass(obj_type, self.AnalogSignal):
+                    self._repr_pretty_analogsignal_overview(items, pp)
+                else:
+                    self._repr_pretty_generic_overview(items, pp)
+                print(output.getvalue())
