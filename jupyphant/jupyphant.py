@@ -1145,7 +1145,7 @@ class Jupyphant:
             elif num_channels > 1:
                 pp.text(f"(Showing data for all {num_channels} channels)\n")
 
-            header = ["Index", f"Time ({neo_obj.units.dimensionality.string})"]
+            header = ["Index", f"Time ({neo_obj.times.units.dimensionality.string})"]
             for i in channel_indices:
                 header.append(f"Ch{i}")
             
