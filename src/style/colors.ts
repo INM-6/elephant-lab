@@ -1,4 +1,4 @@
-export const COLORS: Record<string, string> = {
+export const COLOR_MAP: Record<string, string> = {
     "Slate Grey": "#7d7c84",
     "Sage Green": "#88ab75",
     "Steel Blue": "#2d93ad",
@@ -19,4 +19,11 @@ export const COLORS: Record<string, string> = {
     "Orange": "#ff9800",
     "Forest Green": "#43a047",
     "Charcoal Grey": "#263238"
+};
+
+export const COLORS: Record<string, string> = {
+    "jupyphant_base": COLOR_MAP["Orange"],
+    "jupyphant_error": COLOR_MAP["Raspberry"],
+    "jupyphant_success": COLOR_MAP["Sage Green"],
+    "jupyphant_info": COLOR_MAP["Bright Blue"],
 };

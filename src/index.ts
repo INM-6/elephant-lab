@@ -302,7 +302,7 @@ class JupyphantExtension {
 		const switchNotebookButton = document.createElement('button');
 		switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${currentFilename}`;
 		switchNotebookButton.title = 'Switch Jupyphant to current active notebook';
-		switchNotebookButton.style.backgroundColor = COLORS["Orange"];
+		switchNotebookButton.style.backgroundColor = COLORS["jupyphant_base"];
 		switchNotebookButton.className = 'workflow-button workflow-button-io';
 		switchNotebookButton.style.marginRight = '5px';
 		switchNotebookButton.onclick = () => {
@@ -319,7 +319,7 @@ class JupyphantExtension {
 		const infoButton = document.createElement('button');
 		infoButton.innerHTML = '<i class="fa fa-info-circle" aria-hidden="true"></i> Jupyphant';
 		infoButton.title = 'About Jupyphant';
-		infoButton.style.backgroundColor = COLORS["Orange"];
+		infoButton.style.backgroundColor = COLORS["jupyphant_base"];
 		infoButton.className = 'workflow-button workflow-button-io';
 				infoButton.onclick = async () => {
 			let code =
@@ -433,7 +433,7 @@ print(__version__)
 		const loadNeoFileButton = document.createElement('button');
 		loadNeoFileButton.innerHTML = '<i class="fa fa-file-import" aria-hidden="true"></i> Load';
         loadNeoFileButton.title = 'Create a neoIO for given Path';
-		loadNeoFileButton.style.backgroundColor = COLORS["Orange"]
+		loadNeoFileButton.style.backgroundColor = COLORS["jupyphant_base"]
         loadNeoFileButton.className = 'workflow-button workflow-button-io';
 		loadNeoFileButton.onclick = () => {
 			FileDialog.getOpenFiles({
@@ -526,7 +526,7 @@ self.update_tree()
 		const saveNeoObjectsButton = document.createElement('button');
 		saveNeoObjectsButton.innerHTML = '<i class="fa fa-file-export" aria-hidden="true"></i> Save';
 		saveNeoObjectsButton.title = 'Save selected neo objects to nix-file';
-		saveNeoObjectsButton.style.backgroundColor = COLORS["Orange"]
+		saveNeoObjectsButton.style.backgroundColor = COLORS["jupyphant_base"]
 		saveNeoObjectsButton.className = 'workflow-button workflow-button-io';
 		saveNeoObjectsButton.onclick = () => {
 			const body = document.createElement('div');
@@ -579,7 +579,7 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 		const insertCodeButton = document.createElement('button');
 		insertCodeButton.innerHTML = '<i class="fa fa-code" aria-hidden="true"></i> Insert';
 		insertCodeButton.title = 'Insert selected neo objects into current notebook';
-		insertCodeButton.style.backgroundColor = COLORS["Orange"];
+		insertCodeButton.style.backgroundColor = COLORS["jupyphant_base"];
 		insertCodeButton.className = 'workflow-button workflow-button-io';
 		insertCodeButton.onclick = async () => {
 			const currentNotebook = this.notebook_tracker.currentWidget;
