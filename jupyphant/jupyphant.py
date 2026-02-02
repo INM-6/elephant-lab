@@ -866,15 +866,15 @@ class Jupyphant:
                 partial_annos.append(key)
         
         if common_annos:
-            pp.text(f"  \n{bold}Common Annotations:{reset}\n")
+            pp.text(f"  \n{bold}Identical Annotations:{reset}\n")
             for k, v in common_annos.items():
                 pp.text(f"    {bold}{k}:{reset} {v}\n")
         
         if different_annos:
-            pp.text(f"  \n{bold}Annotations with different values:{reset} {', '.join(different_annos)}\n")
+            pp.text(f"  \n{bold}Diverging Annotations:{reset} {', '.join(different_annos)}\n")
         
         if partial_annos:
-            pp.text(f"  \n{bold}Annotations not in all objects:{reset} {', '.join(partial_annos)}\n")
+            pp.text(f"  \n{bold}Unique Annotations:{reset} {', '.join(partial_annos)}\n")
 
     def _repr_pretty_spiketrain_overview(self, items, pp):
         bold = '\033[1m'
