@@ -33,7 +33,7 @@ def create_tree(jupyphant_entity):
     from IPython.display import display
     jupyphant_entity.create_tree()
     jupyphant_entity.ipytree_of_neo_objects.layout.width = '100%'
-    def on_selected_change_tree(change):
+    def on_selected_change_tree(change, do_not_select_leafs=True):
         jupyphant_entity.ipytree_of_neo_objects.unobserve(on_selected_change_tree, names='selected_nodes')
         old_selected_nodes = change['old']
         new_selected_nodes = change['new']
@@ -42,46 +42,45 @@ def create_tree(jupyphant_entity):
         old_set = set(old_selected_nodes)
         new_set = set(new_selected_nodes)
 
-        def select_iteratively(nodes, selected):
-            first_stack = list(nodes)
-
-            second_stack = []
-            while first_stack:
-                node = first_stack.pop()
-                second_stack.extend(getattr(node, 'nodes', []))
-                    
-            while second_stack:
-                node = second_stack.pop()
-                children = getattr(node, 'nodes', [])
-                n_children = len(children)
-                if selected:
-                    jupyphant_entity.selected_neo_objects.add(node)
-                else:
-                    jupyphant_entity.selected_neo_objects.discard(node)
-                if n_children > 0:
-                    second_stack.extend(children)
-
         # Nodes that were newly selected
         just_selected = new_set - old_set
         just_deselected = old_set - new_set
 
         jupyphant_entity.selected_neo_objects.difference_update(just_deselected)
-        select_iteratively(just_deselected, False)
         jupyphant_entity.selected_neo_objects.update(just_selected)
-        select_iteratively(just_selected, True)
+        
+        visited = set()  # Keep track of processed nodes
 
-        def sync_selection_to_ui(nodes, selected_set):
-            for node in nodes:
-                selected = node in selected_set
+        # Function to propagate selection iteratively
+        def propagate(nodes, selected):
+            stack = list(nodes)
+            while stack:
+                node = stack.pop()
+                if node in visited:
+                    continue
+                visited.add(node)
+
                 children = getattr(node, 'nodes', [])
-                if children and len(children) > 0:
+                is_leaf = not children
+
+                # Only update node.selected if not a leaf
+                if not (is_leaf and do_not_select_leafs):
                     if node.selected != selected:
                         node.selected = selected
-                    sync_selection_to_ui(children, selected_set)
 
-        # Usage
-        sync_selection_to_ui(jupyphant_entity.ipytree_of_neo_objects.nodes,
-                            jupyphant_entity.selected_neo_objects)
+                # Keep selected_neo_objects in sync
+                if selected:
+                    jupyphant_entity.selected_neo_objects.add(node)
+                else:
+                    jupyphant_entity.selected_neo_objects.discard(node)
+
+                # Add children to stack
+                stack.extend(children)
+
+        # Then propagate selection
+        propagate(just_selected, True)
+        # Propagate deselection first
+        propagate(just_deselected, False)
 
         jupyphant_entity.on_selected_neo_objects_changed.fire()
 
