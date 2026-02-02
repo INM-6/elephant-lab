@@ -891,11 +891,14 @@ class Jupyphant:
         # Units Check
         units = set(str(st.units.dimensionality) for st in spiketrains)
         pp.text(f"  {bold}Units:{reset} {', '.join(units)}\n")
+
+        all_annotations = [st.annotations for st in spiketrains]
+        self._repr_pretty_annotations_overview(all_annotations, count, pp)
         
         # Time Range
         all_t_starts = [st.t_start for st in spiketrains]
         all_t_stops = [st.t_stop for st in spiketrains]
-        pp.text(f"  {bold}Time Range (t_start to t_stop):{reset}\n")
+        pp.text(f"  \n{bold}Time Range (t_start to t_stop):{reset}\n")
         pp.text(f"    {bold}Min:{reset} {min(all_t_starts)}\n")
         pp.text(f"    {bold}Max:{reset} {max(all_t_stops)}\n")
 
@@ -937,9 +940,6 @@ class Jupyphant:
                 pp.text(f"    {bold}Min:{reset} {min(cvs):.4f}\n")
                 pp.text(f"    {bold}Max:{reset} {max(cvs):.4f}\n")
                 pp.text(f"    {bold}Average:{reset} {self.np.mean(cvs):.4f}\n")
-
-        all_annotations = [st.annotations for st in spiketrains]
-        self._repr_pretty_annotations_overview(all_annotations, count, pp)
 
         pp.text("\n")
 
