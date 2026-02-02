@@ -106,6 +106,23 @@ class Jupyphant:
     # Used to display the Neo object hierarchy
     from ipytree import Tree, Node
 
+    class SimpleEvent:
+        def __init__(self):
+            self._listeners = []
+
+        def add_listener(self, fn):
+            """Register a callback function."""
+            self._listeners.append(fn)
+
+        def remove_listener(self, fn):
+            """Unregister a callback function."""
+            self._listeners.remove(fn)
+
+        def fire(self):
+            """Call all registered callbacks."""
+            for fn in self._listeners:
+                fn()
+
     def __init__(self):
         """   # TODO: rewrite docstring
         Constructor of JupyphantVisualization
@@ -122,6 +139,8 @@ class Jupyphant:
         self.analogsignal_overview = None
         self.analogsignals_hash = None
         self.ipytree_of_neo_objects = None
+        self.selected_neo_objects = set()
+        self.on_selected_neo_objects_changed = self.SimpleEvent()
         self.map_ipytree_node_id_to_neo_obj_hash = {}
         self.map_neo_obj_hash_to_neo_obj = {}
         self.filter_changed = False
@@ -562,7 +581,7 @@ class Jupyphant:
 
     def _get_neo_obj_hash_and_node_name_of_selected_nodes(self):
         return {self.map_ipytree_node_id_to_neo_obj_hash[node._id]: node.name
-                for node in self.ipytree_of_neo_objects.selected_nodes}
+                for node in self.selected_neo_objects}
 
     def _repr_pretty_neo_objects(self, neo_obj, node_name, pp, cycle):
         """

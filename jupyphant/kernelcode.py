@@ -33,6 +33,60 @@ def create_tree(jupyphant_entity):
     from IPython.display import display
     jupyphant_entity.create_tree()
     jupyphant_entity.ipytree_of_neo_objects.layout.width = '100%'
+    def on_selected_change_tree(change):
+        jupyphant_entity.ipytree_of_neo_objects.unobserve(on_selected_change_tree, names='selected_nodes')
+        old_selected_nodes = change['old']
+        new_selected_nodes = change['new']
+
+        # old_selected_nodes and new_selected_nodes are lists of Node objects
+        old_set = set(old_selected_nodes)
+        new_set = set(new_selected_nodes)
+
+        def select_iteratively(nodes, selected):
+            first_stack = list(nodes)
+
+            second_stack = []
+            while first_stack:
+                node = first_stack.pop()
+                second_stack.extend(getattr(node, 'nodes', []))
+                    
+            while second_stack:
+                node = second_stack.pop()
+                children = getattr(node, 'nodes', [])
+                n_children = len(children)
+                if selected:
+                    jupyphant_entity.selected_neo_objects.add(node)
+                else:
+                    jupyphant_entity.selected_neo_objects.discard(node)
+                if n_children > 0:
+                    second_stack.extend(children)
+
+        # Nodes that were newly selected
+        just_selected = new_set - old_set
+        just_deselected = old_set - new_set
+
+        jupyphant_entity.selected_neo_objects.difference_update(just_deselected)
+        select_iteratively(just_deselected, False)
+        jupyphant_entity.selected_neo_objects.update(just_selected)
+        select_iteratively(just_selected, True)
+
+        def sync_selection_to_ui(nodes, selected_set):
+            for node in nodes:
+                selected = node in selected_set
+                children = getattr(node, 'nodes', [])
+                if children and len(children) > 0:
+                    if node.selected != selected:
+                        node.selected = selected
+                    sync_selection_to_ui(children, selected_set)
+
+        # Usage
+        sync_selection_to_ui(jupyphant_entity.ipytree_of_neo_objects.nodes,
+                            jupyphant_entity.selected_neo_objects)
+
+        jupyphant_entity.on_selected_neo_objects_changed.fire()
+
+        jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
+    jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
     display(jupyphant_entity.ipytree_of_neo_objects)
 
 
@@ -41,13 +95,13 @@ def create_explorer_info(jupyphant_entity):
     from IPython.display import display
     from ipywidgets import Output
 
-    def on_selected_change_info(change):
+    def on_selected_change_info():
         with output_node_info:
             IPython.display.clear_output()
             jupyphant_entity.pretty_print_of_selected_neo_objects()
 
     output_node_info = Output(layout={'border': '1px solid orange'})
-    jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_info, names='selected_nodes')
+    jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
     display(output_node_info)
 
 
@@ -56,7 +110,7 @@ def create_explorer_raw_plot(jupyphant_entity):
     from IPython.display import display
     from ipywidgets import Output
 
-    def on_selected_change_raw(change):
+    def on_selected_change_raw():
         selected_ids = get_selected_neo_ids(jupyphant_entity)
         with output_node_raw_plot:
             IPython.display.clear_output()
@@ -70,7 +124,7 @@ def create_explorer_raw_plot(jupyphant_entity):
                 raw_anasig.display()
 
     output_node_raw_plot = Output(layout={'width': "100%", 'height': 'auto'})
-    jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_raw, names='selected_nodes')
+    jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_raw)
     display(output_node_raw_plot)
 
 
@@ -79,7 +133,7 @@ def create_explorer_statistics(jupyphant_entity):
     from IPython.display import display
     from ipywidgets import Output, Layout
 
-    def on_selected_change_statistics(change):
+    def on_selected_change_statistics():
         selected_ids = get_selected_neo_ids(jupyphant_entity)
         with output_node_statistic:
             IPython.display.clear_output()
@@ -88,13 +142,13 @@ def create_explorer_statistics(jupyphant_entity):
                 display(fig)
 
     output_node_statistic = Output(layout=Layout(border='1px solid orange', width='auto', height='auto'))
-    jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_statistics, names='selected_nodes')
+    jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_statistics)
     display(output_node_statistic)
 
 def get_selected_neo_ids(jupyphant_entity):
     selected_ids = [
         jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id]
-        for node in jupyphant_entity.ipytree_of_neo_objects.selected_nodes
+        for node in jupyphant_entity.selected_neo_objects
         if node._id in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash
     ]
     return selected_ids
