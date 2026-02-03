@@ -299,7 +299,8 @@ class PlotlyGraphFigure:
         """Updates the range slider to the last x-axis if shared_xaxes is True"""
         n = self.nGraphs
         x_bgcolor = "#1e7fcc"
-        x_height = 0.05
+        PIXELS = 25
+        x_height = max(0.02, PIXELS / self.height)
         if self.compress:
             xaxis_options = dict(
                 rangeslider=dict(
@@ -335,6 +336,7 @@ class PlotlyGraphFigure:
             step=0.1,
             orientation='vertical',
             continuous_update=True,
+            readout=False,
             layout={'height': f'{y_slider_height}px', 'margin': '100px 0 0 0'}
         )
 
@@ -370,7 +372,29 @@ class PlotlyGraphFigure:
             if hasattr(self, 'hide_legend'):
                 if self.hide_legend:
                     self.layout_options["showlegend"] = False
+        
 
+    def update_y_slider(self):
+        """Updates the y-axis slider height and visibility."""
+        if hasattr(self, "y_slider"):
+            # Update existing slider
+            y_slider_height = self.calculate_y_slider_height()
+            if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
+                self.y_slider.layout.height = f'{y_slider_height}px'
+            visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
+            if self.y_slider.layout.visibility != visible:
+                self.y_slider.layout.visibility = visible
+
+    def calculate_y_slider_height(self):
+        return int(0.875 * self.get_height() - 165)
+    
+    def get_height(self):
+        """Returns the current height of the figure."""
+        if self.overlapping:
+            return self.default_height
+        else:
+            return self.height
+    
     def create_annotations(self):
         """Updates the graph annotations."""
         if self.annotation_data is None:
@@ -406,7 +430,7 @@ class PlotlyGraphFigure:
                 yref="paper",
                 text=text,
                 showarrow=False,
-                font=dict(size=10, color="#194D89"),
+                font=dict(size=11, color="#194D89"),
                 xanchor="center",
                 yanchor="bottom",
             ))
@@ -419,7 +443,7 @@ class PlotlyGraphFigure:
                 yref="paper",
                 text=f"{x:.2f}",
                 showarrow=False,
-                font=dict(size=9, color="#666"),
+                font=dict(size=10, color="#666"),
                 xanchor="center",
                 yanchor="top"
             ))
@@ -490,7 +514,7 @@ class PlotlyGraphFigure:
                 yref="paper",
                 text=text,
                 showarrow=False,
-                font=dict(size=10, color="#4C9ED9"),
+                font=dict(size=11, color="#4C9ED9"),
                 xanchor="center",
                 yanchor="bottom"
             ))
@@ -503,7 +527,7 @@ class PlotlyGraphFigure:
                 yref="paper",
                 text=f"{x0:.2f}",
                 showarrow=False,
-                font=dict(size=9, color="#666"),
+                font=dict(size=10, color="#666"),
                 xanchor="center",
                 yanchor="top"
             ))
@@ -514,7 +538,7 @@ class PlotlyGraphFigure:
                 yref="paper",
                 text=f"{x1:.2f}",
                 showarrow=False,
-                font=dict(size=9, color="#666"),
+                font=dict(size=10, color="#666"),
                 xanchor="center",
                 yanchor="top"
             ))
@@ -570,28 +594,6 @@ class PlotlyGraphFigure:
                 if y < 0-max_y_shift:  # prevent going too far off bottom
                     y = 0
                 current["y"] = y
-        
-
-    def update_y_slider(self):
-        """Updates the y-axis slider height and visibility."""
-        if hasattr(self, "y_slider"):
-            # Update existing slider
-            y_slider_height = self.calculate_y_slider_height()
-            if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
-                self.y_slider.layout.height = f'{y_slider_height}px'
-            visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
-            if self.y_slider.layout.visibility != visible:
-                self.y_slider.layout.visibility = visible
-
-    def calculate_y_slider_height(self):
-        return int(0.875 * self.get_height() - 165)
-    
-    def get_height(self):
-        """Returns the current height of the figure."""
-        height = self.fig.layout.height
-        if height is None:
-            height = self.layout_options["height"]
-        return height
 
     def manage_axis_titles(self):
         """If all x-axes have the same title, move it to the last axis only."""
