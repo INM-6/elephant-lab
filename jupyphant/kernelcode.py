@@ -14,6 +14,7 @@ def create_tree(jupyphant_entity):
     from IPython.display import display
     jupyphant_entity.create_tree()
     jupyphant_entity.ipytree_of_neo_objects.layout.width = '100%'
+
     def on_selected_change_tree(change, do_not_select_leafs=True):
         jupyphant_entity.ipytree_of_neo_objects.unobserve(on_selected_change_tree, names='selected_nodes')
         old_selected_nodes = change['old']
@@ -26,11 +27,6 @@ def create_tree(jupyphant_entity):
         # Nodes that were newly selected
         just_selected = new_set - old_set
         just_deselected = old_set - new_set
-
-        jupyphant_entity.selected_neo_objects.difference_update(just_deselected)
-        jupyphant_entity.selected_neo_objects.update(just_selected)
-        
-        visited = set()  # Keep track of processed nodes
 
         # Function to propagate selection iteratively
         def propagate(nodes, selected):
@@ -58,12 +54,20 @@ def create_tree(jupyphant_entity):
                 # Add children to stack
                 stack.extend(children)
 
-        # Then propagate selection
-        propagate(just_selected, True)
-        # Propagate deselection first
-        propagate(just_deselected, False)
+        all_selected_in_neo = just_selected.issubset(jupyphant_entity.selected_neo_objects)
+        none_deselected_in_neo = just_deselected.isdisjoint(jupyphant_entity.selected_neo_objects)
 
-        jupyphant_entity.on_selected_neo_objects_changed.fire()
+        visited = set()  # Keep track of processed nodes
+
+        if all_selected_in_neo:
+            if not none_deselected_in_neo:
+                propagate(just_deselected, False)
+                jupyphant_entity.on_selected_neo_objects_changed.fire()
+        else:
+            propagate(just_selected, True)
+            if not none_deselected_in_neo:
+                propagate(just_deselected, False)
+            jupyphant_entity.on_selected_neo_objects_changed.fire()
 
         jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
     jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
