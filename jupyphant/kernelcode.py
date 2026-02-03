@@ -9,25 +9,6 @@ def setup_env():
     return jupyphant_entity
 
 
-# Call to the function that creates a rasterplot from all spike trains
-def raster_plot(jupyphant_entity):
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        plotlyGraphFig = jupyphant_entity.create_rasterplot()
-        if plotlyGraphFig:
-            plotlyGraphFig.display()
-
-# Call to the function that plots AnalogSignals
-def lfp_plot(jupyphant_entity):
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        plotlyGraphFig = jupyphant_entity.create_lfpplot()
-        if plotlyGraphFig:
-            plotlyGraphFig.display()
-
-
 # Call to the function that initializes the ipytree widget with an empty tree
 def create_tree(jupyphant_entity):
     from IPython.display import display

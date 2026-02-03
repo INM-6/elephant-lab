@@ -77,8 +77,6 @@ class JupyphantExtension {
 	private myVisTabs: Widget[];
 	private widget: DockPanel;
 	private workflowEngine: WorkflowEngineWidget | null;
-	private outarea_content_rasterplot: OutputArea | null;
-	private outarea_content_lfpplot: OutputArea | null;
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
 	private outarea_nodeexplorer_statistics: OutputArea | null;
@@ -103,8 +101,6 @@ class JupyphantExtension {
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
 		this.widget = new DockPanel();
 		this.workflowEngine = null;
-		this.outarea_content_rasterplot = null;
-		this.outarea_content_lfpplot = null;
 		this.outarea_nodeexplorer_info = null;
 		this.outarea_nodeexplorer_raw = null;
 		this.outarea_nodeexplorer_statistics = null;
@@ -133,8 +129,6 @@ class JupyphantExtension {
 			await this.executeCodeInOutputArea(pythonCode['createExplorerInfo'], this.outarea_nodeexplorer_info!, session);
 			await this.executeCodeInOutputArea(pythonCode['createExplorerRawPlot'], this.outarea_nodeexplorer_raw!, session);
 			await this.executeCodeInOutputArea(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
-			await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, session);
-			await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, session);
 			this.widget.title.label += ' (ready)'; // Indicates that the Jupyphant Extension is completly loaded
 
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
@@ -225,8 +219,6 @@ class JupyphantExtension {
 			console.log("Jupyphant: Cell executed, updating plots.");
 
 			await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, initialSession, false);
-			await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession);
-			await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession);
 		});
 
 		// Listener for changed Kernel, waits for Kernel to be ready
@@ -567,11 +559,6 @@ class JupyphantExtension {
 			const output_tabs = new DockPanel({ tabsMovable: false });
 			output_tabs.id = 'jupyphant-output-tabs';
 			output_tabs.title.label = 'Output-Area';
-			let output_widget_plot = new Panel();
-			output_widget_plot.title.label = 'Overview Plots';
-			output_widget_plot.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-			this.outarea_content_rasterplot = this.createOutputArea(rendermime, output_widget_plot, ['my-outarea-class'], 'jup_vis_out_id_3.1', session);
-			this.outarea_content_lfpplot = this.createOutputArea(rendermime, output_widget_plot, ['my-outarea-class'], 'jup_vis_out_id_3.2', session);
 
 			// Text Output used for Analysis Results
 			let output_widget_text = new Panel();
@@ -586,7 +573,6 @@ class JupyphantExtension {
 			output_widget_error.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 			this.createOutputArea(rendermime, output_widget_error, ['my-outarea-class'], 'jup_vis_out_id_3.4', session);
 
-			output_tabs.addWidget(output_widget_plot);
 			output_tabs.addWidget(output_widget_text);
 			output_tabs.addWidget(output_widget_error);
 			this.app.shell.add(output_tabs, 'right', { rank: 400 });
