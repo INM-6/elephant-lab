@@ -1401,13 +1401,13 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 
 			// get elephant modules
 			let code = `
-			import sys
-			modules = [
-			name
-			for name in sys.modules
-			if name == "elephant" or name.startswith("elephant.")
-			]
-			print(modules)
+import sys
+modules = [
+name
+for name in sys.modules
+if name == "elephant" or name.startswith("elephant.")
+]
+print(modules)
 			`
 			const result = await this.kernelBridge.executeCode(code, true);
 			if (result && result.outputs) {
@@ -1427,23 +1427,19 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 			elephant_modules_dropdown.onchange = async () => {
 				// get elephant functions
 				code = `
-				import sys
-				import inspect
-				
-				def is_function_or_class(obj):
-					return inspect.isfunction(obj) or inspect.isclass(obj)
-
-				module = sys.modules.get("${elephant_modules_dropdown.value}")
-				if module is None:
-					raise ValueError("Elephant-Module not found")
-
-				function_names = [
-					name
-					for name, obj in inspect.getmembers(module, is_function_or_class)
-					if not name.startswith("_")
-				]
-				print(function_names)
-				
+import sys
+import inspect
+def is_function_or_class(obj):
+	return inspect.isfunction(obj) or inspect.isclass(obj)
+module = sys.modules.get("${elephant_modules_dropdown.value}")
+if module is None:
+	raise ValueError("Elephant-Module not found")
+function_names = [
+	name
+	for name, obj in inspect.getmembers(module, is_function_or_class)
+	if not name.startswith("_")
+]
+print(function_names)
 			`
 				if (!this.kernelBridge) {
 					console.error("KernelBridge not initialized.");
@@ -1475,53 +1471,41 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 				let function_name_to_pydantic_name = elephant_functions_dropdown.value.split("_").map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
 				console.log(`function_name_to_pydantic_name ${function_name_to_pydantic_name}`);
 				let code = `
-				from elephant import schemas
-				import json
-
-				schema_data = schemas.schema_${elephant_modules_dropdown.value.replace("elephant.", "")}.Pydantic${function_name_to_pydantic_name}.model_json_schema()
-
-				if isinstance(schema_data, str):
-					try:
-						schema_dict = json.loads(schema_data)
-					except json.JSONDecodeError:
-						print(json.dumps({"error": "Invalid JSON schema"}))
-						schema_dict = {}
-				else:
-					schema_dict = schema_data
-
-
-				def get_separated_properties(schema_dict):
-					main_props = schema_dict.get('properties', {})
-					definitions = schema_dict.get('$defs', {})
-					
-					output = {
-						"init_params": {},
-						"instance_methods": {}
-					}
-
-					if 'is_class_model' not in main_props:
-						output["init_params"] = main_props
-						print(json.dumps(output))
-						return
-
-					for prop_name, prop_schema in main_props.items():
-						
-						if prop_name == 'constructor' and '$ref' in prop_schema:
-							try:
-								def_name = prop_schema['$ref'].split('/')[-1]
-								referenced_model_schema = definitions[def_name]
-								init_properties = referenced_model_schema.get('properties', {})
-								output["init_params"].update(init_properties)
-								
-							except (KeyError, IndexError):
-								pass
-						
-						elif prop_name not in ('constructor', 'is_class_model'):
-							output["instance_methods"][prop_name] = prop_schema
-							
-					print(json.dumps(output))
-
-				get_separated_properties(schema_dict)
+from elephant import schemas
+import json
+schema_data = schemas.schema_${elephant_modules_dropdown.value.replace("elephant.", "")}.Pydantic${function_name_to_pydantic_name}.model_json_schema()
+if isinstance(schema_data, str):
+	try:
+		schema_dict = json.loads(schema_data)
+	except json.JSONDecodeError:
+		print(json.dumps({"error": "Invalid JSON schema"}))
+		schema_dict = {}
+else:
+	schema_dict = schema_data
+def get_separated_properties(schema_dict):
+	main_props = schema_dict.get('properties', {})
+	definitions = schema_dict.get('$defs', {})
+	output = {
+		"init_params": {},
+		"instance_methods": {}
+	}
+	if 'is_class_model' not in main_props:
+		output["init_params"] = main_props
+		print(json.dumps(output))
+		return
+	for prop_name, prop_schema in main_props.items():
+		if prop_name == 'constructor' and '$ref' in prop_schema:
+			try:
+				def_name = prop_schema['$ref'].split('/')[-1]
+				referenced_model_schema = definitions[def_name]
+				init_properties = referenced_model_schema.get('properties', {})
+				output["init_params"].update(init_properties)
+			except (KeyError, IndexError):
+				pass
+		elif prop_name not in ('constructor', 'is_class_model'):
+			output["instance_methods"][prop_name] = prop_schema
+	print(json.dumps(output))
+get_separated_properties(schema_dict)
 				`
 				if (!this.kernelBridge) {
 					console.error("KernelBridge not initialized.");
