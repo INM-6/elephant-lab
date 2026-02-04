@@ -8,6 +8,7 @@ class PlotlyGraphFigure:
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
+        If many traces are created, it gets compressed, so it still works efficient and is visually pleasing
         """
         self.vertical_spacing = 0.075
         self.default_height = 600
@@ -87,6 +88,9 @@ class PlotlyGraphFigure:
             self.layout_options[key] = options_list
 
     def update_layout(self):
+        """
+        Updates all collected changes to layout in one update to improve performance
+        """
         self.fig.update_layout(**self.layout_options)
         self.layout_options = dict()
 
@@ -240,6 +244,9 @@ class PlotlyGraphFigure:
         return False
     
     def change_height_after_render(self, height):
+        """
+        Changing height after the figure has already, is more complicated than just calling update_layout
+        """
         if self.fig.layout.height == height:
             return
         

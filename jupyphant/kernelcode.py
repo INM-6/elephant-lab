@@ -16,6 +16,19 @@ def create_tree(jupyphant_entity):
     jupyphant_entity.ipytree_of_neo_objects.layout.width = '100%'
 
     def on_selected_change_tree(change, do_not_select_leafs=True):
+        """
+        Selects/Deselects all Childs on Parent select/deselect
+
+        If you want to listen to the change of selected_nodes, then listen to
+        jupyphant_entity.on_selected_neo_objects_changed with add_listener(self, fn)
+        """
+
+        """
+        Calling node.selected is extremly inefficient, because it makes a trip from Python -> Javascript -> Python
+        So there need to be as less calls as possible.
+        However by doing that, the ipytree does not store the correct selected nodes anymore, so the python now stores the truth
+        about which node is selected
+        """
         jupyphant_entity.ipytree_of_neo_objects.unobserve(on_selected_change_tree, names='selected_nodes')
         old_selected_nodes = change['old']
         new_selected_nodes = change['new']
@@ -50,8 +63,6 @@ def create_tree(jupyphant_entity):
                     jupyphant_entity.selected_neo_objects.add(node)
                 else:
                     jupyphant_entity.selected_neo_objects.discard(node)
-
-                # Add children to stack
                 stack.extend(children)
 
         all_selected_in_neo = just_selected.issubset(jupyphant_entity.selected_neo_objects)

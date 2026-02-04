@@ -75,6 +75,7 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                 ))
 
     def extract_data(self, data):
+        """Extracts AnalogSignalLFPPlotData from a dict containing AnalogSignal Data"""
         max_duration_limit = 10 * self.pq.s 
 
         subplot_col = 1
