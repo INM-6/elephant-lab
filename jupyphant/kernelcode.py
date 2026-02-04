@@ -41,12 +41,20 @@ def create_tree(jupyphant_entity):
         just_selected = new_set - old_set
         just_deselected = old_set - new_set
 
+        def parent_selected(child):
+            for node in jupyphant_entity.selected_neo_objects:
+                if child in getattr(node, 'nodes', []):
+                    return True
+            return False
+
+
         # Function to propagate selection iteratively
-        def propagate(nodes, selected):
+        def propagate(nodes, selected, all_selected_in_neo):
+            fire_event = False
             stack = list(nodes)
             while stack:
                 node = stack.pop()
-                if node in visited:
+                if node in visited or (not selected and all_selected_in_neo and node in just_selected):
                     continue
                 visited.add(node)
 
@@ -61,23 +69,28 @@ def create_tree(jupyphant_entity):
                 # Keep selected_neo_objects in sync
                 if selected:
                     jupyphant_entity.selected_neo_objects.add(node)
+                    fire_event = True
                 else:
-                    jupyphant_entity.selected_neo_objects.discard(node)
+                    if not is_leaf or not parent_selected(node):
+                        jupyphant_entity.selected_neo_objects.discard(node)
+                        fire_event = True
                 stack.extend(children)
+            return fire_event
 
         all_selected_in_neo = just_selected.issubset(jupyphant_entity.selected_neo_objects)
         none_deselected_in_neo = just_deselected.isdisjoint(jupyphant_entity.selected_neo_objects)
 
         visited = set()  # Keep track of processed nodes
 
+        fire_event = False
         if all_selected_in_neo:
             if not none_deselected_in_neo:
-                propagate(just_deselected, False)
-                jupyphant_entity.on_selected_neo_objects_changed.fire()
+                fire_event = fire_event or propagate(just_deselected, False, all_selected_in_neo)
         else:
-            propagate(just_selected, True)
+            fire_event = fire_event or propagate(just_selected, True, all_selected_in_neo)
             if not none_deselected_in_neo:
-                propagate(just_deselected, False)
+                fire_event = fire_event or propagate(just_deselected, False, all_selected_in_neo)
+        if fire_event:
             jupyphant_entity.on_selected_neo_objects_changed.fire()
 
         jupyphant_entity.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
