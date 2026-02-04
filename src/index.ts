@@ -838,7 +838,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 * Initialization data for the Jupyphant extension
 */
 const extension: JupyterFrontEndPlugin<void> = {
-	id: 'Jupyphant',
+	id: 'jupyphant:extension',
 	autoStart: true,
 	// What to pass to the activate function
 	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager],

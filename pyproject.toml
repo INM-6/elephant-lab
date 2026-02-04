@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.3.1", "jupyterlab>=4.0.0,<4.4.9", "hatch-nodejs-version"]
+requires = ["hatchling>=1.3.1", "jupyterlab>=4.0.0,<5.0.0", "hatch-nodejs-version", "hatch-jupyter-builder>=0.5"]
 build-backend = "hatchling.build"
 
 [project]
@@ -40,6 +40,7 @@ dependencies = [
 "numpy",
 "pip",
 "neo",
+"nixio",
 "elephant",
 "viziphant",
 "quantities",
@@ -65,34 +66,43 @@ allow-direct-references = true
 [tool.hatch.metadata.hooks.nodejs]
 fields = ["description", "authors", "urls"]
 
-[tool.hatch.build]
-artifacts = ["jupyphant/labextension"]
-
-[tool.hatch.build.targets.wheel.shared-data]
-"jupyphant/labextension" = "share/jupyter/labextensions/jupyphant"
-"install.json" = "share/jupyter/labextensions/jupyphant/install.json"
 
 [tool.hatch.build.targets.sdist]
+include = [
+    "jupyphant",
+    "style",
+    "src",
+    "package.json",
+    "tsconfig.json",
+    "install.json",
+    "README.md",
+    "LICENSE"
+]
 exclude = [".github"]
+
+[tool.hatch.build]
+artifacts = ["labextension"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["jupyphant"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"labextension" = "share/jupyter/labextensions/jupyphant"
+"install.json" = "share/jupyter/labextensions/jupyphant/install.json"
 
 [tool.hatch.build.hooks.jupyter-builder]
 dependencies = ["hatch-jupyter-builder>=0.5"]
 build-function = "hatch_jupyter_builder.npm_builder"
 ensured-targets = [
-    "jupyphant/labextension/static/style.js",
-    "jupyphant/labextension/package.json",
+    "labextension/static/style.js",
+    "labextension/package.json",
 ]
-skip-if-exists = ["jupyphant/labextension/static/style.js"]
+
 
 [tool.hatch.build.hooks.jupyter-builder.build-kwargs]
 build_cmd = "build:prod"
 npm = ["jlpm"]
 
-[tool.hatch.build.hooks.jupyter-builder.editable-build-kwargs]
-build_cmd = "install:extension"
-npm = ["jlpm"]
-source_dir = "."
-build_dir = "jupyphant/labextension"
 
 [tool.jupyter-releaser.options]
 version_cmd = "hatch version"

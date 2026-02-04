@@ -1,5 +1,6 @@
 {
   "packageManager": "python",
   "packageName": "jupyphant",
-  "uninstallInstructions": "Use your Python package manager (pip, conda, etc.) to uninstall the package jupyphant"
+  "uninstallPlugin": "jupyphant:uninstall",
+  "resource": "share/jupyter/labextensions/jupyphant"
 }
