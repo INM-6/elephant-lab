@@ -2,6 +2,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from IPython.display import display
 import warnings
+import quantities as pq
 
 class PlotlyGraphFigure:
     def __init__(self, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None):
@@ -403,6 +404,22 @@ class PlotlyGraphFigure:
             return self.default_height
         else:
             return self.height
+        
+    def can_convert_unit(self, unit, convert_unit):
+        """
+        Returns 0 if no conversion is needed
+        Returns -1 if it is not possible to convert
+        Returns 1 if it can be converted
+        """
+        if unit == convert_unit:
+            return 0
+        if unit.simplified.dimensionality != convert_unit.simplified.dimensionality:
+            return -1
+        return 1
+        
+    def convert_to_common_units(self, val, unit, convert_unit):
+        q = pq.Quantity(val, unit)
+        return q.rescale(convert_unit).magnitude
     
     def create_annotations(self):
         """Updates the graph annotations."""
@@ -417,8 +434,11 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x, text, unit in zip(xs, texts, units):
-            if unit != self.common_units_x:
+            can_convert = self.can_convert_unit(unit=unit, convert_unit=self.common_units_x)
+            if can_convert == -1:
                 continue
+            if can_convert == 1:
+                x = self.convert_to_common_units(x, unit=unit, convert_unit=self.common_units_x)
             shapes.append(dict(
                 type="line",
                 x0=x,
@@ -506,8 +526,12 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x0, x1, text, unit in zip(x0s, x1s, texts, units):
-            if unit != self.common_units_x:
+            can_convert = self.can_convert_unit(unit=unit, convert_unit=self.common_units_x)
+            if can_convert == -1:
                 continue
+            if can_convert == 1:
+                x0 = self.convert_to_common_units(x0, unit=unit, convert_unit=self.common_units_x)
+                x1 = self.convert_to_common_units(x1, unit=unit, convert_unit=self.common_units_x)
             shapes.append(dict(
                 type="rect",
                 x0=x0,
