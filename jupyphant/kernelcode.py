@@ -85,11 +85,11 @@ def create_tree(jupyphant_entity):
         fire_event = False
         if all_selected_in_neo:
             if not none_deselected_in_neo:
-                fire_event = fire_event or propagate(just_deselected, False, all_selected_in_neo)
+                fire_event = propagate(just_deselected, False, all_selected_in_neo) or fire_event
         else:
-            fire_event = fire_event or propagate(just_selected, True, all_selected_in_neo)
+            fire_event = propagate(just_selected, True, all_selected_in_neo) or fire_event
             if not none_deselected_in_neo:
-                fire_event = fire_event or propagate(just_deselected, False, all_selected_in_neo)
+                fire_event = propagate(just_deselected, False, all_selected_in_neo) or fire_event
         if fire_event:
             jupyphant_entity.on_selected_neo_objects_changed.fire()
 
