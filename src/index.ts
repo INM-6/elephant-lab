@@ -199,7 +199,7 @@ class JupyphantExtension {
 			this.output_tabs = null;
 		}
 
-		this.initializeTab(newPanel.content.rendermime);
+		this.initializeTab(newPanel.content.rendermime as any);
 		this.myVisTabs.push(this.widget);
 		this.myPanels.push(newPanel);
 		this.attachTab();
@@ -220,9 +220,11 @@ class JupyphantExtension {
 			}
 	
 			this._updateTimer = window.setTimeout(async () => {
-				await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, initialSession, false);
-				await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession);
-				await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession);
+				await Promise.all([
+					this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, initialSession, false),
+					this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession),
+					this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession)
+				]);
 			}, 500);
 		});
 
@@ -744,8 +746,7 @@ except Exception as e:
 		// Create an OutputArea
 		// OutputAreas are used to display stuff, just like the outputs below every cell
 		let model = new OutputAreaModel({ trusted: true });
-		let outarea = new OutputArea({ rendermime, model });
-		// Add OutputArea to the specified tab
+		let outarea = new OutputArea({ rendermime: rendermime as any, model });
 		tab.addWidget(outarea);
 		// Set HTML/DOM id and classes
 		outarea.id = id;
