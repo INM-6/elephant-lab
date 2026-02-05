@@ -53,6 +53,7 @@ class PlotlyGraphFigure:
 
         self.update_jupyterlab_theme(theme_name)
 
+        self.manage_axis_titles()
         self.overlapping = False
         if overlapping:
             self.overlap()
@@ -68,7 +69,6 @@ class PlotlyGraphFigure:
             self.hide_legend = True
         self.update_legend()
         self.create_sliders()
-        self.manage_axis_titles()
         self.create_annotations()
         self.create_anntotation_intervals()
         self.format_annotations()
@@ -265,7 +265,7 @@ class PlotlyGraphFigure:
 
         for i in range(1, self.nGraphs + 1):
             self.update_layout_options_dict(f"yaxis{i}", dict(
-                visible=False,
+                visible=self.same_y_label and i>1,
                 domain=[0.0,1.0]
             ))
 
@@ -641,6 +641,16 @@ class PlotlyGraphFigure:
         # Clear all titles
         for i in range(1, n):
             self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
+
+        # Collect titles
+        titles = []
+        for i in range(1, n + 1):
+            axis = self.fig.layout[f"yaxis{i}"]
+            titles.append(get_title(axis))
+
+        # Normalize (remove empty strings)
+        titles = [t for t in titles if t not in ("", None)]
+        self.same_y_label = len(set(titles))==1
 
     def create_xrange_buttons(self, relayout_button_options):
         """
