@@ -157,6 +157,7 @@ class Jupyphant:
         self.filter_changed = False
         self.expand_all = False
         self.last_known_hashes = []
+        self.hash_cache = {}
         self.jupyterlab_theme = 'plotly_dark'
         self.plots = {}
         for key in self.RawPlotKey:
@@ -250,9 +251,16 @@ class Jupyphant:
         
     def get_neo_hash(self, neo_obj, hash_name="sha1"):
         """
-        Creates a hash value for neo objects, 
+        Creates a hash value for neo objects,
         taking into account the data, units and metadata.
         """
+        try:
+            obj_id = id(neo_obj)
+            if obj_id in self.hash_cache:
+                return self.hash_cache[obj_id]
+        except Exception:
+            pass
+
         if isinstance(neo_obj, neo.AnalogSignal):
             hashable_summary = (
                 neo_obj.magnitude,
@@ -261,16 +269,16 @@ class Jupyphant:
                 str(neo_obj.sampling_rate),
                 float(neo_obj.t_start)
             )
-            return joblib.hash(hashable_summary, hash_name=hash_name)
-        
+            result = joblib.hash(hashable_summary, hash_name=hash_name)
+
         elif isinstance(neo_obj, neo.IrregularlySampledSignal):
             hashable_summary = (
                 neo_obj.magnitude,
                 str(neo_obj.units),
                 float(neo_obj.t_start)
             )
-            return joblib.hash(hashable_summary, hash_name=hash_name)
-        
+            result = joblib.hash(hashable_summary, hash_name=hash_name)
+
         elif isinstance(neo_obj, neo.SpikeTrain):
             hashable_summary = (
                 neo_obj.times,
@@ -278,7 +286,7 @@ class Jupyphant:
                 float(neo_obj.t_start),
                 float(neo_obj.t_stop)
             )
-            return joblib.hash(hashable_summary, hash_name=hash_name)
+            result = joblib.hash(hashable_summary, hash_name=hash_name)
 
         elif isinstance(neo_obj, (neo.Epoch, neo.Event)):
             hashable_summary = (
@@ -286,8 +294,8 @@ class Jupyphant:
                 neo_obj.labels,
                 str(neo_obj.units)
             )
-            return joblib.hash(hashable_summary, hash_name=hash_name)
-        
+            result = joblib.hash(hashable_summary, hash_name=hash_name)
+
         elif isinstance(neo_obj, (neo.Block, neo.Segment)):
             hashable_summary = [
                 neo_obj.name,
@@ -298,10 +306,17 @@ class Jupyphant:
                 child_container = getattr(neo_obj, child_container_name)
                 for child in child_container:
                     hashable_summary.append(self.get_neo_hash(child, hash_name))
-            
-            return joblib.hash(tuple(hashable_summary), hash_name=hash_name)
-            
-        return joblib.hash(neo_obj, hash_name)
+
+            result = joblib.hash(tuple(hashable_summary), hash_name=hash_name)
+
+        else:
+            result = joblib.hash(neo_obj, hash_name)
+
+        try:
+            self.hash_cache[obj_id] = result
+        except Exception:
+            pass
+        return result
         
     def update(self):
         """
@@ -309,7 +324,7 @@ class Jupyphant:
         created by the notebook user.
         Called before updating plots, thus, usually at every cell execution.
         """
-
+        self.hash_cache = {}
         neo_objs_hash_before_update = joblib.hash(self.last_known_hashes, hash_name='sha1')
 
         self.neo_objs_and_lists_of_neo_objs_with_var_name.clear()
