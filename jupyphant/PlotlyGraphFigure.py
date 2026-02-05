@@ -147,7 +147,36 @@ class PlotlyGraphFigure:
                 marker_settings["size"] = marker_settings["size"](self.getSubplotHeight())
             
             row = len(self.traces) + 1
-            y_values = data.y
+
+            x_values=data.x
+            y_values=data.y
+            units_x = None
+            units_y = None
+            if hasattr(data, 'units_x'):
+                units_x = data.units_x
+                if hasattr(self, 'common_units_x'):
+                    if self.common_units_x is not None:
+                        can_convert = self.can_convert_units(units_x, self.common_units_x)
+                        if can_convert == -1:
+                            self.common_units_x = None
+                        elif can_convert == 1:
+                            x_values=self.convert_to_other_units(x_values, units_x, self.common_units_x)
+                            units_x = self.common_units_x
+                else:
+                    self.common_units_x = units_x
+            if hasattr(data, 'units_y'):
+                units_y = data.units_y
+                if hasattr(self, 'common_units_y'):
+                    if self.common_units_y is not None:
+                        can_convert = self.can_convert_units(units_y, self.common_units_y)
+                        if can_convert == -1:
+                            self.common_units_y = None
+                        elif can_convert == 1:
+                            y_values=self.convert_to_other_units(y_values, units_y, self.common_units_y)
+                            units_y = self.common_units_y
+                else:
+                    self.common_units_y = units_y
+
             if self.compress:
                 offset_index = row-1
                 if offset_index > 0:
@@ -170,8 +199,9 @@ class PlotlyGraphFigure:
                 self.maxX = maxX
                 self.minY = minY
                 self.maxY = maxY
+            
             trace  = go.Scattergl(
-                x=data.x,
+                x=x_values,
                 y=y_values,
                 name=getattr(data, 'name', 'Trace'),
                 mode=getattr(data, "mode", "markers"),
@@ -179,19 +209,6 @@ class PlotlyGraphFigure:
                 line=line_settings
             )
             self.traces.append((trace, row))
-            
-            if hasattr(data, 'units_x'):
-                if hasattr(self, 'common_units_x'):
-                    if self.common_units_x != data.units_x:
-                        self.common_units_x = None
-                else:
-                    self.common_units_x = data.units_x
-            if hasattr(data, 'units_y'):
-                if hasattr(self, 'common_units_y'):
-                    if self.common_units_y != data.units_y:
-                        self.common_units_y = None
-                else:
-                    self.common_units_y = data.units_y
 
             if self.compress:
                 fig.add_trace(trace)
@@ -203,9 +220,9 @@ class PlotlyGraphFigure:
                         row=row,
                         col=1
                     )
-                if hasattr(data, 'units_x'):
+                if units_x is not None:
                     fig.layout[f"xaxis{row}"].update(title=data.units_x.__str__())
-                if hasattr(data, 'units_y'):
+                if units_y is not None:
                     fig.layout[f"yaxis{row}"].update(title=data.units_y.__str__())
                 if hasattr(data, 'use_name_as_ticklabels'):
                     if data.use_name_as_ticklabels:
@@ -405,7 +422,7 @@ class PlotlyGraphFigure:
         else:
             return self.height
         
-    def can_convert_unit(self, unit, convert_unit):
+    def can_convert_units(self, unit, convert_unit):
         """
         Returns 0 if no conversion is needed
         Returns -1 if it is not possible to convert
@@ -417,7 +434,7 @@ class PlotlyGraphFigure:
             return -1
         return 1
         
-    def convert_to_common_units(self, val, unit, convert_unit):
+    def convert_to_other_units(self, val, unit, convert_unit):
         q = pq.Quantity(val, unit)
         return q.rescale(convert_unit).magnitude
     
@@ -434,11 +451,11 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x, text, unit in zip(xs, texts, units):
-            can_convert = self.can_convert_unit(unit=unit, convert_unit=self.common_units_x)
+            can_convert = self.can_convert_units(unit=unit, convert_unit=self.common_units_x)
             if can_convert == -1:
                 continue
             if can_convert == 1:
-                x = self.convert_to_common_units(x, unit=unit, convert_unit=self.common_units_x)
+                x = self.convert_to_other_units(x, unit=unit, convert_unit=self.common_units_x)
             shapes.append(dict(
                 type="line",
                 x0=x,
@@ -526,12 +543,12 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x0, x1, text, unit in zip(x0s, x1s, texts, units):
-            can_convert = self.can_convert_unit(unit=unit, convert_unit=self.common_units_x)
+            can_convert = self.can_convert_units(unit=unit, convert_unit=self.common_units_x)
             if can_convert == -1:
                 continue
             if can_convert == 1:
-                x0 = self.convert_to_common_units(x0, unit=unit, convert_unit=self.common_units_x)
-                x1 = self.convert_to_common_units(x1, unit=unit, convert_unit=self.common_units_x)
+                x0 = self.convert_to_other_units(x0, unit=unit, convert_unit=self.common_units_x)
+                x1 = self.convert_to_other_units(x1, unit=unit, convert_unit=self.common_units_x)
             shapes.append(dict(
                 type="rect",
                 x0=x0,
