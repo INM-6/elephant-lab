@@ -71,7 +71,8 @@ def create_tree(jupyphant_entity):
                     jupyphant_entity.selected_neo_objects.add(node)
                     fire_event = True
                 else:
-                    if not is_leaf or not parent_selected(node):
+                    # Since leafs never get selected in the UI it is more intuative, that they are always selected, when parent is selected
+                    if not is_leaf or node not in just_deselected or not parent_selected(node):
                         jupyphant_entity.selected_neo_objects.discard(node)
                         fire_event = True
                 stack.extend(children)
