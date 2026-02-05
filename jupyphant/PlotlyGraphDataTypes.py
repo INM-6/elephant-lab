@@ -17,7 +17,7 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
         self.marker = dict(symbol='line-ns-open', size=calcSize)
         self.x = spiketrain.times.magnitude
         self.y = [0] * len(self.x)
-        self.title_x = 'Time ({0})'.format(spiketrain.times.dimensionality)
+        self.units_x = spiketrain.times.units
         self.use_name_as_ticklabels = True
 
 class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
@@ -70,8 +70,8 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                         times=times, 
                         name=f"{names[trial_id]}",
                     ), 
-                    title_x = 'Time ({0})'.format(times.dimensionality),
-                    title_y = lfp.units.__str__()
+                    units_x = times.units,
+                    units_y = lfp.units
                 ))
 
     def extract_data(self, data):
@@ -117,7 +117,7 @@ class EventAnnotations(PlotlyGraphAnnotations):
                     x.append(event.times.magnitude)
                     text.append(event.labels)
                     n = len(event.times.magnitude)
-                    unit = unit + (['Time ({0})'.format(event.times.dimensionality)]*n)
+                    unit = unit + ([event.times.units]*n)
         super().__init__(self.np.concatenate(x), self.np.concatenate(text), unit)
 
 class EpochIntervals(PlotlyGraphAnnotationIntervals):
@@ -135,7 +135,7 @@ class EpochIntervals(PlotlyGraphAnnotationIntervals):
                     duration.append(epoch.durations.magnitude)
                     text.append(epoch.labels)
                     n = len(epoch.times.magnitude)
-                    unit = unit + (['Time ({0})'.format(epoch.times.dimensionality)]*n)
+                    unit = unit + ([epoch.times.units]*n)
         x = self.np.concatenate(x)
         duration = self.np.concatenate(duration)
         super().__init__(x, x+duration, self.np.concatenate(text), unit)

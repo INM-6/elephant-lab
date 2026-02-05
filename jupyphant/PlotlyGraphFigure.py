@@ -53,7 +53,7 @@ class PlotlyGraphFigure:
 
         self.update_jupyterlab_theme(theme_name)
 
-        self.manage_axis_titles()
+        self.manage_axis_units()
         self.overlapping = False
         if overlapping:
             self.overlap()
@@ -178,20 +178,22 @@ class PlotlyGraphFigure:
                 line=line_settings
             )
             self.traces.append((trace, row))
+            
+            if hasattr(data, 'units_x'):
+                if hasattr(self, 'common_units_x'):
+                    if self.common_units_x != data.units_x:
+                        self.common_units_x = None
+                else:
+                    self.common_units_x = data.units_x
+            if hasattr(data, 'units_y'):
+                if hasattr(self, 'common_units_y'):
+                    if self.common_units_y != data.units_y:
+                        self.common_units_y = None
+                else:
+                    self.common_units_y = data.units_y
+
             if self.compress:
                 fig.add_trace(trace)
-                if hasattr(data, 'title_x'):
-                    if hasattr(self, 'common_title_x'):
-                        if self.common_title_x != data.title_x:
-                            self.common_title_x = None
-                    else:
-                        self.common_title_x = data.title_x
-                if hasattr(data, 'title_y'):
-                    if hasattr(self, 'common_title_y'):
-                        if self.common_title_y != data.title_y:
-                            self.common_title_y = None
-                    else:
-                        self.common_title_y = data.title_y
                 if hasattr(data, 'use_name_as_ticklabels'):
                     self.ticktext.append(data.name)
             else:      
@@ -200,10 +202,10 @@ class PlotlyGraphFigure:
                         row=row,
                         col=1
                     )
-                if hasattr(data, 'title_x'):
-                    fig.layout[f"xaxis{row}"].update(title=data.title_x)
-                if hasattr(data, 'title_y'):
-                    fig.layout[f"yaxis{row}"].update(title=data.title_y)
+                if hasattr(data, 'units_x'):
+                    fig.layout[f"xaxis{row}"].update(title=data.units_x.__str__())
+                if hasattr(data, 'units_y'):
+                    fig.layout[f"yaxis{row}"].update(title=data.units_y.__str__())
                 if hasattr(data, 'use_name_as_ticklabels'):
                     if data.use_name_as_ticklabels:
                         fig.layout[f"yaxis{row}"].update(
@@ -265,7 +267,7 @@ class PlotlyGraphFigure:
 
         for i in range(1, self.nGraphs + 1):
             self.update_layout_options_dict(f"yaxis{i}", dict(
-                visible=self.common_title_y is not None and i>1,
+                visible=self.common_units_y is not None and i>1,
                 domain=[0.0,1.0]
             ))
 
@@ -415,7 +417,7 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x, text, unit in zip(xs, texts, units):
-            if unit != self.common_title_x:
+            if unit != self.common_units_x:
                 continue
             shapes.append(dict(
                 type="line",
@@ -504,7 +506,7 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x0, x1, text, unit in zip(x0s, x1s, texts, units):
-            if unit != self.common_title_x:
+            if unit != self.common_units_x:
                 continue
             shapes.append(dict(
                 type="rect",
@@ -608,56 +610,25 @@ class PlotlyGraphFigure:
                     y = 0
                 current["y"] = y
 
-    def manage_axis_titles(self):
-        """If all x-axes have the same title, move it to the last axis only."""
+    def manage_axis_units(self):
+        """If all x-axes have the same units, move it to the last axis only."""
         if self.compress:
-            if hasattr(self, 'common_title_x'):
-                if self.common_title_x is not None:
+            if hasattr(self, 'common_units_x'):
+                if self.common_units_x is not None:
                     self.update_layout_options_dict("xaxis", dict(
-                        title=self.common_title_x
+                        title=self.common_units_x.__str__()
                     ))
-            if hasattr(self, 'common_title_y'):
-                if self.common_title_y is not None:
+            if hasattr(self, 'common_units_y'):
+                if self.common_units_y is not None:
                     self.update_layout_options_dict("yaxis", dict(
-                        title=self.common_title_y
+                        title=self.common_units_y.__str__()
                     ))
-            return
-
-        def get_title(axis):
-            t = axis.title
-            if t is None:
-                return None
-            return t.text if hasattr(t, "text") else t
-        
-        def get_titles_set(axis_name):
-            n=self.nGraphs
-
-            # Collect titles
-            titles = []
-            for i in range(1, n + 1):
-                axis = self.fig.layout[f"{axis_name}{i}"]
-                titles.append(get_title(axis))
-
-            # Normalize (remove empty strings)
-            titles = [t for t in titles if t not in ("", None)]
-
-            return set(titles)
-        
-
-        x_titles = get_titles_set("xaxis")
-        if len(x_titles)>1:
-            self.common_title_x = None
         else:
-            # Clear all titles
-            for i in range(1, self.nGraphs):
-                self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
-            self.common_title_x = x_titles.pop()
-
-        y_titles = get_titles_set("yaxis")
-        if len(y_titles)>1:
-            self.common_title_y = None
-        else:
-            self.common_title_y = y_titles.pop()
+            if hasattr(self, 'common_units_x'):
+                if self.common_units_x is not None:
+                    # Clear all units except the last one
+                    for i in range(1, self.nGraphs):
+                        self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
 
     def create_xrange_buttons(self, relayout_button_options):
         """
@@ -771,10 +742,10 @@ class PlotlyGraphDataType:
             self.marker = data.marker
         if hasattr(data, 'line'):
             self.line = data.line
-        if hasattr(data, 'title_x'):
-            self.title_x = data.title_x
-        if hasattr(data, 'title_y'):
-            self.title_y = data.title_y
+        if hasattr(data, 'units_x'):
+            self.units_x = data.units_x
+        if hasattr(data, 'units_y'):
+            self.units_y = data.units_y
 
         try:
             # Objects with x/y attributes
