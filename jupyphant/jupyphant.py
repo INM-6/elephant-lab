@@ -6,7 +6,12 @@ import __main__
 import time
 
 import joblib
-import matplotlib.pyplot as plt
+
+from .PlotlyGraphFigure import PlotlyGraphFigure
+from .PlotlyGraphDataTypes import *
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import neo
 
 # neo abbreviations and font-awesome icons
@@ -95,19 +100,28 @@ class Jupyphant:
     correlation_coefficient = staticmethod(correlation_coefficient)
     # TODO: Use new viziphant for plotting
     # This relies on the initial version of viziphant
-    from viziphant.rasterplot import rasterplot
-    rasterplot = staticmethod(rasterplot)
-    from viziphant.statistics import plot_isi_histogram, plot_time_histogram, plot_instantaneous_rates_colormesh
-    from viziphant.spike_train_correlation import plot_corrcoef
-    plot_isi_histogram = staticmethod(plot_isi_histogram)
-    plot_time_histogram = staticmethod(plot_time_histogram)
-    plot_instantaneous_rates_colormesh = staticmethod(plot_instantaneous_rates_colormesh)
-    plot_corrcoef = staticmethod(plot_corrcoef)
     # Widgets used for display
     from ipywidgets import Output
     # ipytree provides a tree structure widget
     # Used to display the Neo object hierarchy
     from ipytree import Tree, Node
+
+    class SimpleEvent:
+        def __init__(self):
+            self._listeners = []
+
+        def add_listener(self, fn):
+            """Register a callback function."""
+            self._listeners.append(fn)
+
+        def remove_listener(self, fn):
+            """Unregister a callback function."""
+            self._listeners.remove(fn)
+
+        def fire(self):
+            """Call all registered callbacks."""
+            for fn in self._listeners:
+                fn()
 
     def __init__(self):
         """   # TODO: rewrite docstring
@@ -125,6 +139,8 @@ class Jupyphant:
         self.analogsignal_overview = None
         self.analogsignals_hash = None
         self.ipytree_of_neo_objects = None
+        self.selected_neo_objects = set()
+        self.on_selected_neo_objects_changed = self.SimpleEvent()
         self.map_ipytree_node_id_to_neo_obj_hash = {}
         self.map_neo_obj_hash_to_neo_obj = {}
         self.filter_changed = False
@@ -545,48 +561,44 @@ class Jupyphant:
         n_st_statistics = 4  # ISI, time-histogram, IFR, correlation
         n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
         if n_subplots > 0:
-            fig, axs = plt.subplots(n_subplots, n_st_statistics, figsize=(n_st_statistics * 8, n_subplots * 4),
-                                    squeeze=False)
-            fig.suptitle(f"Basic statistics for {'selected' if selected_ids else 'all'} SpikeTrains in Top-Nodes")
+            
+            subplot_titles = []
+            for top_node in spiketrains.keys():
+                if spiketrains[top_node]:
+                    subplot_titles.extend([f"ISI-distribution: {top_node}", f"Time-histogram: {top_node}", f"IFR: {top_node}", f"Correlation: {top_node}"])
+
+            fig = make_subplots(rows=n_subplots, cols=n_st_statistics, subplot_titles=subplot_titles)
+            fig.update_layout(title_text=f"Basic statistics for {'selected' if selected_ids else 'all'} SpikeTrains in Top-Nodes", showlegend=False)
+            
+            plot_row = 1
             for i, top_node in enumerate(spiketrains.keys()):
                 if spiketrains[top_node]:
                     # plot ISI
-                    axs[i, 0] = self.plot_isi_histogram(spiketrains=spiketrains[top_node], axes=axs[i, 0],
-                                                        title=f"ISI-distribution:\n {top_node}")
+                    for st in spiketrains[top_node]:
+                        isi = self.statistics.interspike_interval(st)
+                        fig.add_trace(go.Histogram(x=isi.magnitude, name=f"ISI of {st.name or 'unnnamed'}"), row=plot_row, col=1)
+                    
                     # plot time histogram
                     time_histogram = self.statistics.time_histogram(spiketrains[top_node], bin_size=0.1 * self.pq.s,
                                                                     output='rate')
-                    axs[i, 1] = self.plot_time_histogram(histogram=time_histogram, axes=axs[i, 1])
-                    axs[i, 1].set_title(f"Time-histogram:\n {top_node}")
+                    fig.add_trace(go.Bar(x=time_histogram.times.magnitude, y=time_histogram.magnitude.flatten()), row=plot_row, col=2)
+                    
                     # plot IFR
                     kernel = self.kernels.GaussianKernel(sigma=100 * self.pq.ms)
                     rates = self.statistics.instantaneous_rate(spiketrains[top_node], sampling_period=10 * self.pq.ms,
                                                                kernel=kernel)
-                    axs[i, 2] = self.plot_instantaneous_rates_colormesh(rates, axes=axs[i, 2])
-                    axs[i, 2].set_title(f"IFR:\n {top_node}")
+                    fig.add_trace(go.Heatmap(z=rates.magnitude.T, x=rates.times.magnitude, y=list(range(len(spiketrains[top_node])))), row=plot_row, col=3)
+
                     # plot correlation
-                    selected_ids = [
-                    self.map_ipytree_node_id_to_neo_obj_hash[node._id]
-                    for node in self.ipytree_of_neo_objects.selected_nodes
-                    if node._id in self.map_ipytree_node_id_to_neo_obj_hash
-                    ]
-                    extracted_spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=neo.SpikeTrain).items()
-                    if len(extracted_spiketrains) > 1:
-                        sp_list = [st[0] for _, st in extracted_spiketrains]
-                        binned_spiketrains = self.BinnedSpikeTrain(sp_list, bin_size=100 * self.pq.ms)
+                    if len(spiketrains[top_node]) > 1:
+                        binned_spiketrains = self.BinnedSpikeTrain(spiketrains[top_node], bin_size=100 * self.pq.ms)
                         corrcoef_matrix = self.correlation_coefficient(binned_spiketrains)
-                        axs[i, 3] = self.plot_corrcoef(corrcoef_matrix, axes=axs[i, 3])
-                        axs[i, 3].set_xlabel('Neuron')
-                        axs[i, 3].set_ylabel('Neuron')
-                        axs[i, 3].set_title(f"Correlation coefficient matrix:\n {top_node}")
-                    else:
-                        axs[i, 0].set_title(f"ISI-distribution:\n {top_node}")
-                        axs[i, 1].set_title(f"Time-histogram:\n {top_node}")
-                        axs[i, 2].set_title(f"IFR:\n {top_node}")
-                        axs[i, 3].set_xlabel('Neuron')
-                        axs[i, 3].set_ylabel('Neuron')
-                        axs[i, 3].set_title(f"Correlation coefficient matrix:\n {top_node}")
-            fig.tight_layout(pad=1.0)
+                        fig.add_trace(go.Heatmap(z=corrcoef_matrix, x=list(range(corrcoef_matrix.shape[1])), y=list(range(corrcoef_matrix.shape[0]))), row=plot_row, col=4)
+                        fig.update_xaxes(title_text='Neuron', row=plot_row, col=4)
+                        fig.update_yaxes(title_text='Neuron', row=plot_row, col=4)
+                    
+                    plot_row += 1
+
             return fig
         else:
             return None
@@ -599,9 +611,7 @@ class Jupyphant:
         """
         spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
                                                                           neo_class=self.SpikeTrain)
-        # Close plots from before to prevent too much memory consumption
-        plt.close('all')
-        # compare contents of AnalogSignals per top node
+        # compare contents of spiketrains per top node
         spiketrains_unchanged = True
         spiketrains_hash = self.get_neo_hash(spiketrains, hash_name='sha1')
         if self.spiketrains_hash is None:
@@ -611,94 +621,41 @@ class Jupyphant:
                 spiketrains_unchanged = False
 
         # Return pre-existing rasterplot if content of spiketrains has NOT changed
-        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None) and True:
+        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None):
             return self.spiketrain_overview
         # Otherwise, create new plot
         else:
             n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
             if n_subplots > 0:
-                fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots * 8, 4))
-                fig.suptitle(f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in")
-                # Rasterplot using viziphant
-                if n_subplots > 1:
-                    for i, top_node in enumerate(spiketrains.keys()):
-                        if spiketrains[top_node]:
-                            axs[i] = self.rasterplot(spiketrains[top_node], axes=axs[i], s=0.1, title=f"{top_node}")
-                        else:
-                            axs[i].set_title(f"{top_node}")
-                else:
-                    top_node = list(spiketrains.keys())[0]
-                    axs = self.rasterplot(spiketrains[top_node], axes=axs, s=0.1, title=f"{top_node}")
+                #subplot_titles = [key for key in spiketrains.keys() if spiketrains[key]]
+                data = []
+                for top_node, st_list in spiketrains.items():
+                    if st_list:
+                        for st in st_list:
+                            data.append(SpikeTrainRasterPlot(st))
+                events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
+                event_annotations = None
+                n_events = sum(1 for v in events.values() if len(v) > 0)
+                if n_events > 0:
+                    event_annotations = EventAnnotations(events)
+                epochs = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
+                epoch_intervals = None
+                n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
+                if n_epochs > 0:
+                    epoch_intervals = EpochIntervals(epochs)
+                overlapping = False
+                if hasattr(self, 'raw_plot_overlap'):
+                    overlapping = self.raw_plot_overlap
+                theme_name = 'plotly_dark'
+                if hasattr(self, 'jupyterlab_theme'):
+                    theme_name = self.jupyterlab_theme
+                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name)
+
                 if selected_ids is None:
-                    self.spiketrain_overview = fig
-                return fig
+                    self.spiketrain_overview = plotlyGraphFigure
+                return plotlyGraphFigure
             else:
-                pass
-
-    # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
-    def plot_lfp(self, lfps, times, title=None, spacing=5, color=None, axes=None):
-        """
-        Plot LFPs.
-
-        lfps:       LFP signals with trial_id as first dimension and sample_id as second dimension.
-                    LFP signals must be arranged according to trial ID.
-        times:      time stamps of the recorded LFP samples. Must be of same length as second dimenion of lfps
-        title:      title of the figure
-        spacing:    vertical spacing between two LFP signals
-        color:      color to used for plotting
-        axes :      matplotlib.axes.Axes or None, optional
-                    Matplotlib axes handle. If None, new axes are created and returned.
-                    Default: None
-        """
-
-        if axes is None:
-            fig, axes = plt.subplots(nrows=1, ncols=1)
-
-        trace_idx = 0
-        
-        for trial_id, lfp in enumerate(lfps):
-            data = lfp.magnitude
-            
-            if data.ndim == 1:
-                data = data.reshape(-1, 1)
-            
-            num_channels = data.shape[1]
-            
-            for ch_idx in range(num_channels):
-                offset = trace_idx * spacing
-                
-                channel_data = data[:, ch_idx]
-
-                min_val = self.np.min(channel_data)
-                max_val = self.np.max(channel_data)
-                range_val = max_val - min_val
-
-                if range_val > 0:
-                    norm_data = (channel_data - min_val) / range_val
-                else:
-                    norm_data = channel_data - min_val
-
-                # Plot
-                axes.plot(times, norm_data + offset, color=color)
-                
-                trace_idx += 1
-
-        axes.set_title(title)
-        axes.set_xlabel('Time ({0})'.format(times.dimensionality))
-
-        # Defines plot parameters for y-axis
-        if trace_idx > 1 and spacing > 0:
-            # Set ticks at the baseline of each signal
-            axes.set_yticks([i * spacing for i in range(trace_idx)])
-            # Label them 0, 1, 2...
-            axes.set_yticklabels(range(trace_idx))
-            axes.set_ylabel("Signal Trace Index")
-            axes.set_ylim(-0.1, (trace_idx - 1) * spacing + 1.2)
-        else:
-            # Fallback for single plot
-            axes.set_ylabel(f'AnaSig ({lfps[0].units.__str__()})')
-
-        return axes
+                return None
 
     def create_lfpplot(self, selected_ids=None):
         """
@@ -706,7 +663,6 @@ class Jupyphant:
 
         Called at every cell execution
         """
-        plt.close('all')
         analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
                                                                             neo_class=self.AnalogSignal)
         # compare contents of AnalogSignals per top node
@@ -724,47 +680,27 @@ class Jupyphant:
         else:
             n_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
             if n_subplots > 0:
-                # Increased figure height slightly to accommodate stacked plots
-                fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots * 8, 4))
-                
-                # Make axs iterable even if its a single axes object
-                if n_subplots == 1:
-                    axs = [axs]
-
-                fig.suptitle(f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals")
-                
-                max_duration_limit = 10 * self.pq.s 
-
-                for i, top_node in enumerate(analogsignals.keys()):
-                    raw_signals = analogsignals[top_node]
-                    
-                    if raw_signals:
-                        durations = [(sig.t_stop - sig.t_start) for sig in raw_signals]
-                        
-                        min_available_duration = min(durations)
-
-                        cut_duration = min(max_duration_limit, min_available_duration)
-
-                        sliced_signals = [
-                            sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
-                            for sig in raw_signals
-                        ]
-
-                        plot_times = sliced_signals[0].times - sliced_signals[0].t_start
-                        
-                        self.plot_lfp(
-                            sliced_signals, 
-                            times=plot_times,
-                            title=f"{top_node}", 
-                            spacing=1.5,
-                            axes=axs[i]
-                        )
-                    else:
-                        axs[i].set_title(f"{top_node} (No Data)")
-                        
+                plotly_data = AnalogSignalLFPPlotList(analogsignals)
+                events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
+                event_annotations = None
+                n_events = sum(1 for v in events.values() if len(v) > 0)
+                if n_events > 0:
+                    event_annotations = EventAnnotations(events)
+                epochs = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
+                epoch_intervals = None
+                n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
+                if n_epochs > 0:
+                    epoch_intervals = EpochIntervals(epochs)
+                overlapping = False
+                if hasattr(self, 'raw_plot_overlap'):
+                    overlapping = self.raw_plot_overlap
+                theme_name = 'plotly_dark'
+                if hasattr(self, 'jupyterlab_theme'):
+                    theme_name = self.jupyterlab_theme
+                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name)
                 if selected_ids is None:
-                    self.analogsignal_overview = fig
-                return fig
+                    self.analogsignal_overview = plotlyGraphFigure
+                return plotlyGraphFigure
             else:
                 pass
 
@@ -804,7 +740,7 @@ class Jupyphant:
 
     def _get_neo_obj_hash_and_node_name_of_selected_nodes(self):
         return {self.map_ipytree_node_id_to_neo_obj_hash[node._id]: node.name
-                for node in self.ipytree_of_neo_objects.selected_nodes}
+                for node in self.selected_neo_objects}
 
     def _print_as_table(self, data, pp):
         """

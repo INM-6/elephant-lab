@@ -42,7 +42,8 @@ import {
 
 import {
 	IRenderMimeRegistry,
-} from '@jupyterlab/rendermime';
+}
+ from '@jupyterlab/rendermime';
 // Lumino imports for dealing with the tabs within JupyterLab
 // These are called Panels
 import {
@@ -130,6 +131,7 @@ class JupyphantExtension {
 			await this.executeCodeInOutputArea(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
 			await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, session);
 			await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, session);
+			this.widget.title.label += ' (ready)'; // Indicates that the Jupyphant Extension is completly loaded
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Jupyphant: FAILED to initialize kernel state:", error);
@@ -459,7 +461,7 @@ print(__version__)
 							Dialog.okButton({ label: 'OK' }),
 							Dialog.createButton({ label: 'Automatic' })
 						],
-						hasClose: true
+					hasClose: true
 					}).then(async dialogResult => {
 						let ioClass: string | null = null;
 						if (dialogResult.button.label === 'OK') {
@@ -508,7 +510,6 @@ elif (isinstance(${varName}, dict)):
 	${varName} = ${varName}['blocks'][0]
 print(${varName}, type(${varName}))
 self.update_tree()
-
 `;
 							}
 							await this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
@@ -603,7 +604,7 @@ try:
         selected_nodes = jupyphant.ipytree_of_neo_objects.selected_nodes
         
         if not selected_nodes:
-            print(json.dumps({"code_to_insert": "", "error": "No nodes selected in the Neo tree."}))
+            print(json.dumps({"code_to_insert": "", "error": "No nodes selected in the Neo tree." }))
         else:
             paths = []
             objects_for_list = []
@@ -640,7 +641,7 @@ try:
 except Exception as e:
     import sys, traceback
     print(json.dumps({"code_to_insert": "", "error": str(e), "traceback": traceback.format_exc()}), file=sys.stdout)
-			`;
+			`
 			
 			const result = await this.kernelBridge!.executeCode(code, true);
 
@@ -684,6 +685,108 @@ except Exception as e:
 		tree_widget.node.prepend(filterContainer);
 	}
 
+	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+		const checked_style = {
+			color: "#2cbb00ff",
+			fontWeight: "bold",
+			cursor: "pointer",
+			padding: "4px",
+			userSelect: "none",
+		}
+
+		const unchecked_style = {
+			color: "#727272ff",
+			fontWeight: "normal",
+			cursor: "pointer",
+			padding: "4px",
+			userSelect: "none",
+		}
+
+		// Single sticky container for both buttons
+		const buttonContainer = document.createElement('div');
+		buttonContainer.classList.add('sticky-filter');
+		buttonContainer.style.display = "flex";     // horizontal layout
+		buttonContainer.style.gap = "8px";          // spacing between buttons
+
+		const overlapToggle = document.createElement('label');
+		overlapToggle.dataset.checked = 'false';
+		Object.assign(overlapToggle.style, unchecked_style);
+		overlapToggle.innerHTML = `<i class="fa fa-bolt"></i> Overlap`;
+
+		const darkmodeToggle = document.createElement('label');
+		darkmodeToggle.dataset.checked = 'true';
+		Object.assign(darkmodeToggle.style, checked_style);
+		darkmodeToggle.innerHTML = `<i class="fa fa-moon"></i> Dark`;
+
+		overlapToggle.onclick = () => {
+			const isNowChecked = overlapToggle.dataset.checked === 'false';
+			overlapToggle.dataset.checked = isNowChecked ? 'true' : 'false';
+			isNowChecked ? Object.assign(overlapToggle.style, checked_style) : Object.assign(overlapToggle.style, unchecked_style);
+			// Send Python command to flip the boolean
+			const code = `
+			from jupyphant.kernelcode import set_raw_plot_overlap
+			set_raw_plot_overlap(jupyphant_entity, ${isNowChecked ? "True" : "False"})
+			`
+
+			// Send to kernel
+			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
+
+			// Listen for output / errors
+			future.onIOPub = (msg: any) => {
+				const msgType = msg.header.msg_type;
+				switch (msgType) {
+					case "stream":
+						console.log("stdout:", msg.content.text);
+						break;
+					case "error":
+						console.error("Python error:", msg.content.ename, msg.content.evalue);
+						console.error(msg.content.traceback.join("\n"));
+						break;
+					case "execute_result":
+					case "display_data":
+						console.log("Result:", msg.content.data);
+						break;
+				}
+			};
+		};
+
+		darkmodeToggle.onclick = () => {
+			const isNowChecked = darkmodeToggle.dataset.checked === 'false';
+			darkmodeToggle.dataset.checked = isNowChecked ? 'true' : 'false';
+			isNowChecked ? Object.assign(darkmodeToggle.style, checked_style) : Object.assign(darkmodeToggle.style, unchecked_style);
+			// Send Python command to flip the boolean
+			const code = `
+			from jupyphant.kernelcode import update_jupyterlab_theme
+			update_jupyterlab_theme(jupyphant_entity, ${isNowChecked ? "\"dark\"" : "\"white\""})
+			`
+
+			// Send to kernel
+			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
+
+			// Listen for output / errors
+			future.onIOPub = (msg: any) => {
+				const msgType = msg.header.msg_type;
+				switch (msgType) {
+					case "stream":
+						console.log("stdout:", msg.content.text);
+						break;
+					case "error":
+						console.error("Python error:", msg.content.ename, msg.content.evalue);
+						console.error(msg.content.traceback.join("\n"));
+						break;
+					case "execute_result":
+					case "display_data":
+						console.log("Result:", msg.content.data);
+						break;
+				}
+			};
+		};
+
+		buttonContainer.appendChild(overlapToggle);
+		buttonContainer.appendChild(darkmodeToggle);
+		raw_plot_widget.node.prepend(buttonContainer);
+	}
+
 	public createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
 		// NEO TREE 
 		let tree_widget = new Panel();
@@ -704,10 +807,18 @@ except Exception as e:
 		explorer_widget_raw_plot.title.label = 'Explore';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
+		this.create_raw_plot_options(session, explorer_widget_raw_plot);
+
+		//STATISTICS
+		let explorer_widget_statistics = new Panel();
+		explorer_widget_statistics.title.label = 'Statistics';
+		explorer_widget_statistics.node.style.cssText = explorer_widget_statistics.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		this.outarea_nodeexplorer_statistics = this.createOutputArea(rendermime, explorer_widget_statistics, ['my-outarea-class'], 'jup_vis_out_id_2.3', session);
 		
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
+		this.widget.addWidget(explorer_widget_statistics, { mode: 'tab-after', ref: explorer_widget_raw_plot });
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
@@ -722,8 +833,8 @@ except Exception as e:
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
 		let code = `
 			from jupyphant.kernelcode import expand_neo_tree
-			# TODO: is there a better way to convert ts bool into python bool?
-			if "${checked}" == "true":
+			// TODO: is there a better way to convert ts bool into python bool?
+			if ("${checked}" == "true"):
 				checked = True
 			else:
 				checked = False
@@ -773,7 +884,7 @@ except Exception as e:
 		}
 
 		let output = await this.kernelBridge?.executeCode(code, true);
-		
+
 		if (output && showOutput) {
 			this.handleOutputs(output.outputs, outputArea);
 		}
@@ -781,14 +892,14 @@ except Exception as e:
 
 	private handleOutputs(outputs: any[], outputArea: OutputArea) {
 		outputArea.model.clear();
-        for (const output of outputs) {
-            if (output.output_type === 'clear_output') {
-                outputArea.model.clear(false);
-            } else {
-                outputArea.model.add(output);
-            }
-        }
-    }
+		for (const output of outputs) {
+			if (output.output_type === 'clear_output') {
+				outputArea.model.clear(false);
+			} else {
+				outputArea.model.add(output);
+			}
+		}
+	}
 
 }; // end of JupyphantWidget class
 
@@ -833,7 +944,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 		name: widget => 'jupyphant:' + widget.id
 	});
 
-}; // end of activate()
+};
 
 /*
 * Initialization data for the Jupyphant extension
