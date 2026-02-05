@@ -181,17 +181,17 @@ class PlotlyGraphFigure:
             if self.compress:
                 fig.add_trace(trace)
                 if hasattr(data, 'title_x'):
-                    if hasattr(self, 'compress_title_x'):
-                        if self.compress_title_x != data.title_x:
-                            self.compress_title_x = None
+                    if hasattr(self, 'common_title_x'):
+                        if self.common_title_x != data.title_x:
+                            self.common_title_x = None
                     else:
-                        self.compress_title_x = data.title_x
+                        self.common_title_x = data.title_x
                 if hasattr(data, 'title_y'):
-                    if hasattr(self, 'compress_title_y'):
-                        if self.compress_title_y != data.title_y:
-                            self.compress_title_y = None
+                    if hasattr(self, 'common_title_y'):
+                        if self.common_title_y != data.title_y:
+                            self.common_title_y = None
                     else:
-                        self.compress_title_y = data.title_y
+                        self.common_title_y = data.title_y
                 if hasattr(data, 'use_name_as_ticklabels'):
                     self.ticktext.append(data.name)
             else:      
@@ -265,7 +265,7 @@ class PlotlyGraphFigure:
 
         for i in range(1, self.nGraphs + 1):
             self.update_layout_options_dict(f"yaxis{i}", dict(
-                visible=self.same_y_label and i>1,
+                visible=self.common_title_y is not None and i>1,
                 domain=[0.0,1.0]
             ))
 
@@ -409,11 +409,14 @@ class PlotlyGraphFigure:
         
         xs = self.annotation_data.x
         texts = self.annotation_data.text
+        units = self.annotation_data.units
 
         shapes = []
         annotations = []
 
-        for x, text in zip(xs, texts):
+        for x, text, unit in zip(xs, texts, units):
+            if unit != self.common_title_x:
+                continue
             shapes.append(dict(
                 type="line",
                 x0=x,
@@ -495,11 +498,14 @@ class PlotlyGraphFigure:
         x0s = self.annotation_interavals_data.x0
         x1s = self.annotation_interavals_data.x1
         texts = self.annotation_interavals_data.text
+        units = self.annotation_interavals_data.units
 
         shapes = []
         annotations = []
 
-        for x0, x1, text in zip(x0s, x1s, texts):
+        for x0, x1, text, unit in zip(x0s, x1s, texts, units):
+            if unit != self.common_title_x:
+                continue
             shapes.append(dict(
                 type="rect",
                 x0=x0,
@@ -605,15 +611,15 @@ class PlotlyGraphFigure:
     def manage_axis_titles(self):
         """If all x-axes have the same title, move it to the last axis only."""
         if self.compress:
-            if hasattr(self, 'compress_title_x'):
-                if self.compress_title_x is not None:
+            if hasattr(self, 'common_title_x'):
+                if self.common_title_x is not None:
                     self.update_layout_options_dict("xaxis", dict(
-                        title=self.compress_title_x
+                        title=self.common_title_x
                     ))
-            if hasattr(self, 'compress_title_y'):
-                if self.compress_title_y is not None:
+            if hasattr(self, 'common_title_y'):
+                if self.common_title_y is not None:
                     self.update_layout_options_dict("yaxis", dict(
-                        title=self.compress_title_y
+                        title=self.common_title_y
                     ))
             return
 
@@ -623,34 +629,35 @@ class PlotlyGraphFigure:
                 return None
             return t.text if hasattr(t, "text") else t
         
-        n=self.nGraphs
+        def get_titles_set(axis_name):
+            n=self.nGraphs
 
-        # Collect titles
-        titles = []
-        for i in range(1, n + 1):
-            axis = self.fig.layout[f"xaxis{i}"]
-            titles.append(get_title(axis))
+            # Collect titles
+            titles = []
+            for i in range(1, n + 1):
+                axis = self.fig.layout[f"{axis_name}{i}"]
+                titles.append(get_title(axis))
 
-        # Normalize (remove empty strings)
-        titles = [t for t in titles if t not in ("", None)]
+            # Normalize (remove empty strings)
+            titles = [t for t in titles if t not in ("", None)]
 
-        # If different titles exist → do nothing
-        if len(set(titles)) > 1:
-            return
+            return set(titles)
+        
 
-        # Clear all titles
-        for i in range(1, n):
-            self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
+        x_titles = get_titles_set("xaxis")
+        if len(x_titles)>1:
+            self.common_title_x = None
+        else:
+            # Clear all titles
+            for i in range(1, self.nGraphs):
+                self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
+            self.common_title_x = x_titles.pop()
 
-        # Collect titles
-        titles = []
-        for i in range(1, n + 1):
-            axis = self.fig.layout[f"yaxis{i}"]
-            titles.append(get_title(axis))
-
-        # Normalize (remove empty strings)
-        titles = [t for t in titles if t not in ("", None)]
-        self.same_y_label = len(set(titles))==1
+        y_titles = get_titles_set("yaxis")
+        if len(y_titles)>1:
+            self.common_title_y = None
+        else:
+            self.common_title_y = y_titles.pop()
 
     def create_xrange_buttons(self, relayout_button_options):
         """
@@ -822,12 +829,14 @@ class PlotlyGraphDataTypeList():
                 warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
 
 class PlotlyGraphAnnotations():
-    def __init__(self, x, text):
+    def __init__(self, x, text, units):
         self.x = x
         self.text = text
+        self.units = units
 
 class PlotlyGraphAnnotationIntervals():
-    def __init__(self, x0, x1, text):
+    def __init__(self, x0, x1, text, units):
         self.x0 = x0
         self.x1 = x1
         self.text = text
+        self.units = units
