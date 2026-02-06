@@ -104,6 +104,40 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                 subplot_col += 1
 
 
+class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
+    import quantities as pq
+    class IrregularlySampledSignalPlot(PlotlyGraphDataType):
+        import numpy as np
+        def extract_data(self, irregular_signal):
+            """Extracts IrregularlySampledSignalPlotData from a SpikeTrain"""
+            self.name = getattr(irregular_signal,'name', 'IrregularSignal')
+            self.mode = 'markers+lines'
+
+            """signal = irregular_signal.magnitude.flatten()
+            times = irregular_signal.times
+
+            min_val = self.np.min(signal)
+            max_val = self.np.max(signal)
+            range_val = max_val - min_val
+
+            if range_val > 0:
+                norm_data = (signal - min_val) / range_val
+            else:
+                norm_data = signal - min_val"""
+
+            self.x=irregular_signal.times.magnitude.flatten()
+            self.y=irregular_signal.magnitude.flatten()
+            self.units_x = irregular_signal.times.units
+            self.units_y = irregular_signal.units
+
+    def extract_data(self, data):
+        """Extracts IrregularlySampledSignalData from a dict containing IrregularlySampledSignal Data"""
+        for top_node, iss_list in data.items():
+            if iss_list:
+                for iss in iss_list:
+                    self.data_list.append(self.IrregularlySampledSignalPlot(iss))
+
+
 class EventAnnotations(PlotlyGraphAnnotations):
     import numpy as np
 

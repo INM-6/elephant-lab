@@ -88,7 +88,7 @@ class Jupyphant:
     from neo.core.regionofinterest import RegionOfInterest, CircularRegionOfInterest, RectangularRegionOfInterest, \
         PolygonRegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
-    from neo import Block, SpikeTrain, AnalogSignal, Event, Epoch
+    from neo import Block, SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal
     from collections import Counter
     from neo.test.tools import assert_same_sub_schema
     assert_same_sub_schema = staticmethod(assert_same_sub_schema)
@@ -136,8 +136,9 @@ class Jupyphant:
         # Plots are saved in order not to require recreation at every cell execution
         self.spiketrain_overview = None
         self.spiketrains_hash = None
-        self.analogsignal_overview = None
+        self.signal_overview = None
         self.analogsignals_hash = None
+        self.irregularsignals_hash = None
         self.ipytree_of_neo_objects = None
         self.selected_neo_objects = set()
         self.on_selected_neo_objects_changed = self.SimpleEvent()
@@ -516,8 +517,8 @@ class Jupyphant:
 
         Called at every cell execution
         """
-        analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
-                                                                            neo_class=self.AnalogSignal)
+        analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.AnalogSignal)
+        irregularsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.IrregularlySampledSignal)
         # compare contents of AnalogSignals per top node
         analogsignals_unchanged = True
         analogsignals_hash = self.get_neo_hash(analogsignals, hash_name='sha1')
@@ -527,13 +528,31 @@ class Jupyphant:
             if self.analogsignals_hash != analogsignals_hash:
                 analogsignals_unchanged = False
 
-        # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
-        if analogsignals_unchanged and (self.analogsignal_overview is not None) and (selected_ids is None) and (not overlap_changes):
-            return self.analogsignal_overview
+        # compare contents of IrregularlySampledSignal per top node
+        irregularsignals_unchanged = True
+        irregularsignals_hash = self.get_neo_hash(irregularsignals, hash_name='sha1')
+        if self.irregularsignals_hash is None:
+            self.irregularsignals_hash = irregularsignals_hash
         else:
-            n_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
-            if n_subplots > 0:
-                plotly_data = AnalogSignalLFPPlotList(analogsignals)
+            if self.irregularsignals_hash != irregularsignals_hash:
+                irregularsignals_unchanged = False
+
+        # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
+        if analogsignals_unchanged and irregularsignals_unchanged  and (self.signal_overview is not None) and (selected_ids is None) and (not overlap_changes):
+            return self.signal_overview
+        else:
+            n_analog_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
+            n_irregular_sublplots = sum(1 for v in irregularsignals.values() if len(v) > 0)
+            if n_analog_subplots > 0 or n_irregular_sublplots > 0:
+                plotly_data = None
+                if n_analog_subplots > 0:
+                    plotly_data = AnalogSignalLFPPlotList(analogsignals)
+                if n_irregular_sublplots > 0:
+                    irregular_plotly_data = IrregularlySampledSignalPlotList(irregularsignals)
+                    if plotly_data is None:
+                        plotly_data = irregular_plotly_data
+                    else:
+                        plotly_data.concat(irregular_plotly_data)
                 events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
                 event_annotations = None
                 n_events = sum(1 for v in events.values() if len(v) > 0)
@@ -552,7 +571,7 @@ class Jupyphant:
                     theme_name = self.jupyterlab_theme
                 plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name)
                 if selected_ids is None:
-                    self.analogsignal_overview = plotlyGraphFigure
+                    self.signal_overview = plotlyGraphFigure
                 return plotlyGraphFigure
             else:
                 pass
