@@ -569,7 +569,7 @@ class Jupyphant:
                 theme_name = 'plotly_dark'
                 if hasattr(self, 'jupyterlab_theme'):
                     theme_name = self.jupyterlab_theme
-                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name)
+                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name, x_range=(0,5))
                 if selected_ids is None:
                     self.signal_overview = plotlyGraphFigure
                 return plotlyGraphFigure

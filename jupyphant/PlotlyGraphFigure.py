@@ -3,9 +3,26 @@ from plotly.subplots import make_subplots
 from IPython.display import display
 import warnings
 import quantities as pq
+import numpy as np
+
+def can_convert_units(unit, convert_unit):
+    """
+    Returns 0 if no conversion is needed
+    Returns -1 if it is not possible to convert
+    Returns 1 if it can be converted
+    """
+    if unit == convert_unit:
+        return 0
+    if unit.simplified.dimensionality != convert_unit.simplified.dimensionality:
+        return -1
+    return 1
+    
+def convert_to_other_units(val, unit, convert_unit):
+    q = pq.Quantity(val, unit)
+    return q.rescale(convert_unit).magnitude
 
 class PlotlyGraphFigure:
-    def __init__(self, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True):
+    def __init__(self, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=True):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -16,16 +33,18 @@ class PlotlyGraphFigure:
         self.layout_options = dict()
 
         self.shared_xaxes = shared_xaxes or overlapping
+        self.overlapping = overlapping
         self.overlap_on_compress = overlap_on_compress
-        self.nGraphs = 1
-        if isinstance(data, list) and self.is_trace_list(data):
-            self.nGraphs = len(data) 
-        if isinstance(data, PlotlyGraphDataTypeList):
-            self.nGraphs = len(data.data_list)
         self.annotation_data = annotation_data
         self.annotation_interavals_data = annotation_interavals_data
 
+        if not isinstance(data, PlotlyGraphDataTypeList):
+            data = PlotlyGraphDataTypeList(data)
+        self.nGraphs = len(data.data_list)
         self.compress = self.nGraphs > 10
+        data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0)
+        self.data = data
+
 
         self.height = self.default_height
         if self.nGraphs > 2:
@@ -41,8 +60,7 @@ class PlotlyGraphFigure:
                 vertical_spacing=self.vertical_spacing,
                 shared_xaxes=self.shared_xaxes
             ))
-        self.overlapping = overlapping
-        self.create_graphs(self.fig, data)
+        self.create_graphs()
 
         if title is None:
             title=getattr(data, 'name', None)
@@ -96,173 +114,78 @@ class PlotlyGraphFigure:
         self.fig.update_layout(**self.layout_options)
         self.layout_options = dict()
 
-    def create_graphs(self, fig, data):
+    def create_graphs(self):
         """
         Recursively adds traces to a Plotly figure from various data types.
         Supports PlotlyDataType, lists of traces, dicts, pandas objects, or lists of points.
-
-        If self.compress==True, all traces are plotted in the same row, 
-        with y-values offset by spacing * trace_index.
         """
-        # If data is a list of traces, recurse
-        if (isinstance(data, list) and self.is_trace_list(data)):
-            for d in data:
-                self.create_graphs(fig, d)
-            return
-        if isinstance(data, PlotlyGraphDataTypeList):
-            for d in data.data_list:
-                self.create_graphs(fig, d)
-            return
+        for d in self.data.data_list:
+            # Check if x and y are valid
+            if d.x is None or d.y is None or len(d.x) == 0 or len(d.y) == 0:
+                warnings.warn(f"Skipping trace '{d.name}' because x or y data is missing or empty.")
+                return
 
-        # Wrap data if not already PlotlyDataType
-        try:
-            if not isinstance(data, PlotlyGraphDataType):
-                data = PlotlyGraphDataType(data)
-        except Exception as e:
-            warnings.warn(f"Failed to convert data to PlotlyDataType: {e}")
-            return  # Skip this trace
+            # Choose Scatter or Scattergl based on x and y size (It does not work with go.Scatter and there is no important benefit of using it)
+            """
+            size_for_gl = 5000
+            use_gl = len(data.x) > size_for_gl or len(data.y) > size_for_gl
+            trace_type = go.Scattergl if use_gl else go.Scatter
+            """
 
-        # Check if x and y are valid
-        if data.x is None or data.y is None or len(data.x) == 0 or len(data.y) == 0:
-            warnings.warn(f"Skipping trace '{data.name}' because x or y data is missing or empty.")
-            return
-
-        # Choose Scatter or Scattergl based on x and y size (It does not work with go.Scatter and there is no important benefit of using it)
-        """
-        size_for_gl = 5000
-        use_gl = len(data.x) > size_for_gl or len(data.y) > size_for_gl
-        trace_type = go.Scattergl if use_gl else go.Scatter
-        """
-
-        # Add the trace
-        try:
-            # Default settings
-            default_marker = dict(size=1)
-            default_line   = dict(width=1)
+            # Add the trace
+            try:
+                # Default settings
+                default_marker = dict(size=1)
+                default_line   = dict(width=1)
 
 
-            # Merge with user-provided dicts (data.marker / data.line)
-            marker_settings = default_marker | getattr(data, "marker", {})
-            line_settings   = default_line   | getattr(data, "line", {})
-            if callable(marker_settings["size"]):
-                marker_settings["size"] = marker_settings["size"](self.getSubplotHeight())
-            
-            row = len(self.traces) + 1
+                # Merge with user-provided dicts (data.marker / data.line)
+                marker_settings = default_marker | getattr(d, "marker", {})
+                line_settings   = default_line   | getattr(d, "line", {})
+                if callable(marker_settings["size"]):
+                    marker_settings["size"] = marker_settings["size"](self.getSubplotHeight())
+                
+                row = len(self.traces) + 1
+                
+                trace  = go.Scattergl(
+                    x=d.x,
+                    y=d.y,
+                    name=getattr(d, 'name', 'Trace'),
+                    mode=getattr(d, "mode", "markers"),
+                    marker=marker_settings,
+                    line=line_settings
+                )
+                self.traces.append((trace, row))
 
-            x_values=data.x
-            y_values=data.y
-            units_x = None
-            units_y = None
-            if hasattr(data, 'units_x'):
-                units_x = data.units_x
-                if hasattr(self, 'common_units_x'):
-                    if self.common_units_x is not None:
-                        can_convert = self.can_convert_units(units_x, self.common_units_x)
-                        if can_convert == -1:
-                            self.common_units_x = None
-                        elif can_convert == 1:
-                            x_values=self.convert_to_other_units(x_values, units_x, self.common_units_x)
-                            units_x = self.common_units_x
-                else:
-                    self.common_units_x = units_x
-            if hasattr(data, 'units_y'):
-                units_y = data.units_y
-                if hasattr(self, 'common_units_y'):
-                    if self.common_units_y is not None:
-                        can_convert = self.can_convert_units(units_y, self.common_units_y)
-                        if can_convert == -1:
-                            self.common_units_y = None
-                        elif can_convert == 1:
-                            y_values=self.convert_to_other_units(y_values, units_y, self.common_units_y)
-                            units_y = self.common_units_y
-                else:
-                    self.common_units_y = units_y
-
-            if self.compress and (not self.overlapping or not self.overlap_on_compress):
-                offset_index = row-1
-                if offset_index > 0:
-                    y_values = [y + offset_index for y in y_values.copy()]
-            minX = min(x_values)
-            maxX = max(x_values)
-            minY = min(y_values)
-            maxY = max(y_values)
-            if hasattr(self, "minX"):
-                if minX < self.minX:
-                    self.minX = minX
-                if maxX > self.maxX:
-                    self.maxX = maxX
-                if minY < self.minY:
-                    self.minY = minY
-                if maxY > self.maxY:
-                    self.maxY = maxY
-            else:
-                self.minX = minX
-                self.maxX = maxX
-                self.minY = minY
-                self.maxY = maxY
-            
-            trace  = go.Scattergl(
-                x=x_values,
-                y=y_values,
-                name=getattr(data, 'name', 'Trace'),
-                mode=getattr(data, "mode", "markers"),
-                marker=marker_settings,
-                line=line_settings
-            )
-            self.traces.append((trace, row))
-
-            if self.compress:
-                fig.add_trace(trace)
-                if hasattr(data, 'use_name_as_ticklabels'):
-                    self.ticktext.append(data.name)
-            else:      
-                fig.add_trace(
-                        trace, 
-                        row=row,
-                        col=1
-                    )
-                if units_x is not None:
-                    fig.layout[f"xaxis{row}"].update(title=data.units_x.__str__())
-                if units_y is not None:
-                    fig.layout[f"yaxis{row}"].update(title=data.units_y.__str__())
-                if hasattr(data, 'use_name_as_ticklabels'):
-                    if data.use_name_as_ticklabels:
-                        fig.layout[f"yaxis{row}"].update(
-                            tickvals=[0],
-                            ticktext=[data.name]
+                if self.compress:
+                    self.fig.add_trace(trace)
+                    if hasattr(d, 'use_name_as_ticklabels'):
+                        if d.use_name_as_ticklabels:
+                            self.ticktext.append(d.name)
+                else:      
+                    self.fig.add_trace(
+                            trace, 
+                            row=row,
+                            col=1
                         )
-                        if hasattr(self, 'hide_legend'):
-                            if self.hide_legend:
-                                if not data.use_name_as_ticklabels:
-                                    self.hide_legend = False
-                        else:
-                            self.hide_legend = data.use_name_as_ticklabels
-        except Exception as e:
-            warnings.warn(f"Failed to add trace '{data.name}': {e}")
-
-    def is_trace_list(self,data_list):
-        """
-        Returns True if data_list should be interpreted as a list of traces
-        rather than a single trace of points.
-        """
-        if not isinstance(data_list, list):
-            return False
-        
-        # Empty list is ambiguous: treat as a single trace
-        if len(data_list) == 0:
-            return False
-        
-        # If any element is already a PlotlyDataType, it's a list of traces
-        if any(isinstance(el, PlotlyGraphDataType) for el in data_list):
-            return True
-        
-        # If any element is a dict with x/y or has x/y attributes, treat as multiple traces
-        if any((hasattr(el, 'x') and hasattr(el, 'y')) or
-            (isinstance(el, dict) and 'x' in el and 'y' in el) for el in data_list):
-            return True
-        
-        # Otherwise, treat it as a single trace (list of points)
-        return False
+                    if d.units_x is not None:
+                        self.fig.layout[f"xaxis{row}"].update(title=d.units_x.__str__())
+                    if d.units_y is not None:
+                        self.fig.layout[f"yaxis{row}"].update(title=d.units_y.__str__())
+                    if hasattr(d, 'use_name_as_ticklabels'):
+                        if d.use_name_as_ticklabels:
+                            self.fig.layout[f"yaxis{row}"].update(
+                                tickvals=[0],
+                                ticktext=[d.name]
+                            )
+                            if hasattr(self, 'hide_legend'):
+                                if self.hide_legend:
+                                    if not d.use_name_as_ticklabels:
+                                        self.hide_legend = False
+                            else:
+                                self.hide_legend = d.use_name_as_ticklabels
+            except Exception as e:
+                warnings.warn(f"Failed to add trace '{d.name}': {e}")
     
     def change_height_after_render(self, height):
         """
@@ -286,7 +209,7 @@ class PlotlyGraphFigure:
 
         for i in range(1, self.nGraphs + 1):
             self.update_layout_options_dict(f"yaxis{i}", dict(
-                visible=self.common_units_y is not None and i>1,
+                visible=self.data.common_units_y is not None and i==1,
                 domain=[0.0,1.0]
             ))
 
@@ -356,11 +279,11 @@ class PlotlyGraphFigure:
 
         y_slider_height = self.calculate_y_slider_height()
 
-        totalrange = [self.minY, self.maxY]
+        totalrange = [self.data.minY, self.data.maxY]
         self.y_slider = widgets.FloatRangeSlider(
             value=totalrange,
-            min=self.minY,
-            max=self.maxY,
+            min=self.data.minY,
+            max=self.data.maxY,
             step=0.1,
             orientation='vertical',
             continuous_update=True,
@@ -422,22 +345,6 @@ class PlotlyGraphFigure:
             return self.default_height
         else:
             return self.height
-        
-    def can_convert_units(self, unit, convert_unit):
-        """
-        Returns 0 if no conversion is needed
-        Returns -1 if it is not possible to convert
-        Returns 1 if it can be converted
-        """
-        if unit == convert_unit:
-            return 0
-        if unit.simplified.dimensionality != convert_unit.simplified.dimensionality:
-            return -1
-        return 1
-        
-    def convert_to_other_units(self, val, unit, convert_unit):
-        q = pq.Quantity(val, unit)
-        return q.rescale(convert_unit).magnitude
     
     def create_annotations(self):
         """Updates the graph annotations."""
@@ -452,11 +359,11 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x, text, unit in zip(xs, texts, units):
-            can_convert = self.can_convert_units(unit=unit, convert_unit=self.common_units_x)
+            can_convert = can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
             if can_convert == -1:
                 continue
             if can_convert == 1:
-                x = self.convert_to_other_units(x, unit=unit, convert_unit=self.common_units_x)
+                x = convert_to_other_units(x, unit=unit, convert_unit=self.data.common_units_x)
             shapes.append(dict(
                 type="line",
                 x0=x,
@@ -544,12 +451,12 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x0, x1, text, unit in zip(x0s, x1s, texts, units):
-            can_convert = self.can_convert_units(unit=unit, convert_unit=self.common_units_x)
+            can_convert = can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
             if can_convert == -1:
                 continue
             if can_convert == 1:
-                x0 = self.convert_to_other_units(x0, unit=unit, convert_unit=self.common_units_x)
-                x1 = self.convert_to_other_units(x1, unit=unit, convert_unit=self.common_units_x)
+                x0 = convert_to_other_units(x0, unit=unit, convert_unit=self.data.common_units_x)
+                x1 = convert_to_other_units(x1, unit=unit, convert_unit=self.data.common_units_x)
             shapes.append(dict(
                 type="rect",
                 x0=x0,
@@ -618,7 +525,7 @@ class PlotlyGraphFigure:
 
         # Parameters
         min_x_distance_percent = 0.02 # minimum horizontal distance as percent of x-axis range
-        min_x_distance = (self.maxX - self.minX) * min_x_distance_percent
+        min_x_distance = (self.data.maxX - self.data.minX) * min_x_distance_percent
         y_shift = 0.0175         # vertical shift amount if overlapping
         max_y_shift = y_shift * 2.5    # maximum vertical shift
 
@@ -655,22 +562,19 @@ class PlotlyGraphFigure:
     def manage_axis_units(self):
         """If all x-axes have the same units, move it to the last axis only."""
         if self.compress:
-            if hasattr(self, 'common_units_x'):
-                if self.common_units_x is not None:
-                    self.update_layout_options_dict("xaxis", dict(
-                        title=self.common_units_x.__str__()
-                    ))
-            if hasattr(self, 'common_units_y'):
-                if self.common_units_y is not None:
-                    self.update_layout_options_dict("yaxis", dict(
-                        title=self.common_units_y.__str__()
-                    ))
+            if self.data.common_units_x is not None:
+                self.update_layout_options_dict("xaxis", dict(
+                    title=self.data.common_units_x.__str__()
+                ))
+            if self.data.common_units_y is not None:
+                self.update_layout_options_dict("yaxis", dict(
+                    title=self.data.common_units_y.__str__()
+                ))
         else:
-            if hasattr(self, 'common_units_x'):
-                if self.common_units_x is not None:
-                    # Clear all units except the last one
-                    for i in range(1, self.nGraphs):
-                        self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
+            if self.data.common_units_x is not None:
+                # Clear all units except the last one
+                for i in range(1, self.nGraphs):
+                    self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
 
     def create_xrange_buttons(self, relayout_button_options):
         """
@@ -687,8 +591,8 @@ class PlotlyGraphFigure:
 
         # Default percentages
         if relayout_button_options is None:
-            start = self.minX
-            width = self.maxX - start
+            start = self.data.minX
+            width = self.data.maxX - start
             relayout_button_options = [
                 ("1%", [start, start+width*0.01]),
                 ("5%", [start, start+width*0.05]),
@@ -765,6 +669,9 @@ class PlotlyGraphFigure:
         if self.compress:
             subplot_height = subplot_height/3.
         return subplot_height
+    
+    def getXRange(self):
+        return self.fig.xaxis.range
 class PlotlyGraphDataType:
     def __init__(self, data, **kwargs):
         self.extract_data(data)
@@ -833,13 +740,173 @@ class PlotlyGraphDataTypeList():
         self.extract_data(data)
 
     def extract_data(self, data):
-        for d in data:
+        if isinstance(data, list) and self.is_trace_list(data):
+            for d in data:
+                try:
+                    if not isinstance(d, PlotlyGraphDataType):
+                        d = PlotlyGraphDataType(d)
+                    self.data_list.append(d)
+                except Exception as e:
+                    warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
+        else:
             try:
                 if not isinstance(d, PlotlyGraphDataType):
                     d = PlotlyGraphDataType(d)
-                self.data_list.append(d)
+                self.data_list = [d]
             except Exception as e:
                 warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
+
+    def is_trace_list(self,data_list):
+        """
+        Returns True if data_list should be interpreted as a list of traces
+        rather than a single trace of points.
+        """
+        if not isinstance(data_list, list):
+            return False
+        
+        # Empty list is ambiguous: treat as a single trace
+        if len(data_list) == 0:
+            return False
+        
+        # If any element is already a PlotlyDataType, it's a list of traces
+        if any(isinstance(el, PlotlyGraphDataType) for el in data_list):
+            return True
+        
+        # If any element is a dict with x/y or has x/y attributes, treat as multiple traces
+        if any((hasattr(el, 'x') and hasattr(el, 'y')) or
+            (isinstance(el, dict) and 'x' in el and 'y' in el) for el in data_list):
+            return True
+        
+        # Otherwise, treat it as a single trace (list of points)
+        return False
+    
+    def normalize(self, x_range, offset_traces, shift_to_0):
+        """
+        Tries to normalize units to first unit found
+        Filters out all points outside of x_range if x_range is not None
+        Decreases number of points if there are to many
+        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY
+        """
+        nPoints = 0
+        first = True
+        common_units_x = None
+        common_units_y = None
+        for data in self.data_list:
+            units_x = None
+            units_y = None
+            x_values = np.asarray(data.x)
+            y_values = np.asarray(data.y)
+            if first:
+                #Set common_units
+                if hasattr(data, "units_x"):
+                    units_x = data.units_x
+                    common_units_x = units_x
+                if hasattr(data, "units_y"):
+                    units_y = data.units_y
+                    common_units_y = units_y
+                first = False
+            else:
+                #Try to convert to common_units
+                if common_units_x is not None and hasattr(data, "units_x"):
+                    units_x = data.units_x
+                    can_convert = can_convert_units(units_x, common_units_x)
+                    if can_convert == -1:
+                        common_units_x = None
+                    elif can_convert == 1:
+                        x_values= convert_to_other_units(x_values, units_x, common_units_x)
+                        units_x = common_units_x
+                else:
+                    common_units_x = None
+                
+                if common_units_y is not None and hasattr(data, "units_y"):
+                    units_y = data.units_y
+                    can_convert = can_convert_units(units_y, common_units_y)
+                    if can_convert == -1:
+                        common_units_y = None
+                    elif can_convert == 1:
+                        y_values= convert_to_other_units(y_values, units_y, common_units_y)
+                        units_y = common_units_y
+                else:
+                    common_units_y = None
+
+            #Filter out of x_range
+            if x_range is not None:
+                x0 = x_range[0]
+                x1 = x_range[1]
+                mask = (x_values >= x0) & (x_values <= x1)
+                x_values = x_values[mask]
+                y_values = y_values[mask]
+
+            #Sum up number of points
+            nPoints += len(x_values)
+
+            data.units_x = units_x
+            data.units_y = units_y
+            data.x = x_values
+            data.y = y_values
+
+        self.common_units_x = common_units_x
+        self.common_units_y = common_units_y
+
+        #Calculate how many points to skip
+        too_many_points = 10000
+        skipFactor = int(np.ceil(nPoints / too_many_points))
+        skipFactor = max(skipFactor, 1)
+
+        if skipFactor > 1:
+            self.is_downscaled = True
+        else:
+            self.is_downscaled = False
+        
+        minX = None
+        minY = None
+        maxX = None
+        maxY = None
+        for index, data in enumerate(self.data_list):
+            x_values = data.x
+            y_values = data.y
+
+            if self.is_downscaled:
+                #Reduce number of points
+                x_values = x_values[::skipFactor]
+                y_values = y_values[::skipFactor]
+
+            if offset_traces:
+                #Offset y_values so the traces are over eachother
+                if index > 0:
+                    y_values = y_values + index
+
+            if shift_to_0:
+                x_values = x_values - x_values.min()
+
+            if index == 0:
+                if not shift_to_0:
+                    minX = x_values.min()
+                minY = y_values.min()
+                maxX = x_values.max()
+                maxY = y_values.max()
+            else:
+                if not shift_to_0:
+                    temp_minX = x_values.min()
+                    if temp_minX < minX:
+                        minX = temp_minX
+                temp_minY = y_values.min()
+                if temp_minY < minY:
+                    minY = temp_minY
+                temp_maxX = x_values.max()
+                if temp_maxX > maxX:
+                    maxX = temp_maxX
+                temp_maxY = y_values.max()
+                if temp_maxY > maxY:
+                    maxY = temp_maxY
+            data.x = x_values
+            data.y = y_values
+        if shift_to_0:
+            minX = 0
+        self.minX = minX
+        self.minY = minY
+        self.maxX = maxX
+        self.maxY = maxY
 
 class PlotlyGraphAnnotations():
     def __init__(self, x, text, units):

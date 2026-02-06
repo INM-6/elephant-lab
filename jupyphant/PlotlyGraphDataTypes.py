@@ -1,6 +1,8 @@
 from .PlotlyGraphFigure import PlotlyGraphDataType, PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
 
 class SpikeTrainRasterPlot(PlotlyGraphDataType):
+    import numpy as np
+
     def extract_data(self, spiketrain):
         """Extracts SpikeTrainRasterPlotData from a SpikeTrain"""
         self.name = getattr(spiketrain,'name', 'SpikeTrain')
@@ -16,7 +18,7 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
 
         self.marker = dict(symbol='line-ns-open', size=calcSize)
         self.x = spiketrain.times.magnitude
-        self.y = [0] * len(self.x)
+        self.y = self.np.zeros(len(self.x))
         self.units_x = spiketrain.times.units
         self.use_name_as_ticklabels = True
 
