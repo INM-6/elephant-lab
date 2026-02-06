@@ -33,6 +33,7 @@ dependencies = [
 "jupyter-server",
 "jupyterlab",
 "jupyterlab-pygments",
+"anywidget",
 "jupyterlab-server",
 "jupyterlab-widgets",
 "matplotlib",
@@ -84,8 +85,6 @@ exclude = [".github"]
 [tool.hatch.build]
 artifacts = ["labextension"]
 
-[tool.hatch.build.targets.wheel]
-packages = ["jupyphant"]
 
 [tool.hatch.build.targets.wheel.shared-data]
 "labextension" = "share/jupyter/labextensions/jupyphant"
