@@ -456,7 +456,7 @@ class Jupyphant:
         else:
             return None
 
-    def create_rasterplot(self, selected_ids=None):
+    def create_rasterplot(self, selected_ids=None, overlap_changes=False):
         """
         Create for each top-node a rasterplot for the contained spike trains.
 
@@ -474,7 +474,7 @@ class Jupyphant:
                 spiketrains_unchanged = False
 
         # Return pre-existing rasterplot if content of spiketrains has NOT changed
-        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None):
+        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None) and (not overlap_changes):
             return self.spiketrain_overview
         # Otherwise, create new plot
         else:
@@ -502,7 +502,7 @@ class Jupyphant:
                 theme_name = 'plotly_dark'
                 if hasattr(self, 'jupyterlab_theme'):
                     theme_name = self.jupyterlab_theme
-                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name)
+                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name, overlap_on_compress=False)
 
                 if selected_ids is None:
                     self.spiketrain_overview = plotlyGraphFigure
@@ -510,7 +510,7 @@ class Jupyphant:
             else:
                 return None
 
-    def create_lfpplot(self, selected_ids=None):
+    def create_lfpplot(self, selected_ids=None, overlap_changes=False):
         """
         Wrapper for plot_lfp to update the lfp plot
 
@@ -528,7 +528,7 @@ class Jupyphant:
                 analogsignals_unchanged = False
 
         # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
-        if analogsignals_unchanged and (self.analogsignal_overview is not None) and (selected_ids is None):
+        if analogsignals_unchanged and (self.analogsignal_overview is not None) and (selected_ids is None) and (not overlap_changes):
             return self.analogsignal_overview
         else:
             n_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)

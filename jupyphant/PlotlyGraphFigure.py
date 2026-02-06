@@ -5,7 +5,7 @@ import warnings
 import quantities as pq
 
 class PlotlyGraphFigure:
-    def __init__(self, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None):
+    def __init__(self, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -16,6 +16,7 @@ class PlotlyGraphFigure:
         self.layout_options = dict()
 
         self.shared_xaxes = shared_xaxes or overlapping
+        self.overlap_on_compress = overlap_on_compress
         self.nGraphs = 1
         if isinstance(data, list) and self.is_trace_list(data):
             self.nGraphs = len(data) 
@@ -40,7 +41,7 @@ class PlotlyGraphFigure:
                 vertical_spacing=self.vertical_spacing,
                 shared_xaxes=self.shared_xaxes
             ))
-
+        self.overlapping = overlapping
         self.create_graphs(self.fig, data)
 
         if title is None:
@@ -177,12 +178,12 @@ class PlotlyGraphFigure:
                 else:
                     self.common_units_y = units_y
 
-            if self.compress:
+            if self.compress and (not self.overlapping or not self.overlap_on_compress):
                 offset_index = row-1
                 if offset_index > 0:
                     y_values = [y + offset_index for y in y_values.copy()]
-            minX = min(data.x)
-            maxX = max(data.x)
+            minX = min(x_values)
+            maxX = max(x_values)
             minY = min(y_values)
             maxY = max(y_values)
             if hasattr(self, "minX"):
@@ -369,7 +370,7 @@ class PlotlyGraphFigure:
 
         def update_ticklabels(new_range):
             if self.compress and len(self.ticktext)==self.nGraphs:
-                showticklabels = new_range[1]-new_range[0]<26
+                showticklabels = new_range[1]-new_range[0]<26 and (not self.overlapping or not self.overlap_on_compress)
                 self.update_layout_options_dict("yaxis", dict(
                     showticklabels=showticklabels,
                     zeroline=showticklabels,
