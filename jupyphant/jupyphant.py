@@ -249,7 +249,10 @@ class Jupyphant:
                 str(neo_obj.units),
                 float(neo_obj.sampling_rate),
                 str(neo_obj.sampling_rate),
-                float(neo_obj.t_start)
+                float(neo_obj.t_start),
+                neo_obj.name,
+                neo_obj.description,
+                neo_obj.annotations
             )
             result = joblib.hash(hashable_summary, hash_name=hash_name)
 
@@ -257,7 +260,10 @@ class Jupyphant:
             hashable_summary = (
                 neo_obj.magnitude,
                 str(neo_obj.units),
-                float(neo_obj.t_start)
+                float(neo_obj.t_start),
+                neo_obj.name,
+                neo_obj.description,
+                neo_obj.annotations
             )
             result = joblib.hash(hashable_summary, hash_name=hash_name)
 
@@ -266,7 +272,10 @@ class Jupyphant:
                 neo_obj.times,
                 str(neo_obj.units),
                 float(neo_obj.t_start),
-                float(neo_obj.t_stop)
+                float(neo_obj.t_stop),
+                neo_obj.name,
+                neo_obj.description,
+                neo_obj.annotations
             )
             result = joblib.hash(hashable_summary, hash_name=hash_name)
 
@@ -274,7 +283,10 @@ class Jupyphant:
             hashable_summary = (
                 neo_obj.times,
                 neo_obj.labels,
-                str(neo_obj.units)
+                str(neo_obj.units),
+                neo_obj.name,
+                neo_obj.description,
+                neo_obj.annotations
             )
             result = joblib.hash(hashable_summary, hash_name=hash_name)
 
