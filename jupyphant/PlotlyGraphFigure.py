@@ -220,8 +220,9 @@ class PlotlyGraphFigure:
             self.saved_y_ranges.append(y_range)
 
         self.change_height_after_render(self.default_height)
-        with self.fig.batch_update():
-                self.fig.update_yaxes(range=self.y_slider.value)
+        if hasattr(self, 'y_slider'):
+            with self.fig.batch_update():
+                    self.fig.update_yaxes(range=self.y_slider.value)
         self.update_legend()
         self.update_layout()
         
@@ -302,7 +303,7 @@ class PlotlyGraphFigure:
 
         def update_ticklabels(new_range):
             if self.compress and len(self.ticktext)==self.nGraphs:
-                showticklabels = new_range[1]-new_range[0]<26 and (not self.overlapping or not self.overlap_on_compress)
+                showticklabels = bool(new_range[1]-new_range[0]<26) and (not self.overlapping or not self.overlap_on_compress)
                 self.update_layout_options_dict("yaxis", dict(
                     showticklabels=showticklabels,
                     zeroline=showticklabels,
@@ -339,12 +340,13 @@ class PlotlyGraphFigure:
 
     def update_y_slider(self):
         """Updates the y-axis slider height and visibility."""
-        y_slider_height = self.calculate_y_slider_height()
-        if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
-            self.y_slider.layout.height = f'{y_slider_height}px'
-        visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
-        if self.y_slider.layout.visibility != visible:
-            self.y_slider.layout.visibility = visible
+        if hasattr(self, 'y_slider'):
+            y_slider_height = self.calculate_y_slider_height()
+            if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
+                self.y_slider.layout.height = f'{y_slider_height}px'
+            visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
+            if self.y_slider.layout.visibility != visible:
+                self.y_slider.layout.visibility = visible
 
     def calculate_y_slider_height(self):
         return int(0.875 * self.get_height() - 165)
