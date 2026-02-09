@@ -316,6 +316,9 @@ class PlotlyGraphFigure:
         update_ticklabels(totalrange)
 
     def update_legend(self):
+        if self.nGraphs == 1:
+            return
+
         if self.overlapping and not self.compress:
             if not self.fig.layout.showlegend:
                 self.layout_options["showlegend"] = True
@@ -780,6 +783,9 @@ class PlotlyGraphDataTypeList():
         # Otherwise, treat it as a single trace (list of points)
         return False
     
+    def concat(self, plotlyGraphDataTypeList):
+        self.data_list += plotlyGraphDataTypeList.data_list
+    
     def normalize(self, x_range, offset_traces, shift_to_0):
         """
         Tries to normalize units to first unit found
@@ -790,7 +796,6 @@ class PlotlyGraphDataTypeList():
         nPoints = 0
         first = True
         common_units_x = None
-        common_units_y = None
         for data in self.data_list:
             units_x = None
             units_y = None
@@ -801,9 +806,6 @@ class PlotlyGraphDataTypeList():
                 if hasattr(data, "units_x"):
                     units_x = data.units_x
                     common_units_x = units_x
-                if hasattr(data, "units_y"):
-                    units_y = data.units_y
-                    common_units_y = units_y
                 first = False
             else:
                 #Try to convert to common_units
@@ -817,17 +819,6 @@ class PlotlyGraphDataTypeList():
                         units_x = common_units_x
                 else:
                     common_units_x = None
-                
-                if common_units_y is not None and hasattr(data, "units_y"):
-                    units_y = data.units_y
-                    can_convert = can_convert_units(units_y, common_units_y)
-                    if can_convert == -1:
-                        common_units_y = None
-                    elif can_convert == 1:
-                        y_values= convert_to_other_units(y_values, units_y, common_units_y)
-                        units_y = common_units_y
-                else:
-                    common_units_y = None
 
             #Filter out of x_range
             if x_range is not None:
@@ -841,12 +832,10 @@ class PlotlyGraphDataTypeList():
             nPoints += len(x_values)
 
             data.units_x = units_x
-            data.units_y = units_y
             data.x = x_values
             data.y = y_values
 
         self.common_units_x = common_units_x
-        self.common_units_y = common_units_y
 
         #Calculate how many points to skip
         too_many_points = 10000
@@ -858,10 +847,12 @@ class PlotlyGraphDataTypeList():
         else:
             self.is_downscaled = False
         
+        common_units_y = None
         minX = None
         minY = None
         maxX = None
         maxY = None
+        previous_maxY = None
         for index, data in enumerate(self.data_list):
             x_values = data.x
             y_values = data.y
@@ -871,10 +862,21 @@ class PlotlyGraphDataTypeList():
                 x_values = x_values[::skipFactor]
                 y_values = y_values[::skipFactor]
 
-            if offset_traces:
-                #Offset y_values so the traces are over eachother
-                if index > 0:
-                    y_values = y_values + index
+            if index == 0:
+                if hasattr(data, "units_y"):
+                    units_y = data.units_y
+                    common_units_y = units_y
+            else:
+                if common_units_y is not None and hasattr(data, "units_y"):
+                    units_y = data.units_y
+                    can_convert = can_convert_units(units_y, common_units_y)
+                    if can_convert == -1:
+                        common_units_y = None
+                    elif can_convert == 1:
+                        y_values= convert_to_other_units(y_values, units_y, common_units_y)
+                        units_y = common_units_y
+                else:
+                    common_units_y = None
 
             if shift_to_0:
                 x_values = x_values - x_values.min()
@@ -885,24 +887,41 @@ class PlotlyGraphDataTypeList():
                 minY = y_values.min()
                 maxX = x_values.max()
                 maxY = y_values.max()
+                previous_maxY = maxY
             else:
+                temp_minX = 0 if shift_to_0 else x_values.min()
+                temp_minY = y_values.min()
+                temp_maxX = x_values.max()
+                temp_maxY = y_values.max()
+
+                if offset_traces:
+                    offset = previous_maxY - temp_minY
+                    span = (temp_maxY - temp_minY)
+                    if span < 1e-9:
+                        offset += 1
+                    else:
+                        gap = 0.05 * span
+                        offset + gap
+                    y_values = y_values + offset
+                    temp_minY += offset
+                    temp_maxY += offset
+                    previous_maxY = temp_maxY
+
                 if not shift_to_0:
-                    temp_minX = x_values.min()
                     if temp_minX < minX:
                         minX = temp_minX
-                temp_minY = y_values.min()
                 if temp_minY < minY:
                     minY = temp_minY
-                temp_maxX = x_values.max()
                 if temp_maxX > maxX:
                     maxX = temp_maxX
-                temp_maxY = y_values.max()
                 if temp_maxY > maxY:
                     maxY = temp_maxY
+            data.units_y = units_y
             data.x = x_values
             data.y = y_values
         if shift_to_0:
             minX = 0
+        self.common_units_y = common_units_y
         self.minX = minX
         self.minY = minY
         self.maxX = maxX
