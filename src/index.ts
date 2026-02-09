@@ -600,11 +600,11 @@ try:
             paths = []
             objects_for_list = []
             for node in selected_nodes:
-                if node._id in jupyphant.map_ipytree_node_id_to_neo_obj_hash:
-                    obj_hash = jupyphant.map_ipytree_node_id_to_neo_obj_hash[node._id]
-                    neo_obj = jupyphant.map_neo_obj_hash_to_neo_obj[obj_hash]
+                if node._id in jupyphant.map_ipytree_node_id_to_neo_obj:
+                    neo_obj = jupyphant.map_ipytree_node_id_to_neo_obj[node._id]
                     
-                    path = jupyphant._get_obj_path(neo_obj)
+                    variable_name = node.metadata.get('variable_name', '')
+                    path = jupyphant._get_obj_path(neo_obj, variable_name=variable_name)
                     if path:
                         paths.append(path)
                         objects_for_list.append(neo_obj)

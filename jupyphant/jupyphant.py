@@ -153,6 +153,7 @@ class Jupyphant:
         self.selected_neo_objects = set()
         self.on_selected_neo_objects_changed = self.SimpleEvent()
         self.map_ipytree_node_id_to_neo_obj_hash = {}
+        self.map_ipytree_node_id_to_neo_obj = {}
         self.map_neo_obj_hash_to_neo_obj = {}
         self.filter_changed = False
         self.expand_all = False
@@ -174,7 +175,7 @@ class Jupyphant:
                 return key
         return ""
 
-    def _get_obj_path(self, obj):
+    def _get_obj_path(self, obj, variable_name=''):
         path = []
         curr = obj
 
@@ -209,9 +210,10 @@ class Jupyphant:
                         break
         
         if path:
-            var_name = self.names_for(curr)
-            if var_name:
-                path.insert(0, var_name)
+            if not variable_name:
+                variable_name = self.names_for(curr)
+            if variable_name:
+                path.insert(0, variable_name)
                 return '.'.join(path)
 
             if hasattr(curr, 'name') and curr.name:
@@ -226,14 +228,13 @@ class Jupyphant:
                     if item is obj:
                         return f'{name}[{i}]'
 
-        var_name = self.names_for(obj)
-        if var_name:
-            return var_name
+        if not variable_name:
+            variable_name = self.names_for(obj)
+        if variable_name:
+            return variable_name
 
         if hasattr(obj, 'name') and obj.name:
             return obj.name
-        
-        return ""
     
     
     def expand_neo_tree(self, opened):
@@ -384,7 +385,7 @@ class Jupyphant:
         if self.ipytree_of_neo_objects is not None and self.neo_objs_changed_after_update:
             # Create one tree node per neo block and name of node is name of block
             nodes = []
-            for neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values():
+            for variable_name, neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
                 if type(neo_obj) not in NEO_OBJS_TO_SHOW:
                     continue
                 if hasattr(neo_obj, 'block') and neo_obj.block is not None:
@@ -394,8 +395,6 @@ class Jupyphant:
                 hash_neo_obj = self.get_neo_hash(neo_obj, hash_name='sha1')
                 self.map_neo_obj_hash_to_neo_obj[hash_neo_obj] = neo_obj
                 class_name = neo_obj.__class__.__name__
-
-                variable_name = self.names_for(neo_obj)
 
                 # Define styles for node names
                 NODE_STYLE = "border: 1px dotted var(--jp-border-color2); padding: 1px 4px; background-color: var(--jp-layout-color2); border-radius: 4px;"
@@ -421,6 +420,7 @@ class Jupyphant:
                         continue
                     nodes.append(node_neo_obj)
                     self.map_ipytree_node_id_to_neo_obj_hash[node_neo_obj._id] = hash_neo_obj
+                    self.map_ipytree_node_id_to_neo_obj[node_neo_obj._id] = neo_obj
                 # subclases of RegionOfInterest and list/SpikeTrainList have no 'name' attribute
                 else:
                     is_analog_signal_list = isinstance(neo_obj, list) and len(neo_obj) > 0 and all(
@@ -448,6 +448,7 @@ class Jupyphant:
                         continue
                     nodes.append(node_neo_obj)
                     self.map_ipytree_node_id_to_neo_obj_hash[node_neo_obj._id] = hash_neo_obj
+                    self.map_ipytree_node_id_to_neo_obj[node_neo_obj._id] = neo_obj
 
             print(f"After Blocks: {time.time() - start}")
             # print(f"Nodes After Blocks: {nodes}")
@@ -516,6 +517,7 @@ class Jupyphant:
                         attr_node.open_icon_style = 'success'
                         attr_node.close_icon_style = 'danger'
                         self.map_ipytree_node_id_to_neo_obj_hash[attr_node._id] = attr_value_hash
+                        self.map_ipytree_node_id_to_neo_obj[attr_node._id] = attr_value_list
                         
                         self._add_sub_nodes(attr_node, attr_value_list)
 
@@ -555,6 +557,7 @@ class Jupyphant:
                 child_node.close_icon_style = 'danger'
                 child_node.data = {"neo_id": id(obj), "neo_type": type(obj).__name__}
                 self.map_ipytree_node_id_to_neo_obj_hash[child_node._id] = child_obj_hash
+                self.map_ipytree_node_id_to_neo_obj[child_node._id] = child_obj
                 self._add_sub_nodes(child_node, child_obj)
                 child_node.opened = self.expand_all or (len(parent.nodes) < 5) 
                 parent.add_node(child_node)
@@ -810,8 +813,8 @@ class Jupyphant:
         return collected_neo_objs
 
     def _get_neo_obj_hash_and_node_name_of_selected_nodes(self):
-        return {self.map_ipytree_node_id_to_neo_obj_hash[node._id]: node.name
-                for node in self.selected_neo_objects}
+        return {self.get_neo_hash(self.map_ipytree_node_id_to_neo_obj[node._id]): node.name
+            for node in self.selected_neo_objects}
 
     def _print_as_table(self, data, pp):
         """
@@ -1334,6 +1337,9 @@ class Jupyphant:
 
         # SpikeTrainList
         if isinstance(neo_obj, self.SpikeTrainList):
+            if neo_obj.description:
+                pp.text(f"\n{bold}Description:{reset} {neo_obj.description}")
+
             pp.text(f"{bold}SpikeTrainList{reset}")
             if neo_obj._items is None:
                 if neo_obj._spike_time_array is None:
@@ -1348,14 +1354,20 @@ class Jupyphant:
 
         # Regions of Interest: Circular, Polygon, Rectangular
         if isinstance(neo_obj, self.CircularRegionOfInterest):
+            if neo_obj.description:
+                pp.text(f"\n{bold}Description:{reset} {neo_obj.description}")
             pp.text(f"{neo_obj.__class__.__name__} with center at {neo_obj.center} and radius {neo_obj.radius}")
             pp.text("\n\n")
             return
         if isinstance(neo_obj, self.PolygonRegionOfInterest):
+            if neo_obj.description:
+                pp.text(f"\n{bold}Description:{reset} {neo_obj.description}")
             pp.text(f"{neo_obj.__class__.__name__} with vertices at ({neo_obj.vertices})")
             pp.text("\n\n")
             return
         if isinstance(neo_obj, self.RectangularRegionOfInterest):
+            if neo_obj.description:
+                pp.text(f"\n{bold}Description:{reset} {neo_obj.description}")
             pp.text(f"{neo_obj.__class__.__name__} with center at ({neo_obj.x},{neo_obj.y}), width {neo_obj.width} and height {neo_obj.height}")
             pp.text("\n\n")
             return
@@ -1566,6 +1578,8 @@ class Jupyphant:
             return
 
         if isinstance(neo_obj, self.BaseNeo):
+            if neo_obj.description:
+                pp.text(f"\n{bold}Description:{reset} {neo_obj.description}")
             pp.text(str(neo_obj))
             pp.text("\n\n")
             return
@@ -1586,14 +1600,13 @@ class Jupyphant:
         output = StringIO()
         pp = RepresentationPrinter(output)
 
-        hashes_and_names_of_selected_nodes = self._get_neo_obj_hash_and_node_name_of_selected_nodes()
-        if not hashes_and_names_of_selected_nodes:
+        if not self.selected_neo_objects:
             return
 
-        selected_objects_with_node_name = []
-        for h, name in hashes_and_names_of_selected_nodes.items():
-             if h in self.map_neo_obj_hash_to_neo_obj:
-                selected_objects_with_node_name.append({'obj': self.map_neo_obj_hash_to_neo_obj[h], 'node_name': name})
+        selected_objects_with_node_name = [
+            {'obj': self.map_ipytree_node_id_to_neo_obj.get(node._id), 'node_name': node.name, 'variable_name': node.metadata.get('variable_name', '')}
+            for node in self.selected_neo_objects if node._id in self.map_ipytree_node_id_to_neo_obj
+        ]
 
         if len(selected_objects_with_node_name) <= 1:
             # Existing logic for single selection or no selection
