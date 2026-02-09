@@ -40,8 +40,8 @@ class PlotlyGraphFigure:
         if not isinstance(data, PlotlyGraphDataTypeList):
             data = PlotlyGraphDataTypeList(data)
         self.nGraphs = len(data.data_list)
-        self.compress = self.nGraphs > 10
-        data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0)
+        self.compress = self.nGraphs > 8
+        data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0 and x_range is None)
         self.data = data
 
 
@@ -85,6 +85,11 @@ class PlotlyGraphFigure:
                     ticktext=self.ticktext,
                 )
                 self.update_layout_options_dict("yaxis", yaxis_options)
+            else:
+                if not overlapping:
+                    self.update_layout_options_dict('yaxis',dict(
+                        showticklabels = False
+                    ))
             self.hide_legend = True
         self.update_legend()
         self.create_sliders()
@@ -614,7 +619,10 @@ class PlotlyGraphFigure:
         return subplot_height
     
     def getXRange(self):
-        return self.fig.xaxis.range
+        return self.fig.layout.xaxis.range
+    
+    def isDownscaled(self):
+        return self.data.is_downscaled
 class PlotlyGraphDataType:
     def __init__(self, data, **kwargs):
         if data is None:

@@ -113,17 +113,20 @@ def create_explorer_info(jupyphant_entity):
     jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
     display(output_node_info)
 
-def raw_plot(jupyphant_entity, overlap_changes=False):
+def raw_plot(jupyphant_entity, other_changes=False):
     import IPython
     selected_ids = get_selected_neo_ids(jupyphant_entity)
+    if not other_changes:
+        for key in jupyphant_entity.PlotKey:
+            jupyphant_entity.plots[key]['x_range']=None
     with jupyphant_entity.output_node_raw_plot:
         IPython.display.clear_output()
-        raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids, overlap_changes=overlap_changes)
-        jupyphant_entity.raw_st = raw_st
+        raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids, other_changes=other_changes)
+        jupyphant_entity.plots[jupyphant_entity.PlotKey.RAW_ST]["fig"]=raw_st
         if raw_st:
             raw_st.display()
-        raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids, overlap_changes=overlap_changes)
-        jupyphant_entity.raw_anasig = raw_anasig
+        raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids, other_changes=other_changes)
+        jupyphant_entity.plots[jupyphant_entity.PlotKey.RAW_ANASIG]["fig"]=raw_anasig
         if raw_anasig:
             raw_anasig.display()
 
@@ -187,32 +190,43 @@ def expand_neo_tree(jupyphant_entity, opened):
     jupyphant_entity.expand_neo_tree(opened)
 
 def set_raw_plot_overlap(jupyphant_entity, overlap):
-    jupyphant_entity.raw_plot_overlap = overlap
-    def update_overlap(fig):
+    reload = False
+    for key in jupyphant_entity.PlotKey:
+        plot_dict = jupyphant_entity.plots[key]
+        fig = plot_dict['fig']
+        if overlap == plot_dict['overlapping']:
+            continue
+        plot_dict['overlapping']=overlap
+        if fig is None:
+            continue
         if overlap:
             fig.overlap()
         else:
             fig.stack()
         if fig.compress and fig.overlap_on_compress:
-            return True
-        return False
-    if update_plotly_figures(jupyphant_entity, update_overlap):
-        raw_plot(jupyphant_entity, overlap_changes=True)
+            reload = True
+    if reload:
+        raw_plot(jupyphant_entity, other_changes=True)
 
 def update_jupyterlab_theme(jupyphant_entity, theme_name):
     jupyphant_entity.jupyterlab_theme = theme_name
-    update_plotly_figures(jupyphant_entity, lambda fig: fig.update_jupyterlab_theme(theme_name))
+    for key in jupyphant_entity.PlotKey:
+        fig = jupyphant_entity.plots[key]['fig']
+        if fig is not None:
+            fig.update_jupyterlab_theme(theme_name)
 
-def update_plotly_figures(jupyphant_entity, to_update):
-    changes_needed = False
-    raw_st = None
-    if hasattr(jupyphant_entity, 'raw_st'):
-        raw_st = jupyphant_entity.raw_st
-    if raw_st:
-        changes_needed = to_update(raw_st) or changes_needed
-    raw_anasig = None
-    if hasattr(jupyphant_entity, 'raw_anasig'):
-        raw_anasig = jupyphant_entity.raw_anasig
-    if raw_anasig:
-        changes_needed = to_update(raw_anasig) or changes_needed
-    return changes_needed
+def upscale_raw_plot(jupyphant_entity):
+    reload = False
+    for key in jupyphant_entity.PlotKey:
+        plot_dict = jupyphant_entity.plots[key]
+        fig = plot_dict['fig']
+        if fig is None:
+            continue
+        x_range = fig.getXRange()
+        if x_range == plot_dict['x_range']:
+            continue
+        plot_dict['x_range']=x_range
+        if(fig.isDownscaled()):
+            reload = True
+    if reload:
+        raw_plot(jupyphant_entity, other_changes=True)

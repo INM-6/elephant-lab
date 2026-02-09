@@ -357,6 +357,23 @@ class JupyphantExtension {
 		tree_widget.node.prepend(filterContainer);
 	}
 
+	private defaultOutputErrorListerner(msg: any) {
+		const msgType = msg.header.msg_type;
+		switch (msgType) {
+			case "stream":
+				console.log("stdout:", msg.content.text);
+				break;
+			case "error":
+				console.error("Python error:", msg.content.ename, msg.content.evalue);
+				console.error(msg.content.traceback.join("\n"));
+				break;
+			case "execute_result":
+			case "display_data":
+				console.log("Result:", msg.content.data);
+				break;
+		}
+	}
+
 	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
 		const checked_style = {
 			color: "#2cbb00ff",
@@ -383,12 +400,17 @@ class JupyphantExtension {
 		const overlapToggle = document.createElement('label');
 		overlapToggle.dataset.checked = 'false';
 		Object.assign(overlapToggle.style, unchecked_style);
-		overlapToggle.innerHTML = `<i class="fa fa-bolt"></i> Overlap`;
+		overlapToggle.innerHTML = `<i class="fa fa-layer-group"></i> Overlap`;
 
 		const darkmodeToggle = document.createElement('label');
 		darkmodeToggle.dataset.checked = 'true';
 		Object.assign(darkmodeToggle.style, checked_style);
 		darkmodeToggle.innerHTML = `<i class="fa fa-moon"></i> Dark`;
+
+		const upscaleButton = document.createElement('label');
+		Object.assign(upscaleButton.style, unchecked_style);
+		upscaleButton.innerHTML = `<i class="fa fa-expand-arrows-alt"></i> Upscale`;
+
 
 		overlapToggle.onclick = () => {
 			const isNowChecked = overlapToggle.dataset.checked === 'false';
@@ -398,28 +420,13 @@ class JupyphantExtension {
 			const code = `
 			from jupyphant.kernelcode import set_raw_plot_overlap
 			set_raw_plot_overlap(jupyphant_entity, ${isNowChecked ? "True" : "False"})
-			`
+			`;
 
 			// Send to kernel
 			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
 
 			// Listen for output / errors
-			future.onIOPub = (msg: any) => {
-				const msgType = msg.header.msg_type;
-				switch (msgType) {
-					case "stream":
-						console.log("stdout:", msg.content.text);
-						break;
-					case "error":
-						console.error("Python error:", msg.content.ename, msg.content.evalue);
-						console.error(msg.content.traceback.join("\n"));
-						break;
-					case "execute_result":
-					case "display_data":
-						console.log("Result:", msg.content.data);
-						break;
-				}
-			};
+			future.onIOPub = this.defaultOutputErrorListerner;
 		};
 
 		darkmodeToggle.onclick = () => {
@@ -430,32 +437,32 @@ class JupyphantExtension {
 			const code = `
 			from jupyphant.kernelcode import update_jupyterlab_theme
 			update_jupyterlab_theme(jupyphant_entity, ${isNowChecked ? '"dark"' : '"white"'})
-			`
+			`;
 
 			// Send to kernel
 			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
 
 			// Listen for output / errors
-			future.onIOPub = (msg: any) => {
-				const msgType = msg.header.msg_type;
-				switch (msgType) {
-					case "stream":
-						console.log("stdout:", msg.content.text);
-						break;
-					case "error":
-						console.error("Python error:", msg.content.ename, msg.content.evalue);
-						console.error(msg.content.traceback.join("\n"));
-						break;
-					case "execute_result":
-					case "display_data":
-						console.log("Result:", msg.content.data);
-						break;
-				}
-			};
+			future.onIOPub = this.defaultOutputErrorListerner;
+		};
+
+		upscaleButton.onclick = () => {
+			// Send Python command to flip the boolean
+			const code = `
+			from jupyphant.kernelcode import upscale_raw_plot
+			upscale_raw_plot(jupyphant_entity)
+			`;
+
+			// Send to kernel
+			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
+
+			// Listen for output / errors
+			future.onIOPub = this.defaultOutputErrorListerner;
 		};
 
 		buttonContainer.appendChild(overlapToggle);
 		buttonContainer.appendChild(darkmodeToggle);
+		buttonContainer.appendChild(upscaleButton);
 		raw_plot_widget.node.prepend(buttonContainer);
 	}
 

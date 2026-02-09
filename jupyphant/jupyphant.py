@@ -105,6 +105,11 @@ class Jupyphant:
     # ipytree provides a tree structure widget
     # Used to display the Neo object hierarchy
     from ipytree import Tree, Node
+    from enum import Enum
+
+    class PlotKey(Enum):
+        RAW_ST = 'raw_st'
+        RAW_ANASIG = 'raw_anasig'
 
     class SimpleEvent:
         def __init__(self):
@@ -146,6 +151,14 @@ class Jupyphant:
         self.map_neo_obj_hash_to_neo_obj = {}
         self.filter_changed = False
         self.expand_all = False
+        self.jupyterlab_theme = 'plotly_dark'
+        self.plots = {}
+        for key in self.PlotKey:
+            self.plots[key] = {
+                "fig": None,
+                "overlapping": False,
+                "x_range": None
+            }
 
     def names_for(self, obj):
         for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
@@ -457,7 +470,7 @@ class Jupyphant:
         else:
             return None
 
-    def create_rasterplot(self, selected_ids=None, overlap_changes=False):
+    def create_rasterplot(self, selected_ids=None, other_changes=False):
         """
         Create for each top-node a rasterplot for the contained spike trains.
 
@@ -475,7 +488,7 @@ class Jupyphant:
                 spiketrains_unchanged = False
 
         # Return pre-existing rasterplot if content of spiketrains has NOT changed
-        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None) and (not overlap_changes):
+        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None) and (not other_changes):
             return self.spiketrain_overview
         # Otherwise, create new plot
         else:
@@ -497,13 +510,10 @@ class Jupyphant:
                 n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
                 if n_epochs > 0:
                     epoch_intervals = EpochIntervals(epochs)
-                overlapping = False
-                if hasattr(self, 'raw_plot_overlap'):
-                    overlapping = self.raw_plot_overlap
-                theme_name = 'plotly_dark'
-                if hasattr(self, 'jupyterlab_theme'):
-                    theme_name = self.jupyterlab_theme
-                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name, overlap_on_compress=False)
+                plot_dict = self.plots[self.PlotKey.RAW_ST]
+                overlapping = plot_dict['overlapping']
+                x_range = plot_dict['x_range']
+                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False)
 
                 if selected_ids is None:
                     self.spiketrain_overview = plotlyGraphFigure
@@ -511,7 +521,7 @@ class Jupyphant:
             else:
                 return None
 
-    def create_lfpplot(self, selected_ids=None, overlap_changes=False):
+    def create_lfpplot(self, selected_ids=None, other_changes=False):
         """
         Wrapper for plot_lfp to update the lfp plot
 
@@ -538,7 +548,7 @@ class Jupyphant:
                 irregularsignals_unchanged = False
 
         # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
-        if analogsignals_unchanged and irregularsignals_unchanged  and (self.signal_overview is not None) and (selected_ids is None) and (not overlap_changes):
+        if analogsignals_unchanged and irregularsignals_unchanged  and (self.signal_overview is not None) and (selected_ids is None) and (not other_changes):
             return self.signal_overview
         else:
             n_analog_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
@@ -564,12 +574,10 @@ class Jupyphant:
                 if n_epochs > 0:
                     epoch_intervals = EpochIntervals(epochs)
                 overlapping = False
-                if hasattr(self, 'raw_plot_overlap'):
-                    overlapping = self.raw_plot_overlap
-                theme_name = 'plotly_dark'
-                if hasattr(self, 'jupyterlab_theme'):
-                    theme_name = self.jupyterlab_theme
-                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=theme_name)
+                plot_dict = self.plots[self.PlotKey.RAW_ANASIG]
+                overlapping = plot_dict['overlapping']
+                x_range = plot_dict['x_range']
+                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme)
                 if selected_ids is None:
                     self.signal_overview = plotlyGraphFigure
                 return plotlyGraphFigure
