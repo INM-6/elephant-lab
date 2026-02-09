@@ -22,7 +22,7 @@ def convert_to_other_units(val, unit, convert_unit):
     return q.rescale(convert_unit).magnitude
 
 class PlotlyGraphFigure:
-    def __init__(self, data, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=True):
+    def __init__(self, data, overlapping=False, title=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=True):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -92,7 +92,6 @@ class PlotlyGraphFigure:
         self.create_anntotation_intervals()
         self.format_annotations()
         self.update_layout()
-        #self.create_xrange_buttons(relayout_button_options)
 
     def update_layout_options_dict(self, key, options_dict):
         if key in self.layout_options:
@@ -573,62 +572,6 @@ class PlotlyGraphFigure:
                 # Clear all units except the last one
                 for i in range(1, self.nGraphs):
                     self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
-
-    def create_xrange_buttons(self, relayout_button_options):
-        """
-        Adds updatemenus buttons to the figure to quickly set x-axis range.
-
-        Parameters
-        ----------
-        relayout_button_options : list of tuples or dicts, optional
-            If list of tuples: [(label, fraction_of_width), ...]
-            If None, default percentages are used.
-        """
-
-        # Default percentages
-        if relayout_button_options is None:
-            start = self.data.minX
-            width = self.data.maxX - start
-            relayout_button_options = [
-                ("1%", [start, start+width*0.01]),
-                ("5%", [start, start+width*0.05]),
-                ("10%", [start, start+width*0.1]),
-                ("20%", [start, start+width*0.2]),
-                ("50%", [start, start+width*0.5]),
-                ("75%", [start, start+width*0.75]),
-                ("All", [start, start+width])
-            ]
-
-        # Convert to Plotly button dicts
-        buttons = []
-        for item in relayout_button_options:
-            if isinstance(item, dict):
-                # If already a dict with label/range
-                buttons.append(dict(
-                    label=item["label"],
-                    method="relayout",
-                    args=["xaxis.range", item["range"]]
-                ))
-            elif isinstance(item, (list, tuple)) and len(item) == 2:
-                label, rng = item
-                buttons.append(dict(
-                    label=label,
-                    method="relayout",
-                    args=["xaxis.range", rng]
-                ))
-            else:
-                raise ValueError("Each relayout_button_option must be a dict or (label, fraction) tuple")
-
-        # Add buttons to the figure
-        self.update_layout_options_dict("updatemenus", [
-            dict(
-                type="buttons",
-                x=-0.02,
-                y=1,
-                showactive=False,
-                buttons=buttons
-            )
-        ])
 
     def update_jupyterlab_theme(self, theme_name):
         """Updates the Plotly figure theme based on JupyterLab theme name."""
