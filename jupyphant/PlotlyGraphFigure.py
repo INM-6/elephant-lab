@@ -22,7 +22,7 @@ def convert_to_other_units(val, unit, convert_unit):
     return q.rescale(convert_unit).magnitude
 
 class PlotlyGraphFigure:
-    def __init__(self, data, shared_xaxes=True, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=True):
+    def __init__(self, data, overlapping=False, title=None, relayout_button_options=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=True):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -32,7 +32,6 @@ class PlotlyGraphFigure:
         self.default_height = 600
         self.layout_options = dict()
 
-        self.shared_xaxes = shared_xaxes or overlapping
         self.overlapping = overlapping
         self.overlap_on_compress = overlap_on_compress
         self.annotation_data = annotation_data
@@ -58,7 +57,7 @@ class PlotlyGraphFigure:
                 rows=self.nGraphs,
                 cols=1,
                 vertical_spacing=self.vertical_spacing,
-                shared_xaxes=self.shared_xaxes
+                shared_xaxes=True
             ))
         self.create_graphs()
 
@@ -198,8 +197,8 @@ class PlotlyGraphFigure:
         self.update_y_slider()
     
     def overlap(self):
-        """Overlapps the graphs (needs shared x-axes)"""
-        if self.overlapping or not self.shared_xaxes or self.compress:
+        """Overlapps the graphs"""
+        if self.overlapping or self.compress:
             return
         self.overlapping = True
 
@@ -260,7 +259,7 @@ class PlotlyGraphFigure:
         else:
             for i in range(1, n + 1):
                 # Adding this range slider makes it impossible to manually zoom in vertically for this graph
-                addX_slider = i == n and (self.shared_xaxes or self.compress)
+                addX_slider = i == n
                 if addX_slider:
                     axis_key = f'xaxis{i}'
                     xaxis_options = dict(
@@ -585,8 +584,6 @@ class PlotlyGraphFigure:
             If list of tuples: [(label, fraction_of_width), ...]
             If None, default percentages are used.
         """
-        if not self.shared_xaxes:
-            return
 
         # Default percentages
         if relayout_button_options is None:
