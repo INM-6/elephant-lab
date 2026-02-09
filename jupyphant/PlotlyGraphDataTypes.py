@@ -1,6 +1,8 @@
 from .PlotlyGraphFigure import PlotlyGraphDataType, PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
 
 class SpikeTrainRasterPlot(PlotlyGraphDataType):
+    import numpy as np
+
     def extract_data(self, spiketrain):
         """Extracts SpikeTrainRasterPlotData from a SpikeTrain"""
         self.name = getattr(spiketrain,'name', 'SpikeTrain')
@@ -16,8 +18,8 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
 
         self.marker = dict(symbol='line-ns-open', size=calcSize)
         self.x = spiketrain.times.magnitude
-        self.y = [0] * len(self.x)
-        self.title_x = 'Time ({0})'.format(spiketrain.times.dimensionality)
+        self.y = self.np.zeros(len(self.x))
+        self.units_x = spiketrain.times.units
         self.use_name_as_ticklabels = True
 
 class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
@@ -70,8 +72,8 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                         times=times, 
                         name=f"{names[trial_id]}",
                     ), 
-                    title_x = 'Time ({0})'.format(times.dimensionality),
-                    title_y = lfp.units.__str__()
+                    units_x = times.units,
+                    units_y = lfp.units
                 ))
 
     def extract_data(self, data):
@@ -104,6 +106,40 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                 subplot_col += 1
 
 
+class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
+    import quantities as pq
+    class IrregularlySampledSignalPlot(PlotlyGraphDataType):
+        import numpy as np
+        def extract_data(self, irregular_signal):
+            """Extracts IrregularlySampledSignalPlotData from a SpikeTrain"""
+            self.name = getattr(irregular_signal,'name', 'IrregularSignal')
+            self.mode = 'markers+lines'
+
+            """signal = irregular_signal.magnitude.flatten()
+            times = irregular_signal.times
+
+            min_val = self.np.min(signal)
+            max_val = self.np.max(signal)
+            range_val = max_val - min_val
+
+            if range_val > 0:
+                norm_data = (signal - min_val) / range_val
+            else:
+                norm_data = signal - min_val"""
+
+            self.x=irregular_signal.times.magnitude.flatten()
+            self.y=irregular_signal.magnitude.flatten()
+            self.units_x = irregular_signal.times.units
+            self.units_y = irregular_signal.units
+
+    def extract_data(self, data):
+        """Extracts IrregularlySampledSignalData from a dict containing IrregularlySampledSignal Data"""
+        for top_node, iss_list in data.items():
+            if iss_list:
+                for iss in iss_list:
+                    self.data_list.append(self.IrregularlySampledSignalPlot(iss))
+
+
 class EventAnnotations(PlotlyGraphAnnotations):
     import numpy as np
 
@@ -117,7 +153,7 @@ class EventAnnotations(PlotlyGraphAnnotations):
                     x.append(event.times.magnitude)
                     text.append(event.labels)
                     n = len(event.times.magnitude)
-                    unit = unit + (['Time ({0})'.format(event.times.dimensionality)]*n)
+                    unit = unit + ([event.times.units]*n)
         super().__init__(self.np.concatenate(x), self.np.concatenate(text), unit)
 
 class EpochIntervals(PlotlyGraphAnnotationIntervals):
@@ -135,7 +171,7 @@ class EpochIntervals(PlotlyGraphAnnotationIntervals):
                     duration.append(epoch.durations.magnitude)
                     text.append(epoch.labels)
                     n = len(epoch.times.magnitude)
-                    unit = unit + (['Time ({0})'.format(epoch.times.dimensionality)]*n)
+                    unit = unit + ([epoch.times.units]*n)
         x = self.np.concatenate(x)
         duration = self.np.concatenate(duration)
         super().__init__(x, x+duration, self.np.concatenate(text), unit)
