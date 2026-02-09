@@ -40,7 +40,7 @@ class PlotlyGraphFigure:
         if not isinstance(data, PlotlyGraphDataTypeList):
             data = PlotlyGraphDataTypeList(data)
         self.nGraphs = len(data.data_list)
-        self.compress = self.nGraphs > 8
+        self.compress = self.nGraphs > 10
         data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0 and x_range is None)
         self.data = data
 
@@ -210,13 +210,18 @@ class PlotlyGraphFigure:
             return
         self.overlapping = True
 
+        self.saved_y_ranges = []
         for i in range(1, self.nGraphs + 1):
             self.update_layout_options_dict(f"yaxis{i}", dict(
                 visible=self.data.common_units_y is not None and i==1,
                 domain=[0.0,1.0]
             ))
+            y_range = self.fig.layout[f"yaxis{i}"].range
+            self.saved_y_ranges.append(y_range)
 
         self.change_height_after_render(self.default_height)
+        with self.fig.batch_update():
+                self.fig.update_yaxes(range=self.y_slider.value)
         self.update_legend()
         self.update_layout()
         
@@ -241,7 +246,8 @@ class PlotlyGraphFigure:
             self.update_layout_options_dict(f"yaxis{i}", 
                 dict(
                     visible=True,
-                    domain=[start, end]
+                    domain=[start, end],
+                    range = self.saved_y_ranges[i-1]
                 )
             )
 
@@ -333,14 +339,12 @@ class PlotlyGraphFigure:
 
     def update_y_slider(self):
         """Updates the y-axis slider height and visibility."""
-        if hasattr(self, "y_slider"):
-            # Update existing slider
-            y_slider_height = self.calculate_y_slider_height()
-            if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
-                self.y_slider.layout.height = f'{y_slider_height}px'
-            visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
-            if self.y_slider.layout.visibility != visible:
-                self.y_slider.layout.visibility = visible
+        y_slider_height = self.calculate_y_slider_height()
+        if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
+            self.y_slider.layout.height = f'{y_slider_height}px'
+        visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
+        if self.y_slider.layout.visibility != visible:
+            self.y_slider.layout.visibility = visible
 
     def calculate_y_slider_height(self):
         return int(0.875 * self.get_height() - 165)
@@ -592,19 +596,16 @@ class PlotlyGraphFigure:
     def display(self):
         """Displays the Plotly figure in a Jupyter notebook."""
         if self.fig:
-            if hasattr(self, "y_slider"):
-                from ipywidgets import HBox, Layout, Output
-                output_fig = Output(layout={'width': "100%", 'height': 'auto', 'min_width': '0px'})
-                with output_fig:
-                    display(self.fig)
-                hbox = HBox([self.y_slider, output_fig], 
-                    layout=Layout(
-                        width='100%',
-                    ),
-                )
-                display(hbox)
-            else:
+            from ipywidgets import HBox, Layout, Output
+            output_fig = Output(layout={'width': "100%", 'height': 'auto', 'min_width': '0px'})
+            with output_fig:
                 display(self.fig)
+            hbox = HBox([self.y_slider, output_fig], 
+                layout=Layout(
+                    width='100%',
+                ),
+            )
+            display(hbox)
 
     def getSubplotHeight(self, height=None):
         """Returns the height of each subplot in pixels."""
