@@ -120,10 +120,6 @@ class PlotlyGraphFigure:
         Supports PlotlyDataType, lists of traces, dicts, pandas objects, or lists of points.
         """
         for d in self.data.data_list:
-            # Check if x and y are valid
-            if d.x is None or d.y is None or len(d.x) == 0 or len(d.y) == 0:
-                warnings.warn(f"Skipping trace '{d.name}' because x or y data is missing or empty.")
-                return
 
             # Choose Scatter or Scattergl based on x and y size (It does not work with go.Scatter and there is no important benefit of using it)
             """
@@ -677,10 +673,16 @@ class PlotlyGraphFigure:
         return self.fig.xaxis.range
 class PlotlyGraphDataType:
     def __init__(self, data, **kwargs):
-        self.extract_data(data)
-        # Override / add attributes from kwargs
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+        if data is None:
+            self.x = [0]
+            self.y = [0]
+            self.name = 'nothing'
+            self.mode = 'marker'
+        else:
+            self.extract_data(data)
+            # Override / add attributes from kwargs
+            for key, value in kwargs.items():
+                setattr(self, key, value)
 
     def extract_data(self, data):
         """Generic extraction of x, y, mode, and name from various simple data types."""
@@ -786,7 +788,7 @@ class PlotlyGraphDataTypeList():
     def concat(self, plotlyGraphDataTypeList):
         self.data_list += plotlyGraphDataTypeList.data_list
     
-    def normalize(self, x_range, offset_traces, shift_to_0):
+    def normalize(self, x_range, offset_traces, shift_to_0, too_many_points = 10000):
         """
         Tries to normalize units to first unit found
         Filters out all points outside of x_range if x_range is not None
@@ -796,11 +798,20 @@ class PlotlyGraphDataTypeList():
         nPoints = 0
         first = True
         common_units_x = None
+        filtered = []
         for data in self.data_list:
             units_x = None
             units_y = None
             x_values = np.asarray(data.x)
             y_values = np.asarray(data.y)
+
+            # Check if x and y are valid
+            x_length = len(x_values)
+            y_length = len(y_values)
+            if data.x is None or data.y is None or x_length == 0 or y_length == 0 or x_length != y_length:
+                warnings.warn(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
+                continue
+
             if first:
                 #Set common_units
                 if hasattr(data, "units_x"):
@@ -822,23 +833,32 @@ class PlotlyGraphDataTypeList():
 
             #Filter out of x_range
             if x_range is not None:
-                x0 = x_range[0]
-                x1 = x_range[1]
+                x0, x1 = x_range
                 mask = (x_values >= x0) & (x_values <= x1)
                 x_values = x_values[mask]
                 y_values = y_values[mask]
 
+            x_length = len(x_values)
+            if x_length == 0:
+                warnings.warn(f"Skipping trace '{data.name}' because there is no data in the range")
+                continue
+            filtered.append(data)
+
             #Sum up number of points
-            nPoints += len(x_values)
+            nPoints += x_length
 
             data.units_x = units_x
             data.x = x_values
             data.y = y_values
 
+        if len(filtered) == 0:
+            warnings.warn("There is no valid data selected")
+            self.data_list = [PlotlyGraphDataType(None)]
+            return
+        self.data_list = filtered
         self.common_units_x = common_units_x
 
         #Calculate how many points to skip
-        too_many_points = 10000
         skipFactor = int(np.ceil(nPoints / too_many_points))
         skipFactor = max(skipFactor, 1)
 
@@ -901,7 +921,7 @@ class PlotlyGraphDataTypeList():
                         offset += 1
                     else:
                         gap = 0.05 * span
-                        offset + gap
+                        offset += gap
                     y_values = y_values + offset
                     temp_minY += offset
                     temp_maxY += offset
