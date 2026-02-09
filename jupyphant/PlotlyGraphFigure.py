@@ -805,6 +805,7 @@ class PlotlyGraphDataTypeList():
         #Calculate how many points to skip
         skipFactor = int(np.ceil(nPoints / too_many_points))
         skipFactor = max(skipFactor, 1)
+        too_many_points_per_graph = too_many_points / len(self.data_list)
 
         if skipFactor > 1:
             self.is_downscaled = True
@@ -821,7 +822,7 @@ class PlotlyGraphDataTypeList():
             x_values = data.x
             y_values = data.y
 
-            if self.is_downscaled:
+            if self.is_downscaled and len(x_values)>too_many_points_per_graph:
                 #Reduce number of points
                 x_values = x_values[::skipFactor]
                 y_values = y_values[::skipFactor]
