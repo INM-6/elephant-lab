@@ -163,15 +163,19 @@ class PlotlyGraphFigure:
                             col=1
                         )
                     if d.units_x is not None:
-                        self.fig.layout[f"xaxis{row}"].update(title=d.units_x.__str__())
+                        self.update_layout_options_dict(f"xaxis{row}",dict(
+                            title=d.units_x.__str__()
+                        ))
                     if d.units_y is not None:
-                        self.fig.layout[f"yaxis{row}"].update(title=d.units_y.__str__())
+                        self.update_layout_options_dict(f"yaxis{row}",dict(
+                            title=d.units_y.__str__()
+                        ))
                     if hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
-                            self.fig.layout[f"yaxis{row}"].update(
+                            self.update_layout_options_dict(f"yaxis{row}",dict(
                                 tickvals=[0],
                                 ticktext=[d.name]
-                            )
+                            ))
                             if hasattr(self, 'hide_legend'):
                                 if self.hide_legend:
                                     if not d.use_name_as_ticklabels:
