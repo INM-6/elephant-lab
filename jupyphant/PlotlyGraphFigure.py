@@ -73,9 +73,6 @@ class PlotlyGraphFigure:
         self.update_jupyterlab_theme(theme_name)
 
         self.manage_axis_units()
-        self.overlapping = False
-        if overlapping:
-            self.overlap()
 
         if self.compress:
             if len(self.ticktext)==self.nGraphs:
@@ -97,6 +94,10 @@ class PlotlyGraphFigure:
         self.create_anntotation_intervals()
         self.format_annotations()
         self.update_layout()
+        if overlapping:
+            self.overlapping = False
+            self.overlap()
+            self.overlapping = True
 
     def update_layout_options_dict(self, key, options_dict):
         if key in self.layout_options:
@@ -353,7 +354,7 @@ class PlotlyGraphFigure:
     
     def get_height(self):
         """Returns the current height of the figure."""
-        if self.overlapping:
+        if self.overlapping and not self.compress:
             return self.default_height
         else:
             return self.height
