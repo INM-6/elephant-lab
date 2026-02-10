@@ -114,21 +114,34 @@ def create_explorer_info(jupyphant_entity):
     display(output_node_info)
 
 def raw_plot(jupyphant_entity, other_changes=False):
-    import IPython
+    import ipywidgets as widgets
+    from IPython.display import clear_output, display
     selected_ids = get_selected_neo_ids(jupyphant_entity)
     if not other_changes:
         for key in jupyphant_entity.PlotKey:
             jupyphant_entity.plots[key]['x_range']=None
     with jupyphant_entity.output_node_raw_plot:
-        IPython.display.clear_output()
+        clear_output()
+
+        loading = widgets.HTML("⏳ <b>Rendering plots...</b>")
+        display(loading)
+
         raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids, other_changes=other_changes)
         jupyphant_entity.plots[jupyphant_entity.PlotKey.RAW_ST]["fig"]=raw_st
+
+        clear_output(wait=True)
+
+        displayed_something = False
         if raw_st:
             raw_st.display()
+            displayed_something = True
         raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids, other_changes=other_changes)
         jupyphant_entity.plots[jupyphant_entity.PlotKey.RAW_ANASIG]["fig"]=raw_anasig
         if raw_anasig:
             raw_anasig.display()
+            displayed_something = True
+        if not displayed_something:
+            clear_output()
 
 def create_explorer_raw_plot(jupyphant_entity):
     from IPython.display import display
