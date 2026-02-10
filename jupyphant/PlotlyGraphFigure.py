@@ -87,8 +87,8 @@ class PlotlyGraphFigure:
             self.hide_legend = True
         self.update_legend()
         self.create_sliders()
-        self.create_annotations(annotation_data)
-        self.create_anntotation_intervals(annotation_interavals_data)
+        self.create_annotations(annotation_data, x_range)
+        self.create_anntotation_intervals(annotation_interavals_data, x_range)
         self.format_annotations()
         self.update_layout()
         if overlapping:
@@ -354,7 +354,7 @@ class PlotlyGraphFigure:
         else:
             return self.height
     
-    def create_annotations(self, annotation_data):
+    def create_annotations(self, annotation_data, x_range):
         """Updates the graph annotations."""
         if annotation_data is None:
             return
@@ -363,6 +363,14 @@ class PlotlyGraphFigure:
         texts = annotation_data.text
         units = annotation_data.units
 
+        #Filter out of x_range
+        if x_range is not None:
+            x0, x1 = x_range
+            mask = (xs >= x0) & (xs <= x1)
+            xs = xs[mask]
+            texts = texts[mask]
+            units = units[mask]
+        
         shapes = []
         annotations = []
 
@@ -445,7 +453,7 @@ class PlotlyGraphFigure:
         self.update_layout_options_list("shapes", shapes)
         self.update_layout_options_list("annotations", annotations)
 
-    def create_anntotation_intervals(self, annotation_interavals_data):
+    def create_anntotation_intervals(self, annotation_interavals_data, x_range):
         """Updates the graph annotation intervals."""
         if annotation_interavals_data is None:
             return
@@ -454,6 +462,15 @@ class PlotlyGraphFigure:
         x1s = annotation_interavals_data.x1
         texts = annotation_interavals_data.text
         units = annotation_interavals_data.units
+
+        #Filter out of x_range
+        if x_range is not None:
+            x0, x1 = x_range
+            mask = (x1s >= x0) & (x0s <= x1)
+            x0s = x0s[mask]
+            x1s = x1s[mask]
+            texts = texts[mask]
+            units = units[mask]
 
         shapes = []
         annotations = []
