@@ -228,18 +228,19 @@ def update_jupyterlab_theme(jupyphant_entity, theme_name):
         if fig is not None:
             fig.update_jupyterlab_theme(theme_name)
 
-def upscale_raw_plot(jupyphant_entity):
+def upscale_raw_plot(jupyphant_entity, max_points):
     import math
     reload = False
     for key in jupyphant_entity.PlotKey:
         plot_dict = jupyphant_entity.plots[key]
+        temp_reload = False
+        if(max_points != plot_dict['max_points']):
+            plot_dict['max_points']=max_points
+            temp_reload = True
         fig = plot_dict['fig']
         if fig is None:
             continue
         x_range = fig.getXRange()
-        temp_reload = False
-        if(fig.getMaxPoints()!= plot_dict['max_points']):
-            temp_reload = True
         previous_x_range = plot_dict['x_range']
         if previous_x_range is None or not all(math.isclose(a, b, abs_tol=1e-1) for a, b in zip(x_range, previous_x_range)):
             plot_dict['x_range']=x_range
@@ -249,8 +250,3 @@ def upscale_raw_plot(jupyphant_entity):
         reload = reload or temp_reload
     if reload:
         raw_plot(jupyphant_entity, other_changes=True)
-
-def set_max_points_raw_plot(jupyphant_entity, max_points):
-    for key in jupyphant_entity.PlotKey:
-        plot_dict = jupyphant_entity.plots[key]
-        plot_dict['max_points']=max_points

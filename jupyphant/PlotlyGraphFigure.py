@@ -34,7 +34,6 @@ class PlotlyGraphFigure:
 
         self.overlapping = overlapping
         self.overlap_on_compress = overlap_on_compress
-        self.max_points = max_points
 
         if not isinstance(data, PlotlyGraphDataTypeList):
             data = PlotlyGraphDataTypeList(data)
@@ -641,8 +640,6 @@ class PlotlyGraphFigure:
     def isDownscaled(self):
         return self.data.is_downscaled
     
-    def getMaxPoints(self):
-        return self.max_points
 class PlotlyGraphDataType:
     def __init__(self, data, **kwargs):
         if data is None:

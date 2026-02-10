@@ -416,10 +416,11 @@ class JupyphantExtension {
 		Object.assign(numberLabel.style, unchecked_style);
 
 		// Create number input
+		const min_max_points = 10000
 		const numberInput = document.createElement('input');
 		numberInput.type = "number";
 		numberInput.value = "10000";
-		numberInput.min = "10000";
+		numberInput.min = `${min_max_points}`;
 		numberInput.step = "10000";
 		numberInput.style.padding = "2px 6px";
 		numberInput.style.borderRadius = "4px";
@@ -464,32 +465,22 @@ class JupyphantExtension {
 		};
 
 		upscaleButton.onclick = () => {
+			let max_points = Number(numberInput.value);
+			if (max_points < min_max_points) {
+				max_points = min_max_points
+				numberInput.value = max_points.toString()
+			}
+
 			// Send Python command to flip the boolean
 			const code = `
 			from jupyphant.kernelcode import upscale_raw_plot
-			upscale_raw_plot(jupyphant_entity)
+			upscale_raw_plot(jupyphant_entity, ${max_points})
 			`;
 
 			// Send to kernel
 			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
 
 			// Listen for output / errors
-			future.onIOPub = this.defaultOutputErrorListerner;
-		};
-
-		numberInput.oninput = () => {
-			const value = Number(numberInput.value);
-
-			const code = `
-			from jupyphant.kernelcode import set_max_points_raw_plot
-			set_max_points_raw_plot(jupyphant_entity, ${value})
-			`;
-
-			const future = session.session!.kernel!.requestExecute({
-				code,
-				store_history: false
-			});
-
 			future.onIOPub = this.defaultOutputErrorListerner;
 		};
 
