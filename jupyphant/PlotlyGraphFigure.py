@@ -22,7 +22,7 @@ def convert_to_other_units(val, unit, convert_unit):
     return q.rescale(convert_unit).magnitude
 
 class PlotlyGraphFigure:
-    def __init__(self, data, overlapping=False, title=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=True):
+    def __init__(self, data, overlapping=False, title=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=True, max_points=10000):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -34,12 +34,13 @@ class PlotlyGraphFigure:
 
         self.overlapping = overlapping
         self.overlap_on_compress = overlap_on_compress
+        self.max_points = max_points
 
         if not isinstance(data, PlotlyGraphDataTypeList):
             data = PlotlyGraphDataTypeList(data)
         self.nGraphs = len(data.data_list)
         self.compress = self.nGraphs > 10
-        data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0 and x_range is None)
+        data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0 and x_range is None, max_points=max_points)
         self.data = data
 
 
@@ -639,6 +640,9 @@ class PlotlyGraphFigure:
     
     def isDownscaled(self):
         return self.data.is_downscaled
+    
+    def getMaxPoints(self):
+        return self.max_points
 class PlotlyGraphDataType:
     def __init__(self, data, **kwargs):
         if data is None:
@@ -756,7 +760,7 @@ class PlotlyGraphDataTypeList():
     def concat(self, plotlyGraphDataTypeList):
         self.data_list += plotlyGraphDataTypeList.data_list
     
-    def normalize(self, x_range, offset_traces, shift_to_0, too_many_points = 10000):
+    def normalize(self, x_range, offset_traces, shift_to_0, max_points):
         """
         Tries to normalize units to first unit found
         Filters out all points outside of x_range if x_range is not None
@@ -827,9 +831,9 @@ class PlotlyGraphDataTypeList():
         self.common_units_x = common_units_x
 
         #Calculate how many points to skip
-        skipFactor = int(np.ceil(nPoints / too_many_points))
+        skipFactor = int(np.ceil(nPoints / max_points))
         skipFactor = max(skipFactor, 1)
-        too_many_points_per_graph = too_many_points / len(self.data_list)
+        max_points_per_graph = max_points / len(self.data_list)
 
         if skipFactor > 1:
             self.is_downscaled = True
@@ -846,7 +850,7 @@ class PlotlyGraphDataTypeList():
             x_values = data.x
             y_values = data.y
 
-            if self.is_downscaled and len(x_values)>too_many_points_per_graph:
+            if self.is_downscaled and len(x_values)>max_points_per_graph:
                 #Reduce number of points
                 x_values = x_values[::skipFactor]
                 y_values = y_values[::skipFactor]

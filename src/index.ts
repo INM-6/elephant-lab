@@ -411,6 +411,23 @@ class JupyphantExtension {
 		Object.assign(upscaleButton.style, unchecked_style);
 		upscaleButton.innerHTML = `<i class="fa fa-expand-arrows-alt"></i> Upscale`;
 
+		const numberLabel = document.createElement('label');
+		numberLabel.innerHTML = `<i class="fa fa-chart-line"></i> Max Points`;
+		Object.assign(numberLabel.style, unchecked_style);
+
+		// Create number input
+		const numberInput = document.createElement('input');
+		numberInput.type = "number";
+		numberInput.value = "10000";
+		numberInput.min = "10000";
+		numberInput.step = "10000";
+		numberInput.style.padding = "2px 6px";
+		numberInput.style.borderRadius = "4px";
+		numberInput.style.border = "1px solid #555";
+		numberInput.style.background = "var(--jp-layout-color1)";
+		numberInput.style.color = "var(--jp-ui-font-color1)";
+		numberInput.title = "Set Max Points";
+
 
 		overlapToggle.onclick = () => {
 			const isNowChecked = overlapToggle.dataset.checked === 'false';
@@ -460,9 +477,27 @@ class JupyphantExtension {
 			future.onIOPub = this.defaultOutputErrorListerner;
 		};
 
+		numberInput.oninput = () => {
+			const value = Number(numberInput.value);
+
+			const code = `
+			from jupyphant.kernelcode import set_max_points_raw_plot
+			set_max_points_raw_plot(jupyphant_entity, ${value})
+			`;
+
+			const future = session.session!.kernel!.requestExecute({
+				code,
+				store_history: false
+			});
+
+			future.onIOPub = this.defaultOutputErrorListerner;
+		};
+
 		buttonContainer.appendChild(overlapToggle);
 		buttonContainer.appendChild(darkmodeToggle);
 		buttonContainer.appendChild(upscaleButton);
+		buttonContainer.appendChild(numberLabel);
+		buttonContainer.appendChild(numberInput);
 		raw_plot_widget.node.prepend(buttonContainer);
 	}
 

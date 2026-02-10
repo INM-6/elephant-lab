@@ -121,7 +121,7 @@ def raw_plot(jupyphant_entity, other_changes=False):
         for key in jupyphant_entity.PlotKey:
             jupyphant_entity.plots[key]['x_range']=None
     with jupyphant_entity.output_node_raw_plot:
-        clear_output()
+        clear_output(wait=True)
 
         loading = widgets.HTML("⏳ <b>Rendering plots...</b>")
         display(loading)
@@ -229,6 +229,7 @@ def update_jupyterlab_theme(jupyphant_entity, theme_name):
             fig.update_jupyterlab_theme(theme_name)
 
 def upscale_raw_plot(jupyphant_entity):
+    import math
     reload = False
     for key in jupyphant_entity.PlotKey:
         plot_dict = jupyphant_entity.plots[key]
@@ -236,10 +237,20 @@ def upscale_raw_plot(jupyphant_entity):
         if fig is None:
             continue
         x_range = fig.getXRange()
-        if x_range == plot_dict['x_range']:
-            continue
-        plot_dict['x_range']=x_range
-        if(fig.isDownscaled()):
-            reload = True
+        temp_reload = False
+        if(fig.getMaxPoints()!= plot_dict['max_points']):
+            temp_reload = True
+        previous_x_range = plot_dict['x_range']
+        if previous_x_range is None or not all(math.isclose(a, b, abs_tol=1e-1) for a, b in zip(x_range, previous_x_range)):
+            plot_dict['x_range']=x_range
+            temp_reload = True
+        if(not fig.isDownscaled()):
+            temp_reload = False
+        reload = reload or temp_reload
     if reload:
         raw_plot(jupyphant_entity, other_changes=True)
+
+def set_max_points_raw_plot(jupyphant_entity, max_points):
+    for key in jupyphant_entity.PlotKey:
+        plot_dict = jupyphant_entity.plots[key]
+        plot_dict['max_points']=max_points

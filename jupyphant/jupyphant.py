@@ -157,7 +157,8 @@ class Jupyphant:
             self.plots[key] = {
                 "fig": None,
                 "overlapping": False,
-                "x_range": None
+                "x_range": None,
+                "max_points": 10000
             }
 
     def names_for(self, obj):
@@ -513,7 +514,8 @@ class Jupyphant:
                 plot_dict = self.plots[self.PlotKey.RAW_ST]
                 overlapping = plot_dict['overlapping']
                 x_range = plot_dict['x_range']
-                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False)
+                max_points = plot_dict['max_points']
+                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points)
 
                 if selected_ids is None:
                     self.spiketrain_overview = plotlyGraphFigure
@@ -577,7 +579,8 @@ class Jupyphant:
                 plot_dict = self.plots[self.PlotKey.RAW_ANASIG]
                 overlapping = plot_dict['overlapping']
                 x_range = plot_dict['x_range']
-                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme)
+                max_points = plot_dict['max_points']
+                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points)
                 if selected_ids is None:
                     self.signal_overview = plotlyGraphFigure
                 return plotlyGraphFigure
