@@ -35,3 +35,12 @@
 .no-left-spacing .jp-OutputArea-prompt {
   display: none !important;
 }
+
+.plotly .updatemenu-button text {
+  fill: rgb(0, 0, 0) !important;
+}
+
+.plotly .updatemenu-button rect {
+  fill: rgb(101, 101, 101) !important;
+  stroke: rgb(41, 41, 41) !important;
+}
