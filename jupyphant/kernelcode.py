@@ -118,7 +118,7 @@ def raw_plot(jupyphant_entity, other_changes=False):
     from IPython.display import clear_output, display
     selected_ids = get_selected_neo_ids(jupyphant_entity)
     if not other_changes:
-        for key in jupyphant_entity.PlotKey:
+        for key in jupyphant_entity.RawPlotKey:
             jupyphant_entity.plots[key]['x_range']=None
     with jupyphant_entity.output_node_raw_plot:
         clear_output(wait=True)
@@ -127,7 +127,7 @@ def raw_plot(jupyphant_entity, other_changes=False):
         display(loading)
 
         raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids, other_changes=other_changes)
-        jupyphant_entity.plots[jupyphant_entity.PlotKey.RAW_ST]["fig"]=raw_st
+        jupyphant_entity.plots[jupyphant_entity.RawPlotKey.RAW_ST]["fig"]=raw_st
 
         clear_output(wait=True)
 
@@ -136,9 +136,13 @@ def raw_plot(jupyphant_entity, other_changes=False):
             raw_st.display()
             displayed_something = True
         raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids, other_changes=other_changes)
-        jupyphant_entity.plots[jupyphant_entity.PlotKey.RAW_ANASIG]["fig"]=raw_anasig
+        jupyphant_entity.plots[jupyphant_entity.RawPlotKey.RAW_ANASIG]["fig"]=raw_anasig
         if raw_anasig:
             raw_anasig.display()
+            displayed_something = True
+        raw_imgsequence = jupyphant_entity.create_image_sequence(selected_ids=selected_ids)
+        if raw_imgsequence:
+            raw_imgsequence.display()
             displayed_something = True
         if not displayed_something:
             clear_output()
@@ -204,7 +208,7 @@ def expand_neo_tree(jupyphant_entity, opened):
 
 def set_raw_plot_overlap(jupyphant_entity, overlap):
     reload = False
-    for key in jupyphant_entity.PlotKey:
+    for key in jupyphant_entity.RawPlotKey:
         plot_dict = jupyphant_entity.plots[key]
         fig = plot_dict['fig']
         if overlap == plot_dict['overlapping']:
@@ -223,7 +227,7 @@ def set_raw_plot_overlap(jupyphant_entity, overlap):
 
 def update_jupyterlab_theme(jupyphant_entity, theme_name):
     jupyphant_entity.jupyterlab_theme = theme_name
-    for key in jupyphant_entity.PlotKey:
+    for key in jupyphant_entity.RawPlotKey:
         fig = jupyphant_entity.plots[key]['fig']
         if fig is not None:
             fig.update_jupyterlab_theme(theme_name)
@@ -231,7 +235,7 @@ def update_jupyterlab_theme(jupyphant_entity, theme_name):
 def upscale_raw_plot(jupyphant_entity, max_points):
     import math
     reload = False
-    for key in jupyphant_entity.PlotKey:
+    for key in jupyphant_entity.RawPlotKey:
         plot_dict = jupyphant_entity.plots[key]
         temp_reload = False
         if(max_points != plot_dict['max_points']):

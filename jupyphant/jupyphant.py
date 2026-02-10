@@ -7,6 +7,7 @@ import time
 
 import joblib
 
+from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
 from .PlotlyGraphFigure import PlotlyGraphFigure
 from .PlotlyGraphDataTypes import *
 
@@ -88,7 +89,7 @@ class Jupyphant:
     from neo.core.regionofinterest import RegionOfInterest, CircularRegionOfInterest, RectangularRegionOfInterest, \
         PolygonRegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
-    from neo import Block, SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal
+    from neo import Block, SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence
     from collections import Counter
     from neo.test.tools import assert_same_sub_schema
     assert_same_sub_schema = staticmethod(assert_same_sub_schema)
@@ -107,9 +108,11 @@ class Jupyphant:
     from ipytree import Tree, Node
     from enum import Enum
 
-    class PlotKey(Enum):
+    class RawPlotKey(Enum):
         RAW_ST = 'raw_st'
         RAW_ANASIG = 'raw_anasig'
+
+    RAW_IMGSEQUENCE = 'raw_imgsequence'
 
     class SimpleEvent:
         def __init__(self):
@@ -144,6 +147,8 @@ class Jupyphant:
         self.signal_overview = None
         self.analogsignals_hash = None
         self.irregularsignals_hash = None
+        self.image_sequence_overview = None
+        self.image_sequences_hash = None
         self.ipytree_of_neo_objects = None
         self.selected_neo_objects = set()
         self.on_selected_neo_objects_changed = self.SimpleEvent()
@@ -153,7 +158,7 @@ class Jupyphant:
         self.expand_all = False
         self.jupyterlab_theme = 'plotly_dark'
         self.plots = {}
-        for key in self.PlotKey:
+        for key in self.RawPlotKey:
             self.plots[key] = {
                 "fig": None,
                 "overlapping": False,
@@ -511,7 +516,7 @@ class Jupyphant:
                 n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
                 if n_epochs > 0:
                     epoch_intervals = EpochIntervals(epochs)
-                plot_dict = self.plots[self.PlotKey.RAW_ST]
+                plot_dict = self.plots[self.RawPlotKey.RAW_ST]
                 overlapping = plot_dict['overlapping']
                 x_range = plot_dict['x_range']
                 max_points = plot_dict['max_points']
@@ -576,7 +581,7 @@ class Jupyphant:
                 if n_epochs > 0:
                     epoch_intervals = EpochIntervals(epochs)
                 overlapping = False
-                plot_dict = self.plots[self.PlotKey.RAW_ANASIG]
+                plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
                 overlapping = plot_dict['overlapping']
                 x_range = plot_dict['x_range']
                 max_points = plot_dict['max_points']
@@ -586,6 +591,42 @@ class Jupyphant:
                 return plotlyGraphFigure
             else:
                 pass
+
+    def create_image_sequence(self, selected_ids=None):
+        """
+        Creates a PlotlyImageSequenceFiure for all selected ImageSequences
+
+        Called at every cell execution
+        """
+        image_sequences = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.ImageSequence)
+        # compare contents of image_sequences per top node
+        image_sequences_unchanged = True
+        image_sequences_hash = self.get_neo_hash(image_sequences, hash_name='sha1')
+        if self.image_sequences_hash is None:
+            self.image_sequences_hash = image_sequences_hash
+        else:
+            if self.image_sequences_hash != image_sequences_hash:
+                image_sequences_unchanged = False
+
+        # Return pre-existing rasterplot if content of image_sequences has NOT changed
+        if (image_sequences_unchanged) and (self.image_sequence_overview is not None) and (selected_ids is None):
+            return self.image_sequence_overview
+        # Otherwise, create new plot
+        else:
+            n_subplots = sum(1 for v in image_sequences.values() if len(v) > 0)
+            if n_subplots > 0:
+                image_sequences_list = []
+                for top_node, st_list in image_sequences.items():
+                    if st_list:
+                        image_sequences_list += st_list
+                plotlyImageSequenceFigure = PlotlyImageSequenceFigure(image_sequences=image_sequences_list, theme_name=self.jupyterlab_theme)
+
+                if selected_ids is None:
+                    self.image_sequence_overview = plotlyImageSequenceFigure
+                return plotlyImageSequenceFigure
+            else:
+                return None
+
 
     def _extract_selected_neo_data_objects_by_top_node(self, selected_ids=None, neo_class=None):
         collected_neo_objs = {}
