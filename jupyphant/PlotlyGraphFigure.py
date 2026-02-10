@@ -34,8 +34,6 @@ class PlotlyGraphFigure:
 
         self.overlapping = overlapping
         self.overlap_on_compress = overlap_on_compress
-        self.annotation_data = annotation_data
-        self.annotation_interavals_data = annotation_interavals_data
 
         if not isinstance(data, PlotlyGraphDataTypeList):
             data = PlotlyGraphDataTypeList(data)
@@ -48,7 +46,6 @@ class PlotlyGraphFigure:
         self.height = self.default_height
         if self.nGraphs > 2:
             self.height = 800
-        self.traces = []
         if self.compress:
             self.fig = go.FigureWidget(go.Figure())
             self.ticktext=[]
@@ -90,8 +87,8 @@ class PlotlyGraphFigure:
             self.hide_legend = True
         self.update_legend()
         self.create_sliders()
-        self.create_annotations()
-        self.create_anntotation_intervals()
+        self.create_annotations(annotation_data)
+        self.create_anntotation_intervals(annotation_interavals_data)
         self.format_annotations()
         self.update_layout()
         if overlapping:
@@ -123,7 +120,7 @@ class PlotlyGraphFigure:
         Recursively adds traces to a Plotly figure from various data types.
         Supports PlotlyDataType, lists of traces, dicts, pandas objects, or lists of points.
         """
-        for d in self.data.data_list:
+        for index, d in enumerate(self.data.data_list):
 
             # Choose Scatter or Scattergl based on x and y size (It does not work with go.Scatter and there is no important benefit of using it)
             """
@@ -145,8 +142,6 @@ class PlotlyGraphFigure:
                 if callable(marker_settings["size"]):
                     marker_settings["size"] = marker_settings["size"](self.getSubplotHeight())
                 
-                row = len(self.traces) + 1
-                
                 trace  = go.Scattergl(
                     x=d.x,
                     y=d.y,
@@ -155,14 +150,14 @@ class PlotlyGraphFigure:
                     marker=marker_settings,
                     line=line_settings
                 )
-                self.traces.append((trace, row))
 
                 if self.compress:
                     self.fig.add_trace(trace)
                     if hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
                             self.ticktext.append(d.name)
-                else:      
+                else:
+                    row = index + 1
                     self.fig.add_trace(
                             trace, 
                             row=row,
@@ -359,14 +354,14 @@ class PlotlyGraphFigure:
         else:
             return self.height
     
-    def create_annotations(self):
+    def create_annotations(self, annotation_data):
         """Updates the graph annotations."""
-        if self.annotation_data is None:
+        if annotation_data is None:
             return
         
-        xs = self.annotation_data.x
-        texts = self.annotation_data.text
-        units = self.annotation_data.units
+        xs = annotation_data.x
+        texts = annotation_data.text
+        units = annotation_data.units
 
         shapes = []
         annotations = []
@@ -450,15 +445,15 @@ class PlotlyGraphFigure:
         self.update_layout_options_list("shapes", shapes)
         self.update_layout_options_list("annotations", annotations)
 
-    def create_anntotation_intervals(self):
+    def create_anntotation_intervals(self, annotation_interavals_data):
         """Updates the graph annotation intervals."""
-        if self.annotation_interavals_data is None:
+        if annotation_interavals_data is None:
             return
         
-        x0s = self.annotation_interavals_data.x0
-        x1s = self.annotation_interavals_data.x1
-        texts = self.annotation_interavals_data.text
-        units = self.annotation_interavals_data.units
+        x0s = annotation_interavals_data.x0
+        x1s = annotation_interavals_data.x1
+        texts = annotation_interavals_data.text
+        units = annotation_interavals_data.units
 
         shapes = []
         annotations = []
