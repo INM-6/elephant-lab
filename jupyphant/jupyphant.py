@@ -6,7 +6,13 @@ import __main__
 import time
 
 import joblib
-import matplotlib.pyplot as plt
+
+from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
+from .PlotlyGraphFigure import PlotlyGraphFigure
+from .PlotlyGraphDataTypes import *
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import neo
 
 # neo abbreviations and font-awesome icons
@@ -83,7 +89,7 @@ class Jupyphant:
     from neo.core.regionofinterest import RegionOfInterest, CircularRegionOfInterest, RectangularRegionOfInterest, \
         PolygonRegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
-    from neo import Block, Segment, Group, SpikeTrain, AnalogSignal, Event, Epoch
+    from neo import Block, Segment, Group, SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence
     from collections import Counter
     from neo.test.tools import assert_same_sub_schema
     assert_same_sub_schema = staticmethod(assert_same_sub_schema)
@@ -95,19 +101,35 @@ class Jupyphant:
     correlation_coefficient = staticmethod(correlation_coefficient)
     # TODO: Use new viziphant for plotting
     # This relies on the initial version of viziphant
-    from viziphant.rasterplot import rasterplot
-    rasterplot = staticmethod(rasterplot)
-    from viziphant.statistics import plot_isi_histogram, plot_time_histogram, plot_instantaneous_rates_colormesh
-    from viziphant.spike_train_correlation import plot_corrcoef
-    plot_isi_histogram = staticmethod(plot_isi_histogram)
-    plot_time_histogram = staticmethod(plot_time_histogram)
-    plot_instantaneous_rates_colormesh = staticmethod(plot_instantaneous_rates_colormesh)
-    plot_corrcoef = staticmethod(plot_corrcoef)
     # Widgets used for display
     from ipywidgets import Output
     # ipytree provides a tree structure widget
     # Used to display the Neo object hierarchy
     from ipytree import Tree, Node
+    from enum import Enum
+
+    class RawPlotKey(Enum):
+        RAW_ST = 'raw_st'
+        RAW_ANASIG = 'raw_anasig'
+
+    RAW_IMGSEQUENCE = 'raw_imgsequence'
+
+    class SimpleEvent:
+        def __init__(self):
+            self._listeners = []
+
+        def add_listener(self, fn):
+            """Register a callback function."""
+            self._listeners.append(fn)
+
+        def remove_listener(self, fn):
+            """Unregister a callback function."""
+            self._listeners.remove(fn)
+
+        def fire(self):
+            """Call all registered callbacks."""
+            for fn in self._listeners:
+                fn()
 
     def __init__(self):
         """   # TODO: rewrite docstring
@@ -122,14 +144,28 @@ class Jupyphant:
         # Plots are saved in order not to require recreation at every cell execution
         self.spiketrain_overview = None
         self.spiketrains_hash = None
-        self.analogsignal_overview = None
+        self.signal_overview = None
         self.analogsignals_hash = None
+        self.irregularsignals_hash = None
+        self.image_sequence_overview = None
+        self.image_sequences_hash = None
         self.ipytree_of_neo_objects = None
+        self.selected_neo_objects = set()
+        self.on_selected_neo_objects_changed = self.SimpleEvent()
         self.map_ipytree_node_id_to_neo_obj_hash = {}
         self.map_neo_obj_hash_to_neo_obj = {}
         self.filter_changed = False
         self.expand_all = False
         self.last_known_hashes = []
+        self.jupyterlab_theme = 'plotly_dark'
+        self.plots = {}
+        for key in self.RawPlotKey:
+            self.plots[key] = {
+                "fig": None,
+                "overlapping": False,
+                "x_range": None,
+                "max_points": 10000
+            }
 
     def names_for(self, obj):
         for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
@@ -530,53 +566,49 @@ class Jupyphant:
         n_st_statistics = 4  # ISI, time-histogram, IFR, correlation
         n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
         if n_subplots > 0:
-            fig, axs = plt.subplots(n_subplots, n_st_statistics, figsize=(n_st_statistics * 8, n_subplots * 4),
-                                    squeeze=False)
-            fig.suptitle(f"Basic statistics for {'selected' if selected_ids else 'all'} SpikeTrains in Top-Nodes")
+            
+            subplot_titles = []
+            for top_node in spiketrains.keys():
+                if spiketrains[top_node]:
+                    subplot_titles.extend([f"ISI-distribution: {top_node}", f"Time-histogram: {top_node}", f"IFR: {top_node}", f"Correlation: {top_node}"])
+
+            fig = make_subplots(rows=n_subplots, cols=n_st_statistics, subplot_titles=subplot_titles)
+            fig.update_layout(title_text=f"Basic statistics for {'selected' if selected_ids else 'all'} SpikeTrains in Top-Nodes", showlegend=False)
+            
+            plot_row = 1
             for i, top_node in enumerate(spiketrains.keys()):
                 if spiketrains[top_node]:
                     # plot ISI
-                    axs[i, 0] = self.plot_isi_histogram(spiketrains=spiketrains[top_node], axes=axs[i, 0],
-                                                        title=f"ISI-distribution:\n {top_node}")
+                    for st in spiketrains[top_node]:
+                        isi = self.statistics.interspike_interval(st)
+                        fig.add_trace(go.Histogram(x=isi.magnitude, name=f"ISI of {st.name or 'unnnamed'}"), row=plot_row, col=1)
+                    
                     # plot time histogram
                     time_histogram = self.statistics.time_histogram(spiketrains[top_node], bin_size=0.1 * self.pq.s,
                                                                     output='rate')
-                    axs[i, 1] = self.plot_time_histogram(histogram=time_histogram, axes=axs[i, 1])
-                    axs[i, 1].set_title(f"Time-histogram:\n {top_node}")
+                    fig.add_trace(go.Bar(x=time_histogram.times.magnitude, y=time_histogram.magnitude.flatten()), row=plot_row, col=2)
+                    
                     # plot IFR
                     kernel = self.kernels.GaussianKernel(sigma=100 * self.pq.ms)
                     rates = self.statistics.instantaneous_rate(spiketrains[top_node], sampling_period=10 * self.pq.ms,
                                                                kernel=kernel)
-                    axs[i, 2] = self.plot_instantaneous_rates_colormesh(rates, axes=axs[i, 2])
-                    axs[i, 2].set_title(f"IFR:\n {top_node}")
+                    fig.add_trace(go.Heatmap(z=rates.magnitude.T, x=rates.times.magnitude, y=list(range(len(spiketrains[top_node])))), row=plot_row, col=3)
+
                     # plot correlation
-                    selected_ids = [
-                    self.map_ipytree_node_id_to_neo_obj_hash[node._id]
-                    for node in self.ipytree_of_neo_objects.selected_nodes
-                    if node._id in self.map_ipytree_node_id_to_neo_obj_hash
-                    ]
-                    extracted_spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=neo.SpikeTrain).items()
-                    if len(extracted_spiketrains) > 1:
-                        sp_list = [st[0] for _, st in extracted_spiketrains]
-                        binned_spiketrains = self.BinnedSpikeTrain(sp_list, bin_size=100 * self.pq.ms)
+                    if len(spiketrains[top_node]) > 1:
+                        binned_spiketrains = self.BinnedSpikeTrain(spiketrains[top_node], bin_size=100 * self.pq.ms)
                         corrcoef_matrix = self.correlation_coefficient(binned_spiketrains)
-                        axs[i, 3] = self.plot_corrcoef(corrcoef_matrix, axes=axs[i, 3])
-                        axs[i, 3].set_xlabel('Neuron')
-                        axs[i, 3].set_ylabel('Neuron')
-                        axs[i, 3].set_title(f"Correlation coefficient matrix:\n {top_node}")
-                    else:
-                        axs[i, 0].set_title(f"ISI-distribution:\n {top_node}")
-                        axs[i, 1].set_title(f"Time-histogram:\n {top_node}")
-                        axs[i, 2].set_title(f"IFR:\n {top_node}")
-                        axs[i, 3].set_xlabel('Neuron')
-                        axs[i, 3].set_ylabel('Neuron')
-                        axs[i, 3].set_title(f"Correlation coefficient matrix:\n {top_node}")
-            fig.tight_layout(pad=1.0)
+                        fig.add_trace(go.Heatmap(z=corrcoef_matrix, x=list(range(corrcoef_matrix.shape[1])), y=list(range(corrcoef_matrix.shape[0]))), row=plot_row, col=4)
+                        fig.update_xaxes(title_text='Neuron', row=plot_row, col=4)
+                        fig.update_yaxes(title_text='Neuron', row=plot_row, col=4)
+                    
+                    plot_row += 1
+
             return fig
         else:
             return None
 
-    def create_rasterplot(self, selected_ids=None):
+    def create_rasterplot(self, selected_ids=None, other_changes=False):
         """
         Create for each top-node a rasterplot for the contained spike trains.
 
@@ -584,9 +616,7 @@ class Jupyphant:
         """
         spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
                                                                           neo_class=self.SpikeTrain)
-        # Close plots from before to prevent too much memory consumption
-        plt.close('all')
-        # compare contents of AnalogSignals per top node
+        # compare contents of spiketrains per top node
         spiketrains_unchanged = True
         spiketrains_hash = self.get_neo_hash(spiketrains, hash_name='sha1')
         if self.spiketrains_hash is None:
@@ -596,104 +626,48 @@ class Jupyphant:
                 spiketrains_unchanged = False
 
         # Return pre-existing rasterplot if content of spiketrains has NOT changed
-        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None) and True:
+        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None) and (not other_changes):
             return self.spiketrain_overview
         # Otherwise, create new plot
         else:
             n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
             if n_subplots > 0:
-                fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots * 8, 4))
-                fig.suptitle(f"Rasterplot for {'selected' if selected_ids else 'all'} SpikeTrains in")
-                # Rasterplot using viziphant
-                if n_subplots > 1:
-                    for i, top_node in enumerate(spiketrains.keys()):
-                        if spiketrains[top_node]:
-                            axs[i] = self.rasterplot(spiketrains[top_node], axes=axs[i], s=0.1, title=f"{top_node}")
-                        else:
-                            axs[i].set_title(f"{top_node}")
-                else:
-                    top_node = list(spiketrains.keys())[0]
-                    axs = self.rasterplot(spiketrains[top_node], axes=axs, s=0.1, title=f"{top_node}")
+                #subplot_titles = [key for key in spiketrains.keys() if spiketrains[key]]
+                data = []
+                for top_node, st_list in spiketrains.items():
+                    if st_list:
+                        for st in st_list:
+                            data.append(SpikeTrainRasterPlot(st))
+                events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
+                event_annotations = None
+                n_events = sum(1 for v in events.values() if len(v) > 0)
+                if n_events > 0:
+                    event_annotations = EventAnnotations(events)
+                epochs = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
+                epoch_intervals = None
+                n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
+                if n_epochs > 0:
+                    epoch_intervals = EpochIntervals(epochs)
+                plot_dict = self.plots[self.RawPlotKey.RAW_ST]
+                overlapping = plot_dict['overlapping']
+                x_range = plot_dict['x_range']
+                max_points = plot_dict['max_points']
+                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points)
+
                 if selected_ids is None:
-                    self.spiketrain_overview = fig
-                return fig
+                    self.spiketrain_overview = plotlyGraphFigure
+                return plotlyGraphFigure
             else:
-                pass
+                return None
 
-    # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
-    def plot_lfp(self, lfps, times, title=None, spacing=5, color=None, axes=None):
-        """
-        Plot LFPs.
-
-        lfps:       LFP signals with trial_id as first dimension and sample_id as second dimension.
-                    LFP signals must be arranged according to trial ID.
-        times:      time stamps of the recorded LFP samples. Must be of same length as second dimenion of lfps
-        title:      title of the figure
-        spacing:    vertical spacing between two LFP signals
-        color:      color to used for plotting
-        axes :      matplotlib.axes.Axes or None, optional
-                    Matplotlib axes handle. If None, new axes are created and returned.
-                    Default: None
-        """
-
-        if axes is None:
-            fig, axes = plt.subplots(nrows=1, ncols=1)
-
-        trace_idx = 0
-        
-        for trial_id, lfp in enumerate(lfps):
-            data = lfp.magnitude
-            
-            if data.ndim == 1:
-                data = data.reshape(-1, 1)
-            
-            num_channels = data.shape[1]
-            
-            for ch_idx in range(num_channels):
-                offset = trace_idx * spacing
-                
-                channel_data = data[:, ch_idx]
-
-                min_val = self.np.min(channel_data)
-                max_val = self.np.max(channel_data)
-                range_val = max_val - min_val
-
-                if range_val > 0:
-                    norm_data = (channel_data - min_val) / range_val
-                else:
-                    norm_data = channel_data - min_val
-
-                # Plot
-                axes.plot(times, norm_data + offset, color=color)
-                
-                trace_idx += 1
-
-        axes.set_title(title)
-        axes.set_xlabel('Time ({0})'.format(times.dimensionality))
-
-        # Defines plot parameters for y-axis
-        if trace_idx > 1 and spacing > 0:
-            # Set ticks at the baseline of each signal
-            axes.set_yticks([i * spacing for i in range(trace_idx)])
-            # Label them 0, 1, 2...
-            axes.set_yticklabels(range(trace_idx))
-            axes.set_ylabel("Signal Trace Index")
-            axes.set_ylim(-0.1, (trace_idx - 1) * spacing + 1.2)
-        else:
-            # Fallback for single plot
-            axes.set_ylabel(f'AnaSig ({lfps[0].units.__str__()})')
-
-        return axes
-
-    def create_lfpplot(self, selected_ids=None):
+    def create_lfpplot(self, selected_ids=None, other_changes=False):
         """
         Wrapper for plot_lfp to update the lfp plot
 
         Called at every cell execution
         """
-        plt.close('all')
-        analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
-                                                                            neo_class=self.AnalogSignal)
+        analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.AnalogSignal)
+        irregularsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.IrregularlySampledSignal)
         # compare contents of AnalogSignals per top node
         analogsignals_unchanged = True
         analogsignals_hash = self.get_neo_hash(analogsignals, hash_name='sha1')
@@ -703,55 +677,88 @@ class Jupyphant:
             if self.analogsignals_hash != analogsignals_hash:
                 analogsignals_unchanged = False
 
-        # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
-        if analogsignals_unchanged and (self.analogsignal_overview is not None) and (selected_ids is None):
-            return self.analogsignal_overview
+        # compare contents of IrregularlySampledSignal per top node
+        irregularsignals_unchanged = True
+        irregularsignals_hash = self.get_neo_hash(irregularsignals, hash_name='sha1')
+        if self.irregularsignals_hash is None:
+            self.irregularsignals_hash = irregularsignals_hash
         else:
-            n_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
-            if n_subplots > 0:
-                # Increased figure height slightly to accommodate stacked plots
-                fig, axs = plt.subplots(1, n_subplots, figsize=(n_subplots * 8, 4))
-                
-                # Make axs iterable even if its a single axes object
-                if n_subplots == 1:
-                    axs = [axs]
+            if self.irregularsignals_hash != irregularsignals_hash:
+                irregularsignals_unchanged = False
 
-                fig.suptitle(f"Normalized LFP-Plots for {'selected' if selected_ids else 'all'} AnalogSignals")
-                
-                max_duration_limit = 10 * self.pq.s 
-
-                for i, top_node in enumerate(analogsignals.keys()):
-                    raw_signals = analogsignals[top_node]
-                    
-                    if raw_signals:
-                        durations = [(sig.t_stop - sig.t_start) for sig in raw_signals]
-                        
-                        min_available_duration = min(durations)
-
-                        cut_duration = min(max_duration_limit, min_available_duration)
-
-                        sliced_signals = [
-                            sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
-                            for sig in raw_signals
-                        ]
-
-                        plot_times = sliced_signals[0].times - sliced_signals[0].t_start
-                        
-                        self.plot_lfp(
-                            sliced_signals, 
-                            times=plot_times,
-                            title=f"{top_node}", 
-                            spacing=1.5,
-                            axes=axs[i]
-                        )
+        # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
+        if analogsignals_unchanged and irregularsignals_unchanged  and (self.signal_overview is not None) and (selected_ids is None) and (not other_changes):
+            return self.signal_overview
+        else:
+            n_analog_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
+            n_irregular_sublplots = sum(1 for v in irregularsignals.values() if len(v) > 0)
+            if n_analog_subplots > 0 or n_irregular_sublplots > 0:
+                plotly_data = None
+                if n_analog_subplots > 0:
+                    plotly_data = AnalogSignalLFPPlotList(analogsignals)
+                if n_irregular_sublplots > 0:
+                    irregular_plotly_data = IrregularlySampledSignalPlotList(irregularsignals)
+                    if plotly_data is None:
+                        plotly_data = irregular_plotly_data
                     else:
-                        axs[i].set_title(f"{top_node} (No Data)")
-                        
+                        plotly_data.concat(irregular_plotly_data)
+                events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
+                event_annotations = None
+                n_events = sum(1 for v in events.values() if len(v) > 0)
+                if n_events > 0:
+                    event_annotations = EventAnnotations(events)
+                epochs = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
+                epoch_intervals = None
+                n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
+                if n_epochs > 0:
+                    epoch_intervals = EpochIntervals(epochs)
+                overlapping = False
+                plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
+                overlapping = plot_dict['overlapping']
+                x_range = plot_dict['x_range']
+                max_points = plot_dict['max_points']
+                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points)
                 if selected_ids is None:
-                    self.analogsignal_overview = fig
-                return fig
+                    self.signal_overview = plotlyGraphFigure
+                return plotlyGraphFigure
             else:
                 pass
+
+    def create_image_sequence(self, selected_ids=None):
+        """
+        Creates a PlotlyImageSequenceFiure for all selected ImageSequences
+
+        Called at every cell execution
+        """
+        image_sequences = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.ImageSequence)
+        # compare contents of image_sequences per top node
+        image_sequences_unchanged = True
+        image_sequences_hash = self.get_neo_hash(image_sequences, hash_name='sha1')
+        if self.image_sequences_hash is None:
+            self.image_sequences_hash = image_sequences_hash
+        else:
+            if self.image_sequences_hash != image_sequences_hash:
+                image_sequences_unchanged = False
+
+        # Return pre-existing rasterplot if content of image_sequences has NOT changed
+        if (image_sequences_unchanged) and (self.image_sequence_overview is not None) and (selected_ids is None):
+            return self.image_sequence_overview
+        # Otherwise, create new plot
+        else:
+            n_subplots = sum(1 for v in image_sequences.values() if len(v) > 0)
+            if n_subplots > 0:
+                image_sequences_list = []
+                for top_node, st_list in image_sequences.items():
+                    if st_list:
+                        image_sequences_list += st_list
+                plotlyImageSequenceFigure = PlotlyImageSequenceFigure(image_sequences=image_sequences_list, theme_name=self.jupyterlab_theme)
+
+                if selected_ids is None:
+                    self.image_sequence_overview = plotlyImageSequenceFigure
+                return plotlyImageSequenceFigure
+            else:
+                return None
+
 
     def _extract_selected_neo_data_objects_by_top_node(self, selected_ids=None, neo_class=None):
         collected_neo_objs = {}
@@ -789,7 +796,240 @@ class Jupyphant:
 
     def _get_neo_obj_hash_and_node_name_of_selected_nodes(self):
         return {self.map_ipytree_node_id_to_neo_obj_hash[node._id]: node.name
-                for node in self.ipytree_of_neo_objects.selected_nodes}
+                for node in self.selected_neo_objects}
+
+    def _print_as_table(self, data, pp):
+        """
+        Prints a list of lists as a formatted table using the provided pretty-printer.
+        """
+        if not data:
+            return
+
+        num_columns = len(data[0]) if data else 0
+        if num_columns == 0:
+            return
+
+        table_data = []
+        for row in data:
+            str_row = [str(item) for item in row]
+            padded_row = str_row[:num_columns] + [''] * (num_columns - len(str_row))
+            table_data.append(padded_row)
+
+        col_widths = [0] * num_columns
+        for row in table_data:
+            for i, cell in enumerate(row):
+                if len(cell) > col_widths[i]:
+                    col_widths[i] = len(cell)
+
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        header_cells = [
+            f"{{:<{col_widths[i]}}}".format(table_data[0][i])
+            for i in range(num_columns)
+        ]
+        bold_header_line = " | ".join([f"{bold}{cell}{reset}" for cell in header_cells])
+        pp.text(bold_header_line)
+        pp.text("\n")
+
+        separator = "-+-".join("-" * width for width in col_widths)
+        pp.text(separator)
+        pp.text("\n")
+
+        row_format = " | ".join(f"{{:<{width}}}" for width in col_widths)
+        for row in table_data[1:]:
+            pp.text(row_format.format(*row))
+            pp.text("\n")
+
+    def _repr_pretty_annotations_overview(self, all_annotations, count, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        if not all_annotations:
+            return
+            
+        all_keys = set()
+        for anno in all_annotations:
+            if anno:
+                all_keys.update(anno.keys())
+        
+        common_annos = {}
+        different_annos = []
+        partial_annos = []
+
+        for key in all_keys:
+            values_with_key = [anno.get(key) for anno in all_annotations if anno and key in anno]
+            
+            if len(values_with_key) == count: # present in all
+                try:
+                    first_val_str = str(values_with_key[0])
+                    if all(str(v) == first_val_str for v in values_with_key[1:]):
+                        common_annos[key] = values_with_key[0]
+                    else:
+                        different_annos.append(key)
+                except:
+                    different_annos.append(key)
+            else:
+                partial_annos.append(key)
+        
+        if common_annos:
+            pp.text(f"  \n{bold}Identical Annotations:{reset}\n")
+            for k, v in common_annos.items():
+                pp.text(f"    {bold}{k}:{reset} {v}\n")
+        
+        if different_annos:
+            pp.text(f"  \n{bold}Diverging Annotations:{reset} {', '.join(different_annos)}\n")
+        
+        if partial_annos:
+            pp.text(f"  \n{bold}Unique Annotations:{reset} {', '.join(partial_annos)}\n")
+
+    def _repr_pretty_spiketrain_overview(self, items, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        spiketrains = [item['obj'] for item in items]
+        count = len(spiketrains)
+        total_spikes = sum(len(st) for st in spiketrains)
+        
+        pp.text(f"{bold}SpikeTrain Overview{reset}\n")
+        pp.text(f"  {bold}Count:{reset} {count}\n")
+        pp.text(f"  {bold}Total Spikes:{reset} {total_spikes}\n")
+
+        # Units Check
+        units = set(str(st.units.dimensionality) for st in spiketrains)
+        pp.text(f"  {bold}Units:{reset} {', '.join(units)}\n")
+
+        all_annotations = [st.annotations for st in spiketrains]
+        self._repr_pretty_annotations_overview(all_annotations, count, pp)
+        
+        # Time Range
+        all_t_starts = [st.t_start for st in spiketrains]
+        all_t_stops = [st.t_stop for st in spiketrains]
+        pp.text(f"  \n{bold}Time Range (t_start to t_stop):{reset}\n")
+        pp.text(f"    {bold}Min:{reset} {min(all_t_starts)}\n")
+        pp.text(f"    {bold}Max:{reset} {max(all_t_stops)}\n")
+
+        if spiketrains:
+            target_units = spiketrains[0].units
+            all_times_list = []
+            for st in spiketrains:
+                if len(st) > 0:
+                    all_times_list.append(st.times.rescale(target_units))
+
+            if all_times_list:
+                all_spike_times_magnitude = self.np.concatenate([q.magnitude for q in all_times_list])
+                all_spike_times = self.pq.Quantity(all_spike_times_magnitude, units=target_units)
+                
+                unit_str = all_spike_times.units.dimensionality
+                min_val = self.np.min(all_spike_times).magnitude
+                max_val = self.np.max(all_spike_times).magnitude
+
+                pp.text(f"  {bold}Spike Times:{reset}\n")
+                pp.text(f"    {bold}Min:{reset} {min_val} {unit_str}\n")
+                pp.text(f"    {bold}Max:{reset} {max_val} {unit_str}\n")
+
+        # Firing Rate Statistics
+        firing_rates = [self.statistics.mean_firing_rate(st) for st in spiketrains if st.t_stop > st.t_start]
+        if firing_rates:
+            rate_units = firing_rates[0].units.dimensionality
+            pp.text(f"  {bold}Firing Rates ({rate_units}):{reset}\n")
+            pp.text(f"    {bold}Min:{reset} {min(fr.magnitude for fr in firing_rates):.4f}\n")
+            pp.text(f"    {bold}Max:{reset} {max(fr.magnitude for fr in firing_rates):.4f}\n")
+            pp.text(f"    {bold}Average:{reset} {self.np.mean([fr.magnitude for fr in firing_rates]):.4f}\n")
+
+        # ISI Statistics
+        isis_list = [self.statistics.isi(st) for st in spiketrains if len(st) > 1]
+        if isis_list:
+            cvs = [self.statistics.cv(isis) for isis in isis_list]
+                        
+            if cvs:
+                pp.text(f"  {bold}Coefficient of Variation (CV):{reset}\n")
+                pp.text(f"    {bold}Min:{reset} {min(cvs):.4f}\n")
+                pp.text(f"    {bold}Max:{reset} {max(cvs):.4f}\n")
+                pp.text(f"    {bold}Average:{reset} {self.np.mean(cvs):.4f}\n")
+
+        pp.text("\n")
+
+    def _repr_pretty_analogsignal_overview(self, items, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        signals = [item['obj'] for item in items]
+        count = len(signals)
+        
+        pp.text(f"{bold}AnalogSignal Overview{reset}\n")
+        pp.text(f"  {bold}Count:{reset} {count}\n")
+        pp.text(f"  {bold}Total Channels:{reset} {sum(s.shape[1] for s in signals)}\n")
+
+        sampling_rates = set(str(s.sampling_rate) for s in signals)
+        pp.text(f"  {bold}Sampling Rates:{reset} {', '.join(map(str, sampling_rates))}\n")
+
+        durations = [s.duration for s in signals]
+        pp.text(f"  {bold}Durations:{reset}\n")
+        pp.text(f"    {bold}Min:{reset} {min(durations)}\n")
+        pp.text(f"    {bold}Max:{reset} {max(durations)}\n")
+
+        all_t_starts = [s.t_start for s in signals]
+        all_t_stops = [s.t_stop for s in signals]
+        pp.text(f"  {bold}Time Range (t_start to t_stop):{reset}\n")
+        pp.text(f"    {bold}Min:{reset} {min(all_t_starts)}\n")
+        pp.text(f"    {bold}Max:{reset} {max(all_t_stops)}\n")
+
+        all_annotations = [s.annotations for s in signals]
+        self._repr_pretty_annotations_overview(all_annotations, count, pp)
+
+        pp.text("\n")
+
+    def _repr_pretty_mixed_overview(self, items, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        pp.text(f"{bold}Multiple Object Types Selected{reset}\n")
+        pp.text(f"  {bold}Total Objects:{reset} {len(items)}\n")
+        
+        from collections import Counter
+        type_counts = Counter(type(item['obj']).__name__ for item in items)
+        
+        pp.text(f"  {bold}Object Types:{reset}\n")
+        for type_name, count in type_counts.items():
+            pp.text(f"    - {type_name}: {count}\n")
+        pp.text("\n")
+
+    def _repr_pretty_generic_overview(self, items, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+        
+        count = len(items)
+        obj_type_name = items[0]['obj'].__class__.__name__
+        
+        pp.text(f"{bold}{obj_type_name} Overview{reset}\n")
+        pp.text(f"  {bold}Count:{reset} {count}\n")
+        
+        all_annotations = [item['obj'].annotations for item in items if hasattr(item['obj'], 'annotations')]
+        if all_annotations:
+             self._repr_pretty_annotations_overview(all_annotations, count, pp)
+        
+        pp.text("\n")
+
+    def _format_array_annotation_value(self, value):
+        if isinstance(value, self.np.ndarray):
+            if value.ndim == 1:
+                if len(value) > 10:
+                    return f"{', '.join(map(str, value[:5]))}, ..., {', '.join(map(str, value[-5:]))}"
+                return ', '.join(map(str, value))
+            else:
+                return f"{value.ndim}D array of shape {value.shape}"
+        return str(value)
+
+    def _repr_pretty_array_annotations(self, neo_obj, pp):
+        bold = '\033[1m'
+        reset = '\033[0m'
+
+        if hasattr(neo_obj, 'array_annotations') and neo_obj.array_annotations:
+            pp.text(f"\n{bold}Array Annotations:{reset}\n")
+            for key, value in neo_obj.array_annotations.items():
+                formatted_value = self._format_array_annotation_value(value)
+                pp.text(f"  {bold}{key}{reset}: {formatted_value}\n")
 
     def _print_as_table(self, data, pp):
         """

@@ -72,8 +72,6 @@ class JupyphantExtension {
 	private myVisTabs: Widget[];
 	private widget: DockPanel;
 	private _updateTimer: number | null = null;
-	private outarea_content_rasterplot: OutputArea | null;
-	private outarea_content_lfpplot: OutputArea | null;
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
 	private outarea_nodeexplorer_statistics: OutputArea | null;
@@ -99,8 +97,6 @@ class JupyphantExtension {
 		this.myVisTabs = [];
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
 		this.widget = new DockPanel({ tabsMovable: false });
-		this.outarea_content_rasterplot = null;
-		this.outarea_content_lfpplot = null;
 		this.outarea_nodeexplorer_info = null;
 		this.outarea_nodeexplorer_raw = null;
 		this.outarea_nodeexplorer_statistics = null;
@@ -128,8 +124,6 @@ class JupyphantExtension {
 			await this.executeCodeInOutputArea(pythonCode['createExplorerInfo'], this.outarea_nodeexplorer_info!, session);
 			await this.executeCodeInOutputArea(pythonCode['createExplorerRawPlot'], this.outarea_nodeexplorer_raw!, session);
 			await this.executeCodeInOutputArea(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
-			await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, session);
-			await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, session);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Jupyphant: FAILED to initialize kernel state:", error);
@@ -218,11 +212,9 @@ class JupyphantExtension {
 			if (this._updateTimer) {
 				window.clearTimeout(this._updateTimer);
 			}
-	
+
 			this._updateTimer = window.setTimeout(async () => {
 				await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, initialSession, false);
-				await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession);
-				await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession);
 			}, 500);
 		});
 
@@ -321,9 +313,9 @@ class JupyphantExtension {
 		infoButton.title = 'About Jupyphant';
 		infoButton.style.backgroundColor = COLORS["jupyphant_base"];
 		infoButton.className = 'workflow-button workflow-button-io';
-				infoButton.onclick = async () => {
+		infoButton.onclick = async () => {
 			let code =
-			`
+				`
 from jupyphant import __version__
 print(__version__)
 			`
@@ -429,12 +421,12 @@ print(__version__)
 
 			filterContainer.appendChild(label);
 		});
-		
+
 		const loadNeoFileButton = document.createElement('button');
 		loadNeoFileButton.innerHTML = '<i class="fa fa-file-import" aria-hidden="true"></i> Load';
-        loadNeoFileButton.title = 'Create a neoIO for given Path';
+		loadNeoFileButton.title = 'Create a neoIO for given Path';
 		loadNeoFileButton.style.backgroundColor = COLORS["jupyphant_base"]
-        loadNeoFileButton.className = 'workflow-button workflow-button-io';
+		loadNeoFileButton.className = 'workflow-button workflow-button-io';
 		loadNeoFileButton.onclick = () => {
 			FileDialog.getOpenFiles({
 				manager: this.docManager
@@ -442,13 +434,13 @@ print(__version__)
 				if (result.button.accept && result.value && result.value.length > 0) {
 					const selectedFile = result.value[0];
 					const filePath = selectedFile.path;
-	
+
 					const body = document.createElement('div');
 					const input = document.createElement('input');
 					input.className = 'jp-input';
 					input.placeholder = 'e.g. Spike2IO';
 					body.appendChild(input);
-	
+
 					showDialog({
 						title: 'Enter neo IO class',
 						body: new Widget({ node: body }),
@@ -465,7 +457,7 @@ print(__version__)
 						} else if (dialogResult.button.label === 'Automatic') {
 							ioClass = await this.kernelBridge!.getNeoIOClass(filePath);
 						}
-	
+
 						if (ioClass !== null) {
 							const getVarsCode = `import json, __main__; print(json.dumps(list(__main__.__dict__.keys())))`;
 							const varsResult = await this.kernelBridge!.executeCode(getVarsCode, true);
@@ -480,10 +472,10 @@ print(__version__)
 									}
 								}
 							}
-							
+
 							let counter = 0;
 							let varName = `loaded_data_${counter}`;
-							while(allVars.includes(varName)) {
+							while (allVars.includes(varName)) {
 								counter++;
 								varName = `loaded_data_${counter}`;
 							}
@@ -559,20 +551,20 @@ from jupyphant.kernelcode import save_selected_neo_objects
 save_selected_neo_objects(jupyphant_entity, '${filePath}')
 					`;
 					this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false)
-					.then(() => {
-                    showDialog({
-                        title: 'Export Successful',
-                        body: `The Neo objects have been saved to: ${filePath}`,
-                        buttons: [Dialog.okButton()]
-                    });
-                })
-                .catch(err => {
-                    showDialog({
-                        title: 'Export Failed',
-                        body: `An error occurred: ${err}`,
-                        buttons: [Dialog.okButton()]
-                    });
-                });
+						.then(() => {
+							showDialog({
+								title: 'Export Successful',
+								body: `The Neo objects have been saved to: ${filePath}`,
+								buttons: [Dialog.okButton()]
+							});
+						})
+						.catch(err => {
+							showDialog({
+								title: 'Export Failed',
+								body: `An error occurred: ${err}`,
+								buttons: [Dialog.okButton()]
+							});
+						});
 				}
 			});
 		};
@@ -639,7 +631,7 @@ except Exception as e:
     import sys, traceback
     print(json.dumps({"code_to_insert": "", "error": str(e), "traceback": traceback.format_exc()}), file=sys.stdout)
 			`;
-			
+
 			const result = await this.kernelBridge!.executeCode(code, true);
 
 			if (result && result.outputs.length > 0) {
@@ -664,14 +656,14 @@ except Exception as e:
 								console.log(`Jupyphant: Inserted code at cursor.`);
 							} else {
 								console.log(`Jupyphant: No active cell or editor found. Could not insert code.`);
-							}	
+							}
 						}
 					}
 				}
 			}
 		}
 
-		
+
 		filterContainer.classList.add('sticky-filter');
 		filterContainer.appendChild(document.createElement('br'));
 		filterContainer.appendChild(document.createElement('br'));
@@ -680,6 +672,142 @@ except Exception as e:
 		filterContainer.appendChild(insertCodeButton);
 
 		tree_widget.node.prepend(filterContainer);
+	}
+
+
+	private defaultOutputErrorListerner(msg: any) {
+		const msgType = msg.header.msg_type;
+		switch (msgType) {
+			case "stream":
+				console.log("stdout:", msg.content.text);
+				break;
+			case "error":
+				console.error("Python error:", msg.content.ename, msg.content.evalue);
+				console.error(msg.content.traceback.join("\n"));
+				break;
+			case "execute_result":
+			case "display_data":
+				console.log("Result:", msg.content.data);
+				break;
+		}
+	}
+
+	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+		const checked_style = {
+			color: "#2cbb00ff",
+			fontWeight: "bold",
+			cursor: "pointer",
+			padding: "4px",
+			userSelect: "none",
+		}
+
+		const unchecked_style = {
+			color: "#727272ff",
+			fontWeight: "normal",
+			cursor: "pointer",
+			padding: "4px",
+			userSelect: "none",
+		}
+
+		// Single sticky container for both buttons
+		const buttonContainer = document.createElement('div');
+		buttonContainer.classList.add('sticky-filter');
+		buttonContainer.style.display = "flex";     // horizontal layout
+		buttonContainer.style.gap = "8px";          // spacing between buttons
+
+		const overlapToggle = document.createElement('label');
+		overlapToggle.dataset.checked = 'false';
+		Object.assign(overlapToggle.style, unchecked_style);
+		overlapToggle.innerHTML = `<i class="fa fa-layer-group"></i> Overlap`;
+
+		const darkmodeToggle = document.createElement('label');
+		darkmodeToggle.dataset.checked = 'true';
+		Object.assign(darkmodeToggle.style, checked_style);
+		darkmodeToggle.innerHTML = `<i class="fa fa-moon"></i> Dark`;
+
+		const upscaleButton = document.createElement('label');
+		Object.assign(upscaleButton.style, unchecked_style);
+		upscaleButton.innerHTML = `<i class="fa fa-expand-arrows-alt"></i> Upscale`;
+
+		const numberLabel = document.createElement('label');
+		numberLabel.innerHTML = `<i class="fa fa-chart-line"></i> Max Points`;
+		Object.assign(numberLabel.style, unchecked_style);
+
+		// Create number input
+		const min_max_points = 10000
+		const numberInput = document.createElement('input');
+		numberInput.type = "number";
+		numberInput.value = "10000";
+		numberInput.min = `${min_max_points}`;
+		numberInput.step = "10000";
+		numberInput.style.padding = "2px 6px";
+		numberInput.style.borderRadius = "4px";
+		numberInput.style.border = "1px solid #555";
+		numberInput.style.background = "var(--jp-layout-color1)";
+		numberInput.style.color = "var(--jp-ui-font-color1)";
+		numberInput.title = "Set Max Points";
+
+
+		overlapToggle.onclick = () => {
+			const isNowChecked = overlapToggle.dataset.checked === 'false';
+			overlapToggle.dataset.checked = isNowChecked ? 'true' : 'false';
+			isNowChecked ? Object.assign(overlapToggle.style, checked_style) : Object.assign(overlapToggle.style, unchecked_style);
+			// Send Python command to flip the boolean
+			const code = `
+			from jupyphant.kernelcode import set_raw_plot_overlap
+			set_raw_plot_overlap(jupyphant_entity, ${isNowChecked ? "True" : "False"})
+			`;
+
+			// Send to kernel
+			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
+
+			// Listen for output / errors
+			future.onIOPub = this.defaultOutputErrorListerner;
+		};
+
+		darkmodeToggle.onclick = () => {
+			const isNowChecked = darkmodeToggle.dataset.checked === 'false';
+			darkmodeToggle.dataset.checked = isNowChecked ? 'true' : 'false';
+			isNowChecked ? Object.assign(darkmodeToggle.style, checked_style) : Object.assign(darkmodeToggle.style, unchecked_style);
+			// Send Python command to flip the boolean
+			const code = `
+			from jupyphant.kernelcode import update_jupyterlab_theme
+			update_jupyterlab_theme(jupyphant_entity, ${isNowChecked ? '"dark"' : '"white"'})
+			`;
+
+			// Send to kernel
+			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
+
+			// Listen for output / errors
+			future.onIOPub = this.defaultOutputErrorListerner;
+		};
+
+		upscaleButton.onclick = () => {
+			let max_points = Number(numberInput.value);
+			if (max_points < min_max_points) {
+				max_points = min_max_points
+				numberInput.value = max_points.toString()
+			}
+
+			// Send Python command to flip the boolean
+			const code = `
+			from jupyphant.kernelcode import upscale_raw_plot
+			upscale_raw_plot(jupyphant_entity, ${max_points})
+			`;
+
+			// Send to kernel
+			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
+
+			// Listen for output / errors
+			future.onIOPub = this.defaultOutputErrorListerner;
+		};
+
+		buttonContainer.appendChild(overlapToggle);
+		buttonContainer.appendChild(darkmodeToggle);
+		buttonContainer.appendChild(upscaleButton);
+		buttonContainer.appendChild(numberLabel);
+		buttonContainer.appendChild(numberInput);
+		raw_plot_widget.node.prepend(buttonContainer);
 	}
 
 	public createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
@@ -696,16 +824,17 @@ except Exception as e:
 		explorer_widget_info.title.label = 'Details';
 		explorer_widget_info.node.style.cssText = explorer_widget_info.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_info = this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1', session);
-		
+
 		// RAW
 		let explorer_widget_raw_plot = new Panel();
 		explorer_widget_raw_plot.title.label = 'Explore';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
-		
+		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class', 'no-left-spacing'], 'jup_vis_out_id_2.2', session);
+
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
+		this.create_raw_plot_options(session, explorer_widget_raw_plot);
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
@@ -772,7 +901,7 @@ except Exception as e:
 		}
 
 		let output = await this.kernelBridge?.executeCode(code, true);
-		
+
 		if (output && showOutput) {
 			this.handleOutputs(output.outputs, outputArea);
 		}
@@ -780,14 +909,14 @@ except Exception as e:
 
 	private handleOutputs(outputs: any[], outputArea: OutputArea) {
 		outputArea.model.clear();
-        for (const output of outputs) {
-            if (output.output_type === 'clear_output') {
-                outputArea.model.clear(false);
-            } else {
-                outputArea.model.add(output);
-            }
-        }
-    }
+		for (const output of outputs) {
+			if (output.output_type === 'clear_output') {
+				outputArea.model.clear(false);
+			} else {
+				outputArea.model.add(output);
+			}
+		}
+	}
 
 }; // end of JupyphantWidget class
 

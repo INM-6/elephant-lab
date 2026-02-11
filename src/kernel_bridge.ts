@@ -35,7 +35,6 @@ except Exception as e:
         await future.done;
         try { return JSON.parse(msg_content.trim()); }
         catch (e) { console.error("Failed to parse io class from kernel:", e, msg_content); return null; }
-    }
 
     /**
      * Executes Python code in the kernel and returns the result and any output.
