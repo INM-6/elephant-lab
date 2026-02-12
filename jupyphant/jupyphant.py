@@ -7,12 +7,8 @@ import time
 
 import joblib
 
-from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
-from .PlotlyGraphFigure import PlotlyGraphFigure
-from .PlotlyGraphDataTypes import *
+from .jupyphant_plot import Jupyphant_plot
 
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import neo
 
 # neo abbreviations and font-awesome icons
@@ -106,13 +102,6 @@ class Jupyphant:
     # ipytree provides a tree structure widget
     # Used to display the Neo object hierarchy
     from ipytree import Tree, Node
-    from enum import Enum
-
-    class RawPlotKey(Enum):
-        RAW_ST = 'raw_st'
-        RAW_ANASIG = 'raw_anasig'
-
-    RAW_IMGSEQUENCE = 'raw_imgsequence'
 
     class SimpleEvent:
         def __init__(self):
@@ -141,14 +130,6 @@ class Jupyphant:
         """
         self.neo_objs_and_lists_of_neo_objs_with_var_name = {}
         self.neo_objs_changed_after_update = False
-        # Plots are saved in order not to require recreation at every cell execution
-        self.spiketrain_overview = None
-        self.spiketrains_hash = None
-        self.signal_overview = None
-        self.analogsignals_hash = None
-        self.irregularsignals_hash = None
-        self.image_sequence_overview = None
-        self.image_sequences_hash = None
         self.ipytree_of_neo_objects = None
         self.selected_neo_objects = set()
         self.on_selected_neo_objects_changed = self.SimpleEvent()
@@ -160,14 +141,7 @@ class Jupyphant:
         self.last_known_hashes = []
         self.hash_cache = {}
         self.jupyterlab_theme = 'plotly_dark'
-        self.plots = {}
-        for key in self.RawPlotKey:
-            self.plots[key] = {
-                "fig": None,
-                "overlapping": False,
-                "x_range": None,
-                "max_points": 10000
-            }
+        self.jupyphant_plot = Jupyphant_plot(self)
 
     def names_for(self, obj):
         for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
@@ -591,7 +565,7 @@ class Jupyphant:
         return self.ipytree_of_neo_objects
 
     def statistics_of_selected_nodes(self, selected_ids=None):
-        spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
+        """spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
                                                                           neo_class=self.SpikeTrain)
         n_st_statistics = 4  # ISI, time-histogram, IFR, correlation
         n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
@@ -636,158 +610,7 @@ class Jupyphant:
 
             return fig
         else:
-            return None
-
-    def create_rasterplot(self, selected_ids=None, other_changes=False):
-        """
-        Create for each top-node a rasterplot for the contained spike trains.
-
-        Called at every cell execution
-        """
-        spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
-                                                                          neo_class=self.SpikeTrain)
-        # compare contents of spiketrains per top node
-        spiketrains_unchanged = True
-        spiketrains_hash = self.get_neo_hash(spiketrains, hash_name='sha1')
-        if self.spiketrains_hash is None:
-            self.spiketrains_hash = spiketrains_hash
-        else:
-            if self.spiketrains_hash != spiketrains_hash:
-                spiketrains_unchanged = False
-
-        # Return pre-existing rasterplot if content of spiketrains has NOT changed
-        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None) and (not other_changes):
-            return self.spiketrain_overview
-        # Otherwise, create new plot
-        else:
-            n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
-            if n_subplots > 0:
-                #subplot_titles = [key for key in spiketrains.keys() if spiketrains[key]]
-                data = []
-                for top_node, st_list in spiketrains.items():
-                    if st_list:
-                        for st in st_list:
-                            data.append(SpikeTrainRasterPlot(st))
-                events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
-                event_annotations = None
-                n_events = sum(1 for v in events.values() if len(v) > 0)
-                if n_events > 0:
-                    event_annotations = EventAnnotations(events)
-                epochs = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
-                epoch_intervals = None
-                n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
-                if n_epochs > 0:
-                    epoch_intervals = EpochIntervals(epochs)
-                plot_dict = self.plots[self.RawPlotKey.RAW_ST]
-                overlapping = plot_dict['overlapping']
-                x_range = plot_dict['x_range']
-                max_points = plot_dict['max_points']
-                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points)
-
-                if selected_ids is None:
-                    self.spiketrain_overview = plotlyGraphFigure
-                return plotlyGraphFigure
-            else:
-                return None
-
-    def create_lfpplot(self, selected_ids=None, other_changes=False):
-        """
-        Wrapper for plot_lfp to update the lfp plot
-
-        Called at every cell execution
-        """
-        analogsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.AnalogSignal)
-        irregularsignals = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.IrregularlySampledSignal)
-        # compare contents of AnalogSignals per top node
-        analogsignals_unchanged = True
-        analogsignals_hash = self.get_neo_hash(analogsignals, hash_name='sha1')
-        if self.analogsignals_hash is None:
-            self.analogsignals_hash = analogsignals_hash
-        else:
-            if self.analogsignals_hash != analogsignals_hash:
-                analogsignals_unchanged = False
-
-        # compare contents of IrregularlySampledSignal per top node
-        irregularsignals_unchanged = True
-        irregularsignals_hash = self.get_neo_hash(irregularsignals, hash_name='sha1')
-        if self.irregularsignals_hash is None:
-            self.irregularsignals_hash = irregularsignals_hash
-        else:
-            if self.irregularsignals_hash != irregularsignals_hash:
-                irregularsignals_unchanged = False
-
-        # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
-        if analogsignals_unchanged and irregularsignals_unchanged  and (self.signal_overview is not None) and (selected_ids is None) and (not other_changes):
-            return self.signal_overview
-        else:
-            n_analog_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
-            n_irregular_sublplots = sum(1 for v in irregularsignals.values() if len(v) > 0)
-            if n_analog_subplots > 0 or n_irregular_sublplots > 0:
-                plotly_data = None
-                if n_analog_subplots > 0:
-                    plotly_data = AnalogSignalLFPPlotList(analogsignals)
-                if n_irregular_sublplots > 0:
-                    irregular_plotly_data = IrregularlySampledSignalPlotList(irregularsignals)
-                    if plotly_data is None:
-                        plotly_data = irregular_plotly_data
-                    else:
-                        plotly_data.concat(irregular_plotly_data)
-                events = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
-                event_annotations = None
-                n_events = sum(1 for v in events.values() if len(v) > 0)
-                if n_events > 0:
-                    event_annotations = EventAnnotations(events)
-                epochs = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
-                epoch_intervals = None
-                n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
-                if n_epochs > 0:
-                    epoch_intervals = EpochIntervals(epochs)
-                overlapping = False
-                plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
-                overlapping = plot_dict['overlapping']
-                x_range = plot_dict['x_range']
-                max_points = plot_dict['max_points']
-                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points)
-                if selected_ids is None:
-                    self.signal_overview = plotlyGraphFigure
-                return plotlyGraphFigure
-            else:
-                pass
-
-    def create_image_sequence(self, selected_ids=None):
-        """
-        Creates a PlotlyImageSequenceFiure for all selected ImageSequences
-
-        Called at every cell execution
-        """
-        image_sequences = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.ImageSequence)
-        # compare contents of image_sequences per top node
-        image_sequences_unchanged = True
-        image_sequences_hash = self.get_neo_hash(image_sequences, hash_name='sha1')
-        if self.image_sequences_hash is None:
-            self.image_sequences_hash = image_sequences_hash
-        else:
-            if self.image_sequences_hash != image_sequences_hash:
-                image_sequences_unchanged = False
-
-        # Return pre-existing rasterplot if content of image_sequences has NOT changed
-        if (image_sequences_unchanged) and (self.image_sequence_overview is not None) and (selected_ids is None):
-            return self.image_sequence_overview
-        # Otherwise, create new plot
-        else:
-            n_subplots = sum(1 for v in image_sequences.values() if len(v) > 0)
-            if n_subplots > 0:
-                image_sequences_list = []
-                for top_node, st_list in image_sequences.items():
-                    if st_list:
-                        image_sequences_list += st_list
-                plotlyImageSequenceFigure = PlotlyImageSequenceFigure(image_sequences=image_sequences_list, theme_name=self.jupyterlab_theme)
-
-                if selected_ids is None:
-                    self.image_sequence_overview = plotlyImageSequenceFigure
-                return plotlyImageSequenceFigure
-            else:
-                return None
+            return None"""
 
 
     def _extract_selected_neo_data_objects_by_top_node(self, selected_ids=None, neo_class=None):

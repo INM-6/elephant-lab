@@ -117,17 +117,18 @@ def raw_plot(jupyphant_entity, other_changes=False):
     import ipywidgets as widgets
     from IPython.display import clear_output, display
     selected_ids = get_selected_neo_ids(jupyphant_entity)
+    jupyphant_plot = jupyphant_entity.jupyphant_plot
     if not other_changes:
-        for key in jupyphant_entity.RawPlotKey:
-            jupyphant_entity.plots[key]['x_range']=None
-    with jupyphant_entity.output_node_raw_plot:
+        for key in jupyphant_plot.RawPlotKey:
+            jupyphant_plot.plots[key]['x_range']=None
+    with jupyphant_plot.output_node_raw_plot:
         clear_output(wait=True)
 
         loading = widgets.HTML("⏳ <b>Rendering plots...</b>")
         display(loading)
 
-        raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids, other_changes=other_changes)
-        jupyphant_entity.plots[jupyphant_entity.RawPlotKey.RAW_ST]["fig"]=raw_st
+        raw_st = jupyphant_plot.create_rasterplot(selected_ids=selected_ids, other_changes=other_changes)
+        jupyphant_plot.plots[jupyphant_plot.RawPlotKey.RAW_ST]["fig"]=raw_st
 
         clear_output(wait=True)
 
@@ -135,12 +136,12 @@ def raw_plot(jupyphant_entity, other_changes=False):
         if raw_st:
             raw_st.display()
             displayed_something = True
-        raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids, other_changes=other_changes)
-        jupyphant_entity.plots[jupyphant_entity.RawPlotKey.RAW_ANASIG]["fig"]=raw_anasig
+        raw_anasig = jupyphant_plot.create_lfpplot(selected_ids=selected_ids, other_changes=other_changes)
+        jupyphant_plot.plots[jupyphant_plot.RawPlotKey.RAW_ANASIG]["fig"]=raw_anasig
         if raw_anasig:
             raw_anasig.display()
             displayed_something = True
-        raw_imgsequence = jupyphant_entity.create_image_sequence(selected_ids=selected_ids)
+        raw_imgsequence = jupyphant_plot.create_image_sequence(selected_ids=selected_ids)
         if raw_imgsequence:
             raw_imgsequence.display()
             displayed_something = True
@@ -149,14 +150,12 @@ def raw_plot(jupyphant_entity, other_changes=False):
 
 def create_explorer_raw_plot(jupyphant_entity):
     from IPython.display import display
-    from ipywidgets import Output
 
     def on_selected_change_raw():
         raw_plot(jupyphant_entity)
 
-    jupyphant_entity.output_node_raw_plot = Output(layout={'width': "100%", 'height': 'auto'})
     jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_raw)
-    display(jupyphant_entity.output_node_raw_plot)
+    display(jupyphant_entity.jupyphant_plot.output_node_raw_plot)
 
 
 def create_explorer_statistics(jupyphant_entity):
@@ -208,8 +207,9 @@ def expand_neo_tree(jupyphant_entity, opened):
 
 def set_raw_plot_overlap(jupyphant_entity, overlap):
     reload = False
-    for key in jupyphant_entity.RawPlotKey:
-        plot_dict = jupyphant_entity.plots[key]
+    jupyphant_plot = jupyphant_entity.jupyphant_plot
+    for key in jupyphant_plot.RawPlotKey:
+        plot_dict = jupyphant_plot.plots[key]
         fig = plot_dict['fig']
         if overlap == plot_dict['overlapping']:
             continue
@@ -227,16 +227,18 @@ def set_raw_plot_overlap(jupyphant_entity, overlap):
 
 def update_jupyterlab_theme(jupyphant_entity, theme_name):
     jupyphant_entity.jupyterlab_theme = theme_name
-    for key in jupyphant_entity.RawPlotKey:
-        fig = jupyphant_entity.plots[key]['fig']
+    jupyphant_plot = jupyphant_entity.jupyphant_plot
+    for key in jupyphant_plot.RawPlotKey:
+        fig = jupyphant_plot.plots[key]['fig']
         if fig is not None:
             fig.update_jupyterlab_theme(theme_name)
 
 def upscale_raw_plot(jupyphant_entity, max_points):
     import math
     reload = False
-    for key in jupyphant_entity.RawPlotKey:
-        plot_dict = jupyphant_entity.plots[key]
+    jupyphant_plot = jupyphant_entity.jupyphant_plot
+    for key in jupyphant_plot.RawPlotKey:
+        plot_dict = jupyphant_plot.plots[key]
         temp_reload = False
         if(max_points != plot_dict['max_points']):
             plot_dict['max_points']=max_points
