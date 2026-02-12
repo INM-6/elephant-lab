@@ -140,7 +140,6 @@ class Jupyphant:
         self.expand_all = False
         self.last_known_hashes = []
         self.hash_cache = {}
-        self.jupyterlab_theme = 'plotly_dark'
         self.jupyphant_plot = self.Jupyphant_plot(self)
 
     def names_for(self, obj):

@@ -773,8 +773,8 @@ except Exception as e:
 			isNowChecked ? Object.assign(darkmodeToggle.style, checked_style) : Object.assign(darkmodeToggle.style, unchecked_style);
 			// Send Python command to flip the boolean
 			const code = `
-			from jupyphant.kernelcode import update_jupyterlab_theme
-			update_jupyterlab_theme(jupyphant_entity, ${isNowChecked ? '"dark"' : '"white"'})
+			from jupyphant.kernelcode import update_jupyterlab_plot_theme
+			update_jupyterlab_plot_theme(jupyphant_entity, ${isNowChecked ? '"dark"' : '"white"'})
 			`;
 
 			// Send to kernel
@@ -909,6 +909,9 @@ except Exception as e:
 	}
 
 	private handleOutputs(outputs: any[], outputArea: OutputArea) {
+		if (outputArea == null) {
+			return;
+		}
 		outputArea.model.clear();
 		for (const output of outputs) {
 			if (output.output_type === 'clear_output') {

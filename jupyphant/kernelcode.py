@@ -225,9 +225,9 @@ def set_raw_plot_overlap(jupyphant_entity, overlap):
     if reload:
         raw_plot(jupyphant_entity, other_changes=True)
 
-def update_jupyterlab_theme(jupyphant_entity, theme_name):
-    jupyphant_entity.jupyterlab_theme = theme_name
+def update_jupyterlab_plot_theme(jupyphant_entity, theme_name):
     jupyphant_plot = jupyphant_entity.jupyphant_plot
+    jupyphant_plot.jupyterlab_theme = theme_name
     for key in jupyphant_plot.RawPlotKey:
         fig = jupyphant_plot.plots[key]['fig']
         if fig is not None:

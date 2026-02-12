@@ -28,6 +28,7 @@ class Jupyphant_plot:
         self.irregularsignals_hash = None
         self.image_sequence_overview = None
         self.image_sequences_hash = None
+        self.jupyterlab_theme = 'plotly_dark'
         self.plots = {}
         for key in self.RawPlotKey:
             self.plots[key] = {
@@ -81,7 +82,7 @@ class Jupyphant_plot:
                 overlapping = plot_dict['overlapping']
                 x_range = plot_dict['x_range']
                 max_points = plot_dict['max_points']
-                plotlyGraphFigure = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyphant_entity.jupyterlab_theme, overlap_on_compress=False, max_points=max_points)
+                plotlyGraphFigure = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points)
 
                 if selected_ids is None:
                     self.spiketrain_overview = plotlyGraphFigure
@@ -146,7 +147,7 @@ class Jupyphant_plot:
                 overlapping = plot_dict['overlapping']
                 x_range = plot_dict['x_range']
                 max_points = plot_dict['max_points']
-                plotlyGraphFigure = self.PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyphant_entity.jupyterlab_theme, max_points=max_points)
+                plotlyGraphFigure = self.PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points)
                 if selected_ids is None:
                     self.signal_overview = plotlyGraphFigure
                 return plotlyGraphFigure
@@ -180,7 +181,7 @@ class Jupyphant_plot:
                 for top_node, st_list in image_sequences.items():
                     if st_list:
                         image_sequences_list += st_list
-                plotlyImageSequenceFigure = self.PlotlyImageSequenceFigure(image_sequences=image_sequences_list, theme_name=self.jupyphant_entity.jupyterlab_theme)
+                plotlyImageSequenceFigure = self.PlotlyImageSequenceFigure(image_sequences=image_sequences_list, theme_name=self.jupyterlab_theme)
 
                 if selected_ids is None:
                     self.image_sequence_overview = plotlyImageSequenceFigure
