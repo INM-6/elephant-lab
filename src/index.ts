@@ -723,6 +723,11 @@ except Exception as e:
 		Object.assign(overlapToggle.style, unchecked_style);
 		overlapToggle.innerHTML = `<i class="fa fa-layer-group"></i> Overlap`;
 
+		const zeroBasedToggle = document.createElement('label');
+		zeroBasedToggle.dataset.checked = 'true';
+		Object.assign(zeroBasedToggle.style, checked_style);
+		zeroBasedToggle.innerHTML = `<i class="fa fa-caret-square-o-left"></i> ZeroBased`;
+
 		const darkmodeToggle = document.createElement('label');
 		darkmodeToggle.dataset.checked = 'true';
 		Object.assign(darkmodeToggle.style, checked_style);
@@ -783,6 +788,22 @@ except Exception as e:
 			future.onIOPub = this.defaultOutputErrorListerner;
 		};
 
+		zeroBasedToggle.onclick = () => {
+			const isNowChecked = zeroBasedToggle.dataset.checked === 'false';
+			zeroBasedToggle.dataset.checked = isNowChecked ? 'true' : 'false';
+			isNowChecked ? Object.assign(zeroBasedToggle.style, checked_style) : Object.assign(zeroBasedToggle.style, unchecked_style);
+			// Send Python command to flip the boolean
+			const code = `
+			jupyphant_entity.jupyphant_plot.set_zero_based(${isNowChecked ? "True" : "False"})
+			`;
+
+			// Send to kernel
+			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
+
+			// Listen for output / errors
+			future.onIOPub = this.defaultOutputErrorListerner;
+		};
+
 		upscaleButton.onclick = () => {
 			let max_points = Number(numberInput.value);
 			if (max_points < min_max_points) {
@@ -802,8 +823,9 @@ except Exception as e:
 			future.onIOPub = this.defaultOutputErrorListerner;
 		};
 
-		buttonContainer.appendChild(overlapToggle);
 		buttonContainer.appendChild(darkmodeToggle);
+		buttonContainer.appendChild(overlapToggle);
+		buttonContainer.appendChild(zeroBasedToggle);
 		buttonContainer.appendChild(upscaleButton);
 		buttonContainer.appendChild(numberLabel);
 		buttonContainer.appendChild(numberInput);

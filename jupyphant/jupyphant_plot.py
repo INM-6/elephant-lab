@@ -35,7 +35,8 @@ class Jupyphant_plot:
                 "fig": None,
                 "overlapping": False,
                 "x_range": None,
-                "max_points": 10000
+                "max_points": 10000,
+                "zero_based": True
             }
 
     def raw_plot(self, other_changes=False):
@@ -96,6 +97,16 @@ class Jupyphant_plot:
             else:
                 fig.stack()
             if fig.compress and fig.overlap_on_compress:
+                reload = True
+        if reload:
+            self.raw_plot(other_changes=True)
+    
+    def set_zero_based(self, zero_based):
+        reload = False
+        for key in self.RawPlotKey:
+            plot_dict = self.plots[key]
+            if zero_based != plot_dict['zero_based']:
+                plot_dict['zero_based']=zero_based
                 reload = True
         if reload:
             self.raw_plot(other_changes=True)
@@ -174,7 +185,8 @@ class Jupyphant_plot:
                 overlapping = plot_dict['overlapping']
                 x_range = plot_dict['x_range']
                 max_points = plot_dict['max_points']
-                plotlyGraphFigure = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points)
+                zero_based = plot_dict['zero_based']
+                plotlyGraphFigure = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
 
                 if selected_ids is None:
                     self.spiketrain_overview = plotlyGraphFigure
