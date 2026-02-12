@@ -142,6 +142,14 @@ class Jupyphant:
         self.hash_cache = {}
         self.jupyphant_plot = self.Jupyphant_plot(self)
 
+    def get_selected_neo_ids(self):
+        selected_ids = [
+            self.map_ipytree_node_id_to_neo_obj_hash[node._id]
+            for node in self.selected_neo_objects
+            if node._id in self.map_ipytree_node_id_to_neo_obj_hash
+        ]
+        return selected_ids
+
     def names_for(self, obj):
         for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
             if obj is value:

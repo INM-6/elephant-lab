@@ -113,50 +113,6 @@ def create_explorer_info(jupyphant_entity):
     jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
     display(output_node_info)
 
-def raw_plot(jupyphant_entity, other_changes=False):
-    import ipywidgets as widgets
-    from IPython.display import clear_output, display
-    selected_ids = get_selected_neo_ids(jupyphant_entity)
-    jupyphant_plot = jupyphant_entity.jupyphant_plot
-    if not other_changes:
-        for key in jupyphant_plot.RawPlotKey:
-            jupyphant_plot.plots[key]['x_range']=None
-    with jupyphant_plot.output_node_raw_plot:
-        clear_output(wait=True)
-
-        loading = widgets.HTML("⏳ <b>Rendering plots...</b>")
-        display(loading)
-
-        raw_st = jupyphant_plot.create_rasterplot(selected_ids=selected_ids, other_changes=other_changes)
-        jupyphant_plot.plots[jupyphant_plot.RawPlotKey.RAW_ST]["fig"]=raw_st
-
-        clear_output(wait=True)
-
-        displayed_something = False
-        if raw_st:
-            raw_st.display()
-            displayed_something = True
-        raw_anasig = jupyphant_plot.create_lfpplot(selected_ids=selected_ids, other_changes=other_changes)
-        jupyphant_plot.plots[jupyphant_plot.RawPlotKey.RAW_ANASIG]["fig"]=raw_anasig
-        if raw_anasig:
-            raw_anasig.display()
-            displayed_something = True
-        raw_imgsequence = jupyphant_plot.create_image_sequence(selected_ids=selected_ids)
-        if raw_imgsequence:
-            raw_imgsequence.display()
-            displayed_something = True
-        if not displayed_something:
-            clear_output()
-
-def create_explorer_raw_plot(jupyphant_entity):
-    from IPython.display import display
-
-    def on_selected_change_raw():
-        raw_plot(jupyphant_entity)
-
-    jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_raw)
-    display(jupyphant_entity.jupyphant_plot.output_node_raw_plot)
-
 
 def create_explorer_statistics(jupyphant_entity):
     import IPython
@@ -164,7 +120,7 @@ def create_explorer_statistics(jupyphant_entity):
     from ipywidgets import Output, Layout
 
     def on_selected_change_statistics():
-        selected_ids = get_selected_neo_ids(jupyphant_entity)
+        selected_ids = jupyphant_entity.get_selected_neo_ids()
         with output_node_statistic:
             IPython.display.clear_output()
             fig = jupyphant_entity.statistics_of_selected_nodes(selected_ids=selected_ids)
@@ -175,16 +131,8 @@ def create_explorer_statistics(jupyphant_entity):
     jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_statistics)
     display(output_node_statistic)
 
-def get_selected_neo_ids(jupyphant_entity):
-    selected_ids = [
-        jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id]
-        for node in jupyphant_entity.selected_neo_objects
-        if node._id in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash
-    ]
-    return selected_ids
-
 def get_object_of_ids(jupyphant_entity):
-    selected_ids = get_selected_neo_ids(jupyphant_entity)
+    selected_ids = jupyphant_entity.get_selected_neo_ids()
     if (isinstance(selected_ids, list)):
         return [jupyphant_entity.map_neo_obj_hash_to_neo_obj[selected_id] for selected_id in selected_ids]
     return jupyphant_entity.map_neo_obj_hash_to_neo_obj[selected_ids]
@@ -204,58 +152,6 @@ def toggle_neo_tree_objs(jupyphant_entity, neo_obj):
 
 def expand_neo_tree(jupyphant_entity, opened):
     jupyphant_entity.expand_neo_tree(opened)
-
-def set_raw_plot_overlap(jupyphant_entity, overlap):
-    reload = False
-    jupyphant_plot = jupyphant_entity.jupyphant_plot
-    for key in jupyphant_plot.RawPlotKey:
-        plot_dict = jupyphant_plot.plots[key]
-        fig = plot_dict['fig']
-        if overlap == plot_dict['overlapping']:
-            continue
-        plot_dict['overlapping']=overlap
-        if fig is None:
-            continue
-        if overlap:
-            fig.overlap()
-        else:
-            fig.stack()
-        if fig.compress and fig.overlap_on_compress:
-            reload = True
-    if reload:
-        raw_plot(jupyphant_entity, other_changes=True)
-
-def update_jupyterlab_plot_theme(jupyphant_entity, theme_name):
-    jupyphant_plot = jupyphant_entity.jupyphant_plot
-    jupyphant_plot.jupyterlab_theme = theme_name
-    for key in jupyphant_plot.RawPlotKey:
-        fig = jupyphant_plot.plots[key]['fig']
-        if fig is not None:
-            fig.update_jupyterlab_theme(theme_name)
-
-def upscale_raw_plot(jupyphant_entity, max_points):
-    import math
-    reload = False
-    jupyphant_plot = jupyphant_entity.jupyphant_plot
-    for key in jupyphant_plot.RawPlotKey:
-        plot_dict = jupyphant_plot.plots[key]
-        temp_reload = False
-        if(max_points != plot_dict['max_points']):
-            plot_dict['max_points']=max_points
-            temp_reload = True
-        fig = plot_dict['fig']
-        if fig is None:
-            continue
-        x_range = fig.getXRange()
-        previous_x_range = plot_dict['x_range']
-        if previous_x_range is None or not all(math.isclose(a, b, abs_tol=1e-1) for a, b in zip(x_range, previous_x_range)):
-            plot_dict['x_range']=x_range
-            temp_reload = True
-        if(not fig.isDownscaled()):
-            temp_reload = False
-        reload = reload or temp_reload
-    if reload:
-        raw_plot(jupyphant_entity, other_changes=True)
     
 def save_selected_neo_objects(jupyphant_entity, filepath="output_file.nix"):
     from neo import Block, Segment, SpikeTrain, AnalogSignal
@@ -264,7 +160,7 @@ def save_selected_neo_objects(jupyphant_entity, filepath="output_file.nix"):
     if not filepath.endswith('.nix'):
         filepath += '.nix'
     
-    selected_ids = get_selected_neo_ids(jupyphant_entity)
+    selected_ids = jupyphant_entity.get_selected_neo_ids()
     neo_objs_to_export = [get_neo_obj_from_id(jupyphant_entity, selected_id) for selected_id in selected_ids]
 
     export_block = Block(name="Exported Data")

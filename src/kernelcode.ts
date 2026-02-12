@@ -23,12 +23,6 @@ let create_explorer_info =
 create_explorer_info(jupyphant_entity)
 `;
 
-// Call to the function that shows raw plot of selected nodes in Raw Plot-tab of the node-explorer Dockpanel
-let create_explorer_raw_plot =
-	`from jupyphant.kernelcode import create_explorer_raw_plot
-create_explorer_raw_plot(jupyphant_entity)
-`;
-
 // Call to the function that shows statistics plots of selected nodes in Statistics-tab of the node-explorer Dockpanel
 let create_explorer_statistics =
 	`from jupyphant.kernelcode import create_explorer_statistics
@@ -47,7 +41,6 @@ export const pythonCode = {
 	'setupEnv': setup_env,
 	'createTree': create_tree,
 	'createExplorerInfo': create_explorer_info,
-	'createExplorerRawPlot': create_explorer_raw_plot,
 	'createExplorerStatistics': create_explorer_statistics,
 	'updateTree': update_tree,
 };

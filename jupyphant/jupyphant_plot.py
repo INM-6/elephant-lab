@@ -37,7 +37,99 @@ class Jupyphant_plot:
                 "x_range": None,
                 "max_points": 10000
             }
-    
+
+    def raw_plot(self, other_changes=False):
+        import ipywidgets as widgets
+        from IPython.display import clear_output, display
+        selected_ids = self.jupyphant_entity.get_selected_neo_ids()
+        if not other_changes:
+            for key in self.RawPlotKey:
+                self.plots[key]['x_range']=None
+        with self.output_node_raw_plot:
+            clear_output(wait=True)
+
+            loading = widgets.HTML("⏳ <b>Rendering plots...</b>")
+            display(loading)
+
+            raw_st = self.create_rasterplot(selected_ids=selected_ids, other_changes=other_changes)
+            self.plots[self.RawPlotKey.RAW_ST]["fig"]=raw_st
+
+            clear_output(wait=True)
+
+            displayed_something = False
+            if raw_st:
+                raw_st.display()
+                displayed_something = True
+            raw_anasig = self.create_lfpplot(selected_ids=selected_ids, other_changes=other_changes)
+            self.plots[self.RawPlotKey.RAW_ANASIG]["fig"]=raw_anasig
+            if raw_anasig:
+                raw_anasig.display()
+                displayed_something = True
+            raw_imgsequence = self.create_image_sequence(selected_ids=selected_ids)
+            if raw_imgsequence:
+                raw_imgsequence.display()
+                displayed_something = True
+            if not displayed_something:
+                clear_output()
+
+    def create_explorer_raw_plot(self):
+        from IPython.display import display
+
+        def on_selected_change_raw():
+            self.raw_plot()
+
+        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_raw)
+        display(self.output_node_raw_plot)
+
+    def set_raw_plot_overlap(self, overlap):
+        reload = False
+        for key in self.RawPlotKey:
+            plot_dict = self.plots[key]
+            fig = plot_dict['fig']
+            if overlap == plot_dict['overlapping']:
+                continue
+            plot_dict['overlapping']=overlap
+            if fig is None:
+                continue
+            if overlap:
+                fig.overlap()
+            else:
+                fig.stack()
+            if fig.compress and fig.overlap_on_compress:
+                reload = True
+        if reload:
+            self.raw_plot(other_changes=True)
+
+    def update_jupyterlab_plot_theme(self, theme_name):
+        self.jupyterlab_theme = theme_name
+        for key in self.RawPlotKey:
+            fig = self.plots[key]['fig']
+            if fig is not None:
+                fig.update_jupyterlab_theme(theme_name)
+
+    def upscale_raw_plot(self, max_points):
+        import math
+        reload = False
+        for key in self.RawPlotKey:
+            plot_dict = self.plots[key]
+            temp_reload = False
+            if(max_points != plot_dict['max_points']):
+                plot_dict['max_points']=max_points
+                temp_reload = True
+            fig = plot_dict['fig']
+            if fig is None:
+                continue
+            x_range = fig.getXRange()
+            previous_x_range = plot_dict['x_range']
+            if previous_x_range is None or not all(math.isclose(a, b, abs_tol=1e-1) for a, b in zip(x_range, previous_x_range)):
+                plot_dict['x_range']=x_range
+                temp_reload = True
+            if(not fig.isDownscaled()):
+                temp_reload = False
+            reload = reload or temp_reload
+        if reload:
+            self.raw_plot(other_changes=True)
+        
     def create_rasterplot(self, selected_ids=None, other_changes=False):
         """
         Create for each top-node a rasterplot for the contained spike trains.

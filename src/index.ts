@@ -122,7 +122,8 @@ class JupyphantExtension {
 			await this.executeCodeInOutputArea(pythonCode['createTree'], this.outarea_neo_tree!, session);
 			await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, session, false);
 			await this.executeCodeInOutputArea(pythonCode['createExplorerInfo'], this.outarea_nodeexplorer_info!, session);
-			await this.executeCodeInOutputArea(pythonCode['createExplorerRawPlot'], this.outarea_nodeexplorer_raw!, session);
+			const createExplorerRawPlotCode = 'jupyphant_entity.jupyphant_plot.create_explorer_raw_plot()'
+			await this.executeCodeInOutputArea(createExplorerRawPlotCode, this.outarea_nodeexplorer_raw!, session);
 			await this.executeCodeInOutputArea(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
@@ -756,8 +757,7 @@ except Exception as e:
 			isNowChecked ? Object.assign(overlapToggle.style, checked_style) : Object.assign(overlapToggle.style, unchecked_style);
 			// Send Python command to flip the boolean
 			const code = `
-			from jupyphant.kernelcode import set_raw_plot_overlap
-			set_raw_plot_overlap(jupyphant_entity, ${isNowChecked ? "True" : "False"})
+			jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${isNowChecked ? "True" : "False"})
 			`;
 
 			// Send to kernel
@@ -773,8 +773,7 @@ except Exception as e:
 			isNowChecked ? Object.assign(darkmodeToggle.style, checked_style) : Object.assign(darkmodeToggle.style, unchecked_style);
 			// Send Python command to flip the boolean
 			const code = `
-			from jupyphant.kernelcode import update_jupyterlab_plot_theme
-			update_jupyterlab_plot_theme(jupyphant_entity, ${isNowChecked ? '"dark"' : '"white"'})
+			jupyphant_entity.jupyphant_plot.update_jupyterlab_plot_theme(${isNowChecked ? '"dark"' : '"white"'})
 			`;
 
 			// Send to kernel
@@ -793,8 +792,7 @@ except Exception as e:
 
 			// Send Python command to flip the boolean
 			const code = `
-			from jupyphant.kernelcode import upscale_raw_plot
-			upscale_raw_plot(jupyphant_entity, ${max_points})
+			jupyphant_entity.jupyphant_plot.upscale_raw_plot(${max_points})
 			`;
 
 			// Send to kernel
