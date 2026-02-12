@@ -38,6 +38,10 @@ class Jupyphant_plot:
                 "max_points": 10000,
                 "zero_based": True
             }
+        self.plots[self.RAW_IMGSEQUENCE]= {
+            "fig": None,
+            "color_grade": "Viridis"
+        }
 
     def raw_plot(self, other_changes=False):
         import ipywidgets as widgets
@@ -67,6 +71,7 @@ class Jupyphant_plot:
                 raw_anasig.display()
                 displayed_something = True
             raw_imgsequence = self.create_image_sequence(selected_ids=selected_ids)
+            self.plots[self.RAW_IMGSEQUENCE]["fig"]=raw_imgsequence
             if raw_imgsequence:
                 raw_imgsequence.display()
                 displayed_something = True
@@ -111,12 +116,27 @@ class Jupyphant_plot:
         if reload:
             self.raw_plot(other_changes=True)
 
+    def set_color_grade(self, color_grade):
+        reload = False
+        plot_dict = self.plots[self.RAW_IMGSEQUENCE]
+        if color_grade != plot_dict['color_grade']:
+            plot_dict['color_grade']=color_grade
+            fig = plot_dict['fig']
+            if fig:
+                reload = True
+        if reload:
+            self.raw_plot(other_changes=True)
+
     def update_jupyterlab_plot_theme(self, theme_name):
+        if self.jupyterlab_theme == theme_name:
+            return
         self.jupyterlab_theme = theme_name
         for key in self.RawPlotKey:
             fig = self.plots[key]['fig']
             if fig is not None:
                 fig.update_jupyterlab_theme(theme_name)
+        if self.plots[self.RAW_IMGSEQUENCE]['fig']:
+            self.raw_plot(other_changes=True)
 
     def upscale_raw_plot(self, max_points):
         import math
@@ -285,7 +305,9 @@ class Jupyphant_plot:
                 for top_node, st_list in image_sequences.items():
                     if st_list:
                         image_sequences_list += st_list
-                plotlyImageSequenceFigure = self.PlotlyImageSequenceFigure(image_sequences=image_sequences_list, theme_name=self.jupyterlab_theme)
+                plot_dict = self.plots[self.RAW_IMGSEQUENCE]
+                color_grade = plot_dict['color_grade']
+                plotlyImageSequenceFigure = self.PlotlyImageSequenceFigure(image_sequences=image_sequences_list, theme_name=self.jupyterlab_theme, color_scale=color_grade)
 
                 if selected_ids is None:
                     self.image_sequence_overview = plotlyImageSequenceFigure

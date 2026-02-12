@@ -4,7 +4,7 @@ class PlotlyImageSequenceFigure():
     from neo.core import ImageSequence
     from IPython.display import display as ipython_display
 
-    def __init__(self, image_sequences, title=None, theme_name='plotly_dark'):
+    def __init__(self, image_sequences, title=None, theme_name='plotly_dark', color_scale='Viridis'):
         """
         Creates a plotly.Heatmap with animation to display the image_sequence
         """
@@ -22,7 +22,7 @@ class PlotlyImageSequenceFigure():
             self.figs.append(self.go.Figure(
                 data=self.go.Heatmap(
                     z=image_sequence[0].magnitude,  # first frame
-                    colorscale='Viridis',
+                    colorscale=color_scale,
                     zmin=self.np.min(image_sequence.magnitude),
                     zmax=self.np.max(image_sequence.magnitude)
                 ),
@@ -45,7 +45,7 @@ class PlotlyImageSequenceFigure():
                     template=template
                 ),
                 frames=[self.go.Frame(
-                    data=self.go.Heatmap(z=image_sequence[k].magnitude, colorscale='Viridis'),
+                    data=self.go.Heatmap(z=image_sequence[k].magnitude, colorscale=color_scale),
                     name=str(k)
                 ) for k in range(num_frames)]
             ))

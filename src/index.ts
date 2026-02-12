@@ -726,7 +726,7 @@ except Exception as e:
 		const zeroBasedToggle = document.createElement('label');
 		zeroBasedToggle.dataset.checked = 'true';
 		Object.assign(zeroBasedToggle.style, checked_style);
-		zeroBasedToggle.innerHTML = `<i class="fa fa-caret-square-o-left"></i> ZeroBased`;
+		zeroBasedToggle.innerHTML = `<i class="fa fa-caret-square-o-left"></i> Zero Based`;
 
 		const darkmodeToggle = document.createElement('label');
 		darkmodeToggle.dataset.checked = 'true';
@@ -748,12 +748,49 @@ except Exception as e:
 		numberInput.value = "10000";
 		numberInput.min = `${min_max_points}`;
 		numberInput.step = "10000";
+		numberInput.style.width = "80px"
 		numberInput.style.padding = "2px 6px";
 		numberInput.style.borderRadius = "4px";
 		numberInput.style.border = "1px solid #555";
 		numberInput.style.background = "var(--jp-layout-color1)";
 		numberInput.style.color = "var(--jp-ui-font-color1)";
 		numberInput.title = "Set Max Points";
+
+		// Label for dropdown
+		const colorGradeLabel = document.createElement('label');
+		colorGradeLabel.innerHTML = `<i class="fa fa-palette"></i> Color Grade`;
+		Object.assign(colorGradeLabel.style, unchecked_style);
+
+		// Dropdown select
+		const colorGradeSelect = document.createElement('select');
+		colorGradeSelect.style.padding = "2px 6px";
+		colorGradeSelect.style.borderRadius = "4px";
+		colorGradeSelect.style.border = "1px solid #555";
+		colorGradeSelect.style.background = "var(--jp-layout-color1)";
+		colorGradeSelect.style.color = "var(--jp-ui-font-color1)";
+		colorGradeSelect.title = "Select Color Grade";
+
+		// Add options
+		const colorGrades = [
+			"Viridis",
+			"Plasma",
+			"Inferno",
+			"Magma",
+			"Cividis",
+			"Turbo"
+		];
+
+		for (const grade of colorGrades) {
+			const opt = document.createElement("option");
+			opt.value = grade;
+			opt.textContent = grade;
+			colorGradeSelect.appendChild(opt);
+		}
+
+		// Default
+		colorGradeSelect.value = "Viridis";
+		colorGradeSelect.style.fontWeight = "bold";
+		colorGradeSelect.style.cursor = "pointer";
 
 
 		overlapToggle.onclick = () => {
@@ -823,12 +860,29 @@ except Exception as e:
 			future.onIOPub = this.defaultOutputErrorListerner;
 		};
 
+		colorGradeSelect.onchange = () => {
+			const grade = colorGradeSelect.value;
+			console.log(grade);
+
+			const code = `jupyphant_entity.jupyphant_plot.set_color_grade("${grade}")`;
+
+			const future = session.session!.kernel!.requestExecute({
+				code,
+				store_history: false
+			});
+
+			future.onIOPub = this.defaultOutputErrorListerner;
+		};
+
+
 		buttonContainer.appendChild(darkmodeToggle);
 		buttonContainer.appendChild(overlapToggle);
 		buttonContainer.appendChild(zeroBasedToggle);
 		buttonContainer.appendChild(upscaleButton);
 		buttonContainer.appendChild(numberLabel);
 		buttonContainer.appendChild(numberInput);
+		buttonContainer.appendChild(colorGradeLabel);
+		buttonContainer.appendChild(colorGradeSelect);
 		raw_plot_widget.node.prepend(buttonContainer);
 	}
 
