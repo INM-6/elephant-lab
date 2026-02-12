@@ -1,27 +1,30 @@
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from IPython.display import display
-import warnings
-import quantities as pq
-import numpy as np
+class PlotlyUtils:
+    import quantities as pq
 
-def can_convert_units(unit, convert_unit):
-    """
-    Returns 0 if no conversion is needed
-    Returns -1 if it is not possible to convert
-    Returns 1 if it can be converted
-    """
-    if unit == convert_unit:
-        return 0
-    if unit.simplified.dimensionality != convert_unit.simplified.dimensionality:
-        return -1
-    return 1
-    
-def convert_to_other_units(val, unit, convert_unit):
-    q = pq.Quantity(val, unit)
-    return q.rescale(convert_unit).magnitude
+    def can_convert_units(unit, convert_unit):
+        """
+        Returns 0 if no conversion is needed
+        Returns -1 if it is not possible to convert
+        Returns 1 if it can be converted
+        """
+        if unit == convert_unit:
+            return 0
+        if unit.simplified.dimensionality != convert_unit.simplified.dimensionality:
+            return -1
+        return 1
+        
+    def convert_to_other_units(val, unit, convert_unit):
+        q = PlotlyUtils.pq.Quantity(val, unit)
+        return q.rescale(convert_unit).magnitude
 
 class PlotlyGraphFigure:
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    from IPython.display import display as ipython_display
+    import warnings
+    from ipywidgets import HBox, Layout, Output, FloatRangeSlider
+
+
     def __init__(self, data, overlapping=False, title=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=True, max_points=10000):
         """
         Creates a Plotly figure and adds traces from the provided data.
@@ -47,10 +50,10 @@ class PlotlyGraphFigure:
         if self.nGraphs > 2:
             self.height = 800
         if self.compress:
-            self.fig = go.FigureWidget(go.Figure())
+            self.fig = self.go.FigureWidget(self.go.Figure())
             self.ticktext=[]
         else:
-            self.fig = go.FigureWidget(make_subplots(
+            self.fig = self.go.FigureWidget(PlotlyGraphFigure.make_subplots(
                 rows=self.nGraphs,
                 cols=1,
                 vertical_spacing=self.vertical_spacing,
@@ -142,7 +145,7 @@ class PlotlyGraphFigure:
                 if callable(marker_settings["size"]):
                     marker_settings["size"] = marker_settings["size"](self.getSubplotHeight())
                 
-                trace  = go.Scattergl(
+                trace  = self.go.Scattergl(
                     x=d.x,
                     y=d.y,
                     name=getattr(d, 'name', 'Trace'),
@@ -184,7 +187,7 @@ class PlotlyGraphFigure:
                             else:
                                 self.hide_legend = d.use_name_as_ticklabels
             except Exception as e:
-                warnings.warn(f"Failed to add trace '{d.name}': {e}")
+                self.warnings.warn(f"Failed to add trace '{d.name}': {e}")
     
     def change_height_after_render(self, height):
         """
@@ -281,12 +284,11 @@ class PlotlyGraphFigure:
                         )
                     )
                     self.update_layout_options_dict(axis_key, xaxis_options)
-        import ipywidgets as widgets
 
         y_slider_height = self.calculate_y_slider_height()
 
         totalrange = [self.data.minY, self.data.maxY]
-        self.y_slider = widgets.FloatRangeSlider(
+        self.y_slider = self.FloatRangeSlider(
             value=totalrange,
             min=self.data.minY,
             max=self.data.maxY,
@@ -375,11 +377,11 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x, text, unit in zip(xs, texts, units):
-            can_convert = can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
+            can_convert = PlotlyUtils.can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
             if can_convert == -1:
                 continue
             if can_convert == 1:
-                x = convert_to_other_units(x, unit=unit, convert_unit=self.data.common_units_x)
+                x = PlotlyUtils.convert_to_other_units(x, unit=unit, convert_unit=self.data.common_units_x)
             shapes.append(dict(
                 type="line",
                 x0=x,
@@ -476,12 +478,12 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x0, x1, text, unit in zip(x0s, x1s, texts, units):
-            can_convert = can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
+            can_convert = PlotlyUtils.can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
             if can_convert == -1:
                 continue
             if can_convert == 1:
-                x0 = convert_to_other_units(x0, unit=unit, convert_unit=self.data.common_units_x)
-                x1 = convert_to_other_units(x1, unit=unit, convert_unit=self.data.common_units_x)
+                x0 = PlotlyUtils.convert_to_other_units(x0, unit=unit, convert_unit=self.data.common_units_x)
+                x1 = PlotlyUtils.convert_to_other_units(x1, unit=unit, convert_unit=self.data.common_units_x)
             shapes.append(dict(
                 type="rect",
                 x0=x0,
@@ -611,16 +613,15 @@ class PlotlyGraphFigure:
     def display(self):
         """Displays the Plotly figure in a Jupyter notebook."""
         if self.fig:
-            from ipywidgets import HBox, Layout, Output
-            output_fig = Output(layout={'width': "100%", 'height': 'auto', 'min_width': '0px'})
+            output_fig = self.Output(layout={'width': "100%", 'height': 'auto', 'min_width': '0px'})
             with output_fig:
-                display(self.fig)
-            hbox = HBox([self.y_slider, output_fig], 
-                layout=Layout(
+                PlotlyGraphFigure.ipython_display(self.fig)
+            hbox = self.HBox([self.y_slider, output_fig], 
+                layout=self.Layout(
                     width='100%',
                 ),
             )
-            display(hbox)
+            PlotlyGraphFigure.ipython_display(hbox)
 
     def getSubplotHeight(self, height=None):
         """Returns the height of each subplot in pixels."""
@@ -641,6 +642,8 @@ class PlotlyGraphFigure:
         return self.data.is_downscaled
     
 class PlotlyGraphDataType:
+    import warnings
+
     def __init__(self, data, **kwargs):
         if data is None:
             self.x = [0]
@@ -705,10 +708,13 @@ class PlotlyGraphDataType:
                 self.y = list(self.y)
 
         except Exception as e:
-            warnings.warn(f"Error extracting data for trace '{self.name}': {e}")
+            self.warnings.warn(f"Error extracting data for trace '{self.name}': {e}")
             self.x, self.y = None, None
 
 class PlotlyGraphDataTypeList():
+    import warnings
+    import numpy as np
+
     def __init__(self, data):
         self.data_list = []
         self.extract_data(data)
@@ -721,14 +727,14 @@ class PlotlyGraphDataTypeList():
                         d = PlotlyGraphDataType(d)
                     self.data_list.append(d)
                 except Exception as e:
-                    warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
+                    self.warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
         else:
             try:
                 if not isinstance(d, PlotlyGraphDataType):
                     d = PlotlyGraphDataType(d)
                 self.data_list = [d]
             except Exception as e:
-                warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
+                self.warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
 
     def is_trace_list(self,data_list):
         """
@@ -764,6 +770,7 @@ class PlotlyGraphDataTypeList():
         Decreases number of points if there are to many
         sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY
         """
+
         nPoints = 0
         first = True
         common_units_x = None
@@ -771,14 +778,14 @@ class PlotlyGraphDataTypeList():
         for data in self.data_list:
             units_x = None
             units_y = None
-            x_values = np.asarray(data.x)
-            y_values = np.asarray(data.y)
+            x_values = self.np.asarray(data.x)
+            y_values = self.np.asarray(data.y)
 
             # Check if x and y are valid
             x_length = len(x_values)
             y_length = len(y_values)
             if data.x is None or data.y is None or x_length == 0 or y_length == 0 or x_length != y_length:
-                warnings.warn(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
+                self.warnings.warn(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
                 continue
 
             if first:
@@ -791,11 +798,11 @@ class PlotlyGraphDataTypeList():
                 #Try to convert to common_units
                 if common_units_x is not None and hasattr(data, "units_x"):
                     units_x = data.units_x
-                    can_convert = can_convert_units(units_x, common_units_x)
+                    can_convert = PlotlyUtils.can_convert_units(units_x, common_units_x)
                     if can_convert == -1:
                         common_units_x = None
                     elif can_convert == 1:
-                        x_values= convert_to_other_units(x_values, units_x, common_units_x)
+                        x_values= PlotlyUtils.convert_to_other_units(x_values, units_x, common_units_x)
                         units_x = common_units_x
                 else:
                     common_units_x = None
@@ -809,7 +816,7 @@ class PlotlyGraphDataTypeList():
 
             x_length = len(x_values)
             if x_length == 0:
-                warnings.warn(f"Skipping trace '{data.name}' because there is no data in the range")
+                self.warnings.warn(f"Skipping trace '{data.name}' because there is no data in the range")
                 continue
             filtered.append(data)
 
@@ -821,14 +828,14 @@ class PlotlyGraphDataTypeList():
             data.y = y_values
 
         if len(filtered) == 0:
-            warnings.warn("There is no valid data selected")
+            self.warnings.warn("There is no valid data selected")
             self.data_list = [PlotlyGraphDataType(None)]
             return
         self.data_list = filtered
         self.common_units_x = common_units_x
 
         #Calculate how many points to skip
-        skipFactor = int(np.ceil(nPoints / max_points))
+        skipFactor = int(self.np.ceil(nPoints / max_points))
         skipFactor = max(skipFactor, 1)
         max_points_per_graph = max_points / len(self.data_list)
 
@@ -859,11 +866,11 @@ class PlotlyGraphDataTypeList():
             else:
                 if common_units_y is not None and hasattr(data, "units_y"):
                     units_y = data.units_y
-                    can_convert = can_convert_units(units_y, common_units_y)
+                    can_convert = PlotlyUtils.can_convert_units(units_y, common_units_y)
                     if can_convert == -1:
                         common_units_y = None
                     elif can_convert == 1:
-                        y_values= convert_to_other_units(y_values, units_y, common_units_y)
+                        y_values= PlotlyUtils.convert_to_other_units(y_values, units_y, common_units_y)
                         units_y = common_units_y
                 else:
                     common_units_y = None

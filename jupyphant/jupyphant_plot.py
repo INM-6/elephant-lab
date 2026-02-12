@@ -1,8 +1,8 @@
-from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
-from .PlotlyGraphFigure import PlotlyGraphFigure
-from .PlotlyGraphDataTypes import *
-
 class Jupyphant_plot:
+    from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
+    from .PlotlyGraphFigure import PlotlyGraphFigure
+    from .PlotlyGraphDataTypes import SpikeTrainRasterPlot, AnalogSignalLFPPlotList, EventAnnotations, EpochIntervals, IrregularlySampledSignalPlotList
+
     from neo import SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence
     from enum import Enum
     from ipywidgets import Output
@@ -66,22 +66,22 @@ class Jupyphant_plot:
                 for top_node, st_list in spiketrains.items():
                     if st_list:
                         for st in st_list:
-                            data.append(SpikeTrainRasterPlot(st))
+                            data.append(self.SpikeTrainRasterPlot(st))
                 events = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
                 event_annotations = None
                 n_events = sum(1 for v in events.values() if len(v) > 0)
                 if n_events > 0:
-                    event_annotations = EventAnnotations(events)
+                    event_annotations = self.EventAnnotations(events)
                 epochs = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
                 epoch_intervals = None
                 n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
                 if n_epochs > 0:
-                    epoch_intervals = EpochIntervals(epochs)
+                    epoch_intervals = self.EpochIntervals(epochs)
                 plot_dict = self.plots[self.RawPlotKey.RAW_ST]
                 overlapping = plot_dict['overlapping']
                 x_range = plot_dict['x_range']
                 max_points = plot_dict['max_points']
-                plotlyGraphFigure = PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyphant_entity.jupyterlab_theme, overlap_on_compress=False, max_points=max_points)
+                plotlyGraphFigure = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyphant_entity.jupyterlab_theme, overlap_on_compress=False, max_points=max_points)
 
                 if selected_ids is None:
                     self.spiketrain_overview = plotlyGraphFigure
@@ -124,9 +124,9 @@ class Jupyphant_plot:
             if n_analog_subplots > 0 or n_irregular_sublplots > 0:
                 plotly_data = None
                 if n_analog_subplots > 0:
-                    plotly_data = AnalogSignalLFPPlotList(analogsignals)
+                    plotly_data = self.AnalogSignalLFPPlotList(analogsignals)
                 if n_irregular_sublplots > 0:
-                    irregular_plotly_data = IrregularlySampledSignalPlotList(irregularsignals)
+                    irregular_plotly_data = self.IrregularlySampledSignalPlotList(irregularsignals)
                     if plotly_data is None:
                         plotly_data = irregular_plotly_data
                     else:
@@ -135,18 +135,18 @@ class Jupyphant_plot:
                 event_annotations = None
                 n_events = sum(1 for v in events.values() if len(v) > 0)
                 if n_events > 0:
-                    event_annotations = EventAnnotations(events)
+                    event_annotations = self.EventAnnotations(events)
                 epochs = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
                 epoch_intervals = None
                 n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
                 if n_epochs > 0:
-                    epoch_intervals = EpochIntervals(epochs)
+                    epoch_intervals = self.EpochIntervals(epochs)
                 overlapping = False
                 plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
                 overlapping = plot_dict['overlapping']
                 x_range = plot_dict['x_range']
                 max_points = plot_dict['max_points']
-                plotlyGraphFigure = PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyphant_entity.jupyterlab_theme, max_points=max_points)
+                plotlyGraphFigure = self.PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyphant_entity.jupyterlab_theme, max_points=max_points)
                 if selected_ids is None:
                     self.signal_overview = plotlyGraphFigure
                 return plotlyGraphFigure
@@ -180,7 +180,7 @@ class Jupyphant_plot:
                 for top_node, st_list in image_sequences.items():
                     if st_list:
                         image_sequences_list += st_list
-                plotlyImageSequenceFigure = PlotlyImageSequenceFigure(image_sequences=image_sequences_list, theme_name=self.jupyphant_entity.jupyterlab_theme)
+                plotlyImageSequenceFigure = self.PlotlyImageSequenceFigure(image_sequences=image_sequences_list, theme_name=self.jupyphant_entity.jupyterlab_theme)
 
                 if selected_ids is None:
                     self.image_sequence_overview = plotlyImageSequenceFigure

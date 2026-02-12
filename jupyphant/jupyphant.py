@@ -7,8 +7,6 @@ import time
 
 import joblib
 
-from .jupyphant_plot import Jupyphant_plot
-
 import neo
 
 # neo abbreviations and font-awesome icons
@@ -65,6 +63,8 @@ NEO_OBJS_TO_SHOW = [
 class Jupyphant:
     # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
+    from .jupyphant_plot import Jupyphant_plot
+
     import json
     # Dealing with the Python kernel's namespace, e.g.,
     # listing all defined variables
@@ -141,7 +141,7 @@ class Jupyphant:
         self.last_known_hashes = []
         self.hash_cache = {}
         self.jupyterlab_theme = 'plotly_dark'
-        self.jupyphant_plot = Jupyphant_plot(self)
+        self.jupyphant_plot = self.Jupyphant_plot(self)
 
     def names_for(self, obj):
         for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():

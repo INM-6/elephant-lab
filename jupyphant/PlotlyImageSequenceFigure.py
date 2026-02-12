@@ -2,6 +2,7 @@ class PlotlyImageSequenceFigure():
     import plotly.graph_objects as go
     import numpy as np
     from neo.core import ImageSequence
+    from IPython.display import display as ipython_display
 
     def __init__(self, image_sequences, title=None, theme_name='plotly_dark'):
         """
@@ -50,6 +51,5 @@ class PlotlyImageSequenceFigure():
             ))
 
     def display(self):
-        from IPython.display import display
         for fig in self.figs:
-            display(fig)
+            PlotlyImageSequenceFigure.ipython_display(fig)
