@@ -653,6 +653,26 @@ class Jupyphant:
             if len(collected_neo_objs[key]) == 0:
                 del collected_neo_objs[key]
         return collected_neo_objs
+    
+    def _get_selected_neo_objects_by_class(self, neo_class_dict):
+        """
+        :param neo_class_dict: {key: neo.class}
+        Changes neo_class_dict to: {key: set(selected instances of neo.class)}
+        """
+
+        # Extract actual neo objects from selected nodes
+        selected_neo_objs = [
+            self.map_ipytree_node_id_to_neo_obj.get(node._id)
+            for node in self.selected_neo_objects
+            if node._id in self.map_ipytree_node_id_to_neo_obj
+        ]
+
+        # Classify them
+        for key, cls in neo_class_dict.items():
+            neo_class_dict[key] = [obj for obj in selected_neo_objs if isinstance(obj, cls)]
+
+        return neo_class_dict
+        
 
     def _get_neo_obj_hash_and_node_name_of_selected_nodes(self):
         return {self.get_neo_hash(self.map_ipytree_node_id_to_neo_obj[node._id]): node.name

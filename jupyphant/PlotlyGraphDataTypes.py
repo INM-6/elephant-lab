@@ -77,55 +77,34 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                 ))
 
     def extract_data(self, data):
-        """Extracts AnalogSignalLFPPlotData from a dict containing AnalogSignal Data"""
+        """Extracts AnalogSignalLFPPlotData from a list of AnalogSignals"""
         max_duration_limit = 10 * self.pq.s 
+    
+        durations = [(sig.t_stop - sig.t_start) for sig in data]
+        
+        min_available_duration = min(durations)
 
-        subplot_col = 1
-        for i, top_node in enumerate(data.keys()):
-            raw_signals = data[top_node]
-            
-            if raw_signals:
-                durations = [(sig.t_stop - sig.t_start) for sig in raw_signals]
-                
-                min_available_duration = min(durations)
+        cut_duration = min(max_duration_limit, min_available_duration)
 
-                cut_duration = min(max_duration_limit, min_available_duration)
+        sliced_signals = [
+            sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
+            for sig in data
+        ]
 
-                sliced_signals = [
-                    sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
-                    for sig in raw_signals
-                ]
-
-                plot_times = sliced_signals[0].times - sliced_signals[0].t_start
-                
-                self.plot_lfp(
-                    sliced_signals, 
-                    times=plot_times,
-                    names=[sig.name for sig in raw_signals]
-                )
-                subplot_col += 1
-
+        plot_times = sliced_signals[0].times - sliced_signals[0].t_start
+        
+        self.plot_lfp(
+            sliced_signals, 
+            times=plot_times,
+            names=[sig.name for sig in data]
+        )
 
 class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
-    import quantities as pq
     class IrregularlySampledSignalPlot(PlotlyGraphDataType):
-        import numpy as np
         def extract_data(self, irregular_signal):
-            """Extracts IrregularlySampledSignalPlotData from a SpikeTrain"""
+            """Extracts IrregularlySampledSignalPlotData from a IrregularlySampledSignal"""
             self.name = getattr(irregular_signal,'name', 'IrregularSignal')
             self.mode = 'markers+lines'
-
-            """signal = irregular_signal.magnitude.flatten()
-            times = irregular_signal.times
-
-            min_val = self.np.min(signal)
-            max_val = self.np.max(signal)
-            range_val = max_val - min_val
-
-            if range_val > 0:
-                norm_data = (signal - min_val) / range_val
-            else:
-                norm_data = signal - min_val"""
 
             self.x=irregular_signal.times.magnitude.flatten()
             self.y=irregular_signal.magnitude.flatten()
@@ -133,11 +112,9 @@ class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
             self.units_y = irregular_signal.units
 
     def extract_data(self, data):
-        """Extracts IrregularlySampledSignalData from a dict containing IrregularlySampledSignal Data"""
-        for top_node, iss_list in data.items():
-            if iss_list:
-                for iss in iss_list:
-                    self.data_list.append(self.IrregularlySampledSignalPlot(iss))
+        """Extracts IrregularlySampledSignalData from a list of IrregularlySampledSignals"""
+        for iss in data:
+            self.data_list.append(self.IrregularlySampledSignalPlot(iss))
 
 
 class EventAnnotations(PlotlyGraphAnnotations):
@@ -147,13 +124,11 @@ class EventAnnotations(PlotlyGraphAnnotations):
         x=[]
         text=[]
         unit=[]
-        for top_node, event_list in events.items():
-            if event_list:
-                for event in event_list:
-                    x.append(event.times.magnitude)
-                    text.append(event.labels)
-                    n = len(event.times.magnitude)
-                    unit.append(self.np.full(n, event.times.units, dtype=object))
+        for event in events:
+            x.append(event.times.magnitude)
+            text.append(event.labels)
+            n = len(event.times.magnitude)
+            unit.append(self.np.full(n, event.times.units, dtype=object))
         super().__init__(self.np.concatenate(x), self.np.concatenate(text), self.np.concatenate(unit))
 
 class EpochIntervals(PlotlyGraphAnnotationIntervals):
@@ -164,14 +139,12 @@ class EpochIntervals(PlotlyGraphAnnotationIntervals):
         duration=[]
         text=[]
         unit=[]
-        for top_node, epoch_list in epochs.items():
-            if epoch_list:
-                for epoch in epoch_list:
-                    x.append(epoch.times.magnitude)
-                    duration.append(epoch.durations.magnitude)
-                    text.append(epoch.labels)
-                    n = len(epoch.times.magnitude)
-                    unit.append(self.np.full(n, epoch.times.units, dtype=object))
+        for epoch in epochs:
+            x.append(epoch.times.magnitude)
+            duration.append(epoch.durations.magnitude)
+            text.append(epoch.labels)
+            n = len(epoch.times.magnitude)
+            unit.append(self.np.full(n, epoch.times.units, dtype=object))
         x = self.np.concatenate(x)
         duration = self.np.concatenate(duration)
         super().__init__(x, x+duration, self.np.concatenate(text), self.np.concatenate(unit))

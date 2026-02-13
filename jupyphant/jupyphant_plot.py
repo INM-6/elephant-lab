@@ -5,13 +5,23 @@ class Jupyphant_plot:
 
     from neo import SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence
     from enum import Enum
-    from ipywidgets import Output
+    import math
+    from ipywidgets import Output, HTML
+    from IPython.display import clear_output, display
+
+    class NeoKey(Enum):
+        spiketrain = 'spiketrain'
+        analogsignal = 'analogsignal'
+        irregularsignal = 'irregularsignal'
+        event = 'event'
+        epoch = 'epoch'
+        imagesequence = 'imagesequence'
 
     class RawPlotKey(Enum):
         RAW_ST = 'raw_st'
         RAW_ANASIG = 'raw_anasig'
 
-    RAW_IMGSEQUENCE = 'raw_imgsequence'
+    PLOT_IMGSEQUENCE = 'raw_imgsequence'
 
     def __init__(self, jupyphant_entity):
         """
@@ -19,82 +29,114 @@ class Jupyphant_plot:
         Is a Class to minimize the amount of name clutter in the notebook
         """ 
         self.jupyphant_entity = jupyphant_entity
-        self.output_node_raw_plot = self.Output(layout={'width': "100%", 'height': 'auto'})
-        # Plots are saved in order not to require recreation at every cell execution
-        self.spiketrain_overview = None
-        self.spiketrains_hash = None
-        self.signal_overview = None
-        self.analogsignals_hash = None
-        self.irregularsignals_hash = None
-        self.image_sequence_overview = None
-        self.image_sequences_hash = None
+        self.previous_neo_object_dict = {key: [] for key in self.NeoKey}
         self.jupyterlab_theme = 'plotly_dark'
         self.plots = {}
+
+        #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
         for key in self.RawPlotKey:
             self.plots[key] = {
-                "fig": None,
                 "overlapping": False,
                 "x_range": None,
                 "max_points": 10000,
                 "zero_based": True
             }
-        self.plots[self.RAW_IMGSEQUENCE]= {
-            "fig": None,
+        self.plots[self.PLOT_IMGSEQUENCE]= {
             "color_grade": "Viridis"
         }
 
-    def raw_plot(self, other_changes=False):
-        import ipywidgets as widgets
-        from IPython.display import clear_output, display
-        selected_ids = self.jupyphant_entity.get_selected_neo_ids()
-        if not other_changes:
+        # Add all required options to each plot:
+        #   - fig: a wrapper of the figure with extra functionality (needs fig.display())
+        #   - output: the output area where the figure is displayed;
+        #             each figure has its own output so it can be cleared separately
+        #   - changed: True if any value in the dict has changed, False otherwise;
+        #              used to track if changes where by selecting different nodes or changing #              the settings (e.g., overlap)
+        for plot in self.plots.values():
+            output = self.Output(layout={'width': "100%", 'height': 'auto'})
+            plot.update({
+                "fig": None,
+                "output": output,
+                "changed": False,
+            })
+
+    def raw_plot(self):
+        neo_object_dict = None
+        selection_changed = not any(v["changed"] for v in self.plots.values())
+        if selection_changed:
+            neo_object_dict = {
+                self.NeoKey.spiketrain: self.SpikeTrain,
+                self.NeoKey.analogsignal: self.AnalogSignal,
+                self.NeoKey.irregularsignal: self.IrregularlySampledSignal,
+                self.NeoKey.event: self.Event,
+                self.NeoKey.epoch: self.Epoch,
+                self.NeoKey.imagesequence: self.ImageSequence
+            }
+            self.jupyphant_entity._get_selected_neo_objects_by_class(neo_object_dict)
+            change_dict = {}
+            for key, current_list in neo_object_dict.items():
+                previous_list = self.previous_neo_object_dict[key]
+                change_dict[key] = { self.jupyphant_entity.get_neo_hash(o) for o in current_list
+                } != {
+                    self.jupyphant_entity.get_neo_hash(o) for o in previous_list
+                }
+            self.previous_neo_object_dict = neo_object_dict
+
             for key in self.RawPlotKey:
                 self.plots[key]['x_range']=None
-        with self.output_node_raw_plot:
-            clear_output(wait=True)
 
-            loading = widgets.HTML("⏳ <b>Rendering plots...</b>")
-            display(loading)
+        empty_dict = {}
+        for key, current_set in self.previous_neo_object_dict.items():
+            empty_dict[key] = len(current_set) == 0
 
-            raw_st = self.create_rasterplot(selected_ids=selected_ids, other_changes=other_changes)
-            self.plots[self.RawPlotKey.RAW_ST]["fig"]=raw_st
+        def create_plot(plot_key, plot_method, primary_keys, secondary_keys=[]):
+            if not isinstance(primary_keys, list):
+                primary_keys = [primary_keys]
+            if not isinstance(secondary_keys, list):
+                secondary_keys = [secondary_keys]
 
-            clear_output(wait=True)
+            plot_dict = self.plots[plot_key]
+            if all(empty_dict[k] for k in primary_keys):
+                if plot_dict["fig"] is not None:
+                    plot_dict["fig"]=None
+                    with plot_dict["output"]:
+                        Jupyphant_plot.clear_output()
+            else:
+                all_keys = primary_keys + secondary_keys
+                if plot_dict["changed"] or (selection_changed and any(change_dict[k] for k in all_keys)):
+                    with plot_dict["output"]:
+                        if plot_dict["fig"] is not None:
+                            Jupyphant_plot.clear_output(wait=True)
+                        loading = self.HTML("⏳ <b>Rendering plots...</b>")
+                        Jupyphant_plot.display(loading)
+                        Jupyphant_plot.clear_output(wait=True)
+                        plot_kwargs = {
+                            key.value: self.previous_neo_object_dict[key]
+                            for key in all_keys if not empty_dict[key]
+                        }
+                        fig = plot_method(**plot_kwargs)
+                        plot_dict["fig"]=fig
+                        fig.display()
+            plot_dict["changed"] = False
 
-            displayed_something = False
-            if raw_st:
-                raw_st.display()
-                displayed_something = True
-            raw_anasig = self.create_lfpplot(selected_ids=selected_ids, other_changes=other_changes)
-            self.plots[self.RawPlotKey.RAW_ANASIG]["fig"]=raw_anasig
-            if raw_anasig:
-                raw_anasig.display()
-                displayed_something = True
-            raw_imgsequence = self.create_image_sequence(selected_ids=selected_ids)
-            self.plots[self.RAW_IMGSEQUENCE]["fig"]=raw_imgsequence
-            if raw_imgsequence:
-                raw_imgsequence.display()
-                displayed_something = True
-            if not displayed_something:
-                clear_output()
+        create_plot(self.RawPlotKey.RAW_ST, self.create_rasterplot, self.NeoKey.spiketrain, [self.NeoKey.event, self.NeoKey.epoch])
+
+        create_plot(self.RawPlotKey.RAW_ANASIG, self.create_lfpplot, [self.NeoKey.analogsignal, self.NeoKey.irregularsignal], [self.NeoKey.event, self.NeoKey.epoch])
+
+        create_plot(self.PLOT_IMGSEQUENCE, self.create_image_sequence, self.NeoKey.imagesequence)
 
     def create_explorer_raw_plot(self):
-        from IPython.display import display
-
-        def on_selected_change_raw():
-            self.raw_plot()
-
-        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_raw)
-        display(self.output_node_raw_plot)
+        for plot_dict in self.plots.values():
+            Jupyphant_plot.display(plot_dict["output"])
+        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self.raw_plot)
 
     def set_raw_plot_overlap(self, overlap):
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
-            fig = plot_dict['fig']
             if overlap == plot_dict['overlapping']:
                 continue
             plot_dict['overlapping']=overlap
+            fig = plot_dict['fig']
             if fig is None:
                 continue
             if overlap:
@@ -102,9 +144,10 @@ class Jupyphant_plot:
             else:
                 fig.stack()
             if fig.compress and fig.overlap_on_compress:
+                plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot(other_changes=True)
+            self.raw_plot()
     
     def set_zero_based(self, zero_based):
         reload = False
@@ -112,20 +155,25 @@ class Jupyphant_plot:
             plot_dict = self.plots[key]
             if zero_based != plot_dict['zero_based']:
                 plot_dict['zero_based']=zero_based
+                fig = plot_dict['fig']
+                if fig is None:
+                    continue
+                plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot(other_changes=True)
+            self.raw_plot()
 
     def set_color_grade(self, color_grade):
         reload = False
-        plot_dict = self.plots[self.RAW_IMGSEQUENCE]
+        plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         if color_grade != plot_dict['color_grade']:
             plot_dict['color_grade']=color_grade
             fig = plot_dict['fig']
             if fig:
+                plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot(other_changes=True)
+            self.raw_plot()
 
     def update_jupyterlab_plot_theme(self, theme_name):
         if self.jupyterlab_theme == theme_name:
@@ -135,11 +183,12 @@ class Jupyphant_plot:
             fig = self.plots[key]['fig']
             if fig is not None:
                 fig.update_jupyterlab_theme(theme_name)
-        if self.plots[self.RAW_IMGSEQUENCE]['fig']:
-            self.raw_plot(other_changes=True)
+        plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
+        if plot_dict['fig'] is not None:
+            plot_dict['changed']=True
+            self.raw_plot()
 
     def upscale_raw_plot(self, max_points):
-        import math
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
@@ -152,14 +201,15 @@ class Jupyphant_plot:
                 continue
             x_range = fig.getXRange()
             previous_x_range = plot_dict['x_range']
-            if previous_x_range is None or not all(math.isclose(a, b, abs_tol=1e-1) for a, b in zip(x_range, previous_x_range)):
+            if previous_x_range is None or not all(self.math.isclose(a, b, abs_tol=1e-1) for a, b in zip(x_range, previous_x_range)):
                 plot_dict['x_range']=x_range
                 temp_reload = True
             if(not fig.isDownscaled()):
                 temp_reload = False
+            plot_dict['changed']=temp_reload
             reload = reload or temp_reload
         if reload:
-            self.raw_plot(other_changes=True)
+            self.raw_plot()
     
     def reset_scale(self):
         reload = False
@@ -172,160 +222,42 @@ class Jupyphant_plot:
             fig = plot_dict['fig']
             if fig is None:
                 continue
+            plot_dict['changed']=True
             reload = reload or temp_reload
         if reload:
-            self.raw_plot(other_changes=True)
+            self.raw_plot()
         
-    def create_rasterplot(self, selected_ids=None, other_changes=False):
-        """
-        Create for each top-node a rasterplot for the contained spike trains.
+    def create_rasterplot(self, spiketrain=None, event=None, epoch=None):
+        data = [self.SpikeTrainRasterPlot(st) for st in spiketrain]
+        event_annotations = self.EventAnnotations(event) if event is not None else None
+        epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
+        plot_dict = self.plots[self.RawPlotKey.RAW_ST]
+        overlapping = plot_dict['overlapping']
+        x_range = plot_dict['x_range']
+        max_points = plot_dict['max_points']
+        zero_based = plot_dict['zero_based']
+        return self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
 
-        Called at every cell execution
-        """
-        spiketrains = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
-                                                                          neo_class=self.SpikeTrain)
-        # compare contents of spiketrains per top node
-        spiketrains_unchanged = True
-        spiketrains_hash = self.jupyphant_entity.get_neo_hash(spiketrains, hash_name='sha1')
-        if self.spiketrains_hash is None:
-            self.spiketrains_hash = spiketrains_hash
-        else:
-            if self.spiketrains_hash != spiketrains_hash:
-                spiketrains_unchanged = False
-
-        # Return pre-existing rasterplot if content of spiketrains has NOT changed
-        if (spiketrains_unchanged) and (self.spiketrain_overview is not None) and (selected_ids is None) and (not other_changes):
-            return self.spiketrain_overview
-        # Otherwise, create new plot
-        else:
-            n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
-            if n_subplots > 0:
-                #subplot_titles = [key for key in spiketrains.keys() if spiketrains[key]]
-                data = []
-                for top_node, st_list in spiketrains.items():
-                    if st_list:
-                        for st in st_list:
-                            data.append(self.SpikeTrainRasterPlot(st))
-                events = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
-                event_annotations = None
-                n_events = sum(1 for v in events.values() if len(v) > 0)
-                if n_events > 0:
-                    event_annotations = self.EventAnnotations(events)
-                epochs = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
-                epoch_intervals = None
-                n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
-                if n_epochs > 0:
-                    epoch_intervals = self.EpochIntervals(epochs)
-                plot_dict = self.plots[self.RawPlotKey.RAW_ST]
-                overlapping = plot_dict['overlapping']
-                x_range = plot_dict['x_range']
-                max_points = plot_dict['max_points']
-                zero_based = plot_dict['zero_based']
-                plotlyGraphFigure = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
-
-                if selected_ids is None:
-                    self.spiketrain_overview = plotlyGraphFigure
-                return plotlyGraphFigure
+    def create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
+        data = None
+        if analogsignal is not None:
+            data = self.AnalogSignalLFPPlotList(analogsignal)
+        if irregularsignal is not None:
+            irregular_data = self.IrregularlySampledSignalPlotList(irregularsignal)
+            if data is None:
+                data = irregular_data
             else:
-                return None
+                data.concat(irregular_data)
+        event_annotations = self.EventAnnotations(event) if event is not None else None
+        epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
+        plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
+        overlapping = plot_dict['overlapping']
+        x_range = plot_dict['x_range']
+        max_points = plot_dict['max_points']
+        zero_based = plot_dict['zero_based']
+        return self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points, shift_to_0=zero_based)
 
-    def create_lfpplot(self, selected_ids=None, other_changes=False):
-        """
-        Wrapper for plot_lfp to update the lfp plot
-
-        Called at every cell execution
-        """
-        analogsignals = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.AnalogSignal)
-        irregularsignals = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.IrregularlySampledSignal)
-        # compare contents of AnalogSignals per top node
-        analogsignals_unchanged = True
-        analogsignals_hash = self.jupyphant_entity.get_neo_hash(analogsignals, hash_name='sha1')
-        if self.analogsignals_hash is None:
-            self.analogsignals_hash = analogsignals_hash
-        else:
-            if self.analogsignals_hash != analogsignals_hash:
-                analogsignals_unchanged = False
-
-        # compare contents of IrregularlySampledSignal per top node
-        irregularsignals_unchanged = True
-        irregularsignals_hash = self.jupyphant_entity.get_neo_hash(irregularsignals, hash_name='sha1')
-        if self.irregularsignals_hash is None:
-            self.irregularsignals_hash = irregularsignals_hash
-        else:
-            if self.irregularsignals_hash != irregularsignals_hash:
-                irregularsignals_unchanged = False
-
-        # Return pre-existing lfpplot if content of AnalogSignals has NOT changed
-        if analogsignals_unchanged and irregularsignals_unchanged  and (self.signal_overview is not None) and (selected_ids is None) and (not other_changes):
-            return self.signal_overview
-        else:
-            n_analog_subplots = sum(1 for v in analogsignals.values() if len(v) > 0)
-            n_irregular_sublplots = sum(1 for v in irregularsignals.values() if len(v) > 0)
-            if n_analog_subplots > 0 or n_irregular_sublplots > 0:
-                plotly_data = None
-                if n_analog_subplots > 0:
-                    plotly_data = self.AnalogSignalLFPPlotList(analogsignals)
-                if n_irregular_sublplots > 0:
-                    irregular_plotly_data = self.IrregularlySampledSignalPlotList(irregularsignals)
-                    if plotly_data is None:
-                        plotly_data = irregular_plotly_data
-                    else:
-                        plotly_data.concat(irregular_plotly_data)
-                events = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Event)
-                event_annotations = None
-                n_events = sum(1 for v in events.values() if len(v) > 0)
-                if n_events > 0:
-                    event_annotations = self.EventAnnotations(events)
-                epochs = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.Epoch)
-                epoch_intervals = None
-                n_epochs = sum(1 for v in epochs.values() if len(v) > 0)
-                if n_epochs > 0:
-                    epoch_intervals = self.EpochIntervals(epochs)
-                overlapping = False
-                plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
-                overlapping = plot_dict['overlapping']
-                x_range = plot_dict['x_range']
-                max_points = plot_dict['max_points']
-                plotlyGraphFigure = self.PlotlyGraphFigure(plotly_data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points)
-                if selected_ids is None:
-                    self.signal_overview = plotlyGraphFigure
-                return plotlyGraphFigure
-            else:
-                pass
-
-    def create_image_sequence(self, selected_ids=None):
-        """
-        Creates a PlotlyImageSequenceFiure for all selected ImageSequences
-
-        Called at every cell execution
-        """
-        image_sequences = self.jupyphant_entity._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids, neo_class=self.ImageSequence)
-        # compare contents of image_sequences per top node
-        image_sequences_unchanged = True
-        image_sequences_hash = self.jupyphant_entity.get_neo_hash(image_sequences, hash_name='sha1')
-        if self.image_sequences_hash is None:
-            self.image_sequences_hash = image_sequences_hash
-        else:
-            if self.image_sequences_hash != image_sequences_hash:
-                image_sequences_unchanged = False
-
-        # Return pre-existing rasterplot if content of image_sequences has NOT changed
-        if (image_sequences_unchanged) and (self.image_sequence_overview is not None) and (selected_ids is None):
-            return self.image_sequence_overview
-        # Otherwise, create new plot
-        else:
-            n_subplots = sum(1 for v in image_sequences.values() if len(v) > 0)
-            if n_subplots > 0:
-                image_sequences_list = []
-                for top_node, st_list in image_sequences.items():
-                    if st_list:
-                        image_sequences_list += st_list
-                plot_dict = self.plots[self.RAW_IMGSEQUENCE]
-                color_grade = plot_dict['color_grade']
-                plotlyImageSequenceFigure = self.PlotlyImageSequenceFigure(image_sequences=image_sequences_list, theme_name=self.jupyterlab_theme, color_scale=color_grade)
-
-                if selected_ids is None:
-                    self.image_sequence_overview = plotlyImageSequenceFigure
-                return plotlyImageSequenceFigure
-            else:
-                return None
+    def create_image_sequence(self, imagesequence=None):
+        plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
+        color_grade = plot_dict['color_grade']
+        return self.PlotlyImageSequenceFigure(image_sequences=imagesequence, theme_name=self.jupyterlab_theme, color_scale=color_grade)
