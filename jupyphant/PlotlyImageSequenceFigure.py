@@ -29,8 +29,13 @@ class PlotlyImageSequenceFigure():
                 ),
                 layout=self.go.Layout(
                     title=f"Duration: {image_sequence.t_stop - image_sequence.t_start}",
+                    height=500,
                     xaxis=dict(title=image_sequence.spatial_scale.__str__()),
-                    yaxis=dict(title=image_sequence.spatial_scale.__str__()),
+                    yaxis=dict(
+                        title=image_sequence.spatial_scale.__str__(),
+                        scaleanchor="x",   # lock y scale to x
+                        scaleratio=1       # 1 unit in x = 1 unit in y
+                    ),
                     updatemenus=[dict(
                         type="buttons",
                         buttons=[dict(
