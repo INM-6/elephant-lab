@@ -160,6 +160,21 @@ class Jupyphant_plot:
             reload = reload or temp_reload
         if reload:
             self.raw_plot(other_changes=True)
+    
+    def reset_scale(self):
+        reload = False
+        for key in self.RawPlotKey:
+            plot_dict = self.plots[key]
+            temp_reload = False
+            if plot_dict['x_range'] is not None:
+                plot_dict['x_range']=None
+                temp_reload = True
+            fig = plot_dict['fig']
+            if fig is None:
+                continue
+            reload = reload or temp_reload
+        if reload:
+            self.raw_plot(other_changes=True)
         
     def create_rasterplot(self, selected_ids=None, other_changes=False):
         """

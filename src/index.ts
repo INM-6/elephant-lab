@@ -737,6 +737,10 @@ except Exception as e:
 		Object.assign(upscaleButton.style, unchecked_style);
 		upscaleButton.innerHTML = `<i class="fa fa-expand-arrows-alt"></i> Upscale`;
 
+		const resetScaleButton = document.createElement('label');
+		Object.assign(resetScaleButton.style, unchecked_style);
+		resetScaleButton.innerHTML = `<i class="fa fa-undo"></i> Reset Scale`;
+
 		const numberLabel = document.createElement('label');
 		numberLabel.innerHTML = `<i class="fa fa-chart-line"></i> Max Points`;
 		Object.assign(numberLabel.style, unchecked_style);
@@ -860,6 +864,19 @@ except Exception as e:
 			future.onIOPub = this.defaultOutputErrorListerner;
 		};
 
+		resetScaleButton.onclick = () => {
+			// Send Python command to flip the boolean
+			const code = `
+			jupyphant_entity.jupyphant_plot.reset_scale()
+			`;
+
+			// Send to kernel
+			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
+
+			// Listen for output / errors
+			future.onIOPub = this.defaultOutputErrorListerner;
+		};
+
 		colorGradeSelect.onchange = () => {
 			const grade = colorGradeSelect.value;
 			console.log(grade);
@@ -879,6 +896,7 @@ except Exception as e:
 		buttonContainer.appendChild(overlapToggle);
 		buttonContainer.appendChild(zeroBasedToggle);
 		buttonContainer.appendChild(upscaleButton);
+		buttonContainer.appendChild(resetScaleButton);
 		buttonContainer.appendChild(numberLabel);
 		buttonContainer.appendChild(numberInput);
 		buttonContainer.appendChild(colorGradeLabel);
