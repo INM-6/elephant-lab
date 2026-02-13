@@ -1,6 +1,7 @@
 class PlotlyImageSequenceFigure():
     import plotly.graph_objects as go
     import numpy as np
+    import quantities as pq
     from neo.core import ImageSequence
     from IPython.display import display as ipython_display
 
@@ -27,16 +28,16 @@ class PlotlyImageSequenceFigure():
                     zmax=self.np.max(image_sequence.magnitude)
                 ),
                 layout=self.go.Layout(
-                    title=title,
-                    xaxis=dict(title='X pixels'),
-                    yaxis=dict(title='Y pixels'),
+                    title=f"Duration: {image_sequence.t_stop - image_sequence.t_start}",
+                    xaxis=dict(title=image_sequence.spatial_scale.__str__()),
+                    yaxis=dict(title=image_sequence.spatial_scale.__str__()),
                     updatemenus=[dict(
                         type="buttons",
                         buttons=[dict(
                             label="Play",
                             method="animate",
                             args=[None, {
-                                "frame": {"duration": 200, "redraw": True},
+                                "frame": {"duration": image_sequence.frame_duration.rescale(self.pq.ms).magnitude, "redraw": True},
                                 "fromcurrent": True,
                                 "transition": {"duration": 0}
                             }]
