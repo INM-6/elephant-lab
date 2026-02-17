@@ -25,7 +25,10 @@ class PlotlyImageSequenceFigure():
                     z=image_sequence[0].magnitude,  # first frame
                     colorscale=color_scale,
                     zmin=self.np.min(image_sequence.magnitude),
-                    zmax=self.np.max(image_sequence.magnitude)
+                    zmax=self.np.max(image_sequence.magnitude),
+                    colorbar=dict(
+                        title=image_sequence.units.__str__()
+                    )
                 ),
                 layout=self.go.Layout(
                     title=f"Duration: {image_sequence.t_stop - image_sequence.t_start}",
