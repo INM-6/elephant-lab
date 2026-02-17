@@ -40,6 +40,8 @@ import {
 	OutputAreaModel
 } from '@jupyterlab/outputarea';
 
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
+
 import {
 	IRenderMimeRegistry,
 } from '@jupyterlab/rendermime';
@@ -62,6 +64,14 @@ import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
 import { COLORS } from "./style/colors";
 
+interface RawPlotSettings {
+	darkMode: boolean;
+	overlap: boolean;
+	zeroBased: boolean;
+	maxPoints: number;
+	colorGrade: string;
+}
+
 class JupyphantExtension {
 	// declaring members of the class
 	private app: JupyterFrontEnd;
@@ -78,19 +88,23 @@ class JupyphantExtension {
 	private outarea_neo_tree: OutputArea | null;
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
+	private settings: ISettingRegistry.ISettings | undefined;
+	private plotSettings: RawPlotSettings;
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
 
 
 	// Construct a new JupyphantExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry, docManager: IDocumentManager) {
+		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry, docManager: IDocumentManager, settings: ISettingRegistry.ISettings | undefined, plotSettings: RawPlotSettings) {
 		// save all constructor arguments
 		this.app = app;
 		this.command_palette = command_palette;
 		this.notebook_tracker = notebook_tracker;
 		this.widget_tracker = widget_tracker;
 		this.docManager = docManager;
+		this.settings = settings
+		this.plotSettings = plotSettings
 		// Store references to all tabs containing notebooks
 		this.myPanels = [];
 		// Store references to all tabs created by this extension
@@ -696,6 +710,7 @@ except Exception as e:
 	}
 
 	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+
 		const checked_style = {
 			color: "#2cbb00ff",
 			fontWeight: "bold",
@@ -721,39 +736,42 @@ except Exception as e:
 		buttonContainer.style.padding = "6px 12px";              // padding around buttons
 
 		// --- TOGGLE BUTTONS ---
-		const createToggle = (icon: string, label: string, initial: boolean, is_toggle: boolean, callback: (state: boolean) => void) => {
+		const createToggle = (key: string, icon: string, label: string, initial: boolean, is_toggle: boolean, callback: (state: boolean) => void) => {
 			const toggle = document.createElement('label');
 			toggle.dataset.checked = initial ? 'true' : 'false';
 			Object.assign(toggle.style, initial ? checked_style : unchecked_style);
 			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
-			toggle.onclick = () => {
+			toggle.onclick = async () => {
 				let isNowChecked = false
 				if (is_toggle) {
 					isNowChecked = toggle.dataset.checked === 'false';
 					toggle.dataset.checked = isNowChecked ? 'true' : 'false';
 					Object.assign(toggle.style, isNowChecked ? checked_style : unchecked_style);
+
+					// Save updated value to settings
+					await this.settings?.set(key, isNowChecked);
 				}
 				callback(isNowChecked);
 			};
 			return toggle;
 		};
 
-		const darkmodeToggle = createToggle('fa-moon', 'Dark', true, true, (state) => {
+		const darkmodeToggle = createToggle('darkMode', 'fa-moon', 'Dark', this.plotSettings.darkMode, true, (state) => {
 			const code = `jupyphant_entity.jupyphant_plot.update_jupyterlab_plot_theme("${state ? "dark" : "white"}")`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
-		const overlapToggle = createToggle('fa-layer-group', 'Overlap', false, true, (state) => {
+		const overlapToggle = createToggle('overlap', 'fa-layer-group', 'Overlap', this.plotSettings.overlap, true, (state) => {
 			const code = `jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${state ? "True" : "False"})`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
-		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', true, true, (state) => {
+		const zeroBasedToggle = createToggle('zeroBased', 'fa-caret-square-o-left', 'Zero Based', this.plotSettings.zeroBased, true, (state) => {
 			const code = `jupyphant_entity.jupyphant_plot.set_zero_based(${state ? "True" : "False"})`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
-		const upscaleButton = createToggle('fa-expand-arrows-alt', 'Upscale', false, false, () => {
+		const upscaleButton = createToggle('', 'fa-expand-arrows-alt', 'Upscale', false, false, () => {
 			let max_points = Number(numberInput.value);
 			if (max_points < min_max_points) {
 				max_points = min_max_points;
@@ -763,13 +781,13 @@ except Exception as e:
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
-		const resetScaleButton = createToggle('fa-undo', 'Reset Scale', false, false, () => {
+		const resetScaleButton = createToggle('', 'fa-undo', 'Reset Scale', false, false, () => {
 			const code = `jupyphant_entity.jupyphant_plot.reset_scale()`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
 		// --- OPTIONS MODAL BUTTON ---
-		const optionsToggle = createToggle('fa-cogs', 'Options', false, true, (state) => {
+		const optionsToggle = createToggle('', 'fa-cogs', 'Options', false, true, (state) => {
 			optionsModal.style.display = state ? "flex" : "none";
 		});
 
@@ -794,7 +812,7 @@ except Exception as e:
 		const min_max_points = 10000;
 		const numberInput = document.createElement('input');
 		numberInput.type = "number";
-		numberInput.value = "10000";
+		numberInput.value = this.plotSettings.maxPoints.toString();
 		numberInput.min = `${min_max_points}`;
 		numberInput.step = "10000";
 		Object.assign(numberInput.style, {
@@ -834,11 +852,12 @@ except Exception as e:
 			opt.textContent = grade;
 			colorGradeSelect.appendChild(opt);
 		});
-		colorGradeSelect.value = "Viridis";
+		colorGradeSelect.value = this.plotSettings.colorGrade;
 
-		colorGradeSelect.onchange = () => {
+		colorGradeSelect.onchange = async () => {
 			const code = `jupyphant_entity.jupyphant_plot.set_color_grade("${colorGradeSelect.value}")`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+			await this.settings?.set('colorGrade', colorGradeSelect.value);
 		};
 
 		const colorGrade = document.createElement('div');
@@ -988,8 +1007,8 @@ except Exception as e:
 /*
 * Activate the JupyphantWidget extension
 */
-function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer, docManager: IDocumentManager) {
+async function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
+	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer, docManager: IDocumentManager, settingsRegistry: ISettingRegistry) {
 	/**
 	 * Performs the initialization of the extension
 	 * Parameters:
@@ -1012,8 +1031,32 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	// to restore the last session
 	let widget_tracker = new WidgetTracker<Widget>({ namespace: 'jupyphant_namespace' });
 
+
+	const DEFAULT_PLOT_SETTINGS: RawPlotSettings = {
+		darkMode: true,
+		overlap: false,
+		zeroBased: true,
+		maxPoints: 10000,
+		colorGrade: "Viridis"
+	};
+
+	let plotSettings = { ...DEFAULT_PLOT_SETTINGS };
+
+	let settings: ISettingRegistry.ISettings | undefined
+	try {
+		settings = await settingsRegistry.load('jupyphant:settings');
+
+		plotSettings = {
+			...DEFAULT_PLOT_SETTINGS,
+			...settings.composite   // overrides defaults with user values
+		} as RawPlotSettings;
+
+	} catch (e) {
+		console.warn("Settings failed, using defaults", e);
+	}
+
 	// create instance of JupyphantExtension
-	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager);
+	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager, settings, plotSettings);
 
 	// Add an application command: this is placed into CommandPalette and by clicking on the corresponding button
 	// this command will open the jupyphant tab
@@ -1035,7 +1078,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 	id: 'jupyphant:extension',
 	autoStart: true,
 	// What to pass to the activate function
-	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager],
+	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager, ISettingRegistry],
 	// activate: Function that is called upon startup of the extension
 	// Parameters are passed by the extension framework as specified in 'requires'
 	activate: activate

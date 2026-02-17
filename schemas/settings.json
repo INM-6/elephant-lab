@@ -1,0 +1,41 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "id": "jupyphant:settings",
+    "title": "Jupyphant Settings",
+    "type": "object",
+    "properties": {
+        "darkMode": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable dark mode"
+        },
+        "overlap": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable overlap in plots"
+        },
+        "zeroBased": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use zero-based axes"
+        },
+        "maxPoints": {
+            "type": "number",
+            "default": 10000,
+            "description": "Maximum number of points to display"
+        },
+        "colorGrade": {
+            "type": "string",
+            "enum": [
+                "Viridis",
+                "Plasma",
+                "Inferno",
+                "Magma",
+                "Cividis",
+                "Turbo"
+            ],
+            "default": "Viridis",
+            "description": "Color gradient for plots"
+        }
+    }
+}
