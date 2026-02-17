@@ -20,6 +20,7 @@ class Jupyphant_plot:
     class RawPlotKey(Enum):
         RAW_ST = 'raw_st'
         RAW_ANASIG = 'raw_anasig'
+        RAW_EVENT = 'raw_event'
 
     PLOT_IMGSEQUENCE = 'raw_imgsequence'
 
@@ -123,6 +124,17 @@ class Jupyphant_plot:
         create_plot(self.RawPlotKey.RAW_ANASIG, self.create_lfpplot, [self.NeoKey.analogsignal, self.NeoKey.irregularsignal], [self.NeoKey.event, self.NeoKey.epoch])
 
         create_plot(self.PLOT_IMGSEQUENCE, self.create_image_sequence, self.NeoKey.imagesequence)
+
+        keys_that_also_display_events = [self.NeoKey.spiketrain, self.NeoKey.analogsignal, self.NeoKey.irregularsignal]
+        if all(empty_dict[key] for key in keys_that_also_display_events):
+            create_plot(self.RawPlotKey.RAW_EVENT, self.create_annotation_plot, [self.NeoKey.event, self.NeoKey.epoch], keys_that_also_display_events)
+        else:
+            plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
+            if plot_dict["fig"] is not None:
+                plot_dict["fig"]=None
+                with plot_dict["output"]:
+                    Jupyphant_plot.clear_output()
+
 
     def create_explorer_raw_plot(self):
         for plot_dict in self.plots.values():
@@ -256,6 +268,16 @@ class Jupyphant_plot:
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
         return self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points, shift_to_0=zero_based)
+    
+    def create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
+        event_annotations = self.EventAnnotations(event) if event is not None else None
+        epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
+        plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
+        overlapping = plot_dict['overlapping']
+        x_range = plot_dict['x_range']
+        max_points = plot_dict['max_points']
+        zero_based = plot_dict['zero_based']
+        return self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
 
     def create_image_sequence(self, imagesequence=None):
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]

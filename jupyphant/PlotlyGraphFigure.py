@@ -377,11 +377,12 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x, text, unit in zip(xs, texts, units):
-            can_convert = PlotlyUtils.can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
-            if can_convert == -1:
-                continue
-            if can_convert == 1:
-                x = PlotlyUtils.convert_to_other_units(x, unit=unit, convert_unit=self.data.common_units_x)
+            if self.data.common_units_x is not None:
+                can_convert = PlotlyUtils.can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
+                if can_convert == -1:
+                    continue
+                if can_convert == 1:
+                    x = PlotlyUtils.convert_to_other_units(x, unit=unit, convert_unit=self.data.common_units_x)
             shapes.append(dict(
                 type="line",
                 x0=x,
@@ -478,12 +479,13 @@ class PlotlyGraphFigure:
         annotations = []
 
         for x0, x1, text, unit in zip(x0s, x1s, texts, units):
-            can_convert = PlotlyUtils.can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
-            if can_convert == -1:
-                continue
-            if can_convert == 1:
-                x0 = PlotlyUtils.convert_to_other_units(x0, unit=unit, convert_unit=self.data.common_units_x)
-                x1 = PlotlyUtils.convert_to_other_units(x1, unit=unit, convert_unit=self.data.common_units_x)
+            if self.data.common_units_x is not None:
+                can_convert = PlotlyUtils.can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
+                if can_convert == -1:
+                    continue
+                if can_convert == 1:
+                    x0 = PlotlyUtils.convert_to_other_units(x0, unit=unit, convert_unit=self.data.common_units_x)
+                    x1 = PlotlyUtils.convert_to_other_units(x1, unit=unit, convert_unit=self.data.common_units_x)
             shapes.append(dict(
                 type="rect",
                 x0=x0,
@@ -649,7 +651,7 @@ class PlotlyGraphDataType:
             self.x = [0]
             self.y = [0]
             self.name = 'nothing'
-            self.mode = 'marker'
+            self.mode = 'markers'
         else:
             self.extract_data(data)
             # Override / add attributes from kwargs
@@ -720,7 +722,9 @@ class PlotlyGraphDataTypeList():
         self.extract_data(data)
 
     def extract_data(self, data):
-        if isinstance(data, list) and self.is_trace_list(data):
+        if data is None:
+            self.data_list = [PlotlyGraphDataType(None)]
+        elif isinstance(data, list) and self.is_trace_list(data):
             for d in data:
                 try:
                     if not isinstance(d, PlotlyGraphDataType):
