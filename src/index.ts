@@ -702,7 +702,7 @@ except Exception as e:
 			cursor: "pointer",
 			padding: "4px",
 			userSelect: "none",
-		}
+		};
 
 		const unchecked_style = {
 			color: "#727272ff",
@@ -710,198 +710,146 @@ except Exception as e:
 			cursor: "pointer",
 			padding: "4px",
 			userSelect: "none",
-		}
+		};
 
-		// Single sticky container for both buttons
+		// --- BUTTON CONTAINER ---
 		const buttonContainer = document.createElement('div');
 		buttonContainer.classList.add('sticky-filter');
-		buttonContainer.style.display = "flex";     // horizontal layout
-		buttonContainer.style.gap = "8px";          // spacing between buttons
+		buttonContainer.style.display = "flex";
+		buttonContainer.style.gap = "8px";
 
-		const overlapToggle = document.createElement('label');
-		overlapToggle.dataset.checked = 'false';
-		Object.assign(overlapToggle.style, unchecked_style);
-		overlapToggle.innerHTML = `<i class="fa fa-layer-group"></i> Overlap`;
+		// --- TOGGLE BUTTONS ---
+		const createToggle = (icon: string, label: string, initial: boolean, is_toggle: boolean, callback: (state: boolean) => void) => {
+			const toggle = document.createElement('label');
+			toggle.dataset.checked = initial ? 'true' : 'false';
+			Object.assign(toggle.style, initial ? checked_style : unchecked_style);
+			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
+			toggle.onclick = () => {
+				let isNowChecked = false
+				if (is_toggle) {
+					isNowChecked = toggle.dataset.checked === 'false';
+					toggle.dataset.checked = isNowChecked ? 'true' : 'false';
+					Object.assign(toggle.style, isNowChecked ? checked_style : unchecked_style);
+				}
+				callback(isNowChecked);
+			};
+			return toggle;
+		};
 
-		const zeroBasedToggle = document.createElement('label');
-		zeroBasedToggle.dataset.checked = 'true';
-		Object.assign(zeroBasedToggle.style, checked_style);
-		zeroBasedToggle.innerHTML = `<i class="fa fa-caret-square-o-left"></i> Zero Based`;
+		const darkmodeToggle = createToggle('fa-moon', 'Dark', true, true, (state) => {
+			const code = `jupyphant_entity.jupyphant_plot.update_jupyterlab_plot_theme("${state ? "dark" : "white"}")`;
+			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+		});
 
-		const darkmodeToggle = document.createElement('label');
-		darkmodeToggle.dataset.checked = 'true';
-		Object.assign(darkmodeToggle.style, checked_style);
-		darkmodeToggle.innerHTML = `<i class="fa fa-moon"></i> Dark`;
+		const overlapToggle = createToggle('fa-layer-group', 'Overlap', false, true, (state) => {
+			const code = `jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${state ? "True" : "False"})`;
+			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+		});
 
-		const upscaleButton = document.createElement('label');
-		Object.assign(upscaleButton.style, unchecked_style);
-		upscaleButton.innerHTML = `<i class="fa fa-expand-arrows-alt"></i> Upscale`;
+		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', true, true, (state) => {
+			const code = `jupyphant_entity.jupyphant_plot.set_zero_based(${state ? "True" : "False"})`;
+			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+		});
 
-		const resetScaleButton = document.createElement('label');
-		Object.assign(resetScaleButton.style, unchecked_style);
-		resetScaleButton.innerHTML = `<i class="fa fa-undo"></i> Reset Scale`;
+		const upscaleButton = createToggle('fa-expand-arrows-alt', 'Upscale', false, false, () => {
+			let max_points = Number(numberInput.value);
+			if (max_points < min_max_points) {
+				max_points = min_max_points;
+				numberInput.value = max_points.toString();
+			}
+			const code = `jupyphant_entity.jupyphant_plot.upscale_raw_plot(${max_points})`;
+			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+		});
 
+		const resetScaleButton = createToggle('fa-undo', 'Reset Scale', false, false, () => {
+			const code = `jupyphant_entity.jupyphant_plot.reset_scale()`;
+			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+		});
+
+		// --- OPTIONS MODAL BUTTON ---
+		const optionsToggle = createToggle('fa-cogs', 'Options', false, true, (state) => {
+			optionsModal.style.display = state ? "block" : "none";
+		});
+
+		const optionsModal = document.createElement('div');
+		optionsModal.classList.add('sticky-filter');
+		optionsModal.style.display = "none";
+		optionsModal.style.gap = "8px";
+
+		// --- MAX POINTS INPUT ---
 		const numberLabel = document.createElement('label');
 		numberLabel.innerHTML = `<i class="fa fa-chart-line"></i> Max Points`;
 		Object.assign(numberLabel.style, unchecked_style);
 
-		// Create number input
-		const min_max_points = 10000
+		const min_max_points = 10000;
 		const numberInput = document.createElement('input');
 		numberInput.type = "number";
 		numberInput.value = "10000";
 		numberInput.min = `${min_max_points}`;
 		numberInput.step = "10000";
-		numberInput.style.width = "80px"
-		numberInput.style.padding = "2px 6px";
-		numberInput.style.borderRadius = "4px";
-		numberInput.style.border = "1px solid #555";
-		numberInput.style.background = "var(--jp-layout-color1)";
-		numberInput.style.color = "var(--jp-ui-font-color1)";
-		numberInput.title = "Set Max Points";
+		Object.assign(numberInput.style, {
+			width: "80px",
+			padding: "2px 6px",
+			borderRadius: "4px",
+			border: "1px solid #555",
+			background: "var(--jp-layout-color1)",
+			color: "var(--jp-ui-font-color1)",
+		});
 
-		// Label for dropdown
+		// --- COLOR GRADE SELECT ---
 		const colorGradeLabel = document.createElement('label');
 		colorGradeLabel.innerHTML = `<i class="fa fa-palette"></i> Color Grade`;
 		Object.assign(colorGradeLabel.style, unchecked_style);
 
-		// Dropdown select
 		const colorGradeSelect = document.createElement('select');
-		colorGradeSelect.style.padding = "2px 6px";
-		colorGradeSelect.style.borderRadius = "4px";
-		colorGradeSelect.style.border = "1px solid #555";
-		colorGradeSelect.style.background = "var(--jp-layout-color1)";
-		colorGradeSelect.style.color = "var(--jp-ui-font-color1)";
-		colorGradeSelect.title = "Select Color Grade";
-
-		// Add options
-		const colorGrades = [
-			"Viridis",
-			"Plasma",
-			"Inferno",
-			"Magma",
-			"Cividis",
-			"Turbo"
-		];
-
-		for (const grade of colorGrades) {
+		Object.assign(colorGradeSelect.style, {
+			padding: "2px 6px",
+			borderRadius: "4px",
+			border: "1px solid #555",
+			background: "var(--jp-layout-color1)",
+			color: "var(--jp-ui-font-color1)",
+			cursor: "pointer",
+		});
+		["Viridis", "Plasma", "Inferno", "Magma", "Cividis", "Turbo"].forEach(grade => {
 			const opt = document.createElement("option");
 			opt.value = grade;
 			opt.textContent = grade;
 			colorGradeSelect.appendChild(opt);
-		}
-
-		// Default
+		});
 		colorGradeSelect.value = "Viridis";
-		colorGradeSelect.style.fontWeight = "bold";
-		colorGradeSelect.style.cursor = "pointer";
-
-
-		overlapToggle.onclick = () => {
-			const isNowChecked = overlapToggle.dataset.checked === 'false';
-			overlapToggle.dataset.checked = isNowChecked ? 'true' : 'false';
-			isNowChecked ? Object.assign(overlapToggle.style, checked_style) : Object.assign(overlapToggle.style, unchecked_style);
-			// Send Python command to flip the boolean
-			const code = `
-			jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${isNowChecked ? "True" : "False"})
-			`;
-
-			// Send to kernel
-			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
-
-			// Listen for output / errors
-			future.onIOPub = this.defaultOutputErrorListerner;
-		};
-
-		darkmodeToggle.onclick = () => {
-			const isNowChecked = darkmodeToggle.dataset.checked === 'false';
-			darkmodeToggle.dataset.checked = isNowChecked ? 'true' : 'false';
-			isNowChecked ? Object.assign(darkmodeToggle.style, checked_style) : Object.assign(darkmodeToggle.style, unchecked_style);
-			// Send Python command to flip the boolean
-			const code = `
-			jupyphant_entity.jupyphant_plot.update_jupyterlab_plot_theme(${isNowChecked ? '"dark"' : '"white"'})
-			`;
-
-			// Send to kernel
-			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
-
-			// Listen for output / errors
-			future.onIOPub = this.defaultOutputErrorListerner;
-		};
-
-		zeroBasedToggle.onclick = () => {
-			const isNowChecked = zeroBasedToggle.dataset.checked === 'false';
-			zeroBasedToggle.dataset.checked = isNowChecked ? 'true' : 'false';
-			isNowChecked ? Object.assign(zeroBasedToggle.style, checked_style) : Object.assign(zeroBasedToggle.style, unchecked_style);
-			// Send Python command to flip the boolean
-			const code = `
-			jupyphant_entity.jupyphant_plot.set_zero_based(${isNowChecked ? "True" : "False"})
-			`;
-
-			// Send to kernel
-			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
-
-			// Listen for output / errors
-			future.onIOPub = this.defaultOutputErrorListerner;
-		};
-
-		upscaleButton.onclick = () => {
-			let max_points = Number(numberInput.value);
-			if (max_points < min_max_points) {
-				max_points = min_max_points
-				numberInput.value = max_points.toString()
-			}
-
-			// Send Python command to flip the boolean
-			const code = `
-			jupyphant_entity.jupyphant_plot.upscale_raw_plot(${max_points})
-			`;
-
-			// Send to kernel
-			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
-
-			// Listen for output / errors
-			future.onIOPub = this.defaultOutputErrorListerner;
-		};
-
-		resetScaleButton.onclick = () => {
-			// Send Python command to flip the boolean
-			const code = `
-			jupyphant_entity.jupyphant_plot.reset_scale()
-			`;
-
-			// Send to kernel
-			const future = session.session!.kernel!.requestExecute({ code, store_history: false });
-
-			// Listen for output / errors
-			future.onIOPub = this.defaultOutputErrorListerner;
-		};
 
 		colorGradeSelect.onchange = () => {
-			const grade = colorGradeSelect.value;
-			console.log(grade);
-
-			const code = `jupyphant_entity.jupyphant_plot.set_color_grade("${grade}")`;
-
-			const future = session.session!.kernel!.requestExecute({
-				code,
-				store_history: false
-			});
-
-			future.onIOPub = this.defaultOutputErrorListerner;
+			const code = `jupyphant_entity.jupyphant_plot.set_color_grade("${colorGradeSelect.value}")`;
+			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		};
 
+		optionsModal.appendChild(numberLabel);
+		optionsModal.appendChild(numberInput);
+		optionsModal.appendChild(document.createElement('br'));
+		optionsModal.appendChild(colorGradeLabel);
+		optionsModal.appendChild(colorGradeSelect);
 
-		buttonContainer.appendChild(darkmodeToggle);
-		buttonContainer.appendChild(overlapToggle);
-		buttonContainer.appendChild(zeroBasedToggle);
-		buttonContainer.appendChild(upscaleButton);
-		buttonContainer.appendChild(resetScaleButton);
-		buttonContainer.appendChild(numberLabel);
-		buttonContainer.appendChild(numberInput);
-		buttonContainer.appendChild(colorGradeLabel);
-		buttonContainer.appendChild(colorGradeSelect);
-		raw_plot_widget.node.prepend(buttonContainer);
+		// --- APPEND TO BUTTON CONTAINER ---
+		buttonContainer.append(darkmodeToggle, overlapToggle, zeroBasedToggle, upscaleButton, resetScaleButton, optionsToggle);
+
+		// --- MAIN CONTAINER ---
+		const toolbarContainer = document.createElement('div');
+		toolbarContainer.style.position = 'sticky';  // sticks when scrolling
+		toolbarContainer.style.top = '0px';
+		toolbarContainer.style.zIndex = '1000';
+		toolbarContainer.style.display = 'flex';
+		toolbarContainer.style.flexDirection = 'column'; // stack button row + options modal
+		toolbarContainer.style.gap = '4px';             // space between toolbar and modal
+		toolbarContainer.style.backgroundColor = 'var(--jp-layout-color1)';
+		toolbarContainer.style.padding = '4px 8px';
+		toolbarContainer.style.borderBottom = '1px solid #555';
+
+		// Append the existing button container and modal to this toolbar container
+		toolbarContainer.appendChild(buttonContainer);
+		toolbarContainer.appendChild(optionsModal);
+
+		// Finally, prepend the toolbar container to the widget
+		raw_plot_widget.node.prepend(toolbarContainer);
 	}
 
 	public createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {

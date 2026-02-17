@@ -102,14 +102,19 @@ class Jupyphant_plot:
             if all(empty_dict[k] for k in primary_keys):
                 if plot_dict["fig"] is not None:
                     plot_dict["fig"]=None
-                    with plot_dict["output"]:
+                    output = plot_dict["output"]
+                    with output:
                         Jupyphant_plot.clear_output()
+                        output.layout.display = 'none'
             else:
                 all_keys = primary_keys + secondary_keys
                 if plot_dict["changed"] or (selection_changed and any(change_dict[k] for k in all_keys)):
-                    with plot_dict["output"]:
+                    output = plot_dict["output"]
+                    with output:
                         if plot_dict["fig"] is not None:
                             Jupyphant_plot.clear_output(wait=True)
+                        else:
+                            output.layout.display = 'block'
                         loading = self.HTML("⏳ <b>Rendering plots...</b>")
                         Jupyphant_plot.display(loading)
                         Jupyphant_plot.clear_output(wait=True)
@@ -141,7 +146,9 @@ class Jupyphant_plot:
 
     def create_explorer_raw_plot(self):
         for plot_dict in self.plots.values():
-            Jupyphant_plot.display(plot_dict["output"])
+            output = plot_dict["output"]
+            Jupyphant_plot.display(output)
+            output.layout.display = 'none'
         self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self.raw_plot)
 
     def set_raw_plot_overlap(self, overlap):
