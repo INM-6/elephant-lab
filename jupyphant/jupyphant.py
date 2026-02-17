@@ -660,11 +660,10 @@ class Jupyphant:
         Returns: {NeoKey: [selected neo objects in tree order]}
         """
 
-        # Copy class mapping
-        class_dict = dict(neo_class_dict)
+        neo_class_dict = dict(neo_class_dict)
 
         # Prepare result dict
-        result = {key: [] for key in class_dict}
+        result = {key: [] for key in neo_class_dict}
 
         selected_nodes = self.selected_neo_objects
 
@@ -674,7 +673,7 @@ class Jupyphant:
                 obj = self.map_ipytree_node_id_to_neo_obj[node._id]
 
                 # Classify
-                for key, cls in class_dict.items():
+                for key, cls in neo_class_dict.items():
                     if isinstance(obj, cls):
                         result[key].append(obj)
                         break  # one class only

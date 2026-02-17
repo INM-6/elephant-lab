@@ -638,7 +638,10 @@ class PlotlyGraphFigure:
         return subplot_height
     
     def getXRange(self):
-        return self.fig.layout.xaxis.range
+        x_range = self.fig.layout.xaxis.range
+        if x_range==None:
+            x_range = [self.data.minX, self.data.maxX]
+        return x_range
     
     def isDownscaled(self):
         return self.data.is_downscaled

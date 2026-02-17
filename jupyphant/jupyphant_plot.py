@@ -38,6 +38,7 @@ class Jupyphant_plot:
         for key in self.RawPlotKey:
             self.plots[key] = {
                 "overlapping": False,
+                "og_x_range": None,
                 "x_range": None,
                 "max_points": 10000,
                 "zero_based": True
@@ -83,7 +84,9 @@ class Jupyphant_plot:
             self.previous_neo_object_dict = neo_object_dict
 
             for key in self.RawPlotKey:
-                self.plots[key]['x_range']=None
+                plot_dict = self.plots[key]
+                plot_dict['x_range']=None
+                plot_dict['og_x_range']=None
 
         empty_dict = {}
         for key, current_set in self.previous_neo_object_dict.items():
@@ -123,8 +126,6 @@ class Jupyphant_plot:
 
         create_plot(self.RawPlotKey.RAW_ANASIG, self.create_lfpplot, [self.NeoKey.analogsignal, self.NeoKey.irregularsignal], [self.NeoKey.event, self.NeoKey.epoch])
 
-        create_plot(self.PLOT_IMGSEQUENCE, self.create_image_sequence, self.NeoKey.imagesequence)
-
         keys_that_also_display_events = [self.NeoKey.spiketrain, self.NeoKey.analogsignal, self.NeoKey.irregularsignal]
         if all(empty_dict[key] for key in keys_that_also_display_events):
             create_plot(self.RawPlotKey.RAW_EVENT, self.create_annotation_plot, [self.NeoKey.event, self.NeoKey.epoch], keys_that_also_display_events)
@@ -134,6 +135,8 @@ class Jupyphant_plot:
                 plot_dict["fig"]=None
                 with plot_dict["output"]:
                     Jupyphant_plot.clear_output()
+
+        create_plot(self.PLOT_IMGSEQUENCE, self.create_image_sequence, self.NeoKey.imagesequence)
 
 
     def create_explorer_raw_plot(self):
@@ -213,7 +216,7 @@ class Jupyphant_plot:
                 continue
             x_range = fig.getXRange()
             previous_x_range = plot_dict['x_range']
-            if previous_x_range is None or not all(self.math.isclose(a, b, abs_tol=1e-1) for a, b in zip(x_range, previous_x_range)):
+            if not all(self.math.isclose(a, b, abs_tol=1e-1) for a, b in zip(x_range, previous_x_range)):
                 plot_dict['x_range']=x_range
                 temp_reload = True
             if(not fig.isDownscaled()):
@@ -227,15 +230,13 @@ class Jupyphant_plot:
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
-            temp_reload = False
-            if plot_dict['x_range'] is not None:
-                plot_dict['x_range']=None
-                temp_reload = True
             fig = plot_dict['fig']
             if fig is None:
                 continue
-            plot_dict['changed']=temp_reload
-            reload = reload or temp_reload
+            if not all(self.math.isclose(a, b, abs_tol=1e-1) for a, b in zip(plot_dict['og_x_range'], plot_dict['x_range'],)):
+                plot_dict['x_range']=plot_dict['og_x_range']
+                plot_dict['changed']=True
+                reload = True
         if reload:
             self.raw_plot()
         
@@ -248,7 +249,12 @@ class Jupyphant_plot:
         x_range = plot_dict['x_range']
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
-        return self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        if plot_dict['og_x_range'] is None:
+            x_range = fig.getXRange()
+            plot_dict['og_x_range']=x_range
+            plot_dict['x_range']=x_range
+        return fig
 
     def create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
         data = None
@@ -267,7 +273,12 @@ class Jupyphant_plot:
         x_range = plot_dict['x_range']
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
-        return self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points, shift_to_0=zero_based)
+        fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points, shift_to_0=zero_based)
+        if plot_dict['og_x_range'] is None:
+            x_range = fig.getXRange()
+            plot_dict['og_x_range']=x_range
+            plot_dict['x_range']=x_range
+        return fig
     
     def create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
         event_annotations = self.EventAnnotations(event) if event is not None else None
@@ -277,7 +288,12 @@ class Jupyphant_plot:
         x_range = plot_dict['x_range']
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
-        return self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        if plot_dict['og_x_range'] is None:
+            x_range = fig.getXRange()
+            plot_dict['og_x_range']=x_range
+            plot_dict['x_range']=x_range
+        return fig
 
     def create_image_sequence(self, imagesequence=None):
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
