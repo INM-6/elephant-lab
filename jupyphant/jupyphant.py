@@ -656,22 +656,36 @@ class Jupyphant:
     
     def _get_selected_neo_objects_by_class(self, neo_class_dict):
         """
-        :param neo_class_dict: {key: neo.class}
-        Changes neo_class_dict to: {key: set(selected instances of neo.class)}
+        neo_class_dict: {NeoKey: neo.class}
+        Returns: {NeoKey: [selected neo objects in tree order]}
         """
 
-        # Extract actual neo objects from selected nodes
-        selected_neo_objs = [
-            self.map_ipytree_node_id_to_neo_obj.get(node._id)
-            for node in self.selected_neo_objects
-            if node._id in self.map_ipytree_node_id_to_neo_obj
-        ]
+        # Copy class mapping
+        class_dict = dict(neo_class_dict)
 
-        # Classify them
-        for key, cls in neo_class_dict.items():
-            neo_class_dict[key] = [obj for obj in selected_neo_objs if isinstance(obj, cls)]
+        # Prepare result dict
+        result = {key: [] for key in class_dict}
 
-        return neo_class_dict
+        selected_nodes = self.selected_neo_objects
+
+        def walk(node):
+            # If node maps to a neo object and is selected
+            if node in selected_nodes and node._id in self.map_ipytree_node_id_to_neo_obj:
+                obj = self.map_ipytree_node_id_to_neo_obj[node._id]
+
+                # Classify
+                for key, cls in class_dict.items():
+                    if isinstance(obj, cls):
+                        result[key].append(obj)
+                        break  # one class only
+
+            # Recurse
+            for child in getattr(node, "nodes", []):
+                walk(child)
+
+        walk(self.ipytree_of_neo_objects)
+
+        return result
         
 
     def _get_neo_obj_hash_and_node_name_of_selected_nodes(self):

@@ -71,7 +71,7 @@ class Jupyphant_plot:
                 self.NeoKey.epoch: self.Epoch,
                 self.NeoKey.imagesequence: self.ImageSequence
             }
-            self.jupyphant_entity._get_selected_neo_objects_by_class(neo_object_dict)
+            neo_object_dict = self.jupyphant_entity._get_selected_neo_objects_by_class(neo_object_dict)
             change_dict = {}
             for key, current_list in neo_object_dict.items():
                 previous_list = self.previous_neo_object_dict[key]
@@ -222,7 +222,7 @@ class Jupyphant_plot:
             fig = plot_dict['fig']
             if fig is None:
                 continue
-            plot_dict['changed']=True
+            plot_dict['changed']=temp_reload
             reload = reload or temp_reload
         if reload:
             self.raw_plot()
