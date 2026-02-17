@@ -714,9 +714,11 @@ except Exception as e:
 
 		// --- BUTTON CONTAINER ---
 		const buttonContainer = document.createElement('div');
-		buttonContainer.classList.add('sticky-filter');
 		buttonContainer.style.display = "flex";
 		buttonContainer.style.gap = "8px";
+		buttonContainer.style.flexWrap = "wrap";                  // wrap buttons if too many
+		buttonContainer.style.alignItems = "center";             // vertical alignment
+		buttonContainer.style.padding = "6px 12px";              // padding around buttons
 
 		// --- TOGGLE BUTTONS ---
 		const createToggle = (icon: string, label: string, initial: boolean, is_toggle: boolean, callback: (state: boolean) => void) => {
@@ -768,13 +770,21 @@ except Exception as e:
 
 		// --- OPTIONS MODAL BUTTON ---
 		const optionsToggle = createToggle('fa-cogs', 'Options', false, true, (state) => {
-			optionsModal.style.display = state ? "block" : "none";
+			optionsModal.style.display = state ? "flex" : "none";
 		});
 
+		// --- OPTIONS MODAL ---
 		const optionsModal = document.createElement('div');
-		optionsModal.classList.add('sticky-filter');
 		optionsModal.style.display = "none";
-		optionsModal.style.gap = "8px";
+		optionsModal.style.flexDirection = "column";
+		optionsModal.style.gap = "5px";                     // spacing between sections
+		optionsModal.style.padding = "5px";                 // padding inside the modal
+		optionsModal.style.border = "1px solid #888";        // subtle border
+		optionsModal.style.borderRadius = "6px";             // rounded corners
+		optionsModal.style.backgroundColor = "var(--jp-layout-color1)";
+		optionsModal.style.boxShadow = "0 4px 12px rgba(0,0,0,0.2)"; // soft shadow
+		optionsModal.style.width = "max-content";            // shrink to fit content
+		optionsModal.style.minWidth = "220px";
 
 		// --- MAX POINTS INPUT ---
 		const numberLabel = document.createElement('label');
@@ -788,13 +798,21 @@ except Exception as e:
 		numberInput.min = `${min_max_points}`;
 		numberInput.step = "10000";
 		Object.assign(numberInput.style, {
-			width: "80px",
+			width: "100px",
 			padding: "2px 6px",
 			borderRadius: "4px",
 			border: "1px solid #555",
 			background: "var(--jp-layout-color1)",
 			color: "var(--jp-ui-font-color1)",
 		});
+
+		const maxNumberInput = document.createElement('div');
+		maxNumberInput.style.display = "flex";
+		maxNumberInput.style.alignItems = "center";
+		maxNumberInput.style.gap = "8px";
+
+		maxNumberInput.appendChild(numberLabel);
+		maxNumberInput.appendChild(numberInput);
 
 		// --- COLOR GRADE SELECT ---
 		const colorGradeLabel = document.createElement('label');
@@ -823,32 +841,35 @@ except Exception as e:
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		};
 
-		optionsModal.appendChild(numberLabel);
-		optionsModal.appendChild(numberInput);
-		optionsModal.appendChild(document.createElement('br'));
-		optionsModal.appendChild(colorGradeLabel);
-		optionsModal.appendChild(colorGradeSelect);
+		const colorGrade = document.createElement('div');
+		colorGrade.style.display = "flex";
+		colorGrade.style.alignItems = "center";
+		colorGrade.style.gap = "8px";
+		colorGrade.appendChild(colorGradeLabel);
+		colorGrade.appendChild(colorGradeSelect);
+
+		optionsModal.appendChild(maxNumberInput);
+		optionsModal.appendChild(colorGrade);
 
 		// --- APPEND TO BUTTON CONTAINER ---
 		buttonContainer.append(darkmodeToggle, overlapToggle, zeroBasedToggle, upscaleButton, resetScaleButton, optionsToggle);
 
 		// --- MAIN CONTAINER ---
 		const toolbarContainer = document.createElement('div');
-		toolbarContainer.style.position = 'sticky';  // sticks when scrolling
+		toolbarContainer.style.position = 'sticky';
 		toolbarContainer.style.top = '0px';
 		toolbarContainer.style.zIndex = '1000';
 		toolbarContainer.style.display = 'flex';
-		toolbarContainer.style.flexDirection = 'column'; // stack button row + options modal
-		toolbarContainer.style.gap = '4px';             // space between toolbar and modal
+		toolbarContainer.style.flexDirection = 'column';
+		toolbarContainer.style.gap = '8px';
 		toolbarContainer.style.backgroundColor = 'var(--jp-layout-color1)';
-		toolbarContainer.style.padding = '4px 8px';
+		toolbarContainer.style.padding = '6px 12px';
 		toolbarContainer.style.borderBottom = '1px solid #555';
+		toolbarContainer.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'; // subtle shadow under toolbar
 
-		// Append the existing button container and modal to this toolbar container
 		toolbarContainer.appendChild(buttonContainer);
 		toolbarContainer.appendChild(optionsModal);
 
-		// Finally, prepend the toolbar container to the widget
 		raw_plot_widget.node.prepend(toolbarContainer);
 	}
 
