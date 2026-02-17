@@ -250,10 +250,10 @@ class Jupyphant_plot:
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
         fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        x_range = fig.getXRange()
+        plot_dict['x_range']=x_range
         if plot_dict['og_x_range'] is None:
-            x_range = fig.getXRange()
             plot_dict['og_x_range']=x_range
-            plot_dict['x_range']=x_range
         return fig
 
     def create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
@@ -274,10 +274,10 @@ class Jupyphant_plot:
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
         fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points, shift_to_0=zero_based)
+        x_range = fig.getXRange()
+        plot_dict['x_range']=x_range
         if plot_dict['og_x_range'] is None:
-            x_range = fig.getXRange()
             plot_dict['og_x_range']=x_range
-            plot_dict['x_range']=x_range
         return fig
     
     def create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
@@ -289,10 +289,10 @@ class Jupyphant_plot:
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
         fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        x_range = fig.getXRange()
+        plot_dict['x_range']=x_range
         if plot_dict['og_x_range'] is None:
-            x_range = fig.getXRange()
             plot_dict['og_x_range']=x_range
-            plot_dict['x_range']=x_range
         return fig
 
     def create_image_sequence(self, imagesequence=None):

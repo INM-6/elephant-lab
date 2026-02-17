@@ -44,6 +44,8 @@ class PlotlyGraphFigure:
         self.compress = self.nGraphs > 10
         data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0 and x_range is None, max_points=max_points)
         self.data = data
+        self.total_minX = data.minX
+        self.total_maxX = data.maxX
 
 
         self.height = self.default_height
@@ -89,11 +91,17 @@ class PlotlyGraphFigure:
                     ))
             self.hide_legend = True
         self.update_legend()
-        self.create_sliders()
         self.create_annotations(annotation_data, x_range)
         self.create_anntotation_intervals(annotation_interavals_data, x_range)
+        self.create_sliders()
         self.format_annotations()
+        # Set x_range to total min and max
+        for i in range(1, self.nGraphs + 1):
+            self.update_layout_options_dict(f"xaxis{i}", dict(
+                range = [self.total_minX, self.total_maxX]
+            ))
         self.update_layout()
+        
         if overlapping:
             self.overlapping = False
             self.overlap()
@@ -372,6 +380,9 @@ class PlotlyGraphFigure:
             xs = xs[mask]
             texts = texts[mask]
             units = units[mask]
+
+        self.total_minX = min(self.total_minX, xs.min())
+        self.total_maxX = max(self.total_maxX, xs.max())
         
         shapes = []
         annotations = []
@@ -474,6 +485,9 @@ class PlotlyGraphFigure:
             x1s = x1s[mask]
             texts = texts[mask]
             units = units[mask]
+
+        self.total_minX = min(min(self.total_minX, x0s.min()), x1s.min())
+        self.total_maxX = max(max(self.total_maxX, x0s.max()), x1s.max())
 
         shapes = []
         annotations = []
@@ -638,10 +652,7 @@ class PlotlyGraphFigure:
         return subplot_height
     
     def getXRange(self):
-        x_range = self.fig.layout.xaxis.range
-        if x_range==None:
-            x_range = [self.data.minX, self.data.maxX]
-        return x_range
+        return self.fig.layout.xaxis.range
     
     def isDownscaled(self):
         return self.data.is_downscaled
