@@ -902,15 +902,16 @@ class PlotlyGraphDataTypeList():
                 else:
                     common_units_y = None
 
+            should_find_minX = not shift_to_0 or x_range is not None
             if index == 0:
-                if not shift_to_0:
+                if should_find_minX:
                     minX = x_values.min()
                 minY = y_values.min()
                 maxX = x_values.max()
                 maxY = y_values.max()
                 previous_maxY = maxY
             else:
-                temp_minX = 0 if shift_to_0 else x_values.min()
+                temp_minX = x_values.min() if should_find_minX else 0
                 temp_minY = y_values.min()
                 temp_maxX = x_values.max()
                 temp_maxY = y_values.max()
@@ -928,7 +929,7 @@ class PlotlyGraphDataTypeList():
                     temp_maxY += offset
                     previous_maxY = temp_maxY
 
-                if not shift_to_0:
+                if should_find_minX:
                     if temp_minX < minX:
                         minX = temp_minX
                 if temp_minY < minY:
@@ -940,7 +941,7 @@ class PlotlyGraphDataTypeList():
             data.units_y = units_y
             data.x = x_values
             data.y = y_values
-        if shift_to_0:
+        if shift_to_0 and x_range is None:
             minX = 0
         self.common_units_y = common_units_y
         self.minX = minX
