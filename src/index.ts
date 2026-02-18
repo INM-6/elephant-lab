@@ -696,45 +696,29 @@ except Exception as e:
 	}
 
 	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
-		const checked_style = {
-			color: "#2cbb00ff",
-			fontWeight: "bold",
-			cursor: "pointer",
-			padding: "4px",
-			userSelect: "none",
-		};
+		const buttonContainer = document.createElement("div");
+		buttonContainer.classList.add("jp-rawplot-button-container");
 
-		const unchecked_style = {
-			color: "#727272ff",
-			fontWeight: "normal",
-			cursor: "pointer",
-			padding: "4px",
-			userSelect: "none",
-		};
-
-		// --- BUTTON CONTAINER ---
-		const buttonContainer = document.createElement('div');
-		buttonContainer.style.display = "flex";
-		buttonContainer.style.gap = "8px";
-		buttonContainer.style.flexWrap = "wrap";                  // wrap buttons if too many
-		buttonContainer.style.alignItems = "center";             // vertical alignment
-		buttonContainer.style.padding = "6px 12px";              // padding around buttons
-
-		// --- TOGGLE BUTTONS ---
 		const createToggle = (icon: string, label: string, initial: boolean, is_toggle: boolean, callback: (state: boolean) => void) => {
-			const toggle = document.createElement('label');
-			toggle.dataset.checked = initial ? 'true' : 'false';
-			Object.assign(toggle.style, initial ? checked_style : unchecked_style);
+			const toggle = document.createElement("button");
+			toggle.type = "button";
+			toggle.classList.add("jp-rawplot-toggle");
+			toggle.classList.add(initial ? "checked" : "unchecked");
 			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
-			toggle.onclick = () => {
-				let isNowChecked = false
-				if (is_toggle) {
-					isNowChecked = toggle.dataset.checked === 'false';
-					toggle.dataset.checked = isNowChecked ? 'true' : 'false';
-					Object.assign(toggle.style, isNowChecked ? checked_style : unchecked_style);
+
+			toggle.addEventListener("click", () => {
+				if (!is_toggle) {
+					callback(false);
+					return;
 				}
-				callback(isNowChecked);
-			};
+
+				const checked = toggle.classList.toggle("checked");
+				toggle.classList.toggle("unchecked", !checked);
+				toggle.dataset.checked = String(checked);
+
+				callback(checked);
+			});
+
 			return toggle;
 		};
 
@@ -768,28 +752,26 @@ except Exception as e:
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
+		const optionsModal = document.createElement("div");
+		optionsModal.classList.add("jp-rawplot-options-modal");
+
 		// --- OPTIONS MODAL BUTTON ---
-		const optionsToggle = createToggle('fa-cogs', 'Options', false, true, (state) => {
-			optionsModal.style.display = state ? "flex" : "none";
+		const optionsToggle = createToggle('fa-cogs', 'Options', false, false, () => {
+			optionsModal.classList.add("jp-visible");
 		});
 
-		// --- OPTIONS MODAL ---
-		const optionsModal = document.createElement('div');
-		optionsModal.style.display = "none";
-		optionsModal.style.flexDirection = "column";
-		optionsModal.style.gap = "5px";                     // spacing between sections
-		optionsModal.style.padding = "5px";                 // padding inside the modal
-		optionsModal.style.border = "1px solid #888";        // subtle border
-		optionsModal.style.borderRadius = "6px";             // rounded corners
-		optionsModal.style.backgroundColor = "var(--jp-layout-color1)";
-		optionsModal.style.boxShadow = "0 4px 12px rgba(0,0,0,0.2)"; // soft shadow
-		optionsModal.style.width = "max-content";            // shrink to fit content
-		optionsModal.style.minWidth = "220px";
+		// Hide options when clicked elsewhere
+		document.addEventListener("click", (e) => {
+			const temp: Node = e.target as Node
+			if (!optionsModal.contains(temp) && !optionsToggle.contains(temp)) {
+				optionsModal.classList.remove("jp-visible");
+			}
+		});
 
 		// --- MAX POINTS INPUT ---
 		const numberLabel = document.createElement('label');
 		numberLabel.innerHTML = `<i class="fa fa-chart-line"></i> Max Points`;
-		Object.assign(numberLabel.style, unchecked_style);
+		numberLabel.classList.add("jp-rawplot-toggle", "unchecked");
 
 		const min_max_points = 10000;
 		const numberInput = document.createElement('input');
@@ -797,19 +779,10 @@ except Exception as e:
 		numberInput.value = "10000";
 		numberInput.min = `${min_max_points}`;
 		numberInput.step = "10000";
-		Object.assign(numberInput.style, {
-			width: "100px",
-			padding: "2px 6px",
-			borderRadius: "4px",
-			border: "1px solid #555",
-			background: "var(--jp-layout-color1)",
-			color: "var(--jp-ui-font-color1)",
-		});
+		numberInput.classList.add("jp-rawplot-input");
 
-		const maxNumberInput = document.createElement('div');
-		maxNumberInput.style.display = "flex";
-		maxNumberInput.style.alignItems = "center";
-		maxNumberInput.style.gap = "8px";
+		const maxNumberInput = document.createElement("div");
+		maxNumberInput.classList.add("jp-rawplot-row");
 
 		maxNumberInput.appendChild(numberLabel);
 		maxNumberInput.appendChild(numberInput);
@@ -817,17 +790,10 @@ except Exception as e:
 		// --- COLOR GRADE SELECT ---
 		const colorGradeLabel = document.createElement('label');
 		colorGradeLabel.innerHTML = `<i class="fa fa-palette"></i> Color Grade`;
-		Object.assign(colorGradeLabel.style, unchecked_style);
+		colorGradeLabel.classList.add("jp-rawplot-toggle", "unchecked");
 
 		const colorGradeSelect = document.createElement('select');
-		Object.assign(colorGradeSelect.style, {
-			padding: "2px 6px",
-			borderRadius: "4px",
-			border: "1px solid #555",
-			background: "var(--jp-layout-color1)",
-			color: "var(--jp-ui-font-color1)",
-			cursor: "pointer",
-		});
+		colorGradeSelect.classList.add("jp-rawplot-select");
 		["Viridis", "Plasma", "Inferno", "Magma", "Cividis", "Turbo"].forEach(grade => {
 			const opt = document.createElement("option");
 			opt.value = grade;
@@ -842,33 +808,27 @@ except Exception as e:
 		};
 
 		const colorGrade = document.createElement('div');
-		colorGrade.style.display = "flex";
-		colorGrade.style.alignItems = "center";
-		colorGrade.style.gap = "8px";
+		colorGrade.classList.add("jp-rawplot-row");
 		colorGrade.appendChild(colorGradeLabel);
 		colorGrade.appendChild(colorGradeSelect);
 
 		optionsModal.appendChild(maxNumberInput);
 		optionsModal.appendChild(colorGrade);
 
-		// --- APPEND TO BUTTON CONTAINER ---
-		buttonContainer.append(darkmodeToggle, overlapToggle, zeroBasedToggle, upscaleButton, resetScaleButton, optionsToggle);
+		buttonContainer.append(
+			darkmodeToggle,
+			overlapToggle,
+			zeroBasedToggle,
+			upscaleButton,
+			resetScaleButton,
+			optionsToggle
+		);
 
 		// --- MAIN CONTAINER ---
-		const toolbarContainer = document.createElement('div');
-		toolbarContainer.style.position = 'sticky';
-		toolbarContainer.style.top = '0px';
-		toolbarContainer.style.zIndex = '1000';
-		toolbarContainer.style.display = 'flex';
-		toolbarContainer.style.flexDirection = 'column';
-		toolbarContainer.style.gap = '8px';
-		toolbarContainer.style.backgroundColor = 'var(--jp-layout-color1)';
-		toolbarContainer.style.padding = '6px 12px';
-		toolbarContainer.style.borderBottom = '1px solid #555';
-		toolbarContainer.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'; // subtle shadow under toolbar
+		const toolbarContainer = document.createElement("div");
+		toolbarContainer.classList.add("jp-rawplot-toolbar");
 
-		toolbarContainer.appendChild(buttonContainer);
-		toolbarContainer.appendChild(optionsModal);
+		toolbarContainer.append(buttonContainer, optionsModal);
 
 		raw_plot_widget.node.prepend(toolbarContainer);
 	}
