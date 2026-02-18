@@ -42,7 +42,7 @@ class PlotlyGraphFigure:
             data = PlotlyGraphDataTypeList(data)
         self.nGraphs = len(data.data_list)
         self.compress = self.nGraphs > 10
-        data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0 and x_range is None, max_points=max_points)
+        data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0, max_points=max_points)
         self.data = data
         self.total_minX = data.minX
         self.total_maxX = data.maxX
@@ -824,6 +824,9 @@ class PlotlyGraphDataTypeList():
                 else:
                     common_units_x = None
 
+            if shift_to_0:
+                x_values = x_values - x_values.min()
+
             #Filter out of x_range
             if x_range is not None:
                 x0, x1 = x_range
@@ -898,9 +901,6 @@ class PlotlyGraphDataTypeList():
                         units_y = common_units_y
                 else:
                     common_units_y = None
-
-            if shift_to_0:
-                x_values = x_values - x_values.min()
 
             if index == 0:
                 if not shift_to_0:
