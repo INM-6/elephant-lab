@@ -756,8 +756,8 @@ except Exception as e:
 		optionsModal.classList.add("jp-rawplot-options-modal");
 
 		// --- OPTIONS MODAL BUTTON ---
-		const optionsToggle = createToggle('fa-cogs', 'Options', false, false, () => {
-			optionsModal.classList.add("jp-visible");
+		const optionsToggle = createToggle('fa-cogs', 'Options', false, true, (state) => {
+			optionsModal.classList.toggle("jp-visible", state);
 		});
 
 		// Hide options when clicked elsewhere
@@ -765,6 +765,9 @@ except Exception as e:
 			const temp: Node = e.target as Node
 			if (!optionsModal.contains(temp) && !optionsToggle.contains(temp)) {
 				optionsModal.classList.remove("jp-visible");
+				optionsToggle.classList.toggle("checked", false);
+				optionsToggle.classList.toggle("unchecked", true);
+				optionsToggle.dataset.checked = String(false);
 			}
 		});
 
