@@ -847,6 +847,13 @@ class PlotlyGraphDataTypeList():
 
         if len(filtered) == 0:
             self.warnings.warn("There is no valid data selected")
+            self.common_units_x = None
+            self.common_units_y = None
+            self.minX = 0
+            self.minY = 0
+            self.maxX = 0
+            self.maxY = 0
+            self.is_downscaled = False
             self.data_list = [PlotlyGraphDataType(None)]
             return
         self.data_list = filtered

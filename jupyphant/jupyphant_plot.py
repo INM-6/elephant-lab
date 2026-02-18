@@ -180,6 +180,8 @@ class Jupyphant_plot:
                 fig = plot_dict['fig']
                 if fig is None:
                     continue
+                plot_dict['og_x_range']=None
+                plot_dict['x_range']=None
                 plot_dict['changed']=True
                 reload = True
         if reload:
