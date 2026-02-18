@@ -5,7 +5,7 @@ class Jupyphant_plot:
 
     from neo import SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence
     from enum import Enum
-    import math
+    import numpy as np
     from ipywidgets import Output, HTML
     from IPython.display import clear_output, display
 
@@ -225,7 +225,7 @@ class Jupyphant_plot:
                 continue
             x_range = fig.getXRange()
             previous_x_range = plot_dict['x_range']
-            if not all(self.math.isclose(a, b, abs_tol=1e-1) for a, b in zip(x_range, previous_x_range)):
+            if not self.np.allclose(x_range, previous_x_range, atol=1e-1):
                 plot_dict['x_range']=x_range
                 temp_reload = True
             if(not fig.isDownscaled()):
@@ -242,7 +242,7 @@ class Jupyphant_plot:
             fig = plot_dict['fig']
             if fig is None:
                 continue
-            if not all(self.math.isclose(a, b, abs_tol=1e-1) for a, b in zip(plot_dict['og_x_range'], plot_dict['x_range'],)):
+            if not self.np.allclose(plot_dict['og_x_range'], plot_dict['x_range'], atol=1e-1):
                 plot_dict['x_range']=plot_dict['og_x_range']
                 plot_dict['changed']=True
                 reload = True

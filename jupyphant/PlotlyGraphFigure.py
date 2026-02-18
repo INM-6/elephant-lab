@@ -128,8 +128,7 @@ class PlotlyGraphFigure:
 
     def create_graphs(self):
         """
-        Recursively adds traces to a Plotly figure from various data types.
-        Supports PlotlyDataType, lists of traces, dicts, pandas objects, or lists of points.
+        Adds traces to a Plotly figure from the extracted and normalized data
         """
         for index, d in enumerate(self.data.data_list):
 
@@ -748,9 +747,9 @@ class PlotlyGraphDataTypeList():
                     self.warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
         else:
             try:
-                if not isinstance(d, PlotlyGraphDataType):
-                    d = PlotlyGraphDataType(d)
-                self.data_list = [d]
+                if not isinstance(data, PlotlyGraphDataType):
+                    data = PlotlyGraphDataType(data)
+                self.data_list = [data]
             except Exception as e:
                 self.warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
 
