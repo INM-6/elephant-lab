@@ -54,14 +54,24 @@
   padding: 4px 6px;
   user-select: none;
   background: none;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 4px;
   font: inherit;
+  color: var(--jp-ui-font-color1);
+}
+
+.jp-rawplot-toggle:hover {
+  background: var(--jp-layout-color2);
+}
+
+.jp-rawplot-toggle:active {
+  background: var(--jp-layout-color3);
 }
 
 .jp-rawplot-toggle[aria-pressed="true"] {
   font-weight: bold;
-  background: var(--jp-layout-color2);
+  background: var(--jp-layout-color3);
+  border: 1px solid var(--jp-border-color2);
 }
 
 .jp-rawplot-button-container {
