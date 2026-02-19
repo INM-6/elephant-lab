@@ -703,7 +703,7 @@ except Exception as e:
 			const toggle = document.createElement("button");
 			toggle.type = "button";
 			toggle.classList.add("jp-rawplot-toggle");
-			toggle.classList.add(initial ? "checked" : "unchecked");
+			toggle.setAttribute("aria-pressed", String(initial));
 			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
 
 			toggle.addEventListener("click", () => {
@@ -712,11 +712,10 @@ except Exception as e:
 					return;
 				}
 
-				const checked = toggle.classList.toggle("checked");
-				toggle.classList.toggle("unchecked", !checked);
-				toggle.dataset.checked = String(checked);
-
-				callback(checked);
+				const checked = toggle.getAttribute("aria-pressed") === "true";
+				const newState = !checked;
+				toggle.setAttribute("aria-pressed", String(newState));
+				callback(newState);
 			});
 
 			return toggle;
@@ -761,20 +760,18 @@ except Exception as e:
 		});
 
 		// Hide options when clicked elsewhere
-		document.addEventListener("click", (e) => {
+		raw_plot_widget.node.addEventListener("click", (e) => {
 			const temp: Node = e.target as Node
 			if (!optionsModal.contains(temp) && !optionsToggle.contains(temp)) {
 				optionsModal.classList.remove("jp-visible");
-				optionsToggle.classList.toggle("checked", false);
-				optionsToggle.classList.toggle("unchecked", true);
-				optionsToggle.dataset.checked = String(false);
+				optionsToggle.setAttribute("aria-pressed", "false");
 			}
 		});
 
 		// --- MAX POINTS INPUT ---
 		const numberLabel = document.createElement('label');
 		numberLabel.innerHTML = `<i class="fa fa-chart-line"></i> Max Points`;
-		numberLabel.classList.add("jp-rawplot-toggle", "unchecked");
+		numberLabel.classList.add("jp-rawplot-label");
 
 		const min_max_points = 10000;
 		const numberInput = document.createElement('input');
@@ -793,7 +790,7 @@ except Exception as e:
 		// --- COLOR GRADE SELECT ---
 		const colorGradeLabel = document.createElement('label');
 		colorGradeLabel.innerHTML = `<i class="fa fa-palette"></i> Color Grade`;
-		colorGradeLabel.classList.add("jp-rawplot-toggle", "unchecked");
+		colorGradeLabel.classList.add("jp-rawplot-label");
 
 		const colorGradeSelect = document.createElement('select');
 		colorGradeSelect.classList.add("jp-rawplot-select");
