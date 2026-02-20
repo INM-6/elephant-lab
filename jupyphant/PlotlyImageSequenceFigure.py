@@ -20,6 +20,10 @@ class PlotlyImageSequenceFigure():
             # Shape: (num_frames, height, width)
             num_frames, height, width = image_sequence.shape
 
+            seq_name = getattr(image_sequence, "name", "Unnamed sequence")
+            duration = image_sequence.t_stop - image_sequence.t_start
+            title_text = f"{seq_name}<br><sup>Duration: {duration}</sup>"
+
             self.figs.append(self.go.Figure(
                 data=self.go.Heatmap(
                     z=image_sequence[0].magnitude,  # first frame
@@ -31,7 +35,11 @@ class PlotlyImageSequenceFigure():
                     )
                 ),
                 layout=self.go.Layout(
-                    title=f"Duration: {image_sequence.t_stop - image_sequence.t_start}",
+                    title=dict(
+                        text=title_text,
+                        x=0.5,   # center
+                        xanchor="center"
+                    ),
                     height=500,
                     xaxis=dict(title=image_sequence.spatial_scale.__str__()),
                     yaxis=dict(
