@@ -699,12 +699,13 @@ except Exception as e:
 		const buttonContainer = document.createElement("div");
 		buttonContainer.classList.add("jp-rawplot-button-container");
 
-		const createToggle = (icon: string, label: string, initial: boolean, is_toggle: boolean, callback: (state: boolean) => void) => {
+		const createToggle = (icon: string, label: string, description: string, initial: boolean, is_toggle: boolean, callback: (state: boolean) => void) => {
 			const toggle = document.createElement("button");
 			toggle.type = "button";
 			toggle.classList.add("jp-rawplot-toggle");
 			toggle.setAttribute("aria-pressed", String(initial));
 			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
+			toggle.title = description;
 
 			toggle.addEventListener("click", () => {
 				if (!is_toggle) {
@@ -721,22 +722,22 @@ except Exception as e:
 			return toggle;
 		};
 
-		const darkmodeToggle = createToggle('fa-moon', 'Dark', true, true, (state) => {
+		const darkmodeToggle = createToggle('fa-moon', 'Dark', 'Switch between dark and light mode', true, true, (state) => {
 			const code = `jupyphant_entity.jupyphant_plot.update_jupyterlab_plot_theme("${state ? "dark" : "white"}")`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
-		const overlapToggle = createToggle('fa-layer-group', 'Overlap', false, true, (state) => {
+		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
 			const code = `jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${state ? "True" : "False"})`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
-		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', true, true, (state) => {
+		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', true, true, (state) => {
 			const code = `jupyphant_entity.jupyphant_plot.set_zero_based(${state ? "True" : "False"})`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
-		const upscaleButton = createToggle('fa-expand-arrows-alt', 'Upscale', false, false, () => {
+		const upscaleButton = createToggle('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', false, false, () => {
 			let max_points = Number(numberInput.value);
 			if (max_points < min_max_points) {
 				max_points = min_max_points;
@@ -746,7 +747,7 @@ except Exception as e:
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
-		const resetScaleButton = createToggle('fa-undo', 'Reset Scale', false, false, () => {
+		const resetScaleButton = createToggle('fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', false, false, () => {
 			const code = `jupyphant_entity.jupyphant_plot.reset_scale()`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
@@ -755,7 +756,7 @@ except Exception as e:
 		optionsModal.classList.add("jp-rawplot-options-modal");
 
 		// --- OPTIONS MODAL BUTTON ---
-		const optionsToggle = createToggle('fa-cogs', 'Options', false, true, (state) => {
+		const optionsToggle = createToggle('fa-cogs', 'Options', '', false, true, (state) => {
 			optionsModal.classList.toggle("jp-visible", state);
 		});
 
@@ -783,6 +784,7 @@ except Exception as e:
 
 		const maxNumberInput = document.createElement("div");
 		maxNumberInput.classList.add("jp-rawplot-row");
+		maxNumberInput.title = "Maximum number of points to be plotted. Increasing this number can increase the detail of the plot, but also increases loading times.";
 
 		maxNumberInput.appendChild(numberLabel);
 		maxNumberInput.appendChild(numberInput);
@@ -809,6 +811,7 @@ except Exception as e:
 
 		const colorGrade = document.createElement('div');
 		colorGrade.classList.add("jp-rawplot-row");
+		colorGrade.title = "Color grade for the image sequence plot";
 		colorGrade.appendChild(colorGradeLabel);
 		colorGrade.appendChild(colorGradeSelect);
 
