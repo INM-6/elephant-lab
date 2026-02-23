@@ -33,3 +33,105 @@
 .no-left-spacing .jp-OutputArea-prompt {
   display: none !important;
 }
+
+.plotly .updatemenu-button text {
+  fill: rgb(0, 0, 0) !important;
+}
+
+.plotly .updatemenu-button rect {
+  fill: rgb(101, 101, 101) !important;
+  stroke: rgb(41, 41, 41) !important;
+}
+
+.jp-rawplot-label {
+  color: var(--jp-ui-font-color1);
+  font-size: var(--jp-ui-font-size1);
+  opacity: 0.85;
+}
+
+.jp-rawplot-toggle {
+  cursor: pointer;
+  padding: 4px 6px;
+  user-select: none;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: inherit;
+  color: var(--jp-ui-font-color1);
+}
+
+.jp-rawplot-toggle:hover {
+  background: var(--jp-layout-color2);
+}
+
+.jp-rawplot-toggle:active {
+  background: var(--jp-layout-color3);
+}
+
+.jp-rawplot-toggle[aria-pressed="true"] {
+  font-weight: bold;
+  background: var(--jp-layout-color3);
+  border: 1px solid var(--jp-border-color2);
+}
+
+.jp-rawplot-button-container {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 6px 12px;
+}
+
+.jp-rawplot-options-modal {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 6px;
+  background: var(--jp-layout-color1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  width: max-content;
+  min-width: 220px;
+}
+
+.jp-rawplot-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jp-rawplot-input {
+  width: 100px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--jp-border-color2);
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+}
+
+.jp-rawplot-select {
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--jp-border-color2);
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  cursor: pointer;
+}
+
+.jp-rawplot-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--jp-layout-color1);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--jp-border-color2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.jp-visible {
+  display: flex !important;
+}

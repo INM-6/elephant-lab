@@ -134,3 +134,5 @@ dmypy.json
 yarn.lock
 
 .vscode/
+
+uv.lock

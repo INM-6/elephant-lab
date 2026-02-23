@@ -113,31 +113,6 @@ def create_explorer_info(jupyphant_entity):
     jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
     display(output_node_info)
 
-def raw_plot(jupyphant_entity, overlap_changes=False):
-    import IPython
-    selected_ids = get_selected_neo_ids(jupyphant_entity)
-    with jupyphant_entity.output_node_raw_plot:
-        IPython.display.clear_output()
-        raw_st = jupyphant_entity.create_rasterplot(selected_ids=selected_ids, overlap_changes=overlap_changes)
-        jupyphant_entity.raw_st = raw_st
-        if raw_st:
-            raw_st.display()
-        raw_anasig = jupyphant_entity.create_lfpplot(selected_ids=selected_ids, overlap_changes=overlap_changes)
-        jupyphant_entity.raw_anasig = raw_anasig
-        if raw_anasig:
-            raw_anasig.display()
-
-def create_explorer_raw_plot(jupyphant_entity):
-    from IPython.display import display
-    from ipywidgets import Output
-
-    def on_selected_change_raw():
-        raw_plot(jupyphant_entity)
-
-    jupyphant_entity.output_node_raw_plot = Output(layout={'width': "100%", 'height': 'auto'})
-    jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_raw)
-    display(jupyphant_entity.output_node_raw_plot)
-
 
 def create_explorer_statistics(jupyphant_entity):
     import IPython
@@ -145,7 +120,7 @@ def create_explorer_statistics(jupyphant_entity):
     from ipywidgets import Output, Layout
 
     def on_selected_change_statistics():
-        selected_ids = get_selected_neo_ids(jupyphant_entity)
+        selected_ids = jupyphant_entity.get_selected_neo_ids()
         with output_node_statistic:
             IPython.display.clear_output()
             fig = jupyphant_entity.statistics_of_selected_nodes(selected_ids=selected_ids)
@@ -156,16 +131,8 @@ def create_explorer_statistics(jupyphant_entity):
     jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_statistics)
     display(output_node_statistic)
 
-def get_selected_neo_ids(jupyphant_entity):
-    selected_ids = [
-        jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[node._id]
-        for node in jupyphant_entity.selected_neo_objects
-        if node._id in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash
-    ]
-    return selected_ids
-
 def get_object_of_ids(jupyphant_entity):
-    selected_ids = get_selected_neo_ids(jupyphant_entity)
+    selected_ids = jupyphant_entity.get_selected_neo_ids()
     if (isinstance(selected_ids, list)):
         return [jupyphant_entity.map_neo_obj_hash_to_neo_obj[selected_id] for selected_id in selected_ids]
     return jupyphant_entity.map_neo_obj_hash_to_neo_obj[selected_ids]
@@ -193,7 +160,7 @@ def save_selected_neo_objects(jupyphant_entity, filepath="output_file.nix"):
     if not filepath.endswith('.nix'):
         filepath += '.nix'
     
-    selected_ids = get_selected_neo_ids(jupyphant_entity)
+    selected_ids = jupyphant_entity.get_selected_neo_ids()
     neo_objs_to_export = [get_neo_obj_from_id(jupyphant_entity, selected_id) for selected_id in selected_ids]
 
     export_block = Block(name="Exported Data")
@@ -222,34 +189,3 @@ def save_selected_neo_objects(jupyphant_entity, filepath="output_file.nix"):
 
     with NixIO(filename=filepath, mode='ow') as nix_io:
         nix_io.write_all_blocks(blocks_to_write)
-
-def set_raw_plot_overlap(jupyphant_entity, overlap):
-    jupyphant_entity.raw_plot_overlap = overlap
-    def update_overlap(fig):
-        if overlap:
-            fig.overlap()
-        else:
-            fig.stack()
-        if fig.compress and fig.overlap_on_compress:
-            return True
-        return False
-    if update_plotly_figures(jupyphant_entity, update_overlap):
-        raw_plot(jupyphant_entity, overlap_changes=True)
-
-def update_jupyterlab_theme(jupyphant_entity, theme_name):
-    jupyphant_entity.jupyterlab_theme = theme_name
-    update_plotly_figures(jupyphant_entity, lambda fig: fig.update_jupyterlab_theme(theme_name))
-
-def update_plotly_figures(jupyphant_entity, to_update):
-    changes_needed = False
-    raw_st = None
-    if hasattr(jupyphant_entity, 'raw_st'):
-        raw_st = jupyphant_entity.raw_st
-    if raw_st:
-        changes_needed = to_update(raw_st) or changes_needed
-    raw_anasig = None
-    if hasattr(jupyphant_entity, 'raw_anasig'):
-        raw_anasig = jupyphant_entity.raw_anasig
-    if raw_anasig:
-        changes_needed = to_update(raw_anasig) or changes_needed
-    return changes_needed
