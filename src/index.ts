@@ -695,6 +695,10 @@ except Exception as e:
 		}
 	}
 
+	private convert_bool_to_python_bool(bool: boolean): string {
+		return bool ? "True" : "False";
+	}
+
 	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
 		const buttonContainer = document.createElement("div");
 		buttonContainer.classList.add("jp-rawplot-button-container");
@@ -728,12 +732,12 @@ except Exception as e:
 		});
 
 		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
-			const code = `jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${state ? "True" : "False"})`;
+			const code = `jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${this.convert_bool_to_python_bool(state)})`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
 		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', true, true, (state) => {
-			const code = `jupyphant_entity.jupyphant_plot.set_zero_based(${state ? "True" : "False"})`;
+			const code = `jupyphant_entity.jupyphant_plot.set_zero_based(${this.convert_bool_to_python_bool(state)})`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
@@ -875,11 +879,7 @@ except Exception as e:
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
 		let code = `
 			from jupyphant.kernelcode import expand_neo_tree
-			// TODO: is there a better way to convert ts bool into python bool?
-			if ("${checked}" == "true"):
-				checked = True
-			else:
-				checked = False
+			checked = ${this.convert_bool_to_python_bool(checked)}
 			expand_neo_tree(jupyphant_entity, checked)
 			`
 		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
