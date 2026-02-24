@@ -77,25 +77,26 @@ include = [
     "package.json",
     "tsconfig.json",
     "install.json",
+    "yarn.lock",
     "README.md",
     "LICENSE"
 ]
 exclude = [".github"]
 
 [tool.hatch.build]
-artifacts = ["labextension"]
+artifacts = ["jupyphant/labextension"]
 
 
 [tool.hatch.build.targets.wheel.shared-data]
-"labextension" = "share/jupyter/labextensions/jupyphant"
+"jupyphant/labextension" = "share/jupyter/labextensions/jupyphant"
 "install.json" = "share/jupyter/labextensions/jupyphant/install.json"
 
 [tool.hatch.build.hooks.jupyter-builder]
 dependencies = ["hatch-jupyter-builder>=0.5"]
 build-function = "hatch_jupyter_builder.npm_builder"
 ensured-targets = [
-    "labextension/static/style.js",
-    "labextension/package.json",
+    "jupyphant/labextension/static/style.js",
+    "jupyphant/labextension/package.json",
 ]
 
 

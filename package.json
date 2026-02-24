@@ -80,7 +80,7 @@
   },
   "jupyterlab": {
     "extension": true,
-    "outputDir": "labextension",
+    "outputDir": "jupyphant/labextension",
     "sharedPackages": {
       "@jupyterlab/application": {
         "bundled": false,
