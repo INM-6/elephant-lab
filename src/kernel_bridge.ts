@@ -6,16 +6,6 @@ export interface IExecutionResult {
     outputs: any[];
 }
 
-export type DraggableItem = {
-    id: string;
-    name: string;
-    code: string;
-    is_class: boolean;
-    parameters: { name: string, default: string }[];
-    type?: string;
-    variable_name?: string;
-};
-
 export class KernelBridge {
     private session: ISessionContext;
 

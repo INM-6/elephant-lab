@@ -55,7 +55,8 @@ import {
 // Own imports
 // Python Code to execute in the kernel
 import {
-	pythonCode
+	pythonCode,
+	PythonCodeKey
 } from './kernelcode';
 // Style from css
 import '../style/index.css';
@@ -76,7 +77,6 @@ class JupyphantExtension {
 	private _updateTimer: number | null = null;
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
-	private outarea_nodeexplorer_statistics: OutputArea | null;
 	private outarea_neo_tree: OutputArea | null;
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
@@ -101,7 +101,6 @@ class JupyphantExtension {
 		this.widget = new DockPanel({ tabsMovable: false });
 		this.outarea_nodeexplorer_info = null;
 		this.outarea_nodeexplorer_raw = null;
-		this.outarea_nodeexplorer_statistics = null;
 		this.outarea_neo_tree = null;
 		this.output_tabs = null;
 		this.kernelBridge = null;
@@ -116,17 +115,15 @@ class JupyphantExtension {
 		console.log("Jupyphant: Initializing kernel state...");
 		this.kernelBridge = new KernelBridge(session);
 
-		await this.executeCodeInOutputArea(pythonCode['setupEnv'], this.outarea_neo_tree!, session, false);
+		await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.SetupEnv], this.outarea_neo_tree!, session, false);
 
 		console.log("Jupyphant: Environment setup complete.");
 		try {
 			// Execute Jupyphant Code to create Neo Tree / Information and Plots  
-			await this.executeCodeInOutputArea(pythonCode['createTree'], this.outarea_neo_tree!, session);
-			await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, session, false);
-			await this.executeCodeInOutputArea(pythonCode['createExplorerInfo'], this.outarea_nodeexplorer_info!, session);
-			const createExplorerRawPlotCode = 'jupyphant_entity.jupyphant_plot.create_explorer_raw_plot()'
-			await this.executeCodeInOutputArea(createExplorerRawPlotCode, this.outarea_nodeexplorer_raw!, session);
-			await this.executeCodeInOutputArea(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
+			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateTree], this.outarea_neo_tree!, session);
+			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.UpdateTree], this.outarea_neo_tree!, session, false);
+			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateExplorerInfo], this.outarea_nodeexplorer_info!, session);
+			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateExplorerRaw], this.outarea_nodeexplorer_raw!, session);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Jupyphant: FAILED to initialize kernel state:", error);
@@ -180,8 +177,8 @@ class JupyphantExtension {
 		this.notebook_tracker.forEach(notebookWidget => {
 			if (notebookWidget.title.className.includes('jupyphant-active-notebook')) {
 				notebookWidget.title.className = notebookWidget.title.className
-				.replace('jupyphant-active-notebook', '')
-				.trim();
+					.replace('jupyphant-active-notebook', '')
+					.trim();
 			}
 		});
 
@@ -227,7 +224,7 @@ class JupyphantExtension {
 
 			this._updateTimer = window.setTimeout(async () => {
 				await Promise.all([
-					this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, initialSession, false),
+					this.executeCodeInOutputArea(pythonCode[PythonCodeKey.UpdateTree], this.outarea_neo_tree!, initialSession, false),
 				]);
 			}, 500);
 		});
@@ -337,12 +334,7 @@ class JupyphantExtension {
 		infoButton.title = 'About Jupyphant';
 		infoButton.className = 'workflow-button workflow-button-io';
 		infoButton.onclick = async () => {
-			let code =
-				`
-from jupyphant import __version__
-print(__version__)
-			`
-			const result = await this.kernelBridge!.executeCode(code, true);
+			const result = await this.kernelBridge!.executeCode(pythonCode[PythonCodeKey.Version], true);
 
 			const body = document.createElement('div');
 			body.style.textAlign = 'center';
@@ -405,7 +397,7 @@ print(__version__)
 			const label = document.createElement("label");
 			label.dataset.key = key;
 
-			const defaultState = (key === "open_all") ? false : true; 
+			const defaultState = (key === "open_all") ? false : true;
 			const isChecked = currentFilterStates[key] ?? defaultState;
 
 			label.dataset.checked = isChecked ? "true" : "false";
@@ -430,9 +422,9 @@ print(__version__)
 
 				this.saveFilterState(key, isNowChecked);
 
-				key === "open_all" 
-				? this.neo_tree_expand(isNowChecked, session) 
-				: this.neo_tree_filter(label.dataset.key!, session);
+				key === "open_all"
+					? this.neo_tree_expand(isNowChecked, session)
+					: this.neo_tree_filter(label.dataset.key!, session);
 
 			};
 
@@ -483,8 +475,7 @@ print(__version__)
 						}
 
 						if (ioClass !== null) {
-							const getVarsCode = `import json, __main__; print(json.dumps(list(__main__.__dict__.keys())))`;
-							const varsResult = await this.kernelBridge!.executeCode(getVarsCode, true);
+							const varsResult = await this.kernelBridge!.executeCode(pythonCode[PythonCodeKey.GetVars], true);
 							let allVars: string[] = [];
 							if (varsResult && varsResult.outputs.length > 0) {
 								const output = varsResult.outputs[0];
@@ -525,7 +516,7 @@ self.update_tree()
 `;
 							}
 							await this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
-							await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, session, false);
+							await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.UpdateTree], this.outarea_neo_tree!, session, false);
 						} else if (dialogResult.button.label === 'Automatic') {
 							showDialog({
 								title: 'Error',
@@ -604,56 +595,8 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 				});
 				return;
 			}
-			const code = `
-import json
-import __main__
 
-try:
-    if 'jupyphant_entity' in __main__.__dict__:
-        jupyphant = __main__.__dict__['jupyphant_entity']
-        selected_nodes = jupyphant.ipytree_of_neo_objects.selected_nodes
-        
-        if not selected_nodes:
-            print(json.dumps({"code_to_insert": "", "error": "No nodes selected in the Neo tree." }))
-        else:
-            paths = []
-            objects_for_list = []
-            for node in selected_nodes:
-                if node._id in jupyphant.map_ipytree_node_id_to_neo_obj:
-                    neo_obj = jupyphant.map_ipytree_node_id_to_neo_obj[node._id]
-                    
-                    variable_name = node.metadata.get('variable_name', '')
-                    path = jupyphant._get_obj_path(neo_obj, variable_name=variable_name)
-                    if path:
-                        paths.append(path)
-                        objects_for_list.append(neo_obj)
-
-            code_to_insert = ""
-            if len(paths) > 1:
-                all_vars = list(__main__.__dict__.keys())
-                list_base_name = "jupyphant_list"
-                counter = 0
-                list_var_name = f"{list_base_name}_{counter}"
-                while list_var_name in all_vars:
-                    counter += 1
-                    list_var_name = f"{list_base_name}_{counter}"
-                
-                __main__.__dict__[list_var_name] = objects_for_list
-                
-                code_to_insert = list_var_name
-            elif len(paths) == 1:
-                code_to_insert = paths[0]
-
-            print(json.dumps({"code_to_insert": code_to_insert}))
-    else:
-        print(json.dumps({"code_to_insert": "", "error": "jupyphant_entity not found"}))
-
-except Exception as e:
-    import sys, traceback
-    print(json.dumps({"code_to_insert": "", "error": str(e), "traceback": traceback.format_exc()}), file=sys.stdout)
-			`;
-
-			const result = await this.kernelBridge!.executeCode(code, true);
+			const result = await this.kernelBridge!.executeCode(pythonCode[PythonCodeKey.InsertCode], true);
 
 			if (result && result.outputs.length > 0) {
 				const output = result.outputs[0];
@@ -713,6 +656,10 @@ except Exception as e:
 		}
 	}
 
+	private convert_bool_to_python_bool(bool: boolean): string {
+		return bool ? "True" : "False";
+	}
+
 	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
 		const buttonContainer = document.createElement("div");
 		buttonContainer.classList.add("jp-rawplot-button-container");
@@ -746,12 +693,12 @@ except Exception as e:
 		});
 
 		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
-			const code = `jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${state ? "True" : "False"})`;
+			const code = `jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${this.convert_bool_to_python_bool(state)})`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
 		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', true, true, (state) => {
-			const code = `jupyphant_entity.jupyphant_plot.set_zero_based(${state ? "True" : "False"})`;
+			const code = `jupyphant_entity.jupyphant_plot.set_zero_based(${this.convert_bool_to_python_bool(state)})`;
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
@@ -892,13 +839,9 @@ update_tree(jupyphant_entity)
 
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
 		let code = `
-from jupyphant.kernelcode import expand_neo_tree
-// TODO: is there a better way to convert ts bool into python bool?
-if ("${checked}" == "true"):
-	checked = True
-else:
-	checked = False
-expand_neo_tree(jupyphant_entity, checked)
+			from jupyphant.kernelcode import expand_neo_tree
+			checked = ${this.convert_bool_to_python_bool(checked)}
+			expand_neo_tree(jupyphant_entity, checked)
 			`
 		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
 	}
@@ -987,7 +930,6 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	//Track and restore extension's tabs, needs to work together with restoration of main area
 	// When Main Area is restored, it needs to get all available Notebooks and Consoles
 	// and then check all of them and connect each tab to the right one
-	// TODO: This is not yet completed
 	// Tracker has a namespace where everything is saved;
 	// this namespace needs to have the same name as in the last session
 	// to restore the last session

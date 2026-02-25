@@ -1,71 +1,8 @@
-# XXX: In general this is bad practice but might be useful for this exact usecase
-# Importing main namespace in order to be able to access objects created in
-# JupyterLab Python kernel
-# TODO: move all imports inside the class
-import __main__
-import time
-
-import joblib
-
-import neo
-
-# neo abbreviations and font-awesome icons
-# TODO: maybe create own icons or use more accurate ones from newer fontawesome version (see suggestions in comments)
-NEO_ABBREVIATIONS = {"Block": {"abbr": "", "icon": "cube"},  # folder-grid
-                     "Segment": {"abbr": "", "icon": "columns"},  # grid-divider
-                     "Group": {"abbr": "", "icon": "object-group"},  # chart-tree-map
-                     "ChannelView": {"abbr": "", "icon": "eye"},
-                     "IrregularlySampledSignal": {"abbr": "", "icon": "wave-square"},
-                     "AnalogSignal": {"abbr": "", "icon": "water"},  # waveform
-                     "SpikeTrain": {"abbr": "", "icon": "braille"},
-                     "SpikeTrainList": {"abbr": "", "icon": "bars"},  # barcode-scan
-                     "Epoch": {"abbr": "", "icon": "hourglass"},  # timeline , ruler-horizontal
-                     "Event": {"abbr": "", "icon": "map-marker"},  # location-dot
-                     "ImageSequence": {"abbr": "", "icon": "images"},
-                     "RegionOfInterest": {"abbr": "", "icon": "map"},
-                     "CircularRegionOfInterest": {"abbr": "", "icon": "circle"},
-                     "PolygonRegionOfInterest": {"abbr": "", "icon": "draw-polygon"},
-                     "RectangularRegionOfInterest": {"abbr": "", "icon": "square"},
-                     # python built-in containters
-                     "list": {"abbr": "", "icon": "list"}
-                     }
-
-STRING_TO_NEO_OBJ = {
-    "spiketrain": neo.SpikeTrain, 
-    "analogsignal": neo.AnalogSignal, 
-    "block": neo.Block, 
-    "segment": neo.Segment, 
-    "epoch": neo.Epoch, 
-    "channelview": neo.ChannelView, 
-    "group": neo.Group,
-    "irregularlysampledsignal": neo.IrregularlySampledSignal,
-    "event": neo.Event,
-    "imagesequence": neo.ImageSequence,
-    "circularregionofinterest": neo.CircularRegionOfInterest,
-    "polygonregionofinterest": neo.PolygonRegionOfInterest,
-    "rectangularregionofinterest": neo.RectangularRegionOfInterest
-}
-NEO_OBJS_TO_SHOW = [
-    neo.AnalogSignal, 
-    neo.SpikeTrain, 
-    neo.Block, 
-    neo.Segment, 
-    neo.Epoch, 
-    neo.ChannelView,
-    neo.Group,
-    neo.IrregularlySampledSignal,
-    neo.Event,
-    neo.ImageSequence,
-    neo.CircularRegionOfInterest,
-    neo.PolygonRegionOfInterest,
-    neo.RectangularRegionOfInterest
-]
 class Jupyphant:
     # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
     from .jupyphant_plot import Jupyphant_plot
 
-    import json
     # Dealing with the Python kernel's namespace, e.g.,
     # listing all defined variables
     from IPython.core.magics.namespace import NamespaceMagics
@@ -75,33 +12,31 @@ class Jupyphant:
     # And is used to query and manipulate them
     nsm = NamespaceMagics()
     nsm.shell = get_ipython().kernel.shell
-    # For displaying widgets
-    from IPython.display import display
+    from IPython.lib.pretty import RepresentationPrinter
     # Neo classes need to be imported to work with them
     # Depending on the usage situation, import using
     # sys.path.append might be necessary
     from neo.core.baseneo import BaseNeo
     from neo.core.container import Container
-    from neo.core.regionofinterest import RegionOfInterest, CircularRegionOfInterest, RectangularRegionOfInterest, \
-        PolygonRegionOfInterest
+    from neo.core.regionofinterest import RegionOfInterest, CircularRegionOfInterest, RectangularRegionOfInterest, PolygonRegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
-    from neo import Block, Segment, Group, SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence
-    from collections import Counter
-    from neo.test.tools import assert_same_sub_schema
-    assert_same_sub_schema = staticmethod(assert_same_sub_schema)
+    from neo import Block, Segment, Group, SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence, ChannelView
+    from collections import Counter, defaultdict
     import numpy as np
     import quantities as pq
-    from elephant import statistics, kernels
-    from elephant.conversion import BinnedSpikeTrain
-    from elephant.spike_train_correlation import correlation_coefficient
-    correlation_coefficient = staticmethod(correlation_coefficient)
-    # TODO: Use new viziphant for plotting
-    # This relies on the initial version of viziphant
-    # Widgets used for display
-    from ipywidgets import Output
+    from elephant import statistics
     # ipytree provides a tree structure widget
     # Used to display the Neo object hierarchy
     from ipytree import Tree, Node
+    from io import StringIO
+    import re
+    import sys
+    # XXX: In general this is bad practice but might be useful for this exact usecase
+    # Importing main namespace in order to be able to access objects created in JupyterLab Python kernel
+    import __main__
+    import time
+
+    import joblib
 
     class SimpleEvent:
         def __init__(self):
@@ -128,6 +63,58 @@ class Jupyphant:
         and plots.
         They are used to check for changes in neo objects and to display the current structure.
         """
+        # neo abbreviations and font-awesome icons
+        # TODO: maybe create own icons or use more accurate ones from newer fontawesome version (see suggestions in comments)
+        self.NEO_ABBREVIATIONS = {"Block": {"abbr": "", "icon": "cube"},  # folder-grid
+                            "Segment": {"abbr": "", "icon": "columns"},  # grid-divider
+                            "Group": {"abbr": "", "icon": "object-group"},  # chart-tree-map
+                            "ChannelView": {"abbr": "", "icon": "eye"},
+                            "IrregularlySampledSignal": {"abbr": "", "icon": "wave-square"},
+                            "AnalogSignal": {"abbr": "", "icon": "water"},  # waveform
+                            "SpikeTrain": {"abbr": "", "icon": "braille"},
+                            "SpikeTrainList": {"abbr": "", "icon": "bars"},  # barcode-scan
+                            "Epoch": {"abbr": "", "icon": "hourglass"},  # timeline , ruler-horizontal
+                            "Event": {"abbr": "", "icon": "map-marker"},  # location-dot
+                            "ImageSequence": {"abbr": "", "icon": "images"},
+                            "RegionOfInterest": {"abbr": "", "icon": "map"},
+                            "CircularRegionOfInterest": {"abbr": "", "icon": "circle"},
+                            "PolygonRegionOfInterest": {"abbr": "", "icon": "draw-polygon"},
+                            "RectangularRegionOfInterest": {"abbr": "", "icon": "square"},
+                            # python built-in containters
+                            "list": {"abbr": "", "icon": "list"}
+                            }
+
+        self.STRING_TO_NEO_OBJ = {
+            "spiketrain": self.SpikeTrain, 
+            "analogsignal": self.AnalogSignal, 
+            "block": self.Block, 
+            "segment": self.Segment, 
+            "epoch": self.Epoch, 
+            "channelview": self.ChannelView, 
+            "group": self.Group,
+            "irregularlysampledsignal": self.IrregularlySampledSignal,
+            "event": self.Event,
+            "imagesequence": self.ImageSequence,
+            "circularregionofinterest": self.CircularRegionOfInterest,
+            "polygonregionofinterest": self.PolygonRegionOfInterest,
+            "rectangularregionofinterest": self.RectangularRegionOfInterest
+        }
+        self.NEO_OBJS_TO_SHOW = [
+            self.AnalogSignal, 
+            self.SpikeTrain, 
+            self.Block, 
+            self.Segment, 
+            self.Epoch, 
+            self.ChannelView,
+            self.Group,
+            self.IrregularlySampledSignal,
+            self.Event,
+            self.ImageSequence,
+            self.CircularRegionOfInterest,
+            self.PolygonRegionOfInterest,
+            self.RectangularRegionOfInterest
+        ]
+
         self.neo_objs_and_lists_of_neo_objs_with_var_name = {}
         self.neo_objs_changed_after_update = False
         self.ipytree_of_neo_objects = None
@@ -225,14 +212,14 @@ class Jupyphant:
     
     def show_neo_obj(self, neo_obj_string):
         try:
-            neo_obj_type = STRING_TO_NEO_OBJ[neo_obj_string]
+            neo_obj_type = self.STRING_TO_NEO_OBJ[neo_obj_string]
         except KeyError:
             return
         
-        if neo_obj_type in NEO_OBJS_TO_SHOW:
-            NEO_OBJS_TO_SHOW.remove(neo_obj_type)
+        if neo_obj_type in self.NEO_OBJS_TO_SHOW:
+            self.NEO_OBJS_TO_SHOW.remove(neo_obj_type)
         else:
-            NEO_OBJS_TO_SHOW.append(neo_obj_type)
+            self.NEO_OBJS_TO_SHOW.append(neo_obj_type)
         self.filter_changed = True
         
     def get_neo_hash(self, neo_obj, hash_name="sha1"):
@@ -247,7 +234,7 @@ class Jupyphant:
         except Exception:
             pass
 
-        if isinstance(neo_obj, neo.AnalogSignal):
+        if isinstance(neo_obj, self.AnalogSignal):
             hashable_summary = (
                 neo_obj.magnitude,
                 str(neo_obj.units),
@@ -258,9 +245,9 @@ class Jupyphant:
                 neo_obj.description,
                 neo_obj.annotations
             )
-            result = joblib.hash(hashable_summary, hash_name=hash_name)
+            result = self.joblib.hash(hashable_summary, hash_name=hash_name)
 
-        elif isinstance(neo_obj, neo.IrregularlySampledSignal):
+        elif isinstance(neo_obj, self.IrregularlySampledSignal):
             hashable_summary = (
                 neo_obj.magnitude,
                 str(neo_obj.units),
@@ -269,9 +256,9 @@ class Jupyphant:
                 neo_obj.description,
                 neo_obj.annotations
             )
-            result = joblib.hash(hashable_summary, hash_name=hash_name)
+            result = self.joblib.hash(hashable_summary, hash_name=hash_name)
 
-        elif isinstance(neo_obj, neo.SpikeTrain):
+        elif isinstance(neo_obj, self.SpikeTrain):
             hashable_summary = (
                 neo_obj.times,
                 str(neo_obj.units),
@@ -281,9 +268,9 @@ class Jupyphant:
                 neo_obj.description,
                 neo_obj.annotations
             )
-            result = joblib.hash(hashable_summary, hash_name=hash_name)
+            result = self.joblib.hash(hashable_summary, hash_name=hash_name)
 
-        elif isinstance(neo_obj, (neo.Epoch, neo.Event)):
+        elif isinstance(neo_obj, (self.Epoch, self.Event)):
             hashable_summary = (
                 neo_obj.times,
                 neo_obj.labels,
@@ -292,9 +279,9 @@ class Jupyphant:
                 neo_obj.description,
                 neo_obj.annotations
             )
-            result = joblib.hash(hashable_summary, hash_name=hash_name)
+            result = self.joblib.hash(hashable_summary, hash_name=hash_name)
 
-        elif isinstance(neo_obj, (neo.Block, neo.Segment)):
+        elif isinstance(neo_obj, (self.Block, self.Segment)):
             hashable_summary = [
                 neo_obj.name,
                 neo_obj.description,
@@ -305,10 +292,10 @@ class Jupyphant:
                 for child in child_container:
                     hashable_summary.append(self.get_neo_hash(child, hash_name))
 
-            result = joblib.hash(tuple(hashable_summary), hash_name=hash_name)
+            result = self.joblib.hash(tuple(hashable_summary), hash_name=hash_name)
 
         else:
-            result = joblib.hash(neo_obj, hash_name)
+            result = self.joblib.hash(neo_obj, hash_name)
 
         try:
             self.hash_cache[obj_id] = result
@@ -323,7 +310,7 @@ class Jupyphant:
         Called before updating plots, thus, usually at every cell execution.
         """
         self.hash_cache = {}
-        neo_objs_hash_before_update = joblib.hash(self.last_known_hashes, hash_name='sha1')
+        neo_objs_hash_before_update = self.joblib.hash(self.last_known_hashes, hash_name='sha1')
 
         self.neo_objs_and_lists_of_neo_objs_with_var_name.clear()
 
@@ -341,7 +328,7 @@ class Jupyphant:
             # This requires to have this whole file as a string in the TypeScript code
             # Objects are accessed using their name returned by who_ls() and the dict
             try:
-                obj_from_kernel_ns = __main__.__dict__[variable_name]
+                obj_from_kernel_ns = self.__main__.__dict__[variable_name]
             except KeyError:
                 continue
             # Select only neo objects and SpikeTrainLists / lists with neo objects
@@ -356,7 +343,7 @@ class Jupyphant:
 
 
         current_hashes = [self.get_neo_hash(obj, 'sha1') for obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values()]
-        neo_objs_hash_after_update = joblib.hash(current_hashes, hash_name='sha1')
+        neo_objs_hash_after_update = self.joblib.hash(current_hashes, hash_name='sha1')
 
         if neo_objs_hash_before_update != neo_objs_hash_after_update or self.filter_changed:
             self.neo_objs_changed_after_update = True
@@ -373,17 +360,17 @@ class Jupyphant:
         Called at every cell execution
         """
         # Timer used for debugging only
-        start = time.time()
+        start = self.time.time()
         
         # Update all neo objects
         self.update()
-        print(f"After update of all neo objects: {time.time() - start}")
+        print(f"After update of all neo objects: {self.time.time() - start}")
         
         if self.ipytree_of_neo_objects is not None and self.neo_objs_changed_after_update:
             # Create one tree node per neo block and name of node is name of block
             nodes = []
             for variable_name, neo_obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
-                if type(neo_obj) not in NEO_OBJS_TO_SHOW:
+                if type(neo_obj) not in self.NEO_OBJS_TO_SHOW:
                     continue
                 if hasattr(neo_obj, 'block') and neo_obj.block is not None:
                     continue
@@ -409,7 +396,7 @@ class Jupyphant:
                         node_neo_obj.opened = self.expand_all or (len(neo_obj.segments) < 5)
                     node_neo_obj.metadata = {"data-neo-object": "true", "variable_name": variable_name,
                                              "plain_description": plain_description}
-                    node_neo_obj.icon = NEO_ABBREVIATIONS[class_name]['icon']
+                    node_neo_obj.icon = self.NEO_ABBREVIATIONS[class_name]['icon']
                     node_neo_obj.open_icon_style = 'success'
                     node_neo_obj.close_icon_style = 'danger'
                     self._add_sub_nodes(node_neo_obj, neo_obj)
@@ -437,7 +424,7 @@ class Jupyphant:
                         node_neo_obj = self.Node(node_name)
                     node_neo_obj.opened = True
                     node_neo_obj.metadata = {"data-neo-object": "true", "variable_name": variable_name, "plain_description": plain_description}
-                    node_neo_obj.icon = NEO_ABBREVIATIONS[class_name]['icon']
+                    node_neo_obj.icon = self.NEO_ABBREVIATIONS[class_name]['icon']
                     node_neo_obj.open_icon_style = 'success'
                     node_neo_obj.close_icon_style = 'danger'
                     self._add_sub_nodes(node_neo_obj, neo_obj)
@@ -447,18 +434,17 @@ class Jupyphant:
                     self.map_ipytree_node_id_to_neo_obj_hash[node_neo_obj._id] = hash_neo_obj
                     self.map_ipytree_node_id_to_neo_obj[node_neo_obj._id] = neo_obj
 
-            print(f"After Blocks: {time.time() - start}")
+            print(f"After Blocks: {self.time.time() - start}")
             # print(f"Nodes After Blocks: {nodes}")
 
-            print(f"After Independent: {time.time() - start}")
+            print(f"After Independent: {self.time.time() - start}")
             # print(f"Nodes After Independent: {nodes}")
 
-            print(f"Calculation finished: {time.time() - start}")
-            import sys
-            sys.stdout.flush()
+            print(f"Calculation finished: {self.time.time() - start}")
+            self.sys.stdout.flush()
             # Runs asynchronously for Python kernel but blocks output via JS
             self.ipytree_of_neo_objects.nodes = nodes
-            print(f"Rendered: {time.time() - start}")
+            print(f"Rendered: {self.time.time() - start}")
         else:
             pass
 
@@ -486,7 +472,7 @@ class Jupyphant:
                 if hasattr(obj, attr_name):
                     attr_value_list = getattr(obj, attr_name)
                     try:
-                        if STRING_TO_NEO_OBJ[str(attr_name[:-1].lower())] not in NEO_OBJS_TO_SHOW:
+                        if self.STRING_TO_NEO_OBJ[str(attr_name[:-1].lower())] not in self.NEO_OBJS_TO_SHOW:
                             continue
                     except KeyError:
                         pass
@@ -524,15 +510,15 @@ class Jupyphant:
         elif isinstance(obj, (list, self.SpikeTrainList)) or obj.__class__.__name__ == 'ObjectList':
             
             for i, child_obj in enumerate(obj):
-                if type(child_obj) not in NEO_OBJS_TO_SHOW:
+                if type(child_obj) not in self.NEO_OBJS_TO_SHOW:
                     continue
                 child_obj_hash = self.get_neo_hash(child_obj, hash_name='sha1')
                 self.map_neo_obj_hash_to_neo_obj[child_obj_hash] = child_obj
                 
                 class_name = child_obj.__class__.__name__
-                if class_name not in NEO_ABBREVIATIONS:
+                if class_name not in self.NEO_ABBREVIATIONS:
                     class_name = 'list' if isinstance(child_obj, list) else 'SpikeTrainList'
-                    if class_name not in NEO_ABBREVIATIONS:
+                    if class_name not in self.NEO_ABBREVIATIONS:
                          class_name = 'Block'
                 # Define styles
                 NODE_STYLE = "border: 1px dotted var(--jp-border-color2); padding: 1px 4px; background-color: var(--jp-layout-color2); border-radius: 4px;"
@@ -549,7 +535,7 @@ class Jupyphant:
                     child_node = self.Node(node_name)
                 
                 child_node.metadata = {"data-neo-object": "true"}
-                child_node.icon = NEO_ABBREVIATIONS[class_name]['icon']
+                child_node.icon = self.NEO_ABBREVIATIONS[class_name]['icon']
                 child_node.open_icon_style = 'success'
                 child_node.close_icon_style = 'danger'
                 child_node.data = {"neo_id": id(obj), "neo_type": type(obj).__name__}
@@ -660,7 +646,7 @@ class Jupyphant:
     
     def _get_selected_neo_objects_by_class(self, neo_class_dict):
         """
-        neo_class_dict: {NeoKey: neo.class}
+        neo_class_dict: {NeoKey: neo.class (eg. neo.SpikeTrain)}
         Returns: {NeoKey: [selected neo objects in tree order]}
         """
 
@@ -884,8 +870,7 @@ class Jupyphant:
         pp.text(f"{bold}Multiple Object Types Selected{reset}\n")
         pp.text(f"  {bold}Total Objects:{reset} {len(items)}\n")
         
-        from collections import Counter
-        type_counts = Counter(type(item['obj']).__name__ for item in items)
+        type_counts = self.Counter(type(item['obj']).__name__ for item in items)
         
         pp.text(f"  {bold}Object Types:{reset}\n")
         for type_name, count in type_counts.items():
@@ -937,8 +922,6 @@ class Jupyphant:
             pp: instance of RepresentationPrinter
             cyle: boolean; False -> no self-recursion; True -> self-recursion
         """
-        import pprint
-        import re
         bold = '\033[1m'
         reset = '\033[0m'
 
@@ -953,7 +936,7 @@ class Jupyphant:
         if path:
             pp.text(f"{bold}{path}\n")
         
-        clean_node_name = re.sub(r'<[^>]+>', '', node_name)
+        clean_node_name = self.re.sub(r'<[^>]+>', '', node_name)
         pp.text(f"{bold}{clean_node_name}{reset}\n")
 
         # neo-container: Block, Segment, Group
@@ -1239,12 +1222,8 @@ class Jupyphant:
             pp.text("\n\n")
 
     def pretty_print_of_selected_neo_objects(self):
-        from io import StringIO
-        from IPython.lib.pretty import RepresentationPrinter
-        from collections import defaultdict
-
-        output = StringIO()
-        pp = RepresentationPrinter(output)
+        output = self.StringIO()
+        pp = self.RepresentationPrinter(output)
 
         if not self.selected_neo_objects:
             return
@@ -1262,7 +1241,7 @@ class Jupyphant:
             print(output.getvalue())
             return
         
-        grouped_objects = defaultdict(list)
+        grouped_objects = self.defaultdict(list)
         for item in selected_objects_with_node_name:
             # Handle lists of objects as a special type
             if isinstance(item['obj'], list):
