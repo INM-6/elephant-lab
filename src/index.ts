@@ -289,6 +289,17 @@ class JupyphantExtension {
 
 	} // end of initializeTab()
 
+	private getFilterStates(): Record<string, boolean> {
+		const saved = sessionStorage.getItem('jupyphant-filter-states');
+		return saved ? JSON.parse(saved) : {};
+	}
+
+	private saveFilterState(key: string, isChecked: boolean) {
+		const states = this.getFilterStates();
+		states[key] = isChecked;
+		sessionStorage.setItem('jupyphant-filter-states', JSON.stringify(states));
+	}
+
 	public createTopBar(session: ISessionContext) {
 		if (this.topBar) {
 			this.topBar.dispose();
@@ -377,6 +388,7 @@ print(__version__)
 			"rectangularregionofinterest": "square",
 			"open_all": "check",
 		}
+		const currentFilterStates = this.getFilterStates();
 
 		const filterContainer = document.createElement('div');
 		filterContainer.className = 'neo-filter-container';
@@ -386,13 +398,14 @@ print(__version__)
 			const iconName = neo_obj_filter_dict[key as keyof typeof neo_obj_filter_dict];
 			const label = document.createElement("label");
 			label.dataset.key = key;
-			if (key === "open_all") {
-				label.dataset.checked = "false";
-				label.classList.add('unchecked-label');
-			} else {
-				label.dataset.checked = "true";
-				label.classList.add('checked-label');
-			}
+
+			const defaultState = (key === "open_all") ? false : true; 
+			const isChecked = currentFilterStates[key] ?? defaultState;
+
+			label.dataset.checked = isChecked ? "true" : "false";
+			label.classList.add(isChecked ? 'checked-label' : 'unchecked-label');
+
+
 			const icon = document.createElement("i");
 			icon.className = `fa fa-${iconName}`
 			icon.setAttribute("aria-hidden", "true");
@@ -408,7 +421,13 @@ print(__version__)
 				} else {
 					label.classList.replace('checked-label', 'unchecked-label');
 				}
-				key === "open_all" ? this.neo_tree_expand(isNowChecked, session) : this.neo_tree_filter(label.dataset.key!, session);
+
+				this.saveFilterState(key, isNowChecked);
+
+				key === "open_all" 
+				? this.neo_tree_expand(isNowChecked, session) 
+				: this.neo_tree_filter(label.dataset.key!, session);
+
 			};
 
 			key == "open_all" ? label.title = `Expand all containers` : label.title = `Hide/Show ${key.charAt(0).toUpperCase() + key.slice(1)}(s)`;
