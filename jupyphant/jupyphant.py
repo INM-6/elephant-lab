@@ -1,4 +1,3 @@
-# JupyterLab Python kernel
 class Jupyphant:
     # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
@@ -33,7 +32,7 @@ class Jupyphant:
     import re
     import sys
     # XXX: In general this is bad practice but might be useful for this exact usecase
-    # Importing main namespace in order to be able to access objects created in
+    # Importing main namespace in order to be able to access objects created in JupyterLab Python kernel
     import __main__
     import time
 
