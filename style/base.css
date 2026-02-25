@@ -86,6 +86,7 @@
 }
 
 .unchecked-label:active,
+.workflow-button:active,
 .checked-label:active,
 .jp-rawplot-toggle:active {
   background: var(--jp-layout-color3);
