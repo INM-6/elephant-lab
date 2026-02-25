@@ -559,10 +559,7 @@ self.update_tree()
 						return;
 					}
 
-					const code = `
-from jupyphant.kernelcode import save_selected_neo_objects
-save_selected_neo_objects(jupyphant_entity, '${filePath}')
-					`;
+					const code = `jupyphant_entity.save_selected_neo_objects('${filePath}')`;
 					this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false)
 						.then(() => {
 							showDialog({
@@ -829,20 +826,14 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
-		let code = `
-from jupyphant.kernelcode import toggle_neo_tree_objs, update_tree
-toggle_neo_tree_objs(jupyphant_entity, "${checkbox_id}")
-update_tree(jupyphant_entity)
+		let code = `jupyphant_entity.toggle_neo_tree_objs("${checkbox_id}")
+jupyphant_entity.update_tree()
 			`
 		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
 	}
 
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
-		let code = `
-			from jupyphant.kernelcode import expand_neo_tree
-			checked = ${this.convert_bool_to_python_bool(checked)}
-			expand_neo_tree(jupyphant_entity, checked)
-			`
+		let code = `jupyphant_entity.expand_neo_tree(${this.convert_bool_to_python_bool(checked)})`
 		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
 	}
 

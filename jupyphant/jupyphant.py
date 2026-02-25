@@ -1,3 +1,9 @@
+# Create an object of the JupyphantVisualization class
+# It is used to access and visualize the neo objects
+
+def jupyphant_setup_env():
+    jupyphant_entity = Jupyphant()
+    return jupyphant_entity
 class Jupyphant:
     # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
@@ -13,6 +19,8 @@ class Jupyphant:
     nsm = NamespaceMagics()
     nsm.shell = get_ipython().kernel.shell
     from IPython.lib.pretty import RepresentationPrinter
+    from IPython.display import display, clear_output
+    from ipywidgets import Output
     # Neo classes need to be imported to work with them
     # Depending on the usage situation, import using
     # sys.path.append might be necessary
@@ -31,9 +39,11 @@ class Jupyphant:
     from io import StringIO
     import re
     import sys
+    import traceback
     # XXX: In general this is bad practice but might be useful for this exact usecase
     # Importing main namespace in order to be able to access objects created in JupyterLab Python kernel
     import __main__
+    import json
     import time
 
     import joblib
@@ -136,6 +146,18 @@ class Jupyphant:
             if node._id in self.map_ipytree_node_id_to_neo_obj_hash
         ]
         return selected_ids
+    
+    def get_object_of_ids(self):
+        selected_ids = self.get_selected_neo_ids()
+        if (isinstance(selected_ids, list)):
+            return [self.map_neo_obj_hash_to_neo_obj[selected_id] for selected_id in selected_ids]
+        return self.map_neo_obj_hash_to_neo_obj[selected_ids]
+        
+    def get_neo_obj_from_id(self, obj_id):
+        return self.map_neo_obj_hash_to_neo_obj[obj_id]
+
+    def get_neo_to_hash_dict(self):
+        return self.map_neo_obj_hash_to_neo_obj
 
     def names_for(self, obj):
         for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
@@ -203,7 +225,6 @@ class Jupyphant:
 
         if hasattr(obj, 'name') and obj.name:
             return obj.name
-    
     
     def expand_neo_tree(self, opened):
         self.expand_all = opened
@@ -352,6 +373,43 @@ class Jupyphant:
         
         self.last_known_hashes = current_hashes
         self.filter_changed = False
+        
+    def save_selected_neo_objects(self, filepath="output_file.nix"):
+        from neo import Block, Segment, SpikeTrain, AnalogSignal
+        from neo.io import NixIO
+        
+        if not filepath.endswith('.nix'):
+            filepath += '.nix'
+        
+        selected_ids = self.get_selected_neo_ids()
+        neo_objs_to_export = [self.get_neo_obj_from_id(self, selected_id) for selected_id in selected_ids]
+
+        export_block = Block(name="Exported Data")
+        export_segment = Segment(name="Exported Segment")
+        export_block.segments.append(export_segment)
+
+        blocks_to_write = []
+
+        for obj in neo_objs_to_export:
+            if isinstance(obj, Block):
+                blocks_to_write.append(obj)
+            
+            elif isinstance(obj, Segment):
+                export_block.segments.append(obj)
+                
+            elif isinstance(obj, (SpikeTrain, AnalogSignal)):
+                obj_copy = obj.copy() 
+                
+                if isinstance(obj, SpikeTrain):
+                    export_segment.spiketrains.append(obj_copy)
+                else:
+                    export_segment.analogsignals.append(obj_copy)
+
+        if len(export_segment.spiketrains) > 0 or len(export_segment.analogsignals) > 0:
+            blocks_to_write.append(export_block)
+
+        with NixIO(filename=filepath, mode='ow') as nix_io:
+            nix_io.write_all_blocks(blocks_to_write)
 
     def update_tree(self):
         """  # TODO: rewrite docstring
@@ -559,56 +617,143 @@ class Jupyphant:
         # Alternating dark and light stripes for better better visibility
         self.ipytree_of_neo_objects = self.Tree()
         self.ipytree_of_neo_objects.stripes = True
+
+        self.ipytree_of_neo_objects.layout.width = '100%'
+
+        def on_selected_change_tree(change, do_not_select_leafs=True):
+            """
+            Selects/Deselects all Childs on Parent select/deselect
+
+            If you want to listen to the change of selected_nodes, then listen to
+            jupyphant_entity.on_selected_neo_objects_changed with add_listener(self, fn)
+            """
+
+            """
+            Calling node.selected is extremly inefficient, because it makes a trip from Python -> Javascript -> Python
+            So there need to be as less calls as possible.
+            However by doing that, the ipytree does not store the correct selected nodes anymore, so the python now stores the truth
+            about which node is selected
+            """
+            self.ipytree_of_neo_objects.unobserve(on_selected_change_tree, names='selected_nodes')
+            old_selected_nodes = change['old']
+            new_selected_nodes = change['new']
+
+            # old_selected_nodes and new_selected_nodes are lists of Node objects
+            old_set = set(old_selected_nodes)
+            new_set = set(new_selected_nodes)
+
+            # Nodes that were newly selected
+            just_selected = new_set - old_set
+            just_deselected = old_set - new_set
+
+            def parent_selected(child):
+                for node in self.selected_neo_objects:
+                    if child in getattr(node, 'nodes', []):
+                        return True
+                return False
+
+
+            # Function to propagate selection iteratively
+            def propagate(nodes, selected, all_selected_in_neo):
+                fire_event = False
+                stack = list(nodes)
+                while stack:
+                    node = stack.pop()
+                    if node in visited or (not selected and all_selected_in_neo and node in just_selected):
+                        continue
+                    visited.add(node)
+
+                    children = getattr(node, 'nodes', [])
+                    is_leaf = not children
+
+                    # Only update node.selected if not a leaf
+                    if not (is_leaf and do_not_select_leafs):
+                        if node.selected != selected:
+                            node.selected = selected
+
+                    # Keep selected_neo_objects in sync
+                    if selected:
+                        self.selected_neo_objects.add(node)
+                        fire_event = True
+                    else:
+                        # Since leafs never get selected in the UI it is more intuative, that they are always selected, when parent is selected
+                        if not is_leaf or node not in just_deselected or not parent_selected(node):
+                            self.selected_neo_objects.discard(node)
+                            fire_event = True
+                    stack.extend(children)
+                return fire_event
+
+            all_selected_in_neo = just_selected.issubset(self.selected_neo_objects)
+            none_deselected_in_neo = just_deselected.isdisjoint(self.selected_neo_objects)
+
+            visited = set()  # Keep track of processed nodes
+
+            fire_event = False
+            if all_selected_in_neo:
+                if not none_deselected_in_neo:
+                    fire_event = propagate(just_deselected, False, all_selected_in_neo) or fire_event
+            else:
+                fire_event = propagate(just_selected, True, all_selected_in_neo) or fire_event
+                if not none_deselected_in_neo:
+                    fire_event = propagate(just_deselected, False, all_selected_in_neo) or fire_event
+            if fire_event:
+                self.on_selected_neo_objects_changed.fire()
+
+            self.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
+        self.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
+        Jupyphant.display(self.ipytree_of_neo_objects)
+
         return self.ipytree_of_neo_objects
-
-    def statistics_of_selected_nodes(self, selected_ids=None):
-        """spiketrains = self._extract_selected_neo_data_objects_by_top_node(selected_ids=selected_ids,
-                                                                          neo_class=self.SpikeTrain)
-        n_st_statistics = 4  # ISI, time-histogram, IFR, correlation
-        n_subplots = sum(1 for v in spiketrains.values() if len(v) > 0)
-        if n_subplots > 0:
+    
+    def insert_selected_neo_objects(self):
+        try:
+            selected_nodes = self.selected_neo_objects
             
-            subplot_titles = []
-            for top_node in spiketrains.keys():
-                if spiketrains[top_node]:
-                    subplot_titles.extend([f"ISI-distribution: {top_node}", f"Time-histogram: {top_node}", f"IFR: {top_node}", f"Correlation: {top_node}"])
+            if not selected_nodes:
+                print(self.json.dumps({"code_to_insert": "", "error": "No nodes selected in the Neo tree." }))
+            else:
+                paths = []
+                objects_for_list = []
+                for node in selected_nodes:
+                    if node._id in self.map_ipytree_node_id_to_neo_obj:
+                        neo_obj = self.map_ipytree_node_id_to_neo_obj[node._id]
+                        
+                        variable_name = node.metadata.get('variable_name', '')
+                        path = self._get_obj_path(neo_obj, variable_name=variable_name)
+                        if path:
+                            paths.append(path)
+                            objects_for_list.append(neo_obj)
 
-            fig = make_subplots(rows=n_subplots, cols=n_st_statistics, subplot_titles=subplot_titles)
-            fig.update_layout(title_text=f"Basic statistics for {'selected' if selected_ids else 'all'} SpikeTrains in Top-Nodes", showlegend=False)
-            
-            plot_row = 1
-            for i, top_node in enumerate(spiketrains.keys()):
-                if spiketrains[top_node]:
-                    # plot ISI
-                    for st in spiketrains[top_node]:
-                        isi = self.statistics.interspike_interval(st)
-                        fig.add_trace(go.Histogram(x=isi.magnitude, name=f"ISI of {st.name or 'unnnamed'}"), row=plot_row, col=1)
+                code_to_insert = ""
+                if len(paths) > 1:
+                    all_vars = list(self.__main__.__dict__.keys())
+                    list_base_name = "jupyphant_list"
+                    counter = 0
+                    list_var_name = f"{list_base_name}_{counter}"
+                    while list_var_name in all_vars:
+                        counter += 1
+                        list_var_name = f"{list_base_name}_{counter}"
                     
-                    # plot time histogram
-                    time_histogram = self.statistics.time_histogram(spiketrains[top_node], bin_size=0.1 * self.pq.s,
-                                                                    output='rate')
-                    fig.add_trace(go.Bar(x=time_histogram.times.magnitude, y=time_histogram.magnitude.flatten()), row=plot_row, col=2)
+                    self.__main__.__dict__[list_var_name] = objects_for_list
                     
-                    # plot IFR
-                    kernel = self.kernels.GaussianKernel(sigma=100 * self.pq.ms)
-                    rates = self.statistics.instantaneous_rate(spiketrains[top_node], sampling_period=10 * self.pq.ms,
-                                                               kernel=kernel)
-                    fig.add_trace(go.Heatmap(z=rates.magnitude.T, x=rates.times.magnitude, y=list(range(len(spiketrains[top_node])))), row=plot_row, col=3)
+                    code_to_insert = list_var_name
+                elif len(paths) == 1:
+                    code_to_insert = paths[0]
 
-                    # plot correlation
-                    if len(spiketrains[top_node]) > 1:
-                        binned_spiketrains = self.BinnedSpikeTrain(spiketrains[top_node], bin_size=100 * self.pq.ms)
-                        corrcoef_matrix = self.correlation_coefficient(binned_spiketrains)
-                        fig.add_trace(go.Heatmap(z=corrcoef_matrix, x=list(range(corrcoef_matrix.shape[1])), y=list(range(corrcoef_matrix.shape[0]))), row=plot_row, col=4)
-                        fig.update_xaxes(title_text='Neuron', row=plot_row, col=4)
-                        fig.update_yaxes(title_text='Neuron', row=plot_row, col=4)
-                    
-                    plot_row += 1
+                print(self.json.dumps({"code_to_insert": code_to_insert}))
 
-            return fig
-        else:
-            return None"""
+        except Exception as e:
+            print(self.json.dumps({"code_to_insert": "", "error": str(e), "traceback": self.traceback.format_exc()}), file=self.sys.stdout)
+    
+    def create_explorer_info(self):
+        def on_selected_change_info():
+            with output_node_info:
+                Jupyphant.clear_output()
+                self.pretty_print_of_selected_neo_objects()
 
+        output_node_info = self.Output(layout={'border': '1px solid orange'})
+        self.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
+        Jupyphant.display(output_node_info)
 
     def _extract_selected_neo_data_objects_by_top_node(self, selected_ids=None, neo_class=None):
         collected_neo_objs = {}
