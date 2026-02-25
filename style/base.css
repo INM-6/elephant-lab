@@ -54,6 +54,7 @@
 
 .unchecked-label,
 .checked-label,
+.workflow-button,
 .jp-rawplot-toggle {
   cursor: pointer;
   padding: 4px 6px;
@@ -66,6 +67,7 @@
 }
 
 .unchecked-label:hover,
+.workflow-button:hover,
 .checked-label:hover,
 .jp-rawplot-toggle:hover {
   background: var(--jp-layout-color2);
