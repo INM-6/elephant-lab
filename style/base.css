@@ -44,6 +44,16 @@
   opacity: 0.85;
 }
 
+.neo-filter-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.unchecked-label,
+.checked-label,
 .jp-rawplot-toggle {
   cursor: pointer;
   padding: 4px 6px;
@@ -55,14 +65,19 @@
   color: var(--jp-ui-font-color1);
 }
 
+.unchecked-label:hover,
+.checked-label:hover,
 .jp-rawplot-toggle:hover {
   background: var(--jp-layout-color2);
 }
 
+.unchecked-label:active,
+.checked-label:active,
 .jp-rawplot-toggle:active {
   background: var(--jp-layout-color3);
 }
 
+.checked-label,
 .jp-rawplot-toggle[aria-pressed="true"] {
   font-weight: bold;
   background: var(--jp-layout-color3);

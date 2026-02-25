@@ -224,7 +224,11 @@ class Jupyphant:
         self.update_tree()
     
     def show_neo_obj(self, neo_obj_string):
-        neo_obj_type = STRING_TO_NEO_OBJ[neo_obj_string]
+        try:
+            neo_obj_type = STRING_TO_NEO_OBJ[neo_obj_string]
+        except KeyError:
+            return
+        
         if neo_obj_type in NEO_OBJS_TO_SHOW:
             NEO_OBJS_TO_SHOW.remove(neo_obj_type)
         else:

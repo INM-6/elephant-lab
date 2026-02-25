@@ -59,6 +59,7 @@ import {
 } from './kernelcode';
 // Style from css
 import '../style/index.css';
+import '../style/base.css'
 import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
 import { COLORS } from "./style/colors";
@@ -369,34 +370,16 @@ print(__version__)
 			"channelview": "eye",
 			"group": "object-group",
 			"irregularlysampledsignal": "wave-square",
-			"spiketrainlist": "bars",
 			"event": "map-marker",
 			"imagesequence": "images",
-			"regionofinterest": "map",
 			"circularregionofinterest": "circle",
 			"polygonregionofinterest": "draw-polygon",
 			"rectangularregionofinterest": "square",
 			"open_all": "check",
-			"hide_all": "eye-slash"
-		}
-
-		const checked_style = {
-			color: "#2cbb00ff",
-			fontWeight: "bold",
-			cursor: "pointer",
-			padding: "4px",
-			userSelect: "none",
-		}
-
-		const unchecked_style = {
-			color: "#727272ff",
-			fontWeight: "normal",
-			cursor: "pointer",
-			padding: "4px",
-			userSelect: "none",
 		}
 
 		const filterContainer = document.createElement('div');
+		filterContainer.className = 'neo-filter-container';
 		filterContainer.textContent = "Filter  ";
 
 		Object.keys(neo_obj_filter_dict).forEach(key => {
@@ -405,10 +388,10 @@ print(__version__)
 			label.dataset.key = key;
 			if (key === "open_all") {
 				label.dataset.checked = "false";
-				Object.assign(label.style, unchecked_style);
+				label.classList.add('unchecked-label');
 			} else {
 				label.dataset.checked = "true";
-				Object.assign(label.style, checked_style);
+				label.classList.add('checked-label');
 			}
 			const icon = document.createElement("i");
 			icon.className = `fa fa-${iconName}`
@@ -419,12 +402,22 @@ print(__version__)
 				const isCurrentlyChecked = label.dataset.checked === "true";
 				const isNowChecked = !isCurrentlyChecked;
 				label.dataset.checked = isNowChecked ? "true" : "false";
-				isNowChecked ? Object.assign(label.style, checked_style) : Object.assign(label.style, unchecked_style);
+
+				if (isNowChecked) {
+					label.classList.replace('unchecked-label', 'checked-label');
+				} else {
+					label.classList.replace('checked-label', 'unchecked-label');
+				}
 				key === "open_all" ? this.neo_tree_expand(isNowChecked, session) : this.neo_tree_filter(label.dataset.key!, session);
 			};
 
 			filterContainer.appendChild(label);
 		});
+
+		const flexBreak = document.createElement('div');
+		flexBreak.style.flexBasis = "100%";
+		flexBreak.style.height = "0";
+		filterContainer.appendChild(flexBreak);
 
 		const loadNeoFileButton = document.createElement('button');
 		loadNeoFileButton.innerHTML = '<i class="fa fa-file-import" aria-hidden="true"></i> Load';
@@ -865,22 +858,22 @@ except Exception as e:
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
 		let code = `
-			from jupyphant.kernelcode import toggle_neo_tree_objs, update_tree
-			toggle_neo_tree_objs(jupyphant_entity, "${checkbox_id}")
-			update_tree(jupyphant_entity)
+from jupyphant.kernelcode import toggle_neo_tree_objs, update_tree
+toggle_neo_tree_objs(jupyphant_entity, "${checkbox_id}")
+update_tree(jupyphant_entity)
 			`
 		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
 	}
 
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
 		let code = `
-			from jupyphant.kernelcode import expand_neo_tree
-			// TODO: is there a better way to convert ts bool into python bool?
-			if ("${checked}" == "true"):
-				checked = True
-			else:
-				checked = False
-			expand_neo_tree(jupyphant_entity, checked)
+from jupyphant.kernelcode import expand_neo_tree
+// TODO: is there a better way to convert ts bool into python bool?
+if ("${checked}" == "true"):
+	checked = True
+else:
+	checked = False
+expand_neo_tree(jupyphant_entity, checked)
 			`
 		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
 	}
