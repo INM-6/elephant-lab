@@ -23,12 +23,6 @@ const create_explorer_info =
 create_explorer_info(jupyphant_entity)
 `;
 
-// Call to the function that shows statistics plots of selected nodes in Statistics-tab of the node-explorer Dockpanel
-const create_explorer_statistics =
-	`from jupyphant.kernelcode import create_explorer_statistics
-create_explorer_statistics(jupyphant_entity)
-`;
-
 // Call to the function that updates the ipytree tree view of the neo hierarchy
 const update_tree =
 	`from jupyphant.kernelcode import update_tree
@@ -99,7 +93,6 @@ export enum PythonCodeKey {
 	SetupEnv = 'setupEnv',
 	CreateTree = 'createTree',
 	CreateExplorerInfo = 'createExplorerInfo',
-	CreateExplorerStatistics = 'createExplorerStatistics',
 	UpdateTree = 'updateTree',
 	CreateExplorerRaw = 'createExplorerRaw',
 	Version = 'version',
@@ -111,7 +104,6 @@ export const pythonCode: Record<PythonCodeKey, string> = {
 	[PythonCodeKey.SetupEnv]: setup_env,
 	[PythonCodeKey.CreateTree]: create_tree,
 	[PythonCodeKey.CreateExplorerInfo]: create_explorer_info,
-	[PythonCodeKey.CreateExplorerStatistics]: create_explorer_statistics,
 	[PythonCodeKey.UpdateTree]: update_tree,
 	[PythonCodeKey.CreateExplorerRaw]: createExplorerRawPlot,
 	[PythonCodeKey.Version]: version,

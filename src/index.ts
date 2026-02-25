@@ -76,7 +76,6 @@ class JupyphantExtension {
 	private _updateTimer: number | null = null;
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
-	private outarea_nodeexplorer_statistics: OutputArea | null;
 	private outarea_neo_tree: OutputArea | null;
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
@@ -101,7 +100,6 @@ class JupyphantExtension {
 		this.widget = new DockPanel({ tabsMovable: false });
 		this.outarea_nodeexplorer_info = null;
 		this.outarea_nodeexplorer_raw = null;
-		this.outarea_nodeexplorer_statistics = null;
 		this.outarea_neo_tree = null;
 		this.output_tabs = null;
 		this.kernelBridge = null;
@@ -125,7 +123,6 @@ class JupyphantExtension {
 			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.UpdateTree], this.outarea_neo_tree!, session, false);
 			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateExplorerInfo], this.outarea_nodeexplorer_info!, session);
 			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateExplorerRaw], this.outarea_nodeexplorer_raw!, session);
-			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateExplorerStatistics], this.outarea_nodeexplorer_statistics!, session);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Jupyphant: FAILED to initialize kernel state:", error);
