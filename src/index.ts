@@ -411,6 +411,9 @@ print(__version__)
 				key === "open_all" ? this.neo_tree_expand(isNowChecked, session) : this.neo_tree_filter(label.dataset.key!, session);
 			};
 
+			key == "open_all" ? label.title = `Expand all containers` : label.title = `Hide/Show ${key.charAt(0).toUpperCase() + key.slice(1)}(s)`;
+
+
 			filterContainer.appendChild(label);
 		});
 
