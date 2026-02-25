@@ -55,7 +55,8 @@ import {
 // Own imports
 // Python Code to execute in the kernel
 import {
-	pythonCode
+	pythonCode,
+	PythonCodeKey
 } from './kernelcode';
 // Style from css
 import '../style/index.css';
@@ -115,17 +116,16 @@ class JupyphantExtension {
 		console.log("Jupyphant: Initializing kernel state...");
 		this.kernelBridge = new KernelBridge(session);
 
-		await this.executeCodeInOutputArea(pythonCode['setupEnv'], this.outarea_neo_tree!, session, false);
+		await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.SetupEnv], this.outarea_neo_tree!, session, false);
 
 		console.log("Jupyphant: Environment setup complete.");
 		try {
 			// Execute Jupyphant Code to create Neo Tree / Information and Plots  
-			await this.executeCodeInOutputArea(pythonCode['createTree'], this.outarea_neo_tree!, session);
-			await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, session, false);
-			await this.executeCodeInOutputArea(pythonCode['createExplorerInfo'], this.outarea_nodeexplorer_info!, session);
-			const createExplorerRawPlotCode = 'jupyphant_entity.jupyphant_plot.create_explorer_raw_plot()'
-			await this.executeCodeInOutputArea(createExplorerRawPlotCode, this.outarea_nodeexplorer_raw!, session);
-			await this.executeCodeInOutputArea(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
+			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateTree], this.outarea_neo_tree!, session);
+			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.UpdateTree], this.outarea_neo_tree!, session, false);
+			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateExplorerInfo], this.outarea_nodeexplorer_info!, session);
+			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateExplorerRaw], this.outarea_nodeexplorer_raw!, session);
+			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateExplorerStatistics], this.outarea_nodeexplorer_statistics!, session);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Jupyphant: FAILED to initialize kernel state:", error);
@@ -217,7 +217,7 @@ class JupyphantExtension {
 
 			this._updateTimer = window.setTimeout(async () => {
 				await Promise.all([
-					this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, initialSession, false),
+					this.executeCodeInOutputArea(pythonCode[PythonCodeKey.UpdateTree], this.outarea_neo_tree!, initialSession, false),
 				]);
 			}, 500);
 		});
@@ -318,12 +318,7 @@ class JupyphantExtension {
 		infoButton.style.backgroundColor = COLORS["jupyphant_base"];
 		infoButton.className = 'workflow-button workflow-button-io';
 		infoButton.onclick = async () => {
-			let code =
-				`
-from jupyphant import __version__
-print(__version__)
-			`
-			const result = await this.kernelBridge!.executeCode(code, true);
+			const result = await this.kernelBridge!.executeCode(pythonCode[PythonCodeKey.Version], true);
 
 			const body = document.createElement('div');
 			body.style.textAlign = 'center';
@@ -463,8 +458,7 @@ print(__version__)
 						}
 
 						if (ioClass !== null) {
-							const getVarsCode = `import json, __main__; print(json.dumps(list(__main__.__dict__.keys())))`;
-							const varsResult = await this.kernelBridge!.executeCode(getVarsCode, true);
+							const varsResult = await this.kernelBridge!.executeCode(pythonCode[PythonCodeKey.GetVars], true);
 							let allVars: string[] = [];
 							if (varsResult && varsResult.outputs.length > 0) {
 								const output = varsResult.outputs[0];
@@ -505,7 +499,7 @@ self.update_tree()
 `;
 							}
 							await this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
-							await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, session, false);
+							await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.UpdateTree], this.outarea_neo_tree!, session, false);
 						} else if (dialogResult.button.label === 'Automatic') {
 							showDialog({
 								title: 'Error',
@@ -586,56 +580,8 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 				});
 				return;
 			}
-			const code = `
-import json
-import __main__
 
-try:
-    if 'jupyphant_entity' in __main__.__dict__:
-        jupyphant = __main__.__dict__['jupyphant_entity']
-        selected_nodes = jupyphant.ipytree_of_neo_objects.selected_nodes
-        
-        if not selected_nodes:
-            print(json.dumps({"code_to_insert": "", "error": "No nodes selected in the Neo tree." }))
-        else:
-            paths = []
-            objects_for_list = []
-            for node in selected_nodes:
-                if node._id in jupyphant.map_ipytree_node_id_to_neo_obj:
-                    neo_obj = jupyphant.map_ipytree_node_id_to_neo_obj[node._id]
-                    
-                    variable_name = node.metadata.get('variable_name', '')
-                    path = jupyphant._get_obj_path(neo_obj, variable_name=variable_name)
-                    if path:
-                        paths.append(path)
-                        objects_for_list.append(neo_obj)
-
-            code_to_insert = ""
-            if len(paths) > 1:
-                all_vars = list(__main__.__dict__.keys())
-                list_base_name = "jupyphant_list"
-                counter = 0
-                list_var_name = f"{list_base_name}_{counter}"
-                while list_var_name in all_vars:
-                    counter += 1
-                    list_var_name = f"{list_base_name}_{counter}"
-                
-                __main__.__dict__[list_var_name] = objects_for_list
-                
-                code_to_insert = list_var_name
-            elif len(paths) == 1:
-                code_to_insert = paths[0]
-
-            print(json.dumps({"code_to_insert": code_to_insert}))
-    else:
-        print(json.dumps({"code_to_insert": "", "error": "jupyphant_entity not found"}))
-
-except Exception as e:
-    import sys, traceback
-    print(json.dumps({"code_to_insert": "", "error": str(e), "traceback": traceback.format_exc()}), file=sys.stdout)
-			`;
-
-			const result = await this.kernelBridge!.executeCode(code, true);
+			const result = await this.kernelBridge!.executeCode(pythonCode[PythonCodeKey.InsertCode], true);
 
 			if (result && result.outputs.length > 0) {
 				const output = result.outputs[0];
