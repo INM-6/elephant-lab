@@ -969,7 +969,6 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	//Track and restore extension's tabs, needs to work together with restoration of main area
 	// When Main Area is restored, it needs to get all available Notebooks and Consoles
 	// and then check all of them and connect each tab to the right one
-	// TODO: This is not yet completed
 	// Tracker has a namespace where everything is saved;
 	// this namespace needs to have the same name as in the last session
 	// to restore the last session

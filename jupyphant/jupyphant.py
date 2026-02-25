@@ -95,8 +95,6 @@ class Jupyphant:
     from elephant.conversion import BinnedSpikeTrain
     from elephant.spike_train_correlation import correlation_coefficient
     correlation_coefficient = staticmethod(correlation_coefficient)
-    # TODO: Use new viziphant for plotting
-    # This relies on the initial version of viziphant
     # Widgets used for display
     from ipywidgets import Output
     # ipytree provides a tree structure widget
@@ -656,7 +654,7 @@ class Jupyphant:
     
     def _get_selected_neo_objects_by_class(self, neo_class_dict):
         """
-        neo_class_dict: {NeoKey: neo.class}
+        neo_class_dict: {NeoKey: neo.class (eg. neo.SpikeTrain)}
         Returns: {NeoKey: [selected neo objects in tree order]}
         """
 

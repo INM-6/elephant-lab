@@ -33,7 +33,6 @@ dependencies = [
 "jupyter-server",
 "jupyterlab",
 "jupyterlab-pygments",
-"anywidget",
 "jupyterlab-server",
 "jupyterlab-widgets",
 "matplotlib",
@@ -43,7 +42,6 @@ dependencies = [
 "neo",
 "nixio",
 "elephant",
-"viziphant",
 "quantities",
 "traitlets",
 "plotly<6"
