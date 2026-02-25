@@ -177,6 +177,15 @@ class JupyphantExtension {
 			console.error("Jupyphant: No active notebook found.");
 			return;
 		}
+		this.notebook_tracker.forEach(notebookWidget => {
+			if (notebookWidget.title.className.includes('jupyphant-active-notebook')) {
+				notebookWidget.title.className = notebookWidget.title.className
+				.replace('jupyphant-active-notebook', '')
+				.trim();
+			}
+		});
+
+		newPanel.title.className += ' jupyphant-active-notebook';
 
 		if (!force && this.widget.isAttached) {
 			console.log("Jupyphant: Existing widgets found, activating them.");
