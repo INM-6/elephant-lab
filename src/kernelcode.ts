@@ -8,8 +8,8 @@
 const setup_env =
 	`# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
 %matplotlib inline
-from jupyphant.jupyphant import jupyphant_setup_env
-jupyphant_entity = jupyphant_setup_env()`;
+from jupyphant.jupyphant import Jupyphant
+jupyphant_entity = Jupyphant()`;
 
 // Call to the function that initializes the ipytree widget with an empty tree
 const create_tree = `jupyphant_entity.create_tree()`;

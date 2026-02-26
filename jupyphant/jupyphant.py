@@ -1,9 +1,3 @@
-# Create an object of the JupyphantVisualization class
-# It is used to access and visualize the neo objects
-
-def jupyphant_setup_env():
-    jupyphant_entity = Jupyphant()
-    return jupyphant_entity
 class Jupyphant:
     # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
