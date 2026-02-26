@@ -26,34 +26,17 @@ const update_tree = `jupyphant_entity.update_tree()`;
 
 const createExplorerRawPlot = 'jupyphant_entity.jupyphant_plot.create_explorer_raw_plot()'
 
-const version =
-	`from jupyphant import __version__
-print(__version__)
-`;
+const version = `jupyphant_entity.version()`;
 
-const getVars = `import json, __main__; print(json.dumps(list(__main__.__dict__.keys())))`;
+const getVars = `jupyphant_entity.getVars()`;
 
 const insertCode = `jupyphant_entity.insert_selected_neo_objects()`;
 
 function setVarName(ioClass: string, filePath: string, varName: string): string {
 	if (ioClass) {
-		return `
-import neo
-io_class = getattr(neo.io, '${ioClass}')
-reader = io_class(filename='${filePath}')
-${varName} = reader.read_block()
-									`;
+		return `jupyphant_entity.setVarNameIOClass('${ioClass}','${filePath}', '${varName}')`;
 	} else {
-		return `
-import neo
-${varName} = neo.get_io('${filePath}').read()
-if (isinstance(${varName}, list)):
-	${varName} = ${varName}[0]
-elif (isinstance(${varName}, dict)):
-	${varName} = ${varName}['blocks'][0]
-print(${varName}, type(${varName}))
-self.update_tree()
-`;
+		return `jupyphant_entity.setVarNameNotIOClass('${filePath}', '${varName}')`;
 	}
 }
 

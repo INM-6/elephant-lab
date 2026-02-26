@@ -3,6 +3,7 @@ class Jupyphant:
     # Python kernel's namespace used by the user of the notebook
     from .jupyphant_plot import Jupyphant_plot
 
+    from jupyphant import __version__
     # Dealing with the Python kernel's namespace, e.g.,
     # listing all defined variables
     from IPython.core.magics.namespace import NamespaceMagics
@@ -18,12 +19,13 @@ class Jupyphant:
     # Neo classes need to be imported to work with them
     # Depending on the usage situation, import using
     # sys.path.append might be necessary
+    import neo
     from neo.core.baseneo import BaseNeo
     from neo.core.container import Container
     from neo.core.regionofinterest import RegionOfInterest, CircularRegionOfInterest, RectangularRegionOfInterest, PolygonRegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
     from neo import Block, Segment, Group, SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence, ChannelView
-    from neo.io import NixIO
+    import neo.io
     from collections import Counter, defaultdict
     import numpy as np
     import quantities as pq
@@ -133,6 +135,27 @@ class Jupyphant:
         self.last_known_hashes = []
         self.hash_cache = {}
         self.jupyphant_plot = self.Jupyphant_plot(self)
+
+    def version(self):
+        print(self.__version__)
+
+    def getVars(self):
+        print(self.json.dumps(list(self.__main__.__dict__.keys())))
+
+    def setVarNameIOClass(self, ioClass, filePath, varName):
+        io_class = getattr(self.neo.io, ioClass)
+        reader = io_class(filename=filePath)
+        self.__main__.__dict__[varName] = reader.read_block()
+
+    def setVarNameNotIOClass(self, filePath, varName):
+        var = self.neo.get_io(filePath).read()
+        if (isinstance(var, list)):
+            var = var[0]
+        elif (isinstance(var, dict)):
+            var = var['blocks'][0]
+        self.__main__.__dict__[varName] = var
+        print(var, type(var))
+        self.update_tree()
 
     def get_selected_neo_ids(self):
         selected_ids = [
@@ -401,7 +424,7 @@ class Jupyphant:
         if len(export_segment.spiketrains) > 0 or len(export_segment.analogsignals) > 0:
             blocks_to_write.append(export_block)
 
-        with self.NixIO(filename=filepath, mode='ow') as nix_io:
+        with self.neo.io.NixIO(filename=filepath, mode='ow') as nix_io:
             nix_io.write_all_blocks(blocks_to_write)
 
     def update_tree(self):
