@@ -1,4 +1,5 @@
 class Jupyphant_plot:
+    from .jupyphant import Jupyphant
     from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
     from .PlotlyGraphFigure import PlotlyGraphFigure
     from .PlotlyGraphDataTypes import SpikeTrainRasterPlot, AnalogSignalLFPPlotList, EventAnnotations, EpochIntervals, IrregularlySampledSignalPlotList
@@ -8,6 +9,8 @@ class Jupyphant_plot:
     import numpy as np
     from ipywidgets import Output, HTML
     from IPython.display import clear_output, display
+
+    from typing import TypedDict
 
     class NeoKey(Enum):
         spiketrain = 'spiketrain'
@@ -24,19 +27,51 @@ class Jupyphant_plot:
 
     PLOT_IMGSEQUENCE = 'raw_imgsequence'
 
-    def __init__(self, jupyphant_entity):
+    class DefaultPlotDict(TypedDict):
+        fig: Jupyphant_plot.PlotlyGraphFigure | Jupyphant_plot.PlotlyImageSequenceFigure | None
+        output: Jupyphant_plot.Output
+        changed: bool
+
+    class RawPlotDict(DefaultPlotDict):
+        overlapping: bool
+        og_x_range: list[float] | None
+        x_range: list[float] | None
+        max_points: int
+        zero_based: bool
+    
+    class ImageSequencePlotDict(DefaultPlotDict):
+        color_grade: str
+
+    def _base_plot_dict(self) -> Jupyphant_plot.DefaultPlotDict:
+        # Add all required options to each plot:
+        #   - fig: a wrapper of the figure with extra functionality (needs fig.display())
+        #   - output: the output area where the figure is displayed;
+        #             each figure has its own output so it can be cleared separately
+        #   - changed: True if any value in the dict has changed, False otherwise;
+        #              used to track if changes where by selecting different nodes or changing #              the settings (e.g., overlap)
+        return {
+            "fig": None,
+            "output": self.Output(layout={'width': "100%", 'height': 'auto'}),
+            "changed": False,
+        }
+
+    def __init__(self, jupyphant_entity: Jupyphant_plot.Jupyphant):
         """
         Class to outsource some jupyphant logic.
         Is a Class to minimize the amount of name clutter in the notebook
         """ 
-        self.jupyphant_entity = jupyphant_entity
+        self.jupyphant_entity: Jupyphant_plot.Jupyphant = jupyphant_entity
         self.previous_neo_object_dict = {key: [] for key in self.NeoKey}
         self.jupyterlab_theme = 'plotly_dark'
-        self.plots = {}
+        self.plots: dict[
+            str,
+            Jupyphant_plot.RawPlotDict | Jupyphant_plot.ImageSequencePlotDict
+        ] = {}
 
         #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
         for key in self.RawPlotKey:
             self.plots[key] = {
+                **self._base_plot_dict(),
                 "overlapping": False,
                 "og_x_range": None,
                 "x_range": None,
@@ -44,22 +79,9 @@ class Jupyphant_plot:
                 "zero_based": True
             }
         self.plots[self.PLOT_IMGSEQUENCE]= {
+            **self._base_plot_dict(),
             "color_grade": "Viridis"
         }
-
-        # Add all required options to each plot:
-        #   - fig: a wrapper of the figure with extra functionality (needs fig.display())
-        #   - output: the output area where the figure is displayed;
-        #             each figure has its own output so it can be cleared separately
-        #   - changed: True if any value in the dict has changed, False otherwise;
-        #              used to track if changes where by selecting different nodes or changing #              the settings (e.g., overlap)
-        for plot in self.plots.values():
-            output = self.Output(layout={'width': "100%", 'height': 'auto'})
-            plot.update({
-                "fig": None,
-                "output": output,
-                "changed": False,
-            })
 
     def raw_plot(self):
         neo_object_dict = None

@@ -124,9 +124,9 @@ class Jupyphant:
 
         self.neo_objs_and_lists_of_neo_objs_with_var_name = {}
         self.neo_objs_changed_after_update = False
-        self.ipytree_of_neo_objects = None
+        self.ipytree_of_neo_objects: Jupyphant.Tree = None
         self.selected_neo_objects = set()
-        self.on_selected_neo_objects_changed = self.SimpleEvent()
+        self.on_selected_neo_objects_changed: Jupyphant.SimpleEvent = self.SimpleEvent()
         self.map_ipytree_node_id_to_neo_obj_hash = {}
         self.map_ipytree_node_id_to_neo_obj = {}
         self.map_neo_obj_hash_to_neo_obj = {}
@@ -134,7 +134,7 @@ class Jupyphant:
         self.expand_all = False
         self.last_known_hashes = []
         self.hash_cache = {}
-        self.jupyphant_plot = self.Jupyphant_plot(self)
+        self.jupyphant_plot: Jupyphant.Jupyphant_plot = self.Jupyphant_plot(self)
 
     def version(self):
         print(self.__version__)
