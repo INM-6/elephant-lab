@@ -85,7 +85,7 @@ class Jupyphant_plot:
             "color_grade": "Viridis"
         }
 
-    def raw_plot(self):
+    def _raw_plot(self):
         neo_object_dict = None
         selection_changed = not any(v["changed"] for v in self.plots.values())
         if selection_changed:
@@ -151,13 +151,13 @@ class Jupyphant_plot:
                         fig.display()
             plot_dict["changed"] = False
 
-        create_plot(self.RawPlotKey.RAW_ST, self.create_rasterplot, self.NeoKey.spiketrain, [self.NeoKey.event, self.NeoKey.epoch])
+        create_plot(self.RawPlotKey.RAW_ST, self._create_rasterplot, self.NeoKey.spiketrain, [self.NeoKey.event, self.NeoKey.epoch])
 
-        create_plot(self.RawPlotKey.RAW_ANASIG, self.create_lfpplot, [self.NeoKey.analogsignal, self.NeoKey.irregularsignal], [self.NeoKey.event, self.NeoKey.epoch])
+        create_plot(self.RawPlotKey.RAW_ANASIG, self._create_lfpplot, [self.NeoKey.analogsignal, self.NeoKey.irregularsignal], [self.NeoKey.event, self.NeoKey.epoch])
 
         keys_that_also_display_events = [self.NeoKey.spiketrain, self.NeoKey.analogsignal, self.NeoKey.irregularsignal]
         if all(empty_dict[key] for key in keys_that_also_display_events):
-            create_plot(self.RawPlotKey.RAW_EVENT, self.create_annotation_plot, [self.NeoKey.event, self.NeoKey.epoch], keys_that_also_display_events)
+            create_plot(self.RawPlotKey.RAW_EVENT, self._create_annotation_plot, [self.NeoKey.event, self.NeoKey.epoch], keys_that_also_display_events)
         else:
             plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
             if plot_dict["fig"] is not None:
@@ -165,7 +165,7 @@ class Jupyphant_plot:
                 with plot_dict["output"]:
                     Jupyphant_plot.clear_output()
 
-        create_plot(self.PLOT_IMGSEQUENCE, self.create_image_sequence, self.NeoKey.imagesequence)
+        create_plot(self.PLOT_IMGSEQUENCE, self._create_image_sequence, self.NeoKey.imagesequence)
 
 
     def create_explorer_raw_plot(self):
@@ -173,7 +173,7 @@ class Jupyphant_plot:
             output = plot_dict["output"]
             Jupyphant_plot.display(output)
             output.layout.display = 'none'
-        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self.raw_plot)
+        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self._raw_plot)
 
     def set_raw_plot_overlap(self, overlap):
         reload = False
@@ -193,7 +193,7 @@ class Jupyphant_plot:
                 plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot()
+            self._raw_plot()
     
     def set_zero_based(self, zero_based):
         reload = False
@@ -209,7 +209,7 @@ class Jupyphant_plot:
                 plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot()
+            self._raw_plot()
 
     def set_color_grade(self, color_grade):
         reload = False
@@ -221,7 +221,7 @@ class Jupyphant_plot:
                 plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot()
+            self._raw_plot()
 
     def update_jupyterlab_plot_theme(self, theme_name):
         if self.jupyterlab_theme == theme_name:
@@ -234,7 +234,7 @@ class Jupyphant_plot:
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         if plot_dict['fig'] is not None:
             plot_dict['changed']=True
-            self.raw_plot()
+            self._raw_plot()
 
     def upscale_raw_plot(self, max_points):
         reload = False
@@ -257,7 +257,7 @@ class Jupyphant_plot:
             plot_dict['changed']=temp_reload
             reload = reload or temp_reload
         if reload:
-            self.raw_plot()
+            self._raw_plot()
     
     def reset_scale(self):
         reload = False
@@ -271,9 +271,9 @@ class Jupyphant_plot:
                 plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot()
+            self._raw_plot()
         
-    def create_rasterplot(self, spiketrain=None, event=None, epoch=None):
+    def _create_rasterplot(self, spiketrain=None, event=None, epoch=None):
         data = [self.SpikeTrainRasterPlot(st) for st in spiketrain]
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
@@ -289,7 +289,7 @@ class Jupyphant_plot:
             plot_dict['og_x_range']=x_range
         return fig
 
-    def create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
+    def _create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
         data = None
         if analogsignal is not None:
             data = self.AnalogSignalLFPPlotList(analogsignal)
@@ -313,7 +313,7 @@ class Jupyphant_plot:
             plot_dict['og_x_range']=x_range
         return fig
     
-    def create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
+    def _create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
@@ -328,7 +328,7 @@ class Jupyphant_plot:
             plot_dict['og_x_range']=x_range
         return fig
 
-    def create_image_sequence(self, imagesequence=None):
+    def _create_image_sequence(self, imagesequence=None):
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         color_grade = plot_dict['color_grade']
         return self.PlotlyImageSequenceFigure(image_sequences=imagesequence, theme_name=self.jupyterlab_theme, color_scale=color_grade)

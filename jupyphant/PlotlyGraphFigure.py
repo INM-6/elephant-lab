@@ -61,7 +61,7 @@ class PlotlyGraphFigure:
                 vertical_spacing=self.vertical_spacing,
                 shared_xaxes=True
             ))
-        self.create_graphs()
+        self._create_graphs()
 
         if title is None:
             title=getattr(data, 'name', None)
@@ -74,7 +74,7 @@ class PlotlyGraphFigure:
 
         self.update_jupyterlab_theme(theme_name)
 
-        self.manage_axis_units()
+        self._manage_axis_units()
 
         if self.compress:
             if len(self.ticktext)==self.nGraphs:
@@ -83,50 +83,50 @@ class PlotlyGraphFigure:
                     tickvals=list(range(self.nGraphs)),
                     ticktext=self.ticktext,
                 )
-                self.update_layout_options_dict("yaxis", yaxis_options)
+                self._update_layout_options_dict("yaxis", yaxis_options)
             else:
                 if not overlapping:
-                    self.update_layout_options_dict('yaxis',dict(
+                    self._update_layout_options_dict('yaxis',dict(
                         showticklabels = False
                     ))
             self.hide_legend = True
-        self.update_legend()
-        self.create_annotations(annotation_data, x_range)
-        self.create_anntotation_intervals(annotation_interavals_data, x_range)
-        self.create_sliders()
-        self.format_annotations()
+        self._update_legend()
+        self._create_annotations(annotation_data, x_range)
+        self._create_annotation_intervals(annotation_interavals_data, x_range)
+        self._create_sliders()
+        self._format_annotations()
         # Set x_range to total min and max
         for i in range(1, self.nGraphs + 1):
-            self.update_layout_options_dict(f"xaxis{i}", dict(
+            self._update_layout_options_dict(f"xaxis{i}", dict(
                 range = [self.total_minX, self.total_maxX]
             ))
-        self.update_layout()
+        self._update_layout()
         
         if overlapping:
             self.overlapping = False
             self.overlap()
             self.overlapping = True
 
-    def update_layout_options_dict(self, key, options_dict):
+    def _update_layout_options_dict(self, key, options_dict):
         if key in self.layout_options:
             self.layout_options[key].update(options_dict)
         else:
             self.layout_options[key] = options_dict
 
-    def update_layout_options_list(self, key, options_list):
+    def _update_layout_options_list(self, key, options_list):
         if key in self.layout_options:
             self.layout_options[key].extend(options_list)
         else:
             self.layout_options[key] = options_list
 
-    def update_layout(self):
+    def _update_layout(self):
         """
         Updates all collected changes to layout in one update to improve performance
         """
         self.fig.update_layout(**self.layout_options)
         self.layout_options = dict()
 
-    def create_graphs(self):
+    def _create_graphs(self):
         """
         Adds traces to a Plotly figure from the extracted and normalized data
         """
@@ -150,7 +150,7 @@ class PlotlyGraphFigure:
                 marker_settings = default_marker | getattr(d, "marker", {})
                 line_settings   = default_line   | getattr(d, "line", {})
                 if callable(marker_settings["size"]):
-                    marker_settings["size"] = marker_settings["size"](self.getSubplotHeight())
+                    marker_settings["size"] = marker_settings["size"](self._getSubplotHeight())
                 
                 trace  = self.go.Scattergl(
                     x=d.x,
@@ -174,16 +174,16 @@ class PlotlyGraphFigure:
                             col=1
                         )
                     if d.units_x is not None:
-                        self.update_layout_options_dict(f"xaxis{row}",dict(
+                        self._update_layout_options_dict(f"xaxis{row}",dict(
                             title=d.units_x.__str__()
                         ))
                     if d.units_y is not None:
-                        self.update_layout_options_dict(f"yaxis{row}",dict(
+                        self._update_layout_options_dict(f"yaxis{row}",dict(
                             title=d.units_y.__str__()
                         ))
                     if hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
-                            self.update_layout_options_dict(f"yaxis{row}",dict(
+                            self._update_layout_options_dict(f"yaxis{row}",dict(
                                 tickvals=[0],
                                 ticktext=[d.name]
                             ))
@@ -196,7 +196,7 @@ class PlotlyGraphFigure:
             except Exception as e:
                 self.warnings.warn(f"Failed to add trace '{d.name}': {e}")
     
-    def change_height_after_render(self, height):
+    def _change_height_after_render(self, height):
         """
         Changing height after the figure has already, is more complicated than just calling update_layout
         """
@@ -208,7 +208,7 @@ class PlotlyGraphFigure:
             autosize = True
         )
         self.fig._send_relayout_msg({"autosize": True})
-        self.update_y_slider()
+        self._update_y_slider()
     
     def overlap(self):
         """Overlapps the graphs"""
@@ -218,19 +218,19 @@ class PlotlyGraphFigure:
 
         self.saved_y_ranges = []
         for i in range(1, self.nGraphs + 1):
-            self.update_layout_options_dict(f"yaxis{i}", dict(
+            self._update_layout_options_dict(f"yaxis{i}", dict(
                 visible=self.data.common_units_y is not None and i==1,
                 domain=[0.0,1.0]
             ))
             y_range = self.fig.layout[f"yaxis{i}"].range
             self.saved_y_ranges.append(y_range)
 
-        self.change_height_after_render(self.default_height)
+        self._change_height_after_render(self.default_height)
         if hasattr(self, 'y_slider'):
             with self.fig.batch_update():
                     self.fig.update_yaxes(range=self.y_slider.value)
-        self.update_legend()
-        self.update_layout()
+        self._update_legend()
+        self._update_layout()
         
         
     def stack(self):
@@ -242,7 +242,7 @@ class PlotlyGraphFigure:
         n = self.nGraphs
         vertical_spacing = self.vertical_spacing
 
-        subplot_height = self.getSubplotHeight(1.0)
+        subplot_height = self._getSubplotHeight(1.0)
 
         for i in range(1, n + 1):
             # Domain goes from bottom to top
@@ -250,7 +250,7 @@ class PlotlyGraphFigure:
             start = end - subplot_height
             if(start<0): start=0 #floating point precision issue
 
-            self.update_layout_options_dict(f"yaxis{i}", 
+            self._update_layout_options_dict(f"yaxis{i}", 
                 dict(
                     visible=True,
                     domain=[start, end],
@@ -258,11 +258,11 @@ class PlotlyGraphFigure:
                 )
             )
 
-        self.change_height_after_render(self.height)
-        self.update_legend()
-        self.update_layout()
+        self._change_height_after_render(self.height)
+        self._update_legend()
+        self._update_layout()
 
-    def create_sliders(self):
+    def _create_sliders(self):
         """Updates the range slider to the last x-axis if shared_xaxes is True"""
         n = self.nGraphs
         x_bgcolor = "#1e7fcc"
@@ -276,7 +276,7 @@ class PlotlyGraphFigure:
                     thickness=x_height
                 )
             )
-            self.update_layout_options_dict("xaxis", xaxis_options)
+            self._update_layout_options_dict("xaxis", xaxis_options)
         else:
             for i in range(1, n + 1):
                 # Adding this range slider makes it impossible to manually zoom in vertically for this graph
@@ -290,9 +290,9 @@ class PlotlyGraphFigure:
                             thickness=x_height
                         )
                     )
-                    self.update_layout_options_dict(axis_key, xaxis_options)
+                    self._update_layout_options_dict(axis_key, xaxis_options)
 
-        y_slider_height = self.calculate_y_slider_height()
+        y_slider_height = self._calculate_y_slider_height()
 
         totalrange = [self.data.minY, self.data.maxY]
         self.y_slider = self.FloatRangeSlider(
@@ -309,7 +309,7 @@ class PlotlyGraphFigure:
         def update_ticklabels(new_range):
             if self.compress and len(self.ticktext)==self.nGraphs:
                 showticklabels = bool(new_range[1]-new_range[0]<26) and (not self.overlapping or not self.overlap_on_compress)
-                self.update_layout_options_dict("yaxis", dict(
+                self._update_layout_options_dict("yaxis", dict(
                     showticklabels=showticklabels,
                     zeroline=showticklabels,
                     showgrid=showticklabels
@@ -324,13 +324,13 @@ class PlotlyGraphFigure:
             with self.fig.batch_update():
                 self.fig.update_yaxes(range=new_range)
             if update_ticklabels(new_range):
-                self.update_layout()
+                self._update_layout()
 
         self.y_slider.observe(update_y_range, names='value')
-        self.update_y_slider()
+        self._update_y_slider()
         update_ticklabels(totalrange)
 
-    def update_legend(self):
+    def _update_legend(self):
         if self.nGraphs == 1:
             return
 
@@ -343,27 +343,27 @@ class PlotlyGraphFigure:
                     self.layout_options["showlegend"] = False
         
 
-    def update_y_slider(self):
+    def _update_y_slider(self):
         """Updates the y-axis slider height and visibility."""
         if hasattr(self, 'y_slider'):
-            y_slider_height = self.calculate_y_slider_height()
+            y_slider_height = self._calculate_y_slider_height()
             if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
                 self.y_slider.layout.height = f'{y_slider_height}px'
             visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
             if self.y_slider.layout.visibility != visible:
                 self.y_slider.layout.visibility = visible
 
-    def calculate_y_slider_height(self):
-        return int(0.875 * self.get_height() - 165)
+    def _calculate_y_slider_height(self):
+        return int(0.875 * self._get_height() - 165)
     
-    def get_height(self):
+    def _get_height(self):
         """Returns the current height of the figure."""
         if self.overlapping and not self.compress:
             return self.default_height
         else:
             return self.height
     
-    def create_annotations(self, annotation_data, x_range):
+    def _create_annotations(self, annotation_data, x_range):
         """Updates the graph annotations."""
         if annotation_data is None:
             return
@@ -463,10 +463,10 @@ class PlotlyGraphFigure:
             )
         """
 
-        self.update_layout_options_list("shapes", shapes)
-        self.update_layout_options_list("annotations", annotations)
+        self._update_layout_options_list("shapes", shapes)
+        self._update_layout_options_list("annotations", annotations)
 
-    def create_anntotation_intervals(self, annotation_interavals_data, x_range):
+    def _create_annotation_intervals(self, annotation_interavals_data, x_range):
         """Updates the graph annotation intervals."""
         if annotation_interavals_data is None:
             return
@@ -549,10 +549,10 @@ class PlotlyGraphFigure:
                 yanchor="top"
             ))
 
-        self.update_layout_options_list("shapes", shapes)
-        self.update_layout_options_list("annotations", annotations)
+        self._update_layout_options_list("shapes", shapes)
+        self._update_layout_options_list("annotations", annotations)
 
-    def format_annotations(self):
+    def _format_annotations(self):
         """Formats existing annotations to have consistent style."""
         if "annotations" not in self.layout_options:
             return
@@ -601,22 +601,22 @@ class PlotlyGraphFigure:
                     y = 0
                 current["y"] = y
 
-    def manage_axis_units(self):
+    def _manage_axis_units(self):
         """If all x-axes have the same units, move it to the last axis only."""
         if self.compress:
             if self.data.common_units_x is not None:
-                self.update_layout_options_dict("xaxis", dict(
+                self._update_layout_options_dict("xaxis", dict(
                     title=self.data.common_units_x.__str__()
                 ))
             if self.data.common_units_y is not None:
-                self.update_layout_options_dict("yaxis", dict(
+                self._update_layout_options_dict("yaxis", dict(
                     title=self.data.common_units_y.__str__()
                 ))
         else:
             if self.data.common_units_x is not None:
                 # Clear all units except the last one
                 for i in range(1, self.nGraphs):
-                    self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
+                    self._update_layout_options_dict(f"xaxis{i}", dict(title=None))
 
     def update_jupyterlab_theme(self, theme_name):
         """Updates the Plotly figure theme based on JupyterLab theme name."""
@@ -638,7 +638,7 @@ class PlotlyGraphFigure:
             )
             PlotlyGraphFigure.ipython_display(hbox)
 
-    def getSubplotHeight(self, height=None):
+    def _getSubplotHeight(self, height=None):
         """Returns the height of each subplot in pixels."""
         if self.nGraphs == 0:
             return 0
