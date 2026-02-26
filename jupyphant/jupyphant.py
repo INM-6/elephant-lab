@@ -242,6 +242,7 @@ class Jupyphant:
         else:
             self.NEO_OBJS_TO_SHOW.append(neo_obj_type)
         self.filter_changed = True
+        self.update_tree()
         
     def get_neo_hash(self, neo_obj, hash_name="sha1"):
         """

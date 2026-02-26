@@ -826,9 +826,7 @@ self.update_tree()
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
-		let code = `jupyphant_entity.toggle_neo_tree_objs("${checkbox_id}")
-jupyphant_entity.update_tree()
-			`
+		let code = `jupyphant_entity.show_neo_obj("${checkbox_id}")`
 		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
 	}
 
