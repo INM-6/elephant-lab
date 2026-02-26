@@ -1,5 +1,4 @@
 class Jupyphant_plot:
-    from .jupyphant import Jupyphant
     from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
     from .PlotlyGraphFigure import PlotlyGraphFigure
     from .PlotlyGraphDataTypes import SpikeTrainRasterPlot, AnalogSignalLFPPlotList, EventAnnotations, EpochIntervals, IrregularlySampledSignalPlotList
@@ -10,7 +9,10 @@ class Jupyphant_plot:
     from ipywidgets import Output, HTML
     from IPython.display import clear_output, display
 
-    from typing import TypedDict
+    from typing import TypedDict, TYPE_CHECKING
+
+    if TYPE_CHECKING:
+        from .jupyphant import Jupyphant  # only for type hints
 
     class NeoKey(Enum):
         spiketrain = 'spiketrain'
@@ -55,12 +57,12 @@ class Jupyphant_plot:
             "changed": False,
         }
 
-    def __init__(self, jupyphant_entity: Jupyphant_plot.Jupyphant):
+    def __init__(self, jupyphant_entity: "Jupyphant_plot.Jupyphant"):
         """
         Class to outsource some jupyphant logic.
         Is a Class to minimize the amount of name clutter in the notebook
         """ 
-        self.jupyphant_entity: Jupyphant_plot.Jupyphant = jupyphant_entity
+        self.jupyphant_entity: "Jupyphant_plot.Jupyphant" = jupyphant_entity
         self.previous_neo_object_dict = {key: [] for key in self.NeoKey}
         self.jupyterlab_theme = 'plotly_dark'
         self.plots: dict[
