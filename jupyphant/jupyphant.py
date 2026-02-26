@@ -701,7 +701,7 @@ class Jupyphant:
             self.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
         self.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
 
-        return self.ipytree_of_neo_objects
+        Jupyphant.display(self.ipytree_of_neo_objects)
     
     def insert_selected_neo_objects(self):
         try:
