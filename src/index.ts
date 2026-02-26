@@ -449,8 +449,13 @@ class JupyphantExtension {
 			}).then(result => {
 				if (result.button.accept && result.value && result.value.length > 0) {
 					const selectedFile = result.value[0];
-					const filePath = selectedFile.path;
-
+					let filePath = selectedFile.path;
+					const slashCount = (session.path.match(/\//g) || []).length;
+					if (slashCount !== 0) {
+						const prefix = '../'.repeat(slashCount);
+						filePath = prefix+filePath;
+					}
+					
 					const body = document.createElement('div');
 					const input = document.createElement('input');
 					input.className = 'jp-input';
