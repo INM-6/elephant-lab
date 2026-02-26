@@ -55,8 +55,8 @@ import {
 // Own imports
 // Python Code to execute in the kernel
 import {
-	pythonCode,
-	PythonCodeKey
+	PythonCodeKey,
+	getPythonCode
 } from './kernelcode';
 // Style from css
 import '../style/index.css';
@@ -115,15 +115,15 @@ class JupyphantExtension {
 		console.log("Jupyphant: Initializing kernel state...");
 		this.kernelBridge = new KernelBridge(session);
 
-		await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.SetupEnv], this.outarea_neo_tree!, session, false);
+		await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.SetupEnv), this.outarea_neo_tree!, session, false);
 
 		console.log("Jupyphant: Environment setup complete.");
 		try {
 			// Execute Jupyphant Code to create Neo Tree / Information and Plots  
-			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateTree], this.outarea_neo_tree!, session);
-			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.UpdateTree], this.outarea_neo_tree!, session, false);
-			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateExplorerInfo], this.outarea_nodeexplorer_info!, session);
-			await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.CreateExplorerRaw], this.outarea_nodeexplorer_raw!, session);
+			await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.CreateTree), this.outarea_neo_tree!, session);
+			await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.UpdateTree), this.outarea_neo_tree!, session, false);
+			await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.CreateExplorerInfo), this.outarea_nodeexplorer_info!, session);
+			await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.CreateExplorerRaw), this.outarea_nodeexplorer_raw!, session);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Jupyphant: FAILED to initialize kernel state:", error);
@@ -224,7 +224,7 @@ class JupyphantExtension {
 
 			this._updateTimer = window.setTimeout(async () => {
 				await Promise.all([
-					this.executeCodeInOutputArea(pythonCode[PythonCodeKey.UpdateTree], this.outarea_neo_tree!, initialSession, false),
+					this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.UpdateTree), this.outarea_neo_tree!, initialSession, false),
 				]);
 			}, 500);
 		});
@@ -334,7 +334,7 @@ class JupyphantExtension {
 		infoButton.title = 'About Jupyphant';
 		infoButton.className = 'workflow-button workflow-button-io';
 		infoButton.onclick = async () => {
-			const result = await this.kernelBridge!.executeCode(pythonCode[PythonCodeKey.Version], true);
+			const result = await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.Version), true);
 
 			const body = document.createElement('div');
 			body.style.textAlign = 'center';
@@ -475,7 +475,7 @@ class JupyphantExtension {
 						}
 
 						if (ioClass !== null) {
-							const varsResult = await this.kernelBridge!.executeCode(pythonCode[PythonCodeKey.GetVars], true);
+							const varsResult = await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.GetVars), true);
 							let allVars: string[] = [];
 							if (varsResult && varsResult.outputs.length > 0) {
 								const output = varsResult.outputs[0];
@@ -495,28 +495,9 @@ class JupyphantExtension {
 								varName = `loaded_data_${counter}`;
 							}
 
-							let code = '';
-							if (ioClass) {
-								code = `
-import neo
-io_class = getattr(neo.io, '${ioClass}')
-reader = io_class(filename='${filePath}')
-${varName} = reader.read_block()
-									`;
-							} else {
-								code = `
-import neo
-${varName} = neo.get_io('${filePath}').read()
-if (isinstance(${varName}, list)):
-	${varName} = ${varName}[0]
-elif (isinstance(${varName}, dict)):
-	${varName} = ${varName}['blocks'][0]
-print(${varName}, type(${varName}))
-self.update_tree()
-`;
-							}
+							let code = getPythonCode(PythonCodeKey.SetVarName, ioClass, filePath, varName);
 							await this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
-							await this.executeCodeInOutputArea(pythonCode[PythonCodeKey.UpdateTree], this.outarea_neo_tree!, session, false);
+							await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.UpdateTree), this.outarea_neo_tree!, session, false);
 						} else if (dialogResult.button.label === 'Automatic') {
 							showDialog({
 								title: 'Error',
@@ -559,7 +540,7 @@ self.update_tree()
 						return;
 					}
 
-					const code = `jupyphant_entity.save_selected_neo_objects('${filePath}')`;
+					const code = getPythonCode(PythonCodeKey.SaveSelectedNeoObjects, filePath);
 					this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false)
 						.then(() => {
 							showDialog({
@@ -593,7 +574,7 @@ self.update_tree()
 				return;
 			}
 
-			const result = await this.kernelBridge!.executeCode(pythonCode[PythonCodeKey.InsertCode], true);
+			const result = await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.InsertCode), true);
 
 			if (result && result.outputs.length > 0) {
 				const output = result.outputs[0];
@@ -653,10 +634,6 @@ self.update_tree()
 		}
 	}
 
-	private convert_bool_to_python_bool(bool: boolean): string {
-		return bool ? "True" : "False";
-	}
-
 	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
 		const buttonContainer = document.createElement("div");
 		buttonContainer.classList.add("jp-rawplot-button-container");
@@ -685,17 +662,17 @@ self.update_tree()
 		};
 
 		const darkmodeToggle = createToggle('fa-moon', 'Dark', 'Switch between dark and light mode', true, true, (state) => {
-			const code = `jupyphant_entity.jupyphant_plot.update_jupyterlab_plot_theme("${state ? "dark" : "white"}")`;
+			const code = getPythonCode(PythonCodeKey.DarkModeToggle, state);
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
 		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
-			const code = `jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${this.convert_bool_to_python_bool(state)})`;
+			const code = getPythonCode(PythonCodeKey.OverlapToggle, state);
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
 		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', true, true, (state) => {
-			const code = `jupyphant_entity.jupyphant_plot.set_zero_based(${this.convert_bool_to_python_bool(state)})`;
+			const code = getPythonCode(PythonCodeKey.ZeroBasedToggle, state);
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
@@ -705,12 +682,12 @@ self.update_tree()
 				max_points = min_max_points;
 				numberInput.value = max_points.toString();
 			}
-			const code = `jupyphant_entity.jupyphant_plot.upscale_raw_plot(${max_points})`;
+			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, max_points);
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
 		const resetScaleButton = createToggle('fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', false, false, () => {
-			const code = `jupyphant_entity.jupyphant_plot.reset_scale()`;
+			const code = getPythonCode(PythonCodeKey.ResetScale);
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
@@ -767,7 +744,7 @@ self.update_tree()
 		colorGradeSelect.value = "Viridis";
 
 		colorGradeSelect.onchange = () => {
-			const code = `jupyphant_entity.jupyphant_plot.set_color_grade("${colorGradeSelect.value}")`;
+			const code = getPythonCode(PythonCodeKey.SetColorGrade, colorGradeSelect.value);
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		};
 
@@ -826,12 +803,12 @@ self.update_tree()
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
-		let code = `jupyphant_entity.show_neo_obj("${checkbox_id}")`
+		let code = getPythonCode(PythonCodeKey.ToggleNeoTreeFilter, checkbox_id);
 		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
 	}
 
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
-		let code = `jupyphant_entity.expand_neo_tree(${this.convert_bool_to_python_bool(checked)})`
+		let code = getPythonCode(PythonCodeKey.ExpandNeoTree, checked);
 		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
 	}
 
