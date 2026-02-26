@@ -29,6 +29,7 @@ class Jupyphant:
     from neo.core.regionofinterest import RegionOfInterest, CircularRegionOfInterest, RectangularRegionOfInterest, PolygonRegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
     from neo import Block, Segment, Group, SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence, ChannelView
+    from neo.io import NixIO
     from collections import Counter, defaultdict
     import numpy as np
     import quantities as pq
@@ -376,32 +377,29 @@ class Jupyphant:
         self.filter_changed = False
         
     def save_selected_neo_objects(self, filepath="output_file.nix"):
-        from neo import Block, Segment, SpikeTrain, AnalogSignal
-        from neo.io import NixIO
-        
         if not filepath.endswith('.nix'):
             filepath += '.nix'
         
         selected_ids = self.get_selected_neo_ids()
         neo_objs_to_export = [self.get_neo_obj_from_id(self, selected_id) for selected_id in selected_ids]
 
-        export_block = Block(name="Exported Data")
-        export_segment = Segment(name="Exported Segment")
+        export_block = self.Block(name="Exported Data")
+        export_segment = self.Segment(name="Exported Segment")
         export_block.segments.append(export_segment)
 
         blocks_to_write = []
 
         for obj in neo_objs_to_export:
-            if isinstance(obj, Block):
+            if isinstance(obj, self.Block):
                 blocks_to_write.append(obj)
             
-            elif isinstance(obj, Segment):
+            elif isinstance(obj, self.Segment):
                 export_block.segments.append(obj)
                 
-            elif isinstance(obj, (SpikeTrain, AnalogSignal)):
+            elif isinstance(obj, (self.SpikeTrain, self.AnalogSignal)):
                 obj_copy = obj.copy() 
                 
-                if isinstance(obj, SpikeTrain):
+                if isinstance(obj, self.SpikeTrain):
                     export_segment.spiketrains.append(obj_copy)
                 else:
                     export_segment.analogsignals.append(obj_copy)
@@ -409,7 +407,7 @@ class Jupyphant:
         if len(export_segment.spiketrains) > 0 or len(export_segment.analogsignals) > 0:
             blocks_to_write.append(export_block)
 
-        with NixIO(filename=filepath, mode='ow') as nix_io:
+        with self.NixIO(filename=filepath, mode='ow') as nix_io:
             nix_io.write_all_blocks(blocks_to_write)
 
     def update_tree(self):
