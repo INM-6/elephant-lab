@@ -381,7 +381,7 @@ class Jupyphant:
             filepath += '.nix'
         
         selected_ids = self.get_selected_neo_ids()
-        neo_objs_to_export = [self.get_neo_obj_from_id(self, selected_id) for selected_id in selected_ids]
+        neo_objs_to_export = [self.get_neo_obj_from_id(selected_id) for selected_id in selected_ids]
 
         export_block = self.Block(name="Exported Data")
         export_segment = self.Segment(name="Exported Segment")
