@@ -700,7 +700,6 @@ class Jupyphant:
 
             self.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
         self.ipytree_of_neo_objects.observe(on_selected_change_tree, names='selected_nodes')
-        Jupyphant.display(self.ipytree_of_neo_objects)
 
         return self.ipytree_of_neo_objects
     
