@@ -53,7 +53,8 @@ test = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
-    "pytest-tornasync"
+    "pytest-tornasync",
+    "matplotlib"
 ]
 
 [tool.hatch.version]
