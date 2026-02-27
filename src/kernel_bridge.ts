@@ -1,6 +1,12 @@
 import { ISessionContext } from '@jupyterlab/apputils';
 import { KernelMessage } from '@jupyterlab/services';
 
+// Python Code to execute in the kernel
+import {
+    PythonCodeKey,
+    getPythonCode
+} from './kernelcode';
+
 export interface IExecutionResult {
     resultKey: string | null;
     outputs: any[];
@@ -15,15 +21,7 @@ export class KernelBridge {
 
     public async getNeoIOClass(filename: string): Promise<string | null> {
         if (!this.session || !this.session.session) { return null; }
-        const code = `
-import neo, json, sys
-try:
-    io = neo.get_io("${filename}")
-    print(json.dumps(io.__class__.__name__))
-except Exception as e:
-    print(f"Error getting IO for {filename}: {e}", file=sys.stderr)
-    print(json.dumps(null))
-        `;
+        const code = getPythonCode(PythonCodeKey.GetIOClass, filename);
         let msg_content: string = "";
         const future = this.session.session.kernel!.requestExecute({ code });
         future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
@@ -51,7 +49,7 @@ except Exception as e:
         }
         let codeToRun: string;
         if (executeCode) {
-            codeToRun = "import gc; gc.collect()\n" + code;
+            codeToRun = "import gc as jupyphant_gc; jupyphant_gc.collect()\n" + code;
         }
         else {
             codeToRun = `print(${JSON.stringify(code)})`;

@@ -3,6 +3,7 @@ class Jupyphant_util:
     import json
     import __main__
     import neo
+    import sys
 
     def __init__(self):
         """
@@ -30,3 +31,11 @@ class Jupyphant_util:
             var = var['blocks'][0]
         self.__main__.__dict__[varName] = var
         print(var, type(var))
+
+    def getNeoIOClass(self, filename):
+        try:
+            io = self.neo.get_io(filename)
+            print(self.json.dumps(io.__class__.__name__))
+        except Exception as e:
+            print(f"Error getting IO for {filename}: {e}", file=self.sys.stderr)
+            print(self.json.dumps(None))

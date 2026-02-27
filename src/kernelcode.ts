@@ -39,6 +39,10 @@ function setVarName(ioClass: string, filePath: string, varName: string): string 
 	}
 }
 
+function getNeoIOClass(filename: string): string {
+	return `jupyphant_entity.jupyphant_util.getNeoIOClass('${filename}')`;
+}
+
 function saveSelectedNeoObjects(filePath: string): string {
 	return `jupyphant_entity.save_selected_neo_objects('${filePath}')`;
 }
@@ -94,6 +98,7 @@ export enum PythonCodeKey {
 	SetColorGrade = 'setColorGrade',
 	ToggleNeoTreeFilter = 'toggleNeoTreeFilter',
 	ExpandNeoTree = 'expandNeoTree',
+	GetIOClass = 'getIOClass',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -115,6 +120,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.SetColorGrade]: (...args: any[]) => setColorGrade(args[0]),
 	[PythonCodeKey.ToggleNeoTreeFilter]: (...args: any[]) => toggleNeoTreeFilter(args[0]),
 	[PythonCodeKey.ExpandNeoTree]: (...args: any[]) => expandNeoTree(args[0]),
+	[PythonCodeKey.GetIOClass]: (...args: any[]) => getNeoIOClass(args[0]),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {
