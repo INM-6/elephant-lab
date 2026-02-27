@@ -15,27 +15,27 @@ from jupyphant.jupyphant import Jupyphant
 jupyphant_entity = Jupyphant()`;
 
 // Call to the function that initializes the ipytree widget with an empty tree
-const create_tree = `jupyphant_entity.create_tree()`;
+const create_tree = `jupyphant_entity.jupyphant_tree.create_tree()`;
 
 // Call to the function that shows metadata info of selected nodes in Info-tab of the node-explorer Dockpanel
-const create_explorer_info = `jupyphant_entity.create_explorer_info()`;
+const create_explorer_info = `jupyphant_entity.jupyphant_info.create_explorer_info()`;
 
 // Call to the function that updates the ipytree tree view of the neo hierarchy
-const update_tree = `jupyphant_entity.update_tree()`;
+const update_tree = `jupyphant_entity.jupyphant_tree.update_tree()`;
 
 const createExplorerRawPlot = 'jupyphant_entity.jupyphant_plot.create_explorer_raw_plot()'
 
-const version = `jupyphant_entity.version()`;
+const version = `jupyphant_entity.jupyphant_util.version()`;
 
-const getVars = `jupyphant_entity.getVars()`;
+const getVars = `jupyphant_entity.jupyphant_util.getVars()`;
 
 const insertCode = `jupyphant_entity.insert_selected_neo_objects()`;
 
 function setVarName(ioClass: string, filePath: string, varName: string): string {
 	if (ioClass) {
-		return `jupyphant_entity.setVarNameIOClass('${ioClass}','${filePath}', '${varName}')`;
+		return `jupyphant_entity.jupyphant_util.setVarNameIOClass('${ioClass}','${filePath}', '${varName}')`;
 	} else {
-		return `jupyphant_entity.setVarNameNotIOClass('${filePath}', '${varName}')`;
+		return `jupyphant_entity.jupyphant_util.setVarNameNotIOClass('${filePath}', '${varName}')`;
 	}
 }
 
@@ -66,11 +66,11 @@ function setColorGrade(colorGrade: string): string {
 }
 
 function toggleNeoTreeFilter(checkbox_id: string): string {
-	return `jupyphant_entity.show_neo_obj("${checkbox_id}")`
+	return `jupyphant_entity.jupyphant_tree.show_neo_obj("${checkbox_id}")`
 }
 
 function expandNeoTree(checked: boolean): string {
-	return `jupyphant_entity.expand_neo_tree(${convert_bool_to_python_bool(checked)})`
+	return `jupyphant_entity.jupyphant_tree.expand_neo_tree(${convert_bool_to_python_bool(checked)})`
 }
 
 // Make all strings publicly available in a dict
