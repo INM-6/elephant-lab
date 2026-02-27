@@ -78,7 +78,7 @@ class Jupyphant_plot:
                 "og_x_range": None,
                 "x_range": None,
                 "max_points": 10000,
-                "zero_based": True
+                "zero_based": False
             }
         self.plots[self.PLOT_IMGSEQUENCE]= {
             **self._base_plot_dict(),
@@ -202,7 +202,7 @@ class Jupyphant_plot:
             if zero_based != plot_dict['zero_based']:
                 plot_dict['zero_based']=zero_based
                 fig = plot_dict['fig']
-                if fig is None:
+                if fig is None or fig.isDefaultZeroBased():
                     continue
                 plot_dict['og_x_range']=None
                 plot_dict['x_range']=None

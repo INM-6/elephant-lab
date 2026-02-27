@@ -671,7 +671,7 @@ class JupyphantExtension {
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});
 
-		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', true, true, (state) => {
+		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', false, true, (state) => {
 			const code = getPythonCode(PythonCodeKey.ZeroBasedToggle, state);
 			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
 		});

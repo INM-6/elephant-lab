@@ -25,7 +25,7 @@ class PlotlyGraphFigure:
     from ipywidgets import HBox, Layout, Output, FloatRangeSlider
 
 
-    def __init__(self, data, overlapping=False, title=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=True, max_points=10000):
+    def __init__(self, data, overlapping=False, title=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=False, max_points=10000):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -656,6 +656,9 @@ class PlotlyGraphFigure:
     def isDownscaled(self):
         return self.data.is_downscaled
     
+    def isDefaultZeroBased(self):
+        return self.data.is_default_zero_based
+    
 class PlotlyGraphDataType:
     import warnings
 
@@ -785,13 +788,14 @@ class PlotlyGraphDataTypeList():
         Tries to normalize units to first unit found
         Filters out all points outside of x_range if x_range is not None
         Decreases number of points if there are to many
-        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY
+        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY, is_default_zero_based
         """
 
         nPoints = 0
         first = True
         common_units_x = None
         filtered = []
+        is_default_zero_based = True
         for data in self.data_list:
             units_x = None
             units_y = None
@@ -824,8 +828,13 @@ class PlotlyGraphDataTypeList():
                 else:
                     common_units_x = None
 
-            if shift_to_0:
-                x_values = x_values - x_values.min()
+            minX = x_values.min()
+            if minX > 1e-9 or minX < -1e-9:
+                is_default_zero_based = False
+                if shift_to_0:
+                    x_values = x_values - minX
+                    minX = 0
+            data.minX = minX
 
             #Filter out of x_range
             if x_range is not None:
@@ -847,6 +856,7 @@ class PlotlyGraphDataTypeList():
             data.x = x_values
             data.y = y_values
 
+        self.is_default_zero_based = is_default_zero_based
         if len(filtered) == 0:
             self.warnings.warn("There is no valid data selected")
             self.common_units_x = None
@@ -905,13 +915,13 @@ class PlotlyGraphDataTypeList():
             should_find_minX = not shift_to_0 or x_range is not None
             if index == 0:
                 if should_find_minX:
-                    minX = x_values.min()
+                    minX = data.minX
                 minY = y_values.min()
                 maxX = x_values.max()
                 maxY = y_values.max()
                 previous_maxY = maxY
             else:
-                temp_minX = x_values.min() if should_find_minX else 0
+                temp_minX = data.minX if should_find_minX else 0
                 temp_minY = y_values.min()
                 temp_maxX = x_values.max()
                 temp_maxY = y_values.max()
