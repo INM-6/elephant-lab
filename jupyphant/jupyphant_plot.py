@@ -59,7 +59,8 @@ class Jupyphant_plot:
 
     def __init__(self, jupyphant_entity: "Jupyphant_plot.Jupyphant"):
         """
-        Class to outsource some jupyphant logic.
+        Class to outsource some jupyphant logic:
+            -all logic regarding the plotting of Jupyphant
         Is a Class to minimize the amount of name clutter in the notebook
         """ 
         self.jupyphant_entity: "Jupyphant_plot.Jupyphant" = jupyphant_entity

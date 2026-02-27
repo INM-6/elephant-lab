@@ -1,6 +1,9 @@
 class Jupyphant:
     # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
+    from .jupyphant_util import Jupyphant_util
+    from .jupyphant_tree import Jupyphant_tree
+    from .jupyphant_info import Jupyphant_info
     from .jupyphant_plot import Jupyphant_plot
 
     from jupyphant import __version__
@@ -134,6 +137,9 @@ class Jupyphant:
         self.expand_all = False
         self.last_known_hashes = []
         self.hash_cache = {}
+        self.jupyphant_util: Jupyphant.Jupyphant_util = self.Jupyphant_util()
+        self.jupyphant_tree: Jupyphant.Jupyphant_tree = self.Jupyphant_tree(self)
+        self.jupyphant_info: Jupyphant.Jupyphant_info = self.Jupyphant_info(self)
         self.jupyphant_plot: Jupyphant.Jupyphant_plot = self.Jupyphant_plot(self)
 
     def version(self):
