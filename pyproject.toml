@@ -35,7 +35,6 @@ dependencies = [
 "jupyterlab-pygments",
 "jupyterlab-server",
 "jupyterlab-widgets",
-"matplotlib",
 "nodejs",
 "numpy",
 "pip",

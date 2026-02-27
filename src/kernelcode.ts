@@ -11,7 +11,6 @@ function convert_bool_to_python_bool(bool: boolean): string {
 // It is used to access and visualize the neo objects
 const setup_env =
 	`# only available in conda env MyJupyphantClone; ipympl was additionally installed to this env
-%matplotlib inline
 from jupyphant.jupyphant import Jupyphant
 jupyphant_entity = Jupyphant()`;
 
