@@ -44,12 +44,54 @@ test.describe('Jupyphant: Neo Tree Interactions', () => {
 
     // 2. Create Data in Notebook
     const neoCode = `
-from neo.core import Block, Segment, AnalogSignal, SpikeTrain
+from neo.core import (
+    Block, Segment, AnalogSignal, SpikeTrain, Epoch, Event,
+    IrregularlySampledSignal, ImageSequence, ChannelView, Group,
+    CircularRegionOfInterest, PolygonRegionOfInterest, RectangularRegionOfInterest
+)
 import quantities as pq
+import numpy as np
+
 test_block = Block(name="TestBlock")
 test_block.segments.append(Segment(name="my segment"))
-test_block.segments[0].analogsignals.append(AnalogSignal([1,2,3], name="my analogsignal", t_stop=4, units='s', sampling_rate=1*pq.Hz, id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified'))
-test_block.segments[0].spiketrains.append(SpikeTrain([1,2,3], name="my spiketrain", t_stop=4, units='s', id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified'))
+test_block.segments[0].analogsignals.append(
+    AnalogSignal([1, 2, 3], name="my analogsignal", t_stop=4, units='s', 
+                 sampling_rate=1*pq.Hz, id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+)
+
+test_block.segments[0].spiketrains.append(
+    SpikeTrain([1, 2, 3], name="my spiketrain", t_stop=4, units='s', 
+               id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+)
+
+test_block.segments[0].epochs.append(
+    Epoch(times=[0, 1, 2]*pq.s, durations=[0.5, 0.5, 0.5]*pq.s, labels=['a', 'b', 'c'], 
+          name="my epoch", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+)
+
+test_block.segments[0].events.append(
+    Event(times=[0.5, 1.5, 2.5]*pq.s, labels=['x', 'y', 'z'], 
+          name="my event", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+)
+
+test_block.segments[0].irregularlysampledsignals.append(
+    IrregularlySampledSignal(signal=[1.1, 2.2, 3.3], times=[0, 1, 2]*pq.s, units='V', 
+                             name="my irregularsignal", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+)
+
+test_block.segments[0].imagesequences.append(
+    ImageSequence(image_data=np.empty((3, 10, 10)), sampling_rate=1*pq.Hz, units='V', spatial_scale=1*pq.um, 
+                  name="my imagesequence", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+)
+
+my_group = Group(name="my group", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+test_block.groups.append(my_group)
+
+my_channelview = ChannelView(test_block.segments[0].analogsignals[0], index=[0], 
+                             name="my channelview", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+
+my_imageseq = test_block.segments[0].imagesequences[0]
+
 print("Created:", test_block.name)
     `.trim();
 
@@ -108,24 +150,54 @@ print("Created:", test_block.name)
   });
 
   // --- TEST 2: Filtering ---
-  test('should hide and show node when Block filter is toggled', async ({ page }) => {
-    const blockFilterLabel = page.locator('label[title="Hide/Show Block(s)"]');
-    const treeNode = page.getByRole('tree').getByRole('treeitem').filter({ hasText: 'TestBlock' });
+  test('should hide and show node when filter is toggled', async ({ page }) => {
 
-    // 1. Toggle OFF
-    await blockFilterLabel.click();
-    await expect(blockFilterLabel).toHaveAttribute('data-checked', 'false');
-    await expect(blockFilterLabel).toHaveClass(/unchecked-label/);
+    const neoFilters = [
+        { name: 'Block', testNode: 'TestBlock' },
+        { name: 'Segment', testNode: 'my segment' },
+        { name: 'Spiketrain', testNode: 'my spiketrain' },
+        { name: 'Analogsignal', testNode: 'my analogsignal' },
+        { name: 'Epoch' },
+        { name: 'Channelview' },
+        { name: 'Group' },
+        { name: 'Irregularlysampledsignal' },
+        { name: 'Event' },
+        { name: 'Imagesequence' },
+        { name: 'Circularregionofinterest' },
+        { name: 'Polygonregionofinterest' },
+        { name: 'Rectangularregionofinterest' }
+    ]
 
     await ensureJupyphantActive(page);
-    await expect(treeNode).toBeHidden({ timeout: 10000 });
+
+    for (const filter of neoFilters) {
+        await test.step(`Toggle ${filter.name} filter`, async () => {
+            
+            await ensureJupyphantActive(page);
+            const filterLabel = page.locator(`label[title="Hide/Show ${filter.name}(s)"]`);
+            await filterLabel.click();
+            await expect(filterLabel).toHaveAttribute('data-checked', 'false');
+            await expect(filterLabel).toHaveClass(/unchecked-label/);
+
+            if (filter.testNode) {
+                const treeNode = page.getByRole('tree').getByRole('treeitem').filter({ hasText: filter.testNode });
+                await expect(treeNode).toBeHidden({ timeout: 10000 });
+
+            }
+            // Toggle back ON for next tests
+            await filterLabel.click();
+            await expect(filterLabel).toHaveAttribute('data-checked', 'true');
+            
+            if (filter.testNode) {
+                const treeNode = page.getByRole('tree').getByRole('treeitem').filter({ hasText: filter.testNode });
+                await expect(treeNode).toBeVisible({ timeout: 10000 });
+            }
+        });
+    }
+
+
     await page.screenshot({ path: './outputs/tree-filter-hidden.png' });
 
-    // 2. Toggle ON
-    await ensureJupyphantActive(page);
-    await blockFilterLabel.click();
-    
-    await expect(treeNode).toBeVisible({ timeout: 10000 });
   });
 
 });
