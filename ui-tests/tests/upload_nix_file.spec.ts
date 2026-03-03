@@ -178,4 +178,28 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
     await expect(rightPanel).toContainText('Count: 2');
   });
 
+  test('should render plots in the Explorer tab for TestBlock', async ({ page })=> {
+    await ensureJupyphantActive(page);
+
+    // 1. Select the "TestBlock" node in the tree
+    const treeNode = page.locator('#jupyphant-right-panel').locator(':text-is("TestBlock")').first();
+    await treeNode.click();
+
+    // 2. Switch to the Explore tab
+    const exploreTab = page.locator('#jupyphant-right-panel').getByRole('tab', { name: 'Explore', exact: true });
+    await exploreTab.click();
+
+    const rightPanel = page.locator('#jupyphant-right-panel');
+
+    // Because Jupyphant uses Plotly, we check for Plotly's signature container class to appear
+    const plotContainer = rightPanel.locator('.js-plotly-plot, .plotly, svg, canvas').first();
+
+    // Plots sometimes take a second to render, so we give them time
+    await expect(plotContainer).toBeVisible({ timeout: 15000 });
+
+    // This does not check for correct plots but whether any were generated at all
+    const box = await plotContainer.boundingBox();
+    expect(box?.height).toBeGreaterThan(50);
+    expect(box?.width).toBeGreaterThan(50);
+  });
 });
