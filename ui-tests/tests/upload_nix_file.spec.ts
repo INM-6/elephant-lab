@@ -102,15 +102,18 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
     await ensureJupyphantActive(page);
 
     // Step 3: Ensure tree is populated before handing off to individual tests
-    const treeNode = page.locator('#jupyphant-right-panel').locator(':text-is("TestBlock")').first();
-    await expect(treeNode).toBeVisible({ timeout: 20000 });
+    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
+    await expect(async () => {
+      await ensureJupyphantActive(page);
+      await expect(treeNode).toBeVisible();
+    }).toPass({ timeout: 30000 });
   });
 
 
   // --- TEST 1: Verify Tree ---
   test('should display TestBlock in the Neo Tree', async ({ page }) => {
     await ensureJupyphantActive(page);
-    const treeNode = page.locator('#jupyphant-right-panel').locator(':text-is("TestBlock")').first();    await expect(treeNode).toBeVisible();
+    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();    await expect(treeNode).toBeVisible();
     await expect(treeNode).toBeVisible();
     await treeNode.highlight();
   });
@@ -120,7 +123,7 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
     await ensureJupyphantActive(page);
 
     // 1. Select the "TestBlock" node in the tree
-    const treeNode = page.locator('#jupyphant-right-panel').locator(':text-is("TestBlock")').first();
+    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
     await treeNode.click(); 
     await ensureJupyphantActive(page);
     // 2. Click the Insert button
@@ -153,7 +156,7 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
     await ensureJupyphantActive(page);
 
     // 1. Select the "TestBlock" node in the tree
-    const treeNode = page.locator('#jupyphant-right-panel').locator(':text-is("TestBlock")').first();
+    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
     await treeNode.click(); 
 
     // 2. Switch to the Details tab
@@ -178,11 +181,51 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
     await expect(rightPanel).toContainText('Count: 2');
   });
 
+  test('should display correct information in the Details tab for SpikeTrain', async ({ page }) => { 
+    await ensureJupyphantActive(page);
+
+    // Theoretically for the current test.nix file not needed but with other example files
+    const expandButton = page.locator('[title="Expand all containers"]');
+    if (await expandButton.isVisible()) {
+      await expandButton.click();
+    }
+
+    // 1. Select the "SpikeTrain" node in the tree
+    const spikeTrainNode = page.locator('#jupyphant-right-panel')
+                               .locator('[role="treeitem"]', { hasText: 'my spiketrain' })
+                               .first();
+
+    await spikeTrainNode.waitFor({ state: 'visible' });
+    await spikeTrainNode.click();
+    await expect(spikeTrainNode).toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+    // 2. Switch to the Explore tab
+    const detailsPanel = page.getByRole('tabpanel', { name: 'Details' });
+
+    await detailsPanel.click();
+    
+    await expect(detailsPanel).toContainText('Time Range: 0.0 s to 4.0 s', { timeout: 15000 });
+
+    // Assert the rest of the properties instantly
+    await expect(detailsPanel).toContainText('Annotations:');
+    await expect(detailsPanel).toContainText('id: Unit 1');
+    await expect(detailsPanel).toContainText('channel_id: 1');
+    await expect(detailsPanel).toContainText('unit_id: 0');
+    await expect(detailsPanel).toContainText('unit_tag: unclassified');
+    
+    // Check the table headers and values
+    await expect(detailsPanel).toContainText('Index (3 spikes)');
+    await expect(detailsPanel).toContainText('Time (in s, float64)');
+    await expect(detailsPanel).toContainText('0                | 1.0000 s');
+    await expect(detailsPanel).toContainText('1                | 2.0000 s');
+    await expect(detailsPanel).toContainText('2                | 3.0000 s');
+
+  });
+
   test('should render plots in the Explorer tab for TestBlock', async ({ page })=> {
     await ensureJupyphantActive(page);
 
     // 1. Select the "TestBlock" node in the tree
-    const treeNode = page.locator('#jupyphant-right-panel').locator(':text-is("TestBlock")').first();
+    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
     await treeNode.click();
 
     // 2. Switch to the Explore tab
