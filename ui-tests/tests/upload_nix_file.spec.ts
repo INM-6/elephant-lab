@@ -11,7 +11,7 @@ async function ensureJupyphantActive(page: Page) {
   }
 }
 
-test.describe('Jupyphant: Upload and Load .nix File', () => {
+test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
   // Global timeout
   test.setTimeout(120000);
 
@@ -147,4 +147,35 @@ test.describe('Jupyphant: Upload and Load .nix File', () => {
     await expect(outputArea).toContainText("name: 'TestBlock'");
     await expect(outputArea).toContainText('segments');
   });
+
+  // --- TEST 3: Verify Details Tab ---
+  test('should display correct information in the Details tab for TestBlock', async ({ page }) => {
+    await ensureJupyphantActive(page);
+
+    // 1. Select the "TestBlock" node in the tree
+    const treeNode = page.locator('#jupyphant-right-panel').locator(':text-is("TestBlock")').first();
+    await treeNode.click(); 
+
+    // 2. Switch to the Details tab
+    const detailsTab = page.locator('#jupyphant-right-panel').getByRole('tab', { name: 'Details', exact: true });
+    await detailsTab.click();
+
+    // 3. Verify the details text
+    const rightPanel = page.locator('#jupyphant-right-panel');
+    
+    await expect(rightPanel).toContainText('Multiple Object Types Selected', { timeout: 10000 });
+    
+    // Assert the rest of the expected properties
+    await expect(rightPanel).toContainText('Total Objects: 7');
+    await expect(rightPanel).toContainText('Object Types:');
+    await expect(rightPanel).toContainText('- SpikeTrain: 1');
+    await expect(rightPanel).toContainText('- Segment: 1');
+    await expect(rightPanel).toContainText('- ObjectList: 2');
+    await expect(rightPanel).toContainText('- AnalogSignal: 1');
+    await expect(rightPanel).toContainText('- Block: 1');
+    await expect(rightPanel).toContainText('- SpikeTrainList: 1');
+    await expect(rightPanel).toContainText('ObjectList Overview');
+    await expect(rightPanel).toContainText('Count: 2');
+  });
+
 });
