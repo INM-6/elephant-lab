@@ -1,15 +1,31 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 
-test('Jupyphant: Upload and Load .nix File', async ({ page }, testInfo) => {
+// Helper to reliably bring Jupyphant back to the front if the Debugger steals focus
+async function ensureJupyphantActive(page: Page) {
+  const jupyphantTab = page.getByRole('tab', { name: 'Jupyphant', exact: true });
+  if (await jupyphantTab.getAttribute('aria-selected') !== 'true') {
+    await jupyphantTab.click();
+    await expect(jupyphantTab).toHaveAttribute('aria-selected', 'true');
+  }
+}
+
+test.describe('Jupyphant: Upload and Load .nix File', () => {
+  // Global timeout
   test.setTimeout(120000);
 
-  // Setup: Open Notebook & Upload File
-  await test.step('Setup: Upload File & Open Notebook', async () => {
+  // NOTE: This test relies on the presence of a 'test.nix' file in the same directory as this test file
 
+  test.beforeEach(async ({ page }, testInfo) => {
     await page.goto('http://localhost:8888/lab?reset');
     await page.waitForSelector('#jupyterlab-splash', { state: 'detached', timeout: 30000 });
+
+    await page.evaluate(async () => {
+        if (window.jupyterapp) {
+          await window.jupyterapp.serviceManager.sessions.shutdownAll();
+        }
+    });
 
     // Calculate path to file
     const testFileDir = path.dirname(testInfo.file);
@@ -20,28 +36,29 @@ test('Jupyphant: Upload and Load .nix File', async ({ page }, testInfo) => {
       throw new Error(`CRITICAL: Cannot find test.nix at ${nixFilePath}`);
     }
 
-    
+    // Upload File
     const fileChooserPromise = page.waitForEvent('filechooser');
-    
-    
     await page.getByRole('button', { name: 'Upload Files' }).click();
-    
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(nixFilePath);
 
-    // Wait for the file to appear in the JupyterLab file list
+    const overwriteButton = page.getByRole('button', { name: /Overwrite/i});
+
+    try {
+      await overwriteButton.waitFor({ state: 'visible', timeout: 4000 });
+      await overwriteButton.click();
+      await page.waitForTimeout(2000);
+    } catch (e) {
+      // Dialog didnt appear, proceeding without interruption
+    }
+
     const uploadedFile = page.locator('.jp-DirListing-item', { hasText: 'test.nix' });
     await expect(uploadedFile).toBeVisible({ timeout: 15000 });
 
     // Open Notebook via top menu
-    console.log('Opening new notebook via File menu...');
     await page.getByRole('menuitem', { name: 'File' }).click();
-    
-    const newMenuItem = page.locator('.lm-Menu-itemLabel', { hasText: /^New$/ });
-    await newMenuItem.click();
-    
-    const notebookMenuItem = page.locator('.lm-Menu-itemLabel', { hasText: /^Notebook$/ });
-    await notebookMenuItem.click();
+    await page.locator('.lm-Menu-itemLabel', { hasText: /^New$/ }).click();
+    await page.locator('.lm-Menu-itemLabel', { hasText: /^Notebook$/ }).click();
 
     // Handle the Kernel selection dialog
     const selectBtn = page.getByRole('button', { name: 'Select' });
@@ -49,40 +66,30 @@ test('Jupyphant: Upload and Load .nix File', async ({ page }, testInfo) => {
       await selectBtn.waitFor({ state: 'visible', timeout: 5000 });
       await selectBtn.click();
     } catch (e) { 
-      console.log('No kernel dialog appeared, proceeding...'); 
+      // No kernel dialog appeared, proceeding naturally
     }
-
     await page.waitForSelector('.jp-Notebook-cell', { timeout: 20000 });
-  });
 
-  // Step 1: Activate Jupyphant Sidebar
-  await test.step('Step 1: Activate Sidebar', async () => {
+    // Step 1: Activate Jupyphant Sidebar
     await page.evaluate(async () => {
       const commands = window.jupyterapp.commands.listCommands();
       const cmdId = commands.find(id => id.toLowerCase().includes('jupyphant'));
       if (cmdId) await window.jupyterapp.commands.execute(cmdId);
     });
 
-    const jupyphantTab = page.getByRole('tab', { name: 'Jupyphant', exact: true });
-    
-    const isSelected = await jupyphantTab.getAttribute('aria-selected');
-    if (isSelected !== 'true') {
+    const jupyphantTab = page.locator('.lm-TabBar-tab').filter({ hasText: 'Jupyphant' });
+    if (await jupyphantTab.getAttribute('aria-selected') !== 'true') {
       await jupyphantTab.click();
     }
-    
     await expect(jupyphantTab).toHaveAttribute('aria-selected', 'true', { timeout: 15000 });
-  });
 
-  // Step 2: Use Load Button & File Dialog
-  await test.step('Step 2: Use Load Button & File Dialog', async () => {
-    const loadButton = page.locator('button[title="Create a neoIO for given Path"]');
-    await loadButton.click();
-
+    // Step 2: Use Load Button & File Dialog
+    await page.locator('button[title="Create a neoIO for given Path"]').click();
     const fileDialog = page.locator('.jp-Dialog', { hasText: 'Select' });
     await fileDialog.waitFor({ state: 'visible' });
     await fileDialog.locator('.jp-DirListing-item', { hasText: 'test.nix' }).dblclick();
 
-    await fileDialog.waitFor({ state: 'hidden' })
+    await fileDialog.waitFor({ state: 'hidden' });
 
     const ioDialog = page.locator('.jp-Dialog', { hasText: 'Enter neo IO class' });
     await ioDialog.waitFor({ state: 'visible' });
@@ -90,32 +97,54 @@ test('Jupyphant: Upload and Load .nix File', async ({ page }, testInfo) => {
     // This button click closes the dialog immediately
     await ioDialog.locator('button', { hasText: 'Automatic' }).click();
     await ioDialog.waitFor({ state: 'hidden' });
+
+    await expect(page.getByRole('button', { name: /Python 3.*Idle/})).toBeVisible({ timeout: 200000 });
+    await ensureJupyphantActive(page);
+
+    // Step 3: Ensure tree is populated before handing off to individual tests
+    const treeNode = page.locator('#jupyphant-right-panel').locator(':text-is("TestBlock")').first();
+    await expect(treeNode).toBeVisible({ timeout: 20000 });
   });
 
-  // Step 3: Verify TestBlock in Tree
-  await test.step('Step 3: Verify TestBlock in Tree', async () => {
-    // Target the tab specifically in the sidebar tabbar
-    const sidebarTab = page.locator('.lm-TabBar-tab').filter({ hasText: 'Jupyphant' });
-    const neoTreePanel = page.locator('#jupyphant-right-panel');
-    const treeNode = neoTreePanel.locator(':text-is("TestBlock")').first();
 
-    await expect(async () => {
-      // Force the sidebar tab to be active
-      if (await sidebarTab.getAttribute('aria-selected') !== 'true') {
-        await sidebarTab.click();
-      }
-      
-      // Ensure the Jupyphant panel is actually visible
-      await expect(neoTreePanel).toBeVisible();
+  // --- TEST 1: Verify Tree ---
+  test('should display TestBlock in the Neo Tree', async ({ page }) => {
+    await ensureJupyphantActive(page);
+    const treeNode = page.locator('#jupyphant-right-panel').locator(':text-is("TestBlock")').first();    await expect(treeNode).toBeVisible();
+    await expect(treeNode).toBeVisible();
+    await treeNode.highlight();
+  });
 
-      // Final assertion: the node must be visible
-      await expect(treeNode).toBeVisible();
-    }).toPass({ 
-      timeout: 25000,
-      intervals: [2000] // Give the UI 2 seconds between retries
+  // --- TEST 2: Insert into Notebook ---
+  test('should insert selected Neo object into notebook and execute', async ({ page }) => {
+    await ensureJupyphantActive(page);
+
+    // 1. Select the "TestBlock" node in the tree
+    const treeNode = page.locator('#jupyphant-right-panel').locator(':text-is("TestBlock")').first();
+    await treeNode.click(); 
+    await ensureJupyphantActive(page);
+    // 2. Click the Insert button
+    const insertButton = page.locator('button[title="Insert selected neo objects into current notebook"]');
+    await insertButton.click();
+
+    // 3. Ensure the kernel is ready
+    await expect(page.getByRole('button', { name: /Python 3.*Idle/ })).toBeVisible({ timeout: 20000 });
+
+    // 4. Focus the notebook cell and run it
+    const firstCell = page.locator('.jp-Notebook-cell').first();
+    await firstCell.click(); // Ensure notebook has context focus
+    
+    // Execute the cell using Jupyter's internal command registry (our bulletproof method)
+    await page.evaluate(async () => {
+      await window.jupyterapp.commands.execute('notebook:run-cell-and-select-next');
     });
 
-    await treeNode.highlight();
-    console.log('Successfully found "TestBlock"!');
+    // 5. Verify the cell output
+    const outputArea = firstCell.locator('.jp-OutputArea-output');
+    
+    // assert substrings
+    await expect(outputArea).toContainText('Block with', { timeout: 20000 });
+    await expect(outputArea).toContainText("name: 'TestBlock'");
+    await expect(outputArea).toContainText('segments');
   });
 });
