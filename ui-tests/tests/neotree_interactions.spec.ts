@@ -42,7 +42,10 @@ test.describe('Jupyphant: Neo Tree Interactions', () => {
     }
     await page.waitForSelector('.jp-Notebook-cell', { timeout: 10000 });
 
-    // 2. Create Data in Notebook
+  // 2. Wait a bit for kernel to fully initialize
+  await page.waitForTimeout(1000);
+
+  // 3. Create Data in Notebook
     const neoCode = `
 from neo.core import (
     Block, Segment, AnalogSignal, SpikeTrain, Epoch, Event,
@@ -103,12 +106,24 @@ print("Created:", test_block.name)
       }
     }, neoCode);
 
+    // 4. Execute cell and wait for output
     const firstCell = page.locator('.jp-Notebook-cell').first();
     await firstCell.click();
-    await page.getByRole('button', { name: 'Run this cell and advance (Shift+Enter)' }).click();    
-    await expect(firstCell.locator('.jp-OutputArea-output')).toContainText('Created: TestBlock', { timeout: 20000 });
+    
+    // Use Jupyter's internal execution method for reliability
+    await page.evaluate(async () => {
+      await window.jupyterapp.commands.execute('notebook:run-cell-and-select-next');
+    });
 
-    // 3. Activate Jupyphant Sidebar
+    // Wait for output area to appear AND contain the expected text
+    // This handles async execution properly
+    await expect(async () => {
+      const outputArea = firstCell.locator('.jp-OutputArea-child').first();
+      await expect(outputArea).toBeVisible({ timeout: 2000 });
+      await expect(outputArea).toContainText('Created: TestBlock', { timeout: 2000 });
+    }).toPass({ timeout: 30000 });
+
+    // 5. Activate Jupyphant Sidebar
     await page.evaluate(async () => {
       const commands = window.jupyterapp.commands.listCommands();
       const cmdId = commands.find(id => id.toLowerCase().includes('jupyphant'));
@@ -117,7 +132,7 @@ print("Created:", test_block.name)
 
     await ensureJupyphantActive(page);
 
-    // 4. Ensure tree is populated before handing off to the tests
+    // 6. Ensure tree is populated before handing off to the tests
     const treeWidget = page.getByRole('tree');
     await treeWidget.waitFor({ state: 'visible', timeout: 10000 });
     const treeNode = treeWidget.getByRole('treeitem').filter({ hasText: 'TestBlock' });
