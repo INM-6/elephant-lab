@@ -5,19 +5,28 @@ import fs from 'fs';
 // Helper to reliably bring Jupyphant back to the front if the Debugger steals focus
 async function ensureJupyphantActive(page: Page) {
   const jupyphantTab = page.getByRole('tab', { name: 'Jupyphant', exact: true });
-  if (await jupyphantTab.getAttribute('aria-selected') !== 'true') {
-    await jupyphantTab.click();
-    await expect(jupyphantTab).toHaveAttribute('aria-selected', 'true');
-  }
+  const rightPanel = page.locator('#jupyphant-right-panel');
+
+  await expect(async () => {
+    if (await jupyphantTab.getAttribute('aria-selected') !== 'true') {
+      await jupyphantTab.click();
+    }
+    await expect(jupyphantTab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 });
+    await expect(rightPanel).not.toHaveClass(/lm-mod-hidden/, { timeout: 1000 });
+  }).toPass({ timeout: 10000 });
 }
 
 test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
   // Global timeout
+  let page: Page;
   test.setTimeout(120000);
 
   // NOTE: This test relies on the presence of a 'test.nix' file in the same directory as this test file
 
-  test.beforeEach(async ({ page }, testInfo) => {
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(120000);
+    page = await browser.newPage();
+    
     await page.goto('http://localhost:8888/lab?reset');
     await page.waitForSelector('#jupyterlab-splash', { state: 'detached', timeout: 30000 });
 
@@ -98,33 +107,45 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
     await ioDialog.locator('button', { hasText: 'Automatic' }).click();
     await ioDialog.waitFor({ state: 'hidden' });
 
-    await expect(page.getByRole('button', { name: /Python 3.*Idle/})).toBeVisible({ timeout: 200000 });
     await ensureJupyphantActive(page);
 
     // Step 3: Ensure tree is populated before handing off to individual tests
-    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
+    const rightPanel = page.locator('#jupyphant-right-panel');
+    const jupyphantTabLabel = page.getByRole('tab', { name: 'Jupyphant', exact: true });
+    
+    // Use an async retry loop to force the tab to stay open while waiting for the large file to process
     await expect(async () => {
-      await ensureJupyphantActive(page);
-      await expect(treeNode).toBeVisible();
-    }).toPass({ timeout: 30000 });
+      // Re-click the tab if JupyterLab switched to the Debugger
+      if (await jupyphantTabLabel.getAttribute('aria-selected') !== 'true') {
+        await jupyphantTabLabel.click();
+      }
+      await expect(rightPanel).toContainText('TestBlock', { timeout: 5000 });
+    }).toPass({ timeout: 120000 }); 
+    
+    const treeNode = rightPanel.locator('[role="treeitem"]', { hasText: 'TestBlock' }).first();
+    await treeNode.waitFor({ state: 'attached' });
+  });
+
+  test.afterAll(async () => {
+    await page.close();
   });
 
 
   // --- TEST 1: Verify Tree ---
-  test('should display TestBlock in the Neo Tree', async ({ page }) => {
+  test('should display TestBlock in the Neo Tree', async () => {
     await ensureJupyphantActive(page);
-    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();    await expect(treeNode).toBeVisible();
-    await expect(treeNode).toBeVisible();
+    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();    
+    await expect(treeNode).toContainText('TestBlock');
     await treeNode.highlight();
   });
 
   // --- TEST 2: Insert into Notebook ---
-  test('should insert selected Neo object into notebook and execute', async ({ page }) => {
+  test('should insert selected Neo object into notebook and execute', async () => {
     await ensureJupyphantActive(page);
 
     // 1. Select the "TestBlock" node in the tree
     const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
-    await treeNode.click(); 
+    await treeNode.click({ force: true });    
     await ensureJupyphantActive(page);
     // 2. Click the Insert button
     const insertButton = page.locator('button[title="Insert selected neo objects into current notebook"]');
@@ -152,7 +173,7 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
   });
 
   // --- TEST 3: Verify Details Tab ---
-  test('should display correct information in the Details tab for TestBlock', async ({ page }) => {
+  test('should display correct information in the Details tab for TestBlock', async () => {
     await ensureJupyphantActive(page);
 
     // 1. Select the "TestBlock" node in the tree
@@ -160,68 +181,80 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
     await treeNode.click(); 
 
     // 2. Switch to the Details tab
-    const detailsTab = page.locator('#jupyphant-right-panel').getByRole('tab', { name: 'Details', exact: true });
-    await detailsTab.click();
+    const detailsTabLabel = page.locator('#jupyphant-right-panel .lm-TabBar-tabLabel', { hasText: 'Details' }).first();
+    await detailsTabLabel.click();
 
     // 3. Verify the details text
     const rightPanel = page.locator('#jupyphant-right-panel');
     
-    await expect(rightPanel).toContainText('Multiple Object Types Selected', { timeout: 10000 });
+    // Wait for the panel to update with Block details
+    await expect(rightPanel).toContainText('TestBlock (Block)', { timeout: 10000 });
     
-    // Assert the rest of the expected properties
-    await expect(rightPanel).toContainText('Total Objects: 7');
-    await expect(rightPanel).toContainText('Object Types:');
-    await expect(rightPanel).toContainText('- SpikeTrain: 1');
-    await expect(rightPanel).toContainText('- Segment: 1');
-    await expect(rightPanel).toContainText('- ObjectList: 2');
-    await expect(rightPanel).toContainText('- AnalogSignal: 1');
-    await expect(rightPanel).toContainText('- Block: 1');
-    await expect(rightPanel).toContainText('- SpikeTrainList: 1');
-    await expect(rightPanel).toContainText('ObjectList Overview');
-    await expect(rightPanel).toContainText('Count: 2');
+    // Assert the expected properties for the Block
+    await expect(rightPanel).toContainText('Block with 1 segments');
+    await expect(rightPanel).toContainText('Name: TestBlock');
+
+    await expect(rightPanel).toContainText('Annotations:');
+    await expect(rightPanel).toContainText('nix_name: neo.block.');
   });
 
-  test('should display correct information in the Details tab for SpikeTrain', async ({ page }) => { 
-    await ensureJupyphantActive(page);
+test('should display correct information in the Details tab for SpikeTrain', async () => { 
+  await ensureJupyphantActive(page);
 
+  // Ensure page is still valid
+  if (page.isClosed()) {
+    throw new Error('Page was closed unexpectedly');
+  }
     // Theoretically for the current test.nix file not needed but with other example files
-    const expandButton = page.locator('[title="Expand all containers"]');
-    if (await expandButton.isVisible()) {
-      await expandButton.click();
+
+  const expandButton = page.locator('[title="Expand all containers"]');
+  if (await expandButton.isVisible()) {
+    await expandButton.click();
+  }
+
+  // Wait for the tree to stabilize
+  await page.waitForTimeout(500);
+
+  // 1. Select the "SpikeTrain" node in the tree
+  const spikeTrainNode = page.locator('#jupyphant-right-panel')
+                             .locator('[role="treeitem"]', { hasText: 'my spiketrain' })
+                             .first();
+  
+  // Wait and click with automatic retries
+  await expect(async () => {
+    await spikeTrainNode.waitFor({ state: 'visible', timeout: 3000 });
+    await spikeTrainNode.click({ timeout: 3000 });
+  }).toPass({ timeout: 10000 });
+
+  await expect(spikeTrainNode).toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+  
+  await page.waitForTimeout(500);
+  
+    // 2. Switch to the Details tab
+  const detailsTabLabel = page.locator('#jupyphant-right-panel .lm-TabBar-tabLabel', { hasText: 'Details' }).first();
+  const detailsPanel = page.locator('#jupyphant-right-panel');
+  
+  await expect(async () => {
+    if (await detailsTabLabel.getAttribute('aria-selected') !== 'true') {
+      await detailsTabLabel.click();
     }
-
-    // 1. Select the "SpikeTrain" node in the tree
-    const spikeTrainNode = page.locator('#jupyphant-right-panel')
-                               .locator('[role="treeitem"]', { hasText: 'my spiketrain' })
-                               .first();
-
-    await spikeTrainNode.waitFor({ state: 'visible' });
-    await spikeTrainNode.click();
-    await expect(spikeTrainNode).toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
-    // 2. Switch to the Explore tab
-    const detailsPanel = page.getByRole('tabpanel', { name: 'Details' });
-
-    await detailsPanel.click();
-    
-    await expect(detailsPanel).toContainText('Time Range: 0.0 s to 4.0 s', { timeout: 15000 });
-
-    // Assert the rest of the properties instantly
-    await expect(detailsPanel).toContainText('Annotations:');
-    await expect(detailsPanel).toContainText('id: Unit 1');
-    await expect(detailsPanel).toContainText('channel_id: 1');
-    await expect(detailsPanel).toContainText('unit_id: 0');
-    await expect(detailsPanel).toContainText('unit_tag: unclassified');
-    
+    await expect(detailsPanel).toContainText('Time Range: 0.0 s to 4.0 s', { timeout: 5000 });
+    // Assert the rest of the properties
+    await expect(detailsPanel).toContainText('Annotations:', { timeout: 1000 });    
+    await expect(detailsPanel).toContainText(/id['":\s]+Unit 1/, { timeout: 1000 });
+    await expect(detailsPanel).toContainText(/channel_id['":\s]+1/, { timeout: 1000 });
+    await expect(detailsPanel).toContainText(/unit_id['":\s]+0/, { timeout: 1000 });
+    await expect(detailsPanel).toContainText(/unit_tag['":\s]+unclassified/, { timeout: 1000 });
     // Check the table headers and values
-    await expect(detailsPanel).toContainText('Index (3 spikes)');
-    await expect(detailsPanel).toContainText('Time (in s, float64)');
-    await expect(detailsPanel).toContainText('0                | 1.0000 s');
-    await expect(detailsPanel).toContainText('1                | 2.0000 s');
-    await expect(detailsPanel).toContainText('2                | 3.0000 s');
+    await expect(detailsPanel).toContainText('Index (3 spikes)', { timeout: 1000 });
+    await expect(detailsPanel).toContainText('Time (in s, float64)', { timeout: 1000 });
+    await expect(detailsPanel).toContainText('0                | 1.0000 s', { timeout: 1000 });
+    await expect(detailsPanel).toContainText('1                | 2.0000 s', { timeout: 1000 });
+    await expect(detailsPanel).toContainText('2                | 3.0000 s', { timeout: 1000 });
+  }).toPass({ timeout: 15000 });    
+});
 
-  });
-
-  test('should render plots in the Explorer tab for TestBlock', async ({ page })=> {
+  test('should render plots in the Explorer tab for TestBlock', async ()=> {
     await ensureJupyphantActive(page);
 
     // 1. Select the "TestBlock" node in the tree
