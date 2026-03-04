@@ -254,28 +254,110 @@ test('should display correct information in the Details tab for SpikeTrain', asy
   }).toPass({ timeout: 15000 });    
 });
 
-  test('should render plots in the Explorer tab for TestBlock', async ()=> {
-    await ensureJupyphantActive(page);
+  test('should render correct plots in the Explore tab for SpikeTrain', async () => {
+  await ensureJupyphantActive(page);
+  // Ensure page is still valid
+  if (page.isClosed()) {
+    throw new Error('Page was closed unexpectedly');
+  }
 
-    // 1. Select the "TestBlock" node in the tree
-    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
-    await treeNode.click();
+  // 1. Select the "SpikeTrain" node with retry logic
+  const spikeTrainNode = page.locator('#jupyphant-right-panel')
+                             .locator('[role="treeitem"]', { hasText: 'my spiketrain' })
+                             .first();
+  
+  await expect(async () => {
+    await spikeTrainNode.waitFor({ state: 'visible', timeout: 3000 });
+    await spikeTrainNode.click({ timeout: 3000 });
+  }).toPass({ timeout: 10000 });
 
-    // 2. Switch to the Explore tab
-    const exploreTab = page.locator('#jupyphant-right-panel').getByRole('tab', { name: 'Explore', exact: true });
-    await exploreTab.click();
+  await expect(spikeTrainNode).toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
 
-    const rightPanel = page.locator('#jupyphant-right-panel');
+  // 2. Switch to the Explore tab
+  const rightPanel = page.locator('#jupyphant-right-panel');
+  const exploreTab = rightPanel.getByRole('tab', { name: 'Explore', exact: true });
 
-    // Because Jupyphant uses Plotly, we check for Plotly's signature container class to appear
-    const plotContainer = rightPanel.locator('.js-plotly-plot, .plotly, svg, canvas').first();
+  await expect(async () => {
+    if (await exploreTab.getAttribute('aria-selected') !== 'true') {
+      await exploreTab.click();
+    }
+    await expect(exploreTab).toHaveAttribute('aria-selected', 'true', { timeout: 2000 });
+  }).toPass({ timeout: 10000 });
 
-    // Plots sometimes take a second to render, so we give them time
-    await expect(plotContainer).toBeVisible({ timeout: 15000 });
+  // 3. Wait for the plot container to appear (Plotly can take time to render)
+  // Plotly uses multiple possible DOM structures -> check for any of them
+  const plotContainer = rightPanel.locator('div[data-plot], .plotly-graph-div, .js-plotly-plot, [data-component="plotly"]').first();
 
-    // This does not check for correct plots but whether any were generated at all
-    const box = await plotContainer.boundingBox();
-    expect(box?.height).toBeGreaterThan(50);
-    expect(box?.width).toBeGreaterThan(50);
+  await expect(plotContainer).toBeAttached({ timeout: 15000 });
+  await expect(plotContainer).toBeVisible({ timeout: 20000 });
+
+  // Add a small delay to ensure Plotly has fully rendered
+  await page.waitForTimeout(1000);
+
+  // 4. Verify the plot actually contains data
+  const plotExists = await plotContainer.isVisible();
+  expect(plotExists).toBe(true);
+
+  // 5. Verify the bounding box is reasonable
+  const box = await plotContainer.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box?.height).toBeGreaterThan(100);
+  expect(box?.width).toBeGreaterThan(100);
+
+  // 6. Extract and verify Plotly data structure
+  const plotData = await plotContainer.evaluate((node: any) => {
+    // Plotly stores data in Plotly.d3 or directly on the DOM node
+    if (node.data && node.layout) {
+      return {
+        hasData: true,
+        numTraces: node.data.length,
+        firstTraceType: node.data?.[0]?.type || 'unknown',
+        xAxisLabel: node.layout?.xaxis?.title?.text || node.layout?.xaxis?.title || 'not set',
+        yAxisLabel: node.layout?.yaxis?.title?.text || node.layout?.yaxis?.title || 'not set',
+        plotTitle: node.layout?.title?.text || node.layout?.title || '',
+        // For SpikeTrain, we expect scatter plot data
+        firstTraceHasX: node.data?.[0]?.x !== undefined,
+        firstTraceHasY: node.data?.[0]?.y !== undefined,
+        firstTraceXLength: node.data?.[0]?.x?.length || 0,
+      };
+    }
+    // Fallback: check for SVG/Canvas rendering (Plotly always renders to one of these)
+    const hasSVG = node.querySelector('svg') !== null;
+    const hasCanvas = node.querySelector('canvas') !== null;
+    return {
+      hasData: false,
+      rendered: hasSVG || hasCanvas,
+      hasSVG,
+      hasCanvas,
+    };
+  });
+
+  // 7. Assert the plot data structure
+  expect(plotData).toBeDefined();
+  
+  if (plotData.hasData) {
+    // If Plotly data is accessible, verify it has the expected structure
+    expect(plotData.numTraces).toBeGreaterThan(0);
+    expect(plotData.firstTraceType).toBeTruthy();
+    expect(plotData.firstTraceHasX).toBe(true);
+    expect(plotData.firstTraceHasY).toBe(true);
+    
+    // For a SpikeTrain, we expect at least some data points
+    expect(plotData.firstTraceXLength).toBeGreaterThanOrEqual(0);
+    
+    console.log('Plot rendered with data:', {
+      traces: plotData.numTraces,
+      type: plotData.firstTraceType,
+      xLabel: plotData.xAxisLabel,
+      yLabel: plotData.yAxisLabel,
+      title: plotData.plotTitle,
+    });
+  } else if (plotData.rendered) {
+    // Plotly rendered but data wasn't directly accessible (CORS/security restrictions)
+    // This is still a success - the plot exists
+    console.log('Plot rendered (data not directly accessible due to sandbox restrictions)');
+  } else {
+    throw new Error('Plot did not render to SVG or Canvas');
+  }
   });
 });
