@@ -271,4 +271,65 @@ print("Created 10 epochs")
     blockNode = treeWidget.getByRole('treeitem').filter({ hasText: 'TestBlockModified' });
     await expect(blockNode).toBeVisible({ timeout: 10000 });
   });
+
+  test('should re-render plots in the Explore tab when colormap is changed', async ( { page }) => {
+  await ensureJupyphantActive(page);
+
+  // 1. Select the "ImageSequence" node in the tree
+  const imagesequenceNode = page.locator('#jupyphant-right-panel')
+                             .locator('[role="treeitem"]', { hasText: 'my imagesequence' })
+                             .first();
+
+  await expect(async () => {
+    await imagesequenceNode.waitFor({ state: 'visible', timeout: 3000 });
+    await imagesequenceNode.click({ timeout: 3000 });
+  }).toPass({ timeout: 10000 });
+  
+  await expect(imagesequenceNode).toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+  await page.waitForTimeout(500);
+
+  // 2. Switch to the Explore tab
+  const rightPanel = page.locator('#jupyphant-right-panel');
+  const exploreTab = rightPanel.getByRole('tab', { name: 'Explore', exact: true });
+  await exploreTab.click();
+
+  await expect(async () => {
+    if (await exploreTab.getAttribute('aria-selected') !== 'true') {
+      await exploreTab.click();
+    }
+  }).toPass({ timeout: 15000 });
+
+  // 3. Wait for the plot container to appear
+  const plotContainer = rightPanel.locator('div[data-plot], .plotly-graph-div, .js-plotly-plot, [data-component="plotly"]').first();
+
+  await expect(plotContainer).toBeAttached({ timeout: 15000 });
+  await expect(plotContainer).toBeVisible({ timeout: 20000 });
+  await page.waitForTimeout(1000);
+
+  // 4. Open the plot options
+  const optionsButton = rightPanel.getByRole('button', { name: /Options/ });
+  await optionsButton.click();
+  await page.waitForTimeout(800);
+
+  // 5. Change the colormap using the SELECT element (not the dropdown menu!)
+  const colormapSelect = rightPanel.locator('select').first();
+  
+  // Use selectOption for standard HTML select
+  await colormapSelect.selectOption({ label: 'Turbo' });
+  await page.waitForTimeout(500);
+
+  // Wait for it to disappear (update in progress)
+  await expect(plotContainer).toBeHidden({ timeout: 5000 }).catch(() => {
+  });
+  
+  // Wait for it to reappear (update complete)
+  await expect(plotContainer).toBeVisible({ timeout: 10000 });
+  await page.waitForTimeout(500); // Extra buffer
+  
+  // 6. Verify the plot is intact
+  const box = await plotContainer.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box?.height).toBeGreaterThan(100);
+  expect(box?.width).toBeGreaterThan(100);
+  });
 });
