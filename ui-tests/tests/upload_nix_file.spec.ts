@@ -360,4 +360,77 @@ test('should display correct information in the Details tab for SpikeTrain', asy
     throw new Error('Plot did not render to SVG or Canvas');
   }
   });
+
+  test('should update Switch Notebook button when active notebook changes', async () => {
+  await ensureJupyphantActive(page);
+
+  // 1. Find the Switch Notebook button (contains file extension '.ipynb')
+  const switchNotebookButton = page.locator('[role="banner"] button', { hasText: /\.ipynb/ }).first();
+  await expect(switchNotebookButton).toBeVisible({ timeout: 5000 });
+
+  // Get the initial notebook name from the button
+  const initialButtonText = await switchNotebookButton.textContent();
+
+  // Extract just the filename
+  const initialNotebookName = initialButtonText?.trim() || 'Unknown';
+
+  // Verify that the SpikeTrain node from the first notebook is visible before switching
+  const spikeTrainNode = page.locator('#jupyphant-right-panel')
+                             .locator('[role="treeitem"]', { hasText: 'my spiketrain' })
+                             .first();
+  
+  await expect(async () => {
+    await expect(spikeTrainNode).toBeVisible({ timeout: 3000 });
+    await spikeTrainNode.click({ timeout: 3000 });
+  }).toPass({ timeout: 10000 });
+
+  // 2. Switch to a different notebook tab
+  // Get all notebook tabs in the main area
+  const notebookTabs = page.locator('.lm-TabBar-tab').filter({ hasText: /\.ipynb/ });
+  const tabCount = await notebookTabs.count();
+
+  if (tabCount < 2) {
+    await page.getByRole('menuitem', { name: 'File' }).click();
+    await page.locator('.lm-Menu-itemLabel', { hasText: /^New$/ }).click();
+    await page.locator('.lm-Menu-itemLabel', { hasText: /^Notebook$/ }).click();
+
+    // Handle kernel dialog if it appears (cheap: no fixed wait if absent)
+    const selectBtn = page.getByRole('button', { name: 'Select' });
+    if (await selectBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await selectBtn.click();
+    }
+    // Wait until the second notebook tab is actually present
+    await expect(notebookTabs).toHaveCount(2, { timeout: 20000 });
+  }
+
+  const secondNotebookTab = notebookTabs.nth(1);
+
+  // Click the second notebook tab to activate it
+  await secondNotebookTab.click();
+  await page.waitForTimeout(500);
+
+  // 3. Click the Switch Notebook button to update Jupyphant
+  await switchNotebookButton.click();
+  await page.waitForTimeout(500);
+
+  // 4. Verify the button text updated to the new active notebook
+  const updatedButtonText = await switchNotebookButton.textContent();
+
+  // Extract the notebook name from the updated button text
+  const updatedNotebookName = updatedButtonText?.trim() || 'Unknown';
+
+  // Verify it changed
+  expect(updatedNotebookName).not.toBe(initialNotebookName);
+  expect(updatedNotebookName).toBeTruthy();
+
+  // Verify that the notebook switched and the SpikeTrain node 
+  // from the other notebooks kernel is not visible anymore
+  expect(spikeTrainNode).not.toBeVisible( { timeout: 5000 });
+
+  // 5. Verify the Jupyphant panel switched to the new notebook's data
+  // (Optional: you could verify the Neo Tree updated or notebook content changed)
+  const jupyphantPanel = page.locator('#jupyphant-right-panel');
+  await expect(jupyphantPanel).toBeVisible({ timeout: 5000 });
+
+});
 });
