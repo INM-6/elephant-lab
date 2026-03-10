@@ -74,9 +74,14 @@ test_block.segments[0].irregularlysampledsignals.append(
                              name="my irregularsignal", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
 )
 
+img_sequence_array = [[[column for column in range(20)]for row in range(20)]
+                        for frame in range(10)]
+
 test_block.segments[0].imagesequences.append(
-    ImageSequence(image_data=np.empty((3, 10, 10)), sampling_rate=1*pq.Hz, units='V', spatial_scale=1*pq.um, 
-                  name="my imagesequence", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+    ImageSequence(img_sequence_array, units='V',
+                               sampling_rate=1 * pq.Hz,
+                               spatial_scale=1 * pq.micrometer,
+                               name="my imagesequence")
 )
 
 my_group = Group(name="my group", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
