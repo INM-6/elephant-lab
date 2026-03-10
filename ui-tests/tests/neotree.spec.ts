@@ -43,9 +43,9 @@ import quantities as pq
 import numpy as np
 
 test_block = Block(name="TestBlock")
-test_block.segments.append(Segment(name="my segment"))
+test_block.segments.append(Segment(name="my_segment"))
 test_block.segments[0].analogsignals.append(
-    AnalogSignal([1, 2, 3], name="my analogsignal", t_stop=4, units='s', 
+    AnalogSignal([1, 2, 3], name="my_analogsignal", t_stop=4, units='s', 
                  sampling_rate=1*pq.Hz, id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
 )
 
@@ -61,17 +61,17 @@ test_block.segments[0].spiketrains.append(
 
 test_block.segments[0].epochs.append(
     Epoch(times=[0, 1, 2]*pq.s, durations=[0.5, 0.5, 0.5]*pq.s, labels=['a', 'b', 'c'], 
-          name="my epoch", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+          name="my_epoch", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
 )
 
 test_block.segments[0].events.append(
     Event(times=[0.5, 1.5, 2.5]*pq.s, labels=['x', 'y', 'z'], 
-          name="my event", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+          name="my_event", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
 )
 
 test_block.segments[0].irregularlysampledsignals.append(
     IrregularlySampledSignal(signal=[1.1, 2.2, 3.3], times=[0, 1, 2]*pq.s, units='V', 
-                             name="my irregularsignal", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+                             name="my_irregularsignal", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
 )
 
 img_sequence_array = [[[column for column in range(20)]for row in range(20)]
@@ -81,14 +81,14 @@ test_block.segments[0].imagesequences.append(
     ImageSequence(img_sequence_array, units='V',
                                sampling_rate=1 * pq.Hz,
                                spatial_scale=1 * pq.micrometer,
-                               name="my imagesequence")
+                               name="my_imagesequence")
 )
 
-my_group = Group(name="my group", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+my_group = Group(name="my_group", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
 test_block.groups.append(my_group)
 
 my_channelview = ChannelView(test_block.segments[0].analogsignals[0], index=[0], 
-                             name="my channelview", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+                             name="my_channelview", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
 
 my_imageseq = test_block.segments[0].imagesequences[0]
 
@@ -135,6 +135,7 @@ print("Created:", test_block.name)
       const treeNode = treeWidget.getByRole('treeitem').filter({ hasText: 'TestBlock' });
       await expect(treeNode).toBeVisible({ timeout: 10000 });
     });
+
 
   // --- TEST: Select multiple nodes and check Overview ---
   test('should display multi-selection SpikeTrain Overview in the Details tab', async ({ page }) => {
@@ -276,65 +277,80 @@ print("Created 10 epochs")
     blockNode = treeWidget.getByRole('treeitem').filter({ hasText: 'TestBlockModified' });
     await expect(blockNode).toBeVisible({ timeout: 10000 });
   });
-
-  test('should re-render plots in the Explore tab when colormap is changed', async ( { page }) => {
-  await ensureJupyphantActive(page);
-
-  // 1. Select the "ImageSequence" node in the tree
-  const imagesequenceNode = page.locator('#jupyphant-right-panel')
-                             .locator('[role="treeitem"]', { hasText: 'my imagesequence' })
-                             .first();
-
-  await expect(async () => {
-    await imagesequenceNode.waitFor({ state: 'visible', timeout: 3000 });
-    await imagesequenceNode.click({ timeout: 3000 });
-  }).toPass({ timeout: 10000 });
   
-  await expect(imagesequenceNode).toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
-  await page.waitForTimeout(500);
+    // --- TEST: Deletion ---
+  test('should remove node from tree when deleted in Notebook', async ({ page }) => {
+    // 1. Insert Deletion Code into the next empty cell 
+    const delCode = `del test_block\nprint("Deleted: TestBlock")`;
 
-  // 2. Switch to the Explore tab
-  const rightPanel = page.locator('#jupyphant-right-panel');
-  const exploreTab = rightPanel.getByRole('tab', { name: 'Explore', exact: true });
-  await exploreTab.click();
+    await page.evaluate((code) => {
+      const widgets = Array.from(window.jupyterapp.shell.widgets('main'));
+      const notebookWidget = widgets.find((w: any) => w.sessionContext && w.model && w.model.cells);
+      const cells = notebookWidget.model.cells;
+      cells.get(cells.length - 1).sharedModel.setSource(code);
+    }, delCode);
 
-  await expect(async () => {
-    if (await exploreTab.getAttribute('aria-selected') !== 'true') {
-      await exploreTab.click();
-    }
-  }).toPass({ timeout: 15000 });
+    const lastCell = page.locator('.jp-Notebook-cell').nth(1);
+    await lastCell.click();
+    await page.getByRole('button', { name: 'Run this cell and advance (Shift+Enter)' }).click();
+    await expect(lastCell.locator('.jp-OutputArea-output')).toContainText('Deleted: TestBlock', { timeout: 20000 });
 
-  // 3. Wait for the plot container to appear
-  const plotContainer = rightPanel.locator('div[data-plot], .plotly-graph-div, .js-plotly-plot, [data-component="plotly"]').first();
-
-  await expect(plotContainer).toBeAttached({ timeout: 15000 });
-  await expect(plotContainer).toBeVisible({ timeout: 20000 });
-  await page.waitForTimeout(1000);
-
-  // 4. Open the plot options
-  const optionsButton = rightPanel.getByRole('button', { name: /Options/ });
-  await optionsButton.click();
-  await page.waitForTimeout(800);
-
-  // 5. Change the colormap using the SELECT element (not the dropdown menu!)
-  const colormapSelect = rightPanel.locator('select').first();
-  
-  // Use selectOption for standard HTML select
-  await colormapSelect.selectOption({ label: 'Turbo' });
-  await page.waitForTimeout(500);
-
-  // Wait for it to disappear (update in progress)
-  await expect(plotContainer).toBeHidden({ timeout: 5000 }).catch(() => {
+    // 2. Verify Deletion in Sidebar
+    await ensureJupyphantActive(page);
+    const treeNode = page.getByRole('tree').getByRole('treeitem').filter({ hasText: 'TestBlock' });
+    await expect(treeNode).toBeHidden({ timeout: 15000 });
+    
+    await page.screenshot({ path: './outputs/tree-verification-deleted.png' });
   });
-  
-  // Wait for it to reappear (update complete)
-  await expect(plotContainer).toBeVisible({ timeout: 10000 });
-  await page.waitForTimeout(500); // Extra buffer
-  
-  // 6. Verify the plot is intact
-  const box = await plotContainer.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box?.height).toBeGreaterThan(100);
-  expect(box?.width).toBeGreaterThan(100);
+
+  // --- TEST: Filtering ---
+  test('should hide and show node when filter is toggled', async ({ page }) => {
+
+    const neoFilters = [
+        { name: 'Block', testNode: 'TestBlock' },
+        { name: 'Segment', testNode: 'my_segment' },
+        { name: 'Spiketrain', testNode: 'my_spiketrain' },
+        { name: 'Analogsignal', testNode: 'my_analogsignal' },
+        { name: 'Epoch' },
+        { name: 'Channelview' },
+        { name: 'Group' },
+        { name: 'Irregularlysampledsignal' },
+        { name: 'Event' },
+        { name: 'Imagesequence' },
+        { name: 'Circularregionofinterest' },
+        { name: 'Polygonregionofinterest' },
+        { name: 'Rectangularregionofinterest' }
+    ]
+
+    await ensureJupyphantActive(page);
+
+    for (const filter of neoFilters) {
+        await test.step(`Toggle ${filter.name} filter`, async () => {
+            
+            await ensureJupyphantActive(page);
+            const filterLabel = page.locator(`label[title="Hide/Show ${filter.name}(s)"]`);
+            await filterLabel.click();
+            await expect(filterLabel).toHaveAttribute('data-checked', 'false');
+            await expect(filterLabel).toHaveClass(/unchecked-label/);
+
+            if (filter.testNode) {
+                const treeNode = page.getByRole('tree').getByRole('treeitem').filter({ hasText: filter.testNode }).first();
+                await expect(treeNode).toBeHidden({ timeout: 10000 });
+
+            }
+            // Toggle back ON for next tests
+            await filterLabel.click();
+            await expect(filterLabel).toHaveAttribute('data-checked', 'true');
+            
+            if (filter.testNode) {
+                const treeNode = page.getByRole('tree').getByRole('treeitem').filter({ hasText: filter.testNode }).first();
+                await expect(treeNode).toBeVisible({ timeout: 10000 });
+            }
+        });
+    }
+
+
+    await page.screenshot({ path: './outputs/tree-filter-hidden.png' });
+
   });
 });

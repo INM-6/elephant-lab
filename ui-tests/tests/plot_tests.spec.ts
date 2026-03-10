@@ -94,7 +94,11 @@ test.describe('Jupyphant: Explore Tab Toggles', () => {
 
     // 4. Create test data in notebook
     const neoCode = `
-from neo.core import Block, Segment, AnalogSignal, SpikeTrain
+from neo.core import (
+    Block, Segment, AnalogSignal, SpikeTrain, Epoch, Event,
+    IrregularlySampledSignal, ImageSequence, ChannelView, Group,
+    CircularRegionOfInterest, PolygonRegionOfInterest, RectangularRegionOfInterest
+)
 import quantities as pq
 import numpy as np
 
@@ -106,12 +110,50 @@ test_block.segments[0].analogsignals.append(
 )
 
 test_block.segments[0].spiketrains.append(
-    SpikeTrain([1, 2, 3], name="my spiketrain", t_stop=4, units='s', 
+    SpikeTrain([1, 2, 3], name="my_spiketrain", t_stop=4, units='s', 
                id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
 )
 
+test_block.segments[0].spiketrains.append(
+    SpikeTrain([1, 2, 3, 4], name="my_spiketrain2", t_stop=4, units='s', 
+               id='Unit 2', channel_id=1, unit_id=0, unit_tag='unclassified')
+)
+
+test_block.segments[0].epochs.append(
+    Epoch(times=[0, 1, 2]*pq.s, durations=[0.5, 0.5, 0.5]*pq.s, labels=['a', 'b', 'c'], 
+          name="my epoch", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+)
+
+test_block.segments[0].events.append(
+    Event(times=[0.5, 1.5, 2.5]*pq.s, labels=['x', 'y', 'z'], 
+          name="my event", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+)
+
+test_block.segments[0].irregularlysampledsignals.append(
+    IrregularlySampledSignal(signal=[1.1, 2.2, 3.3], times=[0, 1, 2]*pq.s, units='V', 
+                             name="my irregularsignal", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+)
+
+img_sequence_array = [[[column for column in range(20)]for row in range(20)]
+                        for frame in range(10)]
+
+test_block.segments[0].imagesequences.append(
+    ImageSequence(img_sequence_array, units='V',
+                               sampling_rate=1 * pq.Hz,
+                               spatial_scale=1 * pq.micrometer,
+                               name="my imagesequence")
+)
+
+my_group = Group(name="my group", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+test_block.groups.append(my_group)
+
+my_channelview = ChannelView(test_block.segments[0].analogsignals[0], index=[0], 
+                             name="my channelview", id='Unit 1', channel_id=1, unit_id=0, unit_tag='unclassified')
+
+my_imageseq = test_block.segments[0].imagesequences[0]
+
 print("Created:", test_block.name)
-    `.trim();
+      `.trim();
 
     await page.evaluate((code) => {
       const widgets = Array.from(window.jupyterapp.shell.widgets('main'));
@@ -342,4 +384,66 @@ print("Created:", test_block.name)
     expect(box?.height).toBeGreaterThan(50);
 
   });
+
+  test('should re-render plots in the Explore tab when colormap is changed', async ( { page }) => {
+    await ensureJupyphantActive(page);
+  
+    // 1. Select the "ImageSequence" node in the tree
+    const imagesequenceNode = page.locator('#jupyphant-right-panel')
+                               .locator('[role="treeitem"]', { hasText: 'my imagesequence' })
+                               .first();
+  
+    await expect(async () => {
+      await imagesequenceNode.waitFor({ state: 'visible', timeout: 3000 });
+      await imagesequenceNode.click({ timeout: 3000 });
+    }).toPass({ timeout: 10000 });
+    
+    await expect(imagesequenceNode).toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+    await page.waitForTimeout(500);
+  
+    // 2. Switch to the Explore tab
+    const rightPanel = page.locator('#jupyphant-right-panel');
+    const exploreTab = rightPanel.getByRole('tab', { name: 'Explore', exact: true });
+    await exploreTab.click();
+  
+    await expect(async () => {
+      if (await exploreTab.getAttribute('aria-selected') !== 'true') {
+        await exploreTab.click();
+      }
+    }).toPass({ timeout: 15000 });
+  
+    // 3. Wait for the plot container to appear
+    const plotContainer = rightPanel.locator('div[data-plot], .plotly-graph-div, .js-plotly-plot, [data-component="plotly"]').first();
+  
+    await expect(plotContainer).toBeAttached({ timeout: 15000 });
+    await expect(plotContainer).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(1000);
+  
+    // 4. Open the plot options
+    const optionsButton = rightPanel.getByRole('button', { name: /Options/ });
+    await optionsButton.click();
+    await page.waitForTimeout(800);
+  
+    // 5. Change the colormap using the SELECT element (not the dropdown menu!)
+    const colormapSelect = rightPanel.locator('select').first();
+    
+    // Use selectOption for standard HTML select
+    await colormapSelect.selectOption({ label: 'Turbo' });
+    await page.waitForTimeout(500);
+  
+    // Wait for it to disappear (update in progress)
+    await expect(plotContainer).toBeHidden({ timeout: 5000 }).catch(() => {
+    });
+    
+    // Wait for it to reappear (update complete)
+    await expect(plotContainer).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(500); // Extra buffer
+    
+    // 6. Verify the plot is intact
+    const box = await plotContainer.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box?.height).toBeGreaterThan(100);
+    expect(box?.width).toBeGreaterThan(100);
+    });
+
 });
