@@ -78,6 +78,7 @@ class JupyphantExtension {
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
 	private outarea_neo_tree: OutputArea | null;
+	private outarea_elephant_analysis: OutputArea| null;
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
 	private kernelBridge: KernelBridge | null;
@@ -102,6 +103,7 @@ class JupyphantExtension {
 		this.outarea_nodeexplorer_info = null;
 		this.outarea_nodeexplorer_raw = null;
 		this.outarea_neo_tree = null;
+		this.outarea_elephant_analysis = null;
 		this.output_tabs = null;
 		this.kernelBridge = null;
 	}; // end of constructor()
@@ -304,6 +306,28 @@ class JupyphantExtension {
 		const states = this.getFilterStates();
 		states[key] = isChecked;
 		sessionStorage.setItem('jupyphant-filter-states', JSON.stringify(states));
+	}
+
+	private createElephantWidget(elephant_widget: Panel) {
+		const toolbar = document.createElement('div');
+		toolbar.className = 'sticky-filter';
+
+		const runAnalysisButton = document.createElement('button');
+		runAnalysisButton.innerHTML = '<i class="fa fa-brain"></i>Run Elephant Analysis';
+		runAnalysisButton.title = 'Run elephant analysis on selected neo objects';
+		runAnalysisButton.className = 'workflow-button workflow-button-io';
+		runAnalysisButton.onclick = async () => {
+			const result = await this.kernelBridge!.executeCode(
+				getPythonCode(PythonCodeKey.ElephantAnalysis, ""), true
+			);
+			this.outarea_elephant_analysis?.model.clear();
+			if (result && result.outputs.length > 0) {
+				this.outarea_elephant_analysis?.model.add(result.outputs[0]);
+			}
+		};
+
+		toolbar.appendChild(runAnalysisButton);
+		elephant_widget.node.prepend(toolbar);
 	}
 
 	public createTopBar(session: ISessionContext) {
@@ -801,9 +825,18 @@ class JupyphantExtension {
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
 
+		// Elephant Analysis
+		let elephant_widget = new Panel();
+		elephant_widget.title.label = 'Elephant Analysis';
+		elephant_widget.node.style.cssText = elephant_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		this.outarea_elephant_analysis = this.createOutputArea(rendermime, elephant_widget, ['my-outarea-class'], 'jup_vis_out_id_2.3', session);
+		this.createElephantWidget(elephant_widget);
+
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
+		this.widget.addWidget(elephant_widget, { mode: 'tab-after', ref: explorer_widget_raw_plot });
+
 		this.create_raw_plot_options(session, explorer_widget_raw_plot);
 	}
 
@@ -815,6 +848,11 @@ class JupyphantExtension {
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
 		let code = getPythonCode(PythonCodeKey.ExpandNeoTree, checked);
 		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
+	}
+
+	public elephant_analysis(session: ISessionContext) {
+		let code = getPythonCode(PythonCodeKey.ElephantAnalysis)
+		this.executeCodeInOutputArea(code, this.outarea_elephant_analysis!, session, true);
 	}
 
 	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext): OutputArea {

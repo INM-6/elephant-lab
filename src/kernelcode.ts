@@ -91,6 +91,10 @@ function expandNeoTree(checked: boolean): string {
 	return `jupyphant_entity.expand_neo_tree(${convert_bool_to_python_bool(checked)})`
 }
 
+function elephantAnalysis(): string {
+	return `jupyphant_entity.elephant_analysis()`
+}
+
 // Make all strings publicly available in a dict
 // This dict is used in index.ts to actually execute the code
 export enum PythonCodeKey {
@@ -112,6 +116,7 @@ export enum PythonCodeKey {
 	SetColorGrade = 'setColorGrade',
 	ToggleNeoTreeFilter = 'toggleNeoTreeFilter',
 	ExpandNeoTree = 'expandNeoTree',
+	ElephantAnalysis = 'elephantAnalysis',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -133,6 +138,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.SetColorGrade]: (...args: any[]) => setColorGrade(args[0]),
 	[PythonCodeKey.ToggleNeoTreeFilter]: (...args: any[]) => toggleNeoTreeFilter(args[0]),
 	[PythonCodeKey.ExpandNeoTree]: (...args: any[]) => expandNeoTree(args[0]),
+	[PythonCodeKey.ElephantAnalysis]: (...args: any[]) => elephantAnalysis(),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {

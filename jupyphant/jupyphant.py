@@ -1399,3 +1399,301 @@ class Jupyphant:
                 else:
                     self._repr_pretty_generic_overview(items, pp)
                 print(output.getvalue())
+                
+    def elephant_analysis(self):
+        bold = '\033[1m'
+        reset = '\033[0m'
+
+        selected_by_class = self._get_selected_neo_objects_by_class({
+            'spiketrain':               self.SpikeTrain,
+            'analogsignal':             self.AnalogSignal,
+            'epoch':                    self.Epoch,
+            'event':                    self.Event,
+            'irregularlysampledsignal': self.IrregularlySampledSignal,
+            'imagesequence':            self.ImageSequence,
+        })
+
+        spiketrains   = selected_by_class.get('spiketrain', [])
+        analogsignals = selected_by_class.get('analogsignal', [])
+        epochs        = selected_by_class.get('epoch', [])
+        events        = selected_by_class.get('event', [])
+        irr_signals   = selected_by_class.get('irregularlysampledsignal', [])
+        image_seqs    = selected_by_class.get('imagesequence', [])
+
+        total = sum(len(v) for v in selected_by_class.values())
+        if total == 0:
+            print("No objects selected. Please select Neo objects in the Neo Tree first.")
+            return
+        
+        # SPIKE TRAIN ANALYSIS
+        if spiketrains:
+            print(f"{bold}{'─' * 50}{reset}")
+            print(f"{bold}  SpikeTrain Analysis  ({len(spiketrains)} train{'s' if len(spiketrains) > 1 else ''}){reset}")
+            print(f"{bold}{'─' * 50}{reset}\n")
+
+            # Firing Rate
+            try:
+                frs = [self.statistics.mean_firing_rate(st).rescale('Hz').magnitude
+                    for st in spiketrains if st.t_stop > st.t_start]
+                if frs:
+                    print(f"{bold}Mean Firing Rate:{reset}")
+                    print(f"  Min:  {min(frs):.4f} Hz")
+                    print(f"  Max:  {max(frs):.4f} Hz")
+                    print(f"  Mean: {self.np.mean(frs):.4f} Hz")
+                    print(f"  Std:  {self.np.std(frs):.4f} Hz\n")
+            except Exception as e:
+                print(f"  [Firing rate failed: {e}]\n")
+
+            # ISI & CV
+            try:
+                isis = [self.statistics.isi(st) for st in spiketrains if len(st) > 1]
+                if isis:
+                    cvs = [self.statistics.cv(isi) for isi in isis]
+                    lv_vals = [self.statistics.lv(isi) for isi in isis]
+                    print(f"{bold}ISI Statistics:{reset}")
+                    print(f"  CV  — Min: {min(cvs):.4f}  Max: {max(cvs):.4f}  Mean: {self.np.mean(cvs):.4f}")
+                    print(f"  LV  — Min: {min(lv_vals):.4f}  Max: {max(lv_vals):.4f}  Mean: {self.np.mean(lv_vals):.4f}")
+            except Exception as e:
+                print(f"  [ISI/CV failed: {e}]\n")
+
+            # Fano Factor
+            try:
+                fano = self.statistics.fanofactor(spiketrains)
+                fano = self.statistics.fanofactor(spiketrains)
+                print(f"{bold}Fano Factor:{reset} {fano:.4f} \n")
+            except Exception as e:
+                print(f"  [Fano factor failed: {e}]\n")
+                print(f"  [Fano factor failed: {e}]\n")
+                print(f"  [Fano factor failed: {e}]\n")
+
+            # Pairwise Correlation & CCH (2–50 trains)
+            if 2 <= len(spiketrains) <= 50:
+                try:
+                    from elephant.conversion import BinnedSpikeTrain
+                    from elephant import spike_train_correlation as stc
+
+                    t_start = max(st.t_start for st in spiketrains)
+                    t_stop  = min(st.t_stop  for st in spiketrains)
+
+                    if t_stop > t_start:
+                        binsize = 5 * self.pq.ms
+                        clipped = [st.time_slice(t_start, t_stop) for st in spiketrains]
+                        binned  = BinnedSpikeTrain(clipped, bin_size=binsize)
+                        cc_mat  = stc.correlation_coefficient(binned)
+                        upper   = cc_mat[self.np.triu_indices(len(spiketrains), k=1)]
+
+                        print(f"{bold}Pairwise Correlation Coefficients (bin = {binsize}):{reset}")
+                        if len(spiketrains) == 2:
+                            print(f"  r = {cc_mat[0, 1]:.4f}\n")
+                        else:
+                            print(f"  Mean: {self.np.mean(upper):.4f}")
+                            print(f"  Max:  {self.np.max(upper):.4f}")
+                            print(f"  Min:  {self.np.min(upper):.4f}")
+
+                        # CCH for first pair
+                        if len(spiketrains) >= 2:
+                            cch, lags = stc.cross_correlation_histogram(
+                                BinnedSpikeTrain([clipped[0]], bin_size=binsize),
+                                BinnedSpikeTrain([clipped[1]], bin_size=binsize),
+                                window=[-50, 50]
+                            )
+                            peak_lag = lags[self.np.argmax(cch.magnitude.flatten())]
+                            print(f"{bold}Cross-Correlation Histogram (train 0 × 1):{reset}")
+                            print(f"  Peak lag: {peak_lag * binsize.magnitude:.1f} ms")
+                            print(f"  Peak count: {int(self.np.max(cch.magnitude))}\n")
+                except Exception as e:
+                    print(f"  [Correlation / CCH failed: {e}]\n")
+
+            # Instantaneous Rate (Gaussian)
+            if len(spiketrains) >= 2:
+                try:
+                    from elephant.kernels import GaussianKernel
+
+                    t_start = max(st.t_start for st in spiketrains)
+                    t_stop  = min(st.t_stop  for st in spiketrains)
+                    if t_stop > t_start:
+                        kernel  = GaussianKernel(sigma=50 * self.pq.ms)
+                        sample  = spiketrains[:min(10, len(spiketrains))]
+                        rates   = [self.statistics.instantaneous_rate(
+                                        st, sampling_period=10 * self.pq.ms, kernel=kernel)
+                                for st in sample]
+                        pop_rate = self.np.mean([r.magnitude.flatten() for r in rates], axis=0)
+                        unit_str = rates[0].units.dimensionality
+                        print(f"{bold}Population Instantaneous Rate (σ = 50 ms, n = {len(sample)}):{reset}")
+                        print(f"  Peak: {self.np.max(pop_rate):.4f} {unit_str}")
+                        print(f"  Mean: {self.np.mean(pop_rate):.4f} {unit_str}\n")
+                except Exception as e:
+                    print(f"  [Instantaneous rate failed: {e}]\n")
+
+        # ANALOG SIGNAL ANALYSIS
+        if analogsignals:
+            print(f"{bold}{'─' * 50}{reset}")
+            print(f"{bold}  AnalogSignal Analysis  ({len(analogsignals)} signal{'s' if len(analogsignals) > 1 else ''}){reset}")
+            print(f"{bold}{'─' * 50}{reset}\n")
+
+            for i, sig in enumerate(analogsignals):
+                label = sig.name if sig.name else f"Signal {i}"
+                mag   = sig.magnitude
+                print(f"{bold}[ {label} ]{reset}  {sig.shape[1]} ch × {sig.shape[0]} samples  |  {sig.sampling_rate}  |  {sig.duration.rescale('s'):.4f}")
+                print(f"  Mean ± Std : {self.np.mean(mag):.4f} ± {self.np.std(mag):.4f} {sig.units.dimensionality}")
+                print(f"  Min / Max  : {self.np.min(mag):.4f} / {self.np.max(mag):.4f}\n")
+
+            # Power Spectral Density
+            try:
+                from elephant import spectral as eleph_spectral
+
+                for i, sig in enumerate(analogsignals[:3]):
+                    label = sig.name if sig.name else f"Signal {i}"
+                    psd_freqs, psd = eleph_spectral.welch_psd(sig[:, 0])
+                    psd_mag = psd.magnitude.flatten()
+                    peak_idx  = self.np.argmax(psd_mag)
+                    peak_freq = psd_freqs[peak_idx]
+
+                    # Band power helper
+                    def band_power(lo, hi):
+                        mask = (psd_freqs >= lo) & (psd_freqs < hi)
+                        return self.np.trapz(psd_mag[mask], psd_freqs[mask]) if mask.any() else float('nan')
+
+                    print(f"{bold}PSD — {label} (ch 0):{reset}")
+                    print(f"  Dominant frequency : {peak_freq:.2f} Hz")
+                    print(f"  Delta  (1–4 Hz)    : {band_power(1, 4):.4f}")
+                    print(f"  Theta  (4–8 Hz)    : {band_power(4, 8):.4f}")
+                    print(f"  Alpha  (8–13 Hz)   : {band_power(8, 13):.4f}")
+                    print(f"  Beta   (13–30 Hz)  : {band_power(13, 30):.4f}")
+                    print(f"  Gamma  (30–100 Hz) : {band_power(30, 100):.4f}\n")
+            except Exception as e:
+                print(f"  [PSD failed: {e}]\n")
+
+            # Cross-channel correlation
+            if len(analogsignals) == 1 and analogsignals[0].shape[1] > 1:
+                try:
+                    sig  = analogsignals[0]
+                    n_ch = min(sig.shape[1], 20)
+                    corr = self.np.corrcoef(sig.magnitude[:, :n_ch].T)
+                    upper = corr[self.np.triu_indices(n_ch, k=1)]
+                    print(f"{bold}Cross-channel Correlation (first {n_ch} channels):{reset}")
+                    print(f"  Mean: {self.np.mean(upper):.4f}")
+                    print(f"  Max:  {self.np.max(upper):.4f}")
+                    print(f"  Min:  {self.np.min(upper):.4f}\n")
+                except Exception as e:
+                    print(f"  [Cross-channel correlation failed: {e}]\n")
+
+            # Multi-signal correlation
+            if len(analogsignals) > 1:
+                try:
+                    mags = []
+                    min_len = min(s.shape[0] for s in analogsignals)
+                    for s in analogsignals:
+                        mags.append(s.magnitude[:min_len, 0])
+                    corr = self.np.corrcoef(self.np.stack(mags))
+                    upper = corr[self.np.triu_indices(len(analogsignals), k=1)]
+                    print(f"{bold}Signal-to-Signal Correlation (ch 0 each):{reset}")
+                    print(f"  Mean: {self.np.mean(upper):.4f}")
+                    print(f"  Max:  {self.np.max(upper):.4f}")
+                    print(f"  Min:  {self.np.min(upper):.4f}\n")
+                except Exception as e:
+                    print(f"  [Signal-to-signal correlation failed: {e}]\n")
+
+        # SPIKE-TRIGGERED AVERAGE
+        if spiketrains and analogsignals:
+            print(f"{bold}{'─' * 50}{reset}")
+            print(f"{bold}  Spike-Triggered Average{reset}")
+            print(f"{bold}{'─' * 50}{reset}\n")
+            try:
+                from elephant import sta as eleph_sta
+
+                sig = analogsignals[0]
+                st  = spiketrains[0]
+                win = (-50 * self.pq.ms, 50 * self.pq.ms)
+                sta_result = eleph_sta.spike_triggered_average(sig[:, 0:1], [st], win)
+                peak_amp   = self.np.max(self.np.abs(sta_result.magnitude))
+                print(f"  SpikeTrain 0  ×  AnalogSignal 0 (ch 0)")
+                print(f"  Window  : {win[0]} to {win[1]}")
+                print(f"  STA peak amplitude : {peak_amp:.4f} {sta_result.units.dimensionality}\n")
+            except Exception as e:
+                print(f"  [STA failed: {e}]\n")
+
+        # EPOCH ANALYSIS
+        if epochs:
+            print(f"{bold}{'─' * 50}{reset}")
+            print(f"{bold}  Epoch Analysis  ({len(epochs)} array{'s' if len(epochs) > 1 else ''}){reset}")
+            print(f"{bold}{'─' * 50}{reset}\n")
+
+            for i, epoch in enumerate(epochs):
+                label = epoch.name if epoch.name else f"Epoch {i}"
+                print(f"{bold}[ {label} ]{reset}  {len(epoch)} epoch{'s' if len(epoch) != 1 else ''}")
+                if len(epoch) > 0:
+                    dur_s = epoch.durations.rescale('s').magnitude
+                    print(f"  Duration — Mean: {self.np.mean(dur_s):.4f}s  Std: {self.np.std(dur_s):.4f}s"
+                        f"  Min: {self.np.min(dur_s):.4f}s  Max: {self.np.max(dur_s):.4f}s")
+                    unique_labels, counts = self.np.unique(epoch.labels, return_counts=True)
+                    if len(unique_labels) <= 30:
+                        label_dist = "  ".join(f"{lbl}: {cnt}" for lbl, cnt in zip(unique_labels, counts))
+                        print(f"  Label distribution: {label_dist}")
+                print()
+
+        # EVENT ANALYSIS
+        if events:
+            print(f"{bold}{'─' * 50}{reset}")
+            print(f"{bold}  Event Analysis  ({len(events)} array{'s' if len(events) > 1 else ''}){reset}")
+            print(f"{bold}{'─' * 50}{reset}\n")
+
+            for i, event in enumerate(events):
+                label = event.name if event.name else f"Event {i}"
+                print(f"{bold}[ {label} ]{reset}  {len(event)} event{'s' if len(event) != 1 else ''}")
+                if len(event) > 0:
+                    unique_labels, counts = self.np.unique(event.labels, return_counts=True)
+                    if len(unique_labels) <= 30:
+                        label_dist = "  ".join(f"{lbl}: {cnt}" for lbl, cnt in zip(unique_labels, counts))
+                        print(f"  Label distribution: {label_dist}")
+                    if len(event) > 1:
+                        ieis = self.np.diff(event.times.rescale('s').magnitude)
+                        print(f"  Inter-event interval — Mean: {self.np.mean(ieis):.4f}s"
+                            f"  Std: {self.np.std(ieis):.4f}s"
+                            f"  Min: {self.np.min(ieis):.4f}s"
+                            f"  Max: {self.np.max(ieis):.4f}s")
+                print()
+
+        # IRREGULARLY SAMPLED SIGNAL ANALYSIS
+        if irr_signals:
+            print(f"{bold}{'─' * 50}{reset}")
+            print(f"{bold}  IrregularlySampledSignal Analysis  ({len(irr_signals)}){reset}")
+            print(f"{bold}{'─' * 50}{reset}\n")
+
+            for i, sig in enumerate(irr_signals):
+                label = sig.name if sig.name else f"IrrSignal {i}"
+                mag   = sig.magnitude
+                times = sig.times.rescale('s').magnitude
+                print(f"{bold}[ {label} ]{reset}  {len(times)} samples  |  {sig.shape[1]} ch")
+                print(f"  Time range : {times[0]:.4f}s – {times[-1]:.4f}s")
+                intervals  = self.np.diff(times)
+                print(f"  Sampling interval — Mean: {self.np.mean(intervals)*1000:.3f} ms"
+                    f"  Std: {self.np.std(intervals)*1000:.3f} ms")
+                print(f"  Value — Mean: {self.np.mean(mag):.4f}  Std: {self.np.std(mag):.4f}"
+                    f"  Min: {self.np.min(mag):.4f}  Max: {self.np.max(mag):.4f} {sig.units.dimensionality}\n")
+
+        # IMAGE SEQUENCE ANALYSIS
+        if image_seqs:
+            print(f"{bold}{'─' * 50}{reset}")
+            print(f"{bold}  ImageSequence Analysis  ({len(image_seqs)}){reset}")
+            print(f"{bold}{'─' * 50}{reset}\n")
+
+            for i, imgseq in enumerate(image_seqs):
+                label = imgseq.name if imgseq.name else f"ImageSequence {i}"
+                mag   = imgseq.magnitude  # shape: (frames, height, width)
+                print(f"{bold}[ {label} ]{reset}  {mag.shape[0]} frames × {mag.shape[1]} × {mag.shape[2]} px"
+                    f"  |  {imgseq.sampling_rate}")
+                print(f"  Value range : [{self.np.min(mag):.4f}, {self.np.max(mag):.4f}] {imgseq.units.dimensionality}")
+                print(f"  Mean ± Std  : {self.np.mean(mag):.4f} ± {self.np.std(mag):.4f}")
+
+                # Spatial peak
+                temporal_mean = self.np.mean(mag, axis=0)
+                peak_yx = self.np.unravel_index(self.np.argmax(temporal_mean), temporal_mean.shape)
+                print(f"  Spatial peak pixel (time-averaged): row={peak_yx[0]}, col={peak_yx[1]}")
+
+                # Temporal variance map peak
+                temporal_var = self.np.var(mag, axis=0)
+                var_yx = self.np.unravel_index(self.np.argmax(temporal_var), temporal_var.shape)
+                print(f"  Most dynamic pixel (max variance): row={var_yx[0]}, col={var_yx[1]}\n")
+
+        self.sys.stdout.flush()
