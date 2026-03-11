@@ -4,8 +4,9 @@ import quantities as pq
 import neo
 import re
 from matplotlib.colors import to_rgb
-from jupyphant.PlotlyGraphFigure import PlotlyGraphFigure
+from jupyphant.PlotlyGraphFigure import *
 from jupyphant.PlotlyGraphDataTypes import SpikeTrainRasterPlot
+from ipywidgets import FloatRangeSlider
 
 def parse_plotly_color(color_str):
     """
@@ -27,7 +28,33 @@ def parse_plotly_color(color_str):
 def none_plotlyGraphFigure() -> PlotlyGraphFigure:
     return PlotlyGraphFigure(None)
 
+@pytest.fixture
+def three_spikeTrainRasterPlots() -> PlotlyGraphFigure:
+    spikeTrainRasterPlot1 = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
+    spikeTrainRasterPlot2 = SpikeTrainRasterPlot(neo.SpikeTrain([0.5,1.5,2.5,3.5,6.5] * pq.s, t_stop=10 * pq.s))
+    spikeTrainRasterPlot3 = SpikeTrainRasterPlot(neo.SpikeTrain([0.25,1.25,2.25,3.25,6.25] * pq.s, t_stop=10 * pq.s))
+    return PlotlyGraphFigure([spikeTrainRasterPlot1, spikeTrainRasterPlot2, spikeTrainRasterPlot3], overlap_on_compress=False)
+
+def test_plotlyUtils_can_convert_units():
+    assert PlotlyUtils.can_convert_units(pq.s, pq.ms)==1
+    assert PlotlyUtils.can_convert_units(pq.ms, pq.s)==1
+    assert PlotlyUtils.can_convert_units(pq.s, pq.V)==-1
+    assert PlotlyUtils.can_convert_units(pq.s, pq.s)==0
+
+def test_plotlyUtils_convert_to_other_units():
+    assert np.isclose(PlotlyUtils.convert_to_other_units(1, pq.s, pq.ms), 1000)
+    assert np.isclose(PlotlyUtils.convert_to_other_units(1000, pq.ms, pq.s), 1)
+
+def test_height(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
+    assert none_plotlyGraphFigure._get_height() == 600
+    assert three_spikeTrainRasterPlots._get_height() == 800
+    three_spikeTrainRasterPlots.overlap()
+    assert three_spikeTrainRasterPlots._get_height() == 600
+    three_spikeTrainRasterPlots.stack()
+    assert three_spikeTrainRasterPlots._get_height() == 800
+
 def test_None_data(none_plotlyGraphFigure):
+    assert isinstance(none_plotlyGraphFigure.data, PlotlyGraphDataTypeList)
     # test if any functionlaity raises an error if None was passed in as data
     none_plotlyGraphFigure.overlap()
     none_plotlyGraphFigure.overlap()
@@ -47,6 +74,21 @@ def test_update_jupyterlab_theme(none_plotlyGraphFigure):
     none_plotlyGraphFigure.update_jupyterlab_theme('white_theme')
     paper_color = parse_plotly_color(none_plotlyGraphFigure.fig.layout.template.layout.paper_bgcolor)
     assert paper_color == (255, 255, 255)
+
+def test_legend_visibility(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
+    assert none_plotlyGraphFigure.fig.layout.showlegend == None
+    assert three_spikeTrainRasterPlots.fig.layout.showlegend == False
+    three_spikeTrainRasterPlots.overlap()
+    assert three_spikeTrainRasterPlots.fig.layout.showlegend == True
+
+def test_ticklabels(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
+    assert none_plotlyGraphFigure.fig.layout.xaxis.showticklabels == None
+    assert three_spikeTrainRasterPlots.fig.layout.xaxis.showticklabels == False
+
+def test_sliders(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
+    assert none_plotlyGraphFigure.fig.layout.xaxis.rangeslider != None
+    assert three_spikeTrainRasterPlots.fig.layout.xaxis3.rangeslider != None
+    assert isinstance(none_plotlyGraphFigure.y_slider, FloatRangeSlider)
 
 def test_simple_spiketrain_coords():
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
