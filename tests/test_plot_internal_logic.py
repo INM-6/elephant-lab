@@ -169,3 +169,17 @@ def test_overlap_and_stack(three_spikeTrainRasterPlots):
     assert np.allclose(three_spikeTrainRasterPlots.fig.layout.yaxis1.domain, three_spikeTrainRasterPlots.fig.layout.yaxis2.domain)
     three_spikeTrainRasterPlots.stack()
     assert not np.allclose(three_spikeTrainRasterPlots.fig.layout.yaxis1.domain, three_spikeTrainRasterPlots.fig.layout.yaxis2.domain)
+
+def test_annotations():
+    spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
+    plotlyGraphAnnotations = PlotlyGraphAnnotations(np.array([1,2,3]), np.array(["Test"] * 3), np.array([pq.s] * 3))
+    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_data=plotlyGraphAnnotations)
+    assert len(plotlyGraphFigure.fig.layout.shapes) == 3
+    assert len(plotlyGraphFigure.fig.layout.annotations) == 6
+
+def test_annotation_intervals():
+    spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
+    plotlyGraphAnnotationIntervals = PlotlyGraphAnnotationIntervals(np.array([1,2,3]),np.array([1.5,2.2,4]), np.array(["Test"] * 3), np.array([pq.s] * 3))
+    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_interavals_data=plotlyGraphAnnotationIntervals)
+    assert len(plotlyGraphFigure.fig.layout.shapes) == 3
+    assert len(plotlyGraphFigure.fig.layout.annotations) == 9
