@@ -782,6 +782,60 @@ class PlotlyGraphDataTypeList():
     
     def concat(self, plotlyGraphDataTypeList):
         self.data_list += plotlyGraphDataTypeList.data_list
+
+    def lttb_downsample(self,x, y, threshold):
+        threshold = int(threshold)
+        n = len(x)
+        if threshold >= n or threshold == 0:
+            return x, y
+
+        sampled_x = self.np.empty(threshold)
+        sampled_y = self.np.empty(threshold)
+
+        # always keep first point
+        sampled_x[0] = x[0]
+        sampled_y[0] = y[0]
+
+        bucket_size = (n - 2) / (threshold - 2)
+
+        a = 0  # index of previously selected point
+
+        for i in range(1, threshold - 1):
+
+            start = int(self.np.floor((i - 1) * bucket_size)) + 1
+            end   = int(self.np.floor(i * bucket_size)) + 1
+
+            next_start = end
+            next_end   = int(self.np.floor((i + 1) * bucket_size)) + 1
+            next_end   = min(next_end, n)
+
+            # average point of next bucket
+            avg_x = self.np.mean(x[next_start:next_end])
+            avg_y = self.np.mean(y[next_start:next_end])
+
+            bx = x[start:end]
+            by = y[start:end]
+
+            ax = x[a]
+            ay = y[a]
+
+            # triangle area calculation (vectorized)
+            area = self.np.abs(
+                (ax - avg_x) * (by - ay) -
+                (ax - bx)    * (avg_y - ay)
+            )
+
+            idx = self.np.argmax(area)
+            a = start + idx
+
+            sampled_x[i] = x[a]
+            sampled_y[i] = y[a]
+
+        # keep last point
+        sampled_x[-1] = x[-1]
+        sampled_y[-1] = y[-1]
+
+        return sampled_x, sampled_y
     
     def normalize(self, x_range, offset_traces, shift_to_0, max_points):
         """
@@ -871,13 +925,9 @@ class PlotlyGraphDataTypeList():
         self.data_list = filtered
         self.common_units_x = common_units_x
 
-        #Calculate how many points to skip
-        skipFactor = int(self.np.ceil(nPoints / max_points))
-        skipFactor = max(skipFactor, 1)
-        max_points_per_graph = max_points / len(self.data_list)
-
-        if skipFactor > 1:
+        if nPoints > max_points:
             self.is_downscaled = True
+            max_points_per_graph = max_points / len(self.data_list)
         else:
             self.is_downscaled = False
         
@@ -891,10 +941,8 @@ class PlotlyGraphDataTypeList():
             x_values = data.x
             y_values = data.y
 
-            if self.is_downscaled and len(x_values)>max_points_per_graph:
-                #Reduce number of points
-                x_values = x_values[::skipFactor]
-                y_values = y_values[::skipFactor]
+            if self.is_downscaled:
+                x_values, y_values = self.lttb_downsample(x_values, y_values, max_points_per_graph)
 
             if index == 0:
                 if hasattr(data, "units_y"):
