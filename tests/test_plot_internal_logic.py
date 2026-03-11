@@ -6,6 +6,7 @@ import re
 from matplotlib.colors import to_rgb
 from jupyphant.PlotlyGraphFigure import *
 from jupyphant.PlotlyGraphDataTypes import SpikeTrainRasterPlot
+from jupyphant.PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
 from ipywidgets import FloatRangeSlider
 
 def parse_plotly_color(color_str):
@@ -183,3 +184,41 @@ def test_annotation_intervals():
     plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_interavals_data=plotlyGraphAnnotationIntervals)
     assert len(plotlyGraphFigure.fig.layout.shapes) == 3
     assert len(plotlyGraphFigure.fig.layout.annotations) == 9
+
+def test_image_sequence():
+    # Parameters
+    num_frames = 20
+    height = 30
+    width = 30
+    spatial_scale = 1 * pq.micrometer
+    sampling_rate = 5 * pq.Hz
+
+    # Create a synthetic sequence: moving diagonal wave
+    image_data = []
+    for f in range(num_frames):
+        frame = np.zeros((height, width))
+        for i in range(height):
+            for j in range(width):
+                # moving diagonal wave pattern
+                frame[i, j] = np.sin(2 * np.pi * (i + j + f) / 10)
+        image_data.append(frame)
+
+    # Convert to ImageSequence
+    image_sequence = neo.ImageSequence(
+        image_data,
+        units=pq.V,
+        sampling_rate=sampling_rate,
+        spatial_scale=spatial_scale,
+        t_start=0*pq.s,
+        name="Synthetic Sequence",
+        description="Moving diagonal wave pattern"
+    )
+    plotly_fig = PlotlyImageSequenceFigure(image_sequence)
+    assert len(plotly_fig.figs) == 1
+
+    fig = plotly_fig.figs[0]
+
+    assert len(fig.frames) == num_frames
+    assert fig.data[0].z.shape == (height, width)
+    assert fig.frames[0].name == "0"
+    assert fig.frames[-1].name == str(num_frames - 1)
