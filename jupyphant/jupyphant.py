@@ -1552,7 +1552,7 @@ class Jupyphant:
                     # Band power helper
                     def band_power(lo, hi):
                         mask = (psd_freqs >= lo) & (psd_freqs < hi)
-                        return self.np.trapz(psd_mag[mask], psd_freqs[mask]) if mask.any() else float('nan')
+                        return self.np.trapezoid(psd_mag[mask], psd_freqs[mask]) if mask.any() else float('nan')
 
                     print(f"{bold}PSD — {label} (ch 0):{reset}")
                     print(f"  Dominant frequency : {peak_freq:.2f} Hz")
