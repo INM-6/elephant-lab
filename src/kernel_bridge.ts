@@ -7,6 +7,10 @@ import {
     getPythonCode
 } from './kernelcode';
 
+import {
+    OutputArea
+} from '@jupyterlab/outputarea';
+
 export interface IExecutionResult {
     resultKey: string | null;
     outputs: any[];
@@ -37,16 +41,32 @@ export class KernelBridge {
 
     /**
      * Executes Python code in the kernel and returns the result and any output.
-     * This method is decoupled from the UI and does not directly interact with OutputArea.
-     * @param code The Python code to execute.
+     * This method is decoupled from the UI.
+     * @param pythonCodeKey The Python code key for the code.
+     * @param outputArea The Jupyter OutputArea widget where the execution results will be displayed. If null, the output will be logged.
+     * @param showOutput A boolean flag that determines whether to display the output. Defaults to `true`.
      * @param executeCode If true, execute the code as is. If false, wrap it in a print statement.
      * @returns A promise that resolves to an IExecutionResult object, containing the result key
      * and an array of output messages. Returns null if the session is not available.
      */
-    public async executeCode(code: string, executeCode = false): Promise<IExecutionResult | null> {
-        if (!this.session || !this.session.session) {
+    public async executeCode(pythonCode: PythonCodeKey | string, outputArea: OutputArea | null = null, showOutput = true, executeCode = true, session: ISessionContext | null = null): Promise<IExecutionResult | null> {
+        if (!session) {
+            session = this.session;
+        }
+        if (!session || !session.session) {
             return null;
         }
+        const kernel = session.session?.kernel;
+        if (!kernel) {
+            console.error("Kernel not available for execution.");
+            return null;
+        }
+
+        const code = Object.values(PythonCodeKey).includes(pythonCode as PythonCodeKey)
+            ? getPythonCode(pythonCode as PythonCodeKey)
+            : pythonCode;
+        console.log("Executing code in kernel:", code);
+
         let codeToRun: string;
         if (executeCode) {
             codeToRun = "import gc as jupyphant_gc; jupyphant_gc.collect()\n" + code;
@@ -55,7 +75,7 @@ export class KernelBridge {
             codeToRun = `print(${JSON.stringify(code)})`;
         }
 
-        const future = this.session.session.kernel!.requestExecute({ code: codeToRun, store_history: false });
+        const future = session.session.kernel!.requestExecute({ code: codeToRun, store_history: false });
 
         let resultKey: string | null = null;
         const outputs: any[] = [];
@@ -85,7 +105,6 @@ export class KernelBridge {
                         }
                     }
                 } else if (msg.content.name === 'stderr') {
-                    console.warn("Kernel STDERR:", msg.content.text);
                     const output: any = { ...msg.content, output_type: msg_type };
                     outputs.push(output);
                 }
@@ -99,6 +118,34 @@ export class KernelBridge {
 
         await future.done;
 
-        return { resultKey: resultKey ? resultKey : null, outputs };
+        let result: IExecutionResult = { resultKey: resultKey ? resultKey : null, outputs };
+
+        if (result) {
+            this.handleOutputs(result.outputs, outputArea, showOutput);
+        }
+
+        return result;
+    }
+
+    private handleOutputs(outputs: any[], outputArea: OutputArea | null, showOutput: boolean) {
+        if (outputArea != null && showOutput) outputArea.model.clear();
+        for (const output of outputs) {
+            if (output.output_type === 'clear_output') {
+                if (outputArea != null && showOutput) {
+                    outputArea.model.clear(false);
+                }
+            } else if ((output.output_type === 'stream' && output.name === 'stderr') || output.output_type === 'error') {
+                console.error("Error output from kernel:", output);
+            } else {
+                if (showOutput) {
+                    if (outputArea == null) {
+                        console.log("Output from kernel:", output);
+                    }
+                    else {
+                        outputArea.model.add(output);
+                    }
+                }
+            }
+        }
     }
 }
