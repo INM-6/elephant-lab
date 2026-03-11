@@ -115,7 +115,7 @@ class JupyphantExtension {
 		console.log("Jupyphant: Initializing kernel state...");
 		this.kernelBridge = new KernelBridge(session);
 
-		await this.kernelBridge.executeCode(PythonCodeKey.SetupEnv, null, false);
+		await this.kernelBridge.executeCode(PythonCodeKey.SetupEnv);
 
 		console.log("Jupyphant: Environment setup complete.");
 		try {
@@ -480,7 +480,7 @@ class JupyphantExtension {
 						}
 
 						if (ioClass !== null) {
-							const varsResult = await this.kernelBridge!.executeCode(PythonCodeKey.GetVars, this.outarea_neo_tree!);
+							const varsResult = await this.kernelBridge!.executeCode(PythonCodeKey.GetVars, this.outarea_neo_tree!, false);
 							let allVars: string[] = [];
 							if (varsResult && varsResult.outputs.length > 0) {
 								const output = varsResult.outputs[0];
@@ -579,7 +579,7 @@ class JupyphantExtension {
 				return;
 			}
 
-			const result = await this.kernelBridge!.executeCode(PythonCodeKey.InsertCode, this.outarea_neo_tree!);
+			const result = await this.kernelBridge!.executeCode(PythonCodeKey.InsertCode, this.outarea_neo_tree!, false);
 
 			if (result && result.outputs.length > 0) {
 				const output = result.outputs[0];
@@ -650,17 +650,17 @@ class JupyphantExtension {
 
 		const darkmodeToggle = createToggle('fa-moon', 'Dark', 'Switch between dark and light mode', true, true, (state) => {
 			const code = getPythonCode(PythonCodeKey.DarkModeToggle, state);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!);
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
 		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
 			const code = getPythonCode(PythonCodeKey.OverlapToggle, state);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!);
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
 		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', false, true, (state) => {
 			const code = getPythonCode(PythonCodeKey.ZeroBasedToggle, state);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!);
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
 		const upscaleButton = createToggle('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', false, false, () => {
@@ -670,12 +670,12 @@ class JupyphantExtension {
 				numberInput.value = max_points.toString();
 			}
 			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, max_points);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!);
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
 		const resetScaleButton = createToggle('fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', false, false, () => {
 			const code = getPythonCode(PythonCodeKey.ResetScale);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!);
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
 		const optionsModal = document.createElement("div");
@@ -732,7 +732,7 @@ class JupyphantExtension {
 
 		colorGradeSelect.onchange = () => {
 			const code = getPythonCode(PythonCodeKey.SetColorGrade, colorGradeSelect.value);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!);
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		};
 
 		const colorGrade = document.createElement('div');

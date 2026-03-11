@@ -40,9 +40,9 @@ class PlotlyGraphFigure:
 
         if not isinstance(data, PlotlyGraphDataTypeList):
             data = PlotlyGraphDataTypeList(data)
-        self.nGraphs = len(data.data_list)
-        self.compress = self.nGraphs > 10
-        data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0, max_points=max_points)
+        data.normalize(x_range=x_range,offset_traces_on_compress= not overlapping or not self.overlap_on_compress, shift_to_0=shift_to_0, max_points=max_points)
+        self.nGraphs = data.nGraphs
+        self.compress = data.compress
         self.data = data
         self.total_minX = data.minX
         self.total_maxX = data.maxX
@@ -837,12 +837,13 @@ class PlotlyGraphDataTypeList():
 
         return sampled_x, sampled_y
     
-    def normalize(self, x_range, offset_traces, shift_to_0, max_points):
+    def normalize(self, x_range, offset_traces_on_compress, shift_to_0, max_points):
         """
         Tries to normalize units to first unit found
+        Shifts all graphs to 0 if shift_to_0 is True and minX is not already close to 0
         Filters out all points outside of x_range if x_range is not None
         Decreases number of points if there are to many
-        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY, is_default_zero_based
+        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY, is_default_zero_based, nGraphs, compress
         """
 
         nPoints = 0
@@ -925,9 +926,11 @@ class PlotlyGraphDataTypeList():
         self.data_list = filtered
         self.common_units_x = common_units_x
 
+        self.nGraphs = len(self.data_list)
+        self.compress = self.nGraphs > 10
         if nPoints > max_points:
             self.is_downscaled = True
-            max_points_per_graph = max_points / len(self.data_list)
+            max_points_per_graph = max_points / self.nGraphs
         else:
             self.is_downscaled = False
         
@@ -960,21 +963,23 @@ class PlotlyGraphDataTypeList():
                 else:
                     common_units_y = None
 
-            should_find_minX = not shift_to_0 or x_range is not None
+            should_find_new_minX = x_range is not None
             if index == 0:
-                if should_find_minX:
+                if should_find_new_minX:
+                    minX = x_values.min()
+                else:
                     minX = data.minX
                 minY = y_values.min()
                 maxX = x_values.max()
                 maxY = y_values.max()
                 previous_maxY = maxY
             else:
-                temp_minX = data.minX if should_find_minX else 0
+                temp_minX = x_values.min() if should_find_new_minX else data.minX
                 temp_minY = y_values.min()
                 temp_maxX = x_values.max()
                 temp_maxY = y_values.max()
 
-                if offset_traces:
+                if self.compress and offset_traces_on_compress:
                     offset = previous_maxY - temp_minY
                     span = (temp_maxY - temp_minY)
                     if span < 1e-9:
@@ -987,7 +992,7 @@ class PlotlyGraphDataTypeList():
                     temp_maxY += offset
                     previous_maxY = temp_maxY
 
-                if should_find_minX:
+                if should_find_new_minX or not shift_to_0:
                     if temp_minX < minX:
                         minX = temp_minX
                 if temp_minY < minY:

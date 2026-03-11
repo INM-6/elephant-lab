@@ -114,3 +114,58 @@ def test_shift_to_0():
     assert plotlyGraphFigure.data.minX == 0
     assert plotlyGraphFigure.data.maxX == 7
     assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0, 3, 7])
+
+def test_custom_x_range():
+    spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
+    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, overlap_on_compress=False, x_range=[-5,4])
+    assert not np.allclose(plotlyGraphFigure.getXRange(), [-5,4], atol=1e-6)
+    assert np.allclose(plotlyGraphFigure.getXRange(), [0,3], atol=1e-6)
+    assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0,1,2,3], atol=1e-6)
+
+def test_shift_to_0_and_custom_x_range():
+    spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([3,6,10] * pq.s, t_stop=10 * pq.s))
+    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, overlap_on_compress=False, shift_to_0=True, x_range=[1,6.5])
+    assert plotlyGraphFigure.data.minX == 3
+    assert plotlyGraphFigure.data.maxX == 3
+    assert np.allclose(plotlyGraphFigure.fig.data[0].x, [3])
+
+def test_downsampling():
+    spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
+    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, overlap_on_compress=False, max_points=3)
+    assert len(plotlyGraphFigure.fig.data[0].x) == 3
+    assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0,1,10])
+
+def test_filtering():
+    spikeTrainRasterPlot1 = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
+    spikeTrainRasterPlot2 = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10, 15, 20] * pq.s, t_stop=20 * pq.s))
+    spikeTrainRasterPlot3 = SpikeTrainRasterPlot(neo.SpikeTrain([] * pq.s, t_stop=20 * pq.s))
+    plotlyGraphFigure = PlotlyGraphFigure([spikeTrainRasterPlot1, spikeTrainRasterPlot2, spikeTrainRasterPlot3], overlap_on_compress=False, x_range=[13,20])
+    assert plotlyGraphFigure.nGraphs == 1
+
+def test_offset_traces_on_compress():
+    def createPlotlyGraphDataTypeList():
+        def createGraphObject():
+            class Dummy:
+                pass
+            graphObject = Dummy()
+            graphObject.x = np.array([0,1,2,3,4])
+            graphObject.y = np.array([0,1,2,3,4])
+            graphObject.units_x = pq.s
+            graphObject.units_y = pq.V
+            return graphObject
+        
+        return PlotlyGraphDataTypeList([createGraphObject() for _ in range(20)])
+    plotlyGraphFigure1 = PlotlyGraphFigure(createPlotlyGraphDataTypeList())
+    plotlyGraphFigure2 = PlotlyGraphFigure(createPlotlyGraphDataTypeList(), overlapping=True)
+    plotlyGraphFigure3 = PlotlyGraphFigure(createPlotlyGraphDataTypeList(), overlapping=True, overlap_on_compress=False)
+    assert plotlyGraphFigure1.nGraphs == 20
+    assert plotlyGraphFigure1.compress == True
+    assert np.allclose(plotlyGraphFigure1.fig.data[19].y, plotlyGraphFigure3.fig.data[19].y)
+    assert not np.allclose(plotlyGraphFigure1.fig.data[19].y, plotlyGraphFigure2.fig.data[19].y)
+
+def test_overlap_and_stack(three_spikeTrainRasterPlots):
+    assert not np.allclose(three_spikeTrainRasterPlots.fig.layout.yaxis1.domain, three_spikeTrainRasterPlots.fig.layout.yaxis2.domain)
+    three_spikeTrainRasterPlots.overlap()
+    assert np.allclose(three_spikeTrainRasterPlots.fig.layout.yaxis1.domain, three_spikeTrainRasterPlots.fig.layout.yaxis2.domain)
+    three_spikeTrainRasterPlots.stack()
+    assert not np.allclose(three_spikeTrainRasterPlots.fig.layout.yaxis1.domain, three_spikeTrainRasterPlots.fig.layout.yaxis2.domain)
