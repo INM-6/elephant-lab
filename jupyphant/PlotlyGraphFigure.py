@@ -1,5 +1,6 @@
 class PlotlyUtils:
     import quantities as pq
+    import sys
 
     def can_convert_units(unit, convert_unit):
         """
@@ -16,12 +17,15 @@ class PlotlyUtils:
     def convert_to_other_units(val, unit, convert_unit):
         q = PlotlyUtils.pq.Quantity(val, unit)
         return q.rescale(convert_unit).magnitude
+    
+    def print_warning(message):
+        pass
+        #print(f"WARNING: {message}", file=PlotlyUtils.sys.stderr)
 
 class PlotlyGraphFigure:
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     from IPython.display import display as ipython_display
-    import warnings
     from ipywidgets import HBox, Layout, Output, FloatRangeSlider
 
 
@@ -194,7 +198,7 @@ class PlotlyGraphFigure:
                             else:
                                 self.hide_legend = d.use_name_as_ticklabels
             except Exception as e:
-                self.warnings.warn(f"Failed to add trace '{d.name}': {e}")
+                PlotlyUtils.print_warning(f"Failed to add trace '{d.name}': {e}")
     
     def _change_height_after_render(self, height):
         """
@@ -660,7 +664,6 @@ class PlotlyGraphFigure:
         return self.data.is_default_zero_based
     
 class PlotlyGraphDataType:
-    import warnings
 
     def __init__(self, data, **kwargs):
         if data is None:
@@ -726,11 +729,10 @@ class PlotlyGraphDataType:
                 self.y = list(self.y)
 
         except Exception as e:
-            self.warnings.warn(f"Error extracting data for trace '{self.name}': {e}")
+            PlotlyUtils.print_warning(f"Error extracting data for trace '{self.name}': {e}")
             self.x, self.y = None, None
 
 class PlotlyGraphDataTypeList():
-    import warnings
     import numpy as np
 
     def __init__(self, data):
@@ -747,14 +749,14 @@ class PlotlyGraphDataTypeList():
                         d = PlotlyGraphDataType(d)
                     self.data_list.append(d)
                 except Exception as e:
-                    self.warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
+                    PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
         else:
             try:
                 if not isinstance(data, PlotlyGraphDataType):
                     data = PlotlyGraphDataType(data)
                 self.data_list = [data]
             except Exception as e:
-                self.warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
+                PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
 
     def is_trace_list(self,data_list):
         """
@@ -861,7 +863,7 @@ class PlotlyGraphDataTypeList():
             x_length = len(x_values)
             y_length = len(y_values)
             if data.x is None or data.y is None or x_length == 0 or y_length == 0 or x_length != y_length:
-                self.warnings.warn(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
+                PlotlyUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
                 continue
 
             if first:
@@ -900,7 +902,7 @@ class PlotlyGraphDataTypeList():
 
             x_length = len(x_values)
             if x_length == 0:
-                self.warnings.warn(f"Skipping trace '{data.name}' because there is no data in the range")
+                PlotlyUtils.print_warning(f"Skipping trace '{data.name}' because there is no data after filtering by x_range.")
                 continue
             filtered.append(data)
 
@@ -913,7 +915,7 @@ class PlotlyGraphDataTypeList():
 
         self.is_default_zero_based = is_default_zero_based
         if len(filtered) == 0:
-            self.warnings.warn("There is no valid data selected")
+            PlotlyUtils.print_warning("No valid data to display after normalization and filtering.")
             self.common_units_x = None
             self.common_units_y = None
             self.minX = 0
