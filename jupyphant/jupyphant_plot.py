@@ -30,8 +30,8 @@ class Jupyphant_plot:
     PLOT_IMGSEQUENCE = 'raw_imgsequence'
 
     class DefaultPlotDict(TypedDict):
-        fig: Jupyphant_plot.PlotlyGraphFigure | Jupyphant_plot.PlotlyImageSequenceFigure | None
-        output: Jupyphant_plot.Output
+        fig: "Jupyphant_plot.PlotlyGraphFigure | Jupyphant_plot.PlotlyImageSequenceFigure | None"
+        output: "Jupyphant_plot.Output"
         changed: bool
 
     class RawPlotDict(DefaultPlotDict):
@@ -44,7 +44,7 @@ class Jupyphant_plot:
     class ImageSequencePlotDict(DefaultPlotDict):
         color_grade: str
 
-    def _base_plot_dict(self) -> Jupyphant_plot.DefaultPlotDict:
+    def _base_plot_dict(self) -> "Jupyphant_plot.DefaultPlotDict":
         # Add all required options to each plot:
         #   - fig: a wrapper of the figure with extra functionality (needs fig.display())
         #   - output: the output area where the figure is displayed;
