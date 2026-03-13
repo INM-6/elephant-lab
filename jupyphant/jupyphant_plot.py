@@ -9,6 +9,11 @@ class Jupyphant_plot:
     from ipywidgets import Output, HTML
     from IPython.display import clear_output, display
 
+    from typing import TypedDict, TYPE_CHECKING
+
+    if TYPE_CHECKING:
+        from .jupyphant import Jupyphant  # only for type hints
+
     class NeoKey(Enum):
         spiketrain = 'spiketrain'
         analogsignal = 'analogsignal'
@@ -24,44 +29,64 @@ class Jupyphant_plot:
 
     PLOT_IMGSEQUENCE = 'raw_imgsequence'
 
-    def __init__(self, jupyphant_entity):
-        """
-        Class to outsource some jupyphant logic.
-        Is a Class to minimize the amount of name clutter in the notebook
-        """ 
-        self.jupyphant_entity = jupyphant_entity
-        self.previous_neo_object_dict = {key: [] for key in self.NeoKey}
-        self.jupyterlab_theme = 'plotly_dark'
-        self.plots = {}
+    class DefaultPlotDict(TypedDict):
+        fig: "Jupyphant_plot.PlotlyGraphFigure | Jupyphant_plot.PlotlyImageSequenceFigure | None"
+        output: "Jupyphant_plot.Output"
+        changed: bool
 
-        #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
-        for key in self.RawPlotKey:
-            self.plots[key] = {
-                "overlapping": False,
-                "og_x_range": None,
-                "x_range": None,
-                "max_points": 10000,
-                "zero_based": True
-            }
-        self.plots[self.PLOT_IMGSEQUENCE]= {
-            "color_grade": "Viridis"
-        }
+    class RawPlotDict(DefaultPlotDict):
+        overlapping: bool
+        og_x_range: list[float] | None
+        x_range: list[float] | None
+        max_points: int
+        zero_based: bool
+    
+    class ImageSequencePlotDict(DefaultPlotDict):
+        color_grade: str
 
+    def _base_plot_dict(self) -> "Jupyphant_plot.DefaultPlotDict":
         # Add all required options to each plot:
         #   - fig: a wrapper of the figure with extra functionality (needs fig.display())
         #   - output: the output area where the figure is displayed;
         #             each figure has its own output so it can be cleared separately
         #   - changed: True if any value in the dict has changed, False otherwise;
         #              used to track if changes where by selecting different nodes or changing #              the settings (e.g., overlap)
-        for plot in self.plots.values():
-            output = self.Output(layout={'width': "100%", 'height': 'auto'})
-            plot.update({
-                "fig": None,
-                "output": output,
-                "changed": False,
-            })
+        return {
+            "fig": None,
+            "output": self.Output(layout={'width': "100%", 'height': 'auto'}),
+            "changed": False,
+        }
 
-    def raw_plot(self):
+    def __init__(self, jupyphant_entity: "Jupyphant_plot.Jupyphant"):
+        """
+        Class to outsource some jupyphant logic:
+            -all logic regarding the plotting of Jupyphant
+        Is a Class to minimize the amount of name clutter in the notebook
+        """ 
+        self.jupyphant_entity: "Jupyphant_plot.Jupyphant" = jupyphant_entity
+        self.previous_neo_object_dict = {key: [] for key in self.NeoKey}
+        self.jupyterlab_theme = 'plotly_dark'
+        self.plots: dict[
+            str,
+            Jupyphant_plot.RawPlotDict | Jupyphant_plot.ImageSequencePlotDict
+        ] = {}
+
+        #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
+        for key in self.RawPlotKey:
+            self.plots[key] = {
+                **self._base_plot_dict(),
+                "overlapping": False,
+                "og_x_range": None,
+                "x_range": None,
+                "max_points": 10000,
+                "zero_based": False
+            }
+        self.plots[self.PLOT_IMGSEQUENCE]= {
+            **self._base_plot_dict(),
+            "color_grade": "Viridis"
+        }
+
+    def _raw_plot(self):
         neo_object_dict = None
         selection_changed = not any(v["changed"] for v in self.plots.values())
         if selection_changed:
@@ -127,13 +152,13 @@ class Jupyphant_plot:
                         fig.display()
             plot_dict["changed"] = False
 
-        create_plot(self.RawPlotKey.RAW_ST, self.create_rasterplot, self.NeoKey.spiketrain, [self.NeoKey.event, self.NeoKey.epoch])
+        create_plot(self.RawPlotKey.RAW_ST, self._create_rasterplot, self.NeoKey.spiketrain, [self.NeoKey.event, self.NeoKey.epoch])
 
-        create_plot(self.RawPlotKey.RAW_ANASIG, self.create_lfpplot, [self.NeoKey.analogsignal, self.NeoKey.irregularsignal], [self.NeoKey.event, self.NeoKey.epoch])
+        create_plot(self.RawPlotKey.RAW_ANASIG, self._create_lfpplot, [self.NeoKey.analogsignal, self.NeoKey.irregularsignal], [self.NeoKey.event, self.NeoKey.epoch])
 
         keys_that_also_display_events = [self.NeoKey.spiketrain, self.NeoKey.analogsignal, self.NeoKey.irregularsignal]
         if all(empty_dict[key] for key in keys_that_also_display_events):
-            create_plot(self.RawPlotKey.RAW_EVENT, self.create_annotation_plot, [self.NeoKey.event, self.NeoKey.epoch], keys_that_also_display_events)
+            create_plot(self.RawPlotKey.RAW_EVENT, self._create_annotation_plot, [self.NeoKey.event, self.NeoKey.epoch], keys_that_also_display_events)
         else:
             plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
             if plot_dict["fig"] is not None:
@@ -141,7 +166,7 @@ class Jupyphant_plot:
                 with plot_dict["output"]:
                     Jupyphant_plot.clear_output()
 
-        create_plot(self.PLOT_IMGSEQUENCE, self.create_image_sequence, self.NeoKey.imagesequence)
+        create_plot(self.PLOT_IMGSEQUENCE, self._create_image_sequence, self.NeoKey.imagesequence)
 
 
     def create_explorer_raw_plot(self):
@@ -149,7 +174,7 @@ class Jupyphant_plot:
             output = plot_dict["output"]
             Jupyphant_plot.display(output)
             output.layout.display = 'none'
-        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self.raw_plot)
+        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self._raw_plot)
 
     def set_raw_plot_overlap(self, overlap):
         reload = False
@@ -169,7 +194,7 @@ class Jupyphant_plot:
                 plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot()
+            self._raw_plot()
     
     def set_zero_based(self, zero_based):
         reload = False
@@ -178,14 +203,14 @@ class Jupyphant_plot:
             if zero_based != plot_dict['zero_based']:
                 plot_dict['zero_based']=zero_based
                 fig = plot_dict['fig']
-                if fig is None:
+                if fig is None or fig.isDefaultZeroBased():
                     continue
                 plot_dict['og_x_range']=None
                 plot_dict['x_range']=None
                 plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot()
+            self._raw_plot()
 
     def set_color_grade(self, color_grade):
         reload = False
@@ -197,7 +222,7 @@ class Jupyphant_plot:
                 plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot()
+            self._raw_plot()
 
     def update_jupyterlab_plot_theme(self, theme_name):
         if self.jupyterlab_theme == theme_name:
@@ -210,7 +235,7 @@ class Jupyphant_plot:
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         if plot_dict['fig'] is not None:
             plot_dict['changed']=True
-            self.raw_plot()
+            self._raw_plot()
 
     def upscale_raw_plot(self, max_points):
         reload = False
@@ -233,7 +258,7 @@ class Jupyphant_plot:
             plot_dict['changed']=temp_reload
             reload = reload or temp_reload
         if reload:
-            self.raw_plot()
+            self._raw_plot()
     
     def reset_scale(self):
         reload = False
@@ -247,9 +272,9 @@ class Jupyphant_plot:
                 plot_dict['changed']=True
                 reload = True
         if reload:
-            self.raw_plot()
+            self._raw_plot()
         
-    def create_rasterplot(self, spiketrain=None, event=None, epoch=None):
+    def _create_rasterplot(self, spiketrain=None, event=None, epoch=None):
         data = [self.SpikeTrainRasterPlot(st) for st in spiketrain]
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
@@ -265,7 +290,7 @@ class Jupyphant_plot:
             plot_dict['og_x_range']=x_range
         return fig
 
-    def create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
+    def _create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
         data = None
         if analogsignal is not None:
             data = self.AnalogSignalLFPPlotList(analogsignal)
@@ -289,7 +314,7 @@ class Jupyphant_plot:
             plot_dict['og_x_range']=x_range
         return fig
     
-    def create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
+    def _create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
@@ -304,7 +329,7 @@ class Jupyphant_plot:
             plot_dict['og_x_range']=x_range
         return fig
 
-    def create_image_sequence(self, imagesequence=None):
+    def _create_image_sequence(self, imagesequence=None):
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         color_grade = plot_dict['color_grade']
         return self.PlotlyImageSequenceFigure(image_sequences=imagesequence, theme_name=self.jupyterlab_theme, color_scale=color_grade)

@@ -115,15 +115,15 @@ class JupyphantExtension {
 		console.log("Jupyphant: Initializing kernel state...");
 		this.kernelBridge = new KernelBridge(session);
 
-		await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.SetupEnv), this.outarea_neo_tree!, session, false);
+		await this.kernelBridge.executeCode(PythonCodeKey.SetupEnv);
 
 		console.log("Jupyphant: Environment setup complete.");
 		try {
-			// Execute Jupyphant Code to create Neo Tree / Information and Plots  
-			await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.CreateTree), this.outarea_neo_tree!, session);
-			await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.UpdateTree), this.outarea_neo_tree!, session, false);
-			await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.CreateExplorerInfo), this.outarea_nodeexplorer_info!, session);
-			await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.CreateExplorerRaw), this.outarea_nodeexplorer_raw!, session);
+			// Execute Jupyphant Code to create Neo Tree / Information and Plots 
+			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
+			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
+			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerInfo, this.outarea_nodeexplorer_info!);
+			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Jupyphant: FAILED to initialize kernel state:", error);
@@ -224,7 +224,7 @@ class JupyphantExtension {
 
 			this._updateTimer = window.setTimeout(async () => {
 				await Promise.all([
-					this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.UpdateTree), this.outarea_neo_tree!, initialSession, false),
+					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_nodeexplorer_info!, false, true, initialSession),
 				]);
 			}, 500);
 		});
@@ -335,7 +335,7 @@ class JupyphantExtension {
 		infoButton.title = 'About Jupyphant';
 		infoButton.className = 'workflow-button workflow-button-io';
 		infoButton.onclick = async () => {
-			const result = await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.Version), true);
+			const result = await this.kernelBridge!.executeCode(PythonCodeKey.Version);
 
 			const body = document.createElement('div');
 			body.style.textAlign = 'center';
@@ -454,9 +454,9 @@ class JupyphantExtension {
 					const slashCount = (session.path.match(/\//g) || []).length;
 					if (slashCount !== 0) {
 						const prefix = '../'.repeat(slashCount);
-						filePath = prefix+filePath;
+						filePath = prefix + filePath;
 					}
-					
+
 					const body = document.createElement('div');
 					const input = document.createElement('input');
 					input.className = 'jp-input';
@@ -481,7 +481,7 @@ class JupyphantExtension {
 						}
 
 						if (ioClass !== null) {
-							const varsResult = await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.GetVars), true);
+							const varsResult = await this.kernelBridge!.executeCode(PythonCodeKey.GetVars, this.outarea_neo_tree!, false);
 							let allVars: string[] = [];
 							if (varsResult && varsResult.outputs.length > 0) {
 								const output = varsResult.outputs[0];
@@ -502,8 +502,8 @@ class JupyphantExtension {
 							}
 
 							let code = getPythonCode(PythonCodeKey.SetVarName, ioClass, filePath, varName);
-							await this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
-							await this.executeCodeInOutputArea(getPythonCode(PythonCodeKey.UpdateTree), this.outarea_neo_tree!, session, false);
+							await this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
+							await this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 						} else if (dialogResult.button.label === 'Automatic') {
 							showDialog({
 								title: 'Error',
@@ -547,7 +547,7 @@ class JupyphantExtension {
 					}
 
 					const code = getPythonCode(PythonCodeKey.SaveSelectedNeoObjects, filePath);
-					this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false)
+					this.kernelBridge!.executeCode(code, this.outarea_neo_tree, false)
 						.then(() => {
 							showDialog({
 								title: 'Export Successful',
@@ -580,7 +580,7 @@ class JupyphantExtension {
 				return;
 			}
 
-			const result = await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.InsertCode), true);
+			const result = await this.kernelBridge!.executeCode(PythonCodeKey.InsertCode, this.outarea_neo_tree!, false);
 
 			if (result && result.outputs.length > 0) {
 				const output = result.outputs[0];
@@ -622,24 +622,6 @@ class JupyphantExtension {
 		tree_widget.node.prepend(filterContainer);
 	}
 
-
-	private defaultOutputErrorListerner(msg: any) {
-		const msgType = msg.header.msg_type;
-		switch (msgType) {
-			case "stream":
-				console.log("stdout:", msg.content.text);
-				break;
-			case "error":
-				console.error("Python error:", msg.content.ename, msg.content.evalue);
-				console.error(msg.content.traceback.join("\n"));
-				break;
-			case "execute_result":
-			case "display_data":
-				console.log("Result:", msg.content.data);
-				break;
-		}
-	}
-
 	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
 		const buttonContainer = document.createElement("div");
 		buttonContainer.classList.add("jp-rawplot-button-container");
@@ -669,17 +651,17 @@ class JupyphantExtension {
 
 		const darkmodeToggle = createToggle('fa-moon', 'Dark', 'Switch between dark and light mode', true, true, (state) => {
 			const code = getPythonCode(PythonCodeKey.DarkModeToggle, state);
-			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
 		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
 			const code = getPythonCode(PythonCodeKey.OverlapToggle, state);
-			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', true, true, (state) => {
+		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', false, true, (state) => {
 			const code = getPythonCode(PythonCodeKey.ZeroBasedToggle, state);
-			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
 		const upscaleButton = createToggle('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', false, false, () => {
@@ -689,12 +671,12 @@ class JupyphantExtension {
 				numberInput.value = max_points.toString();
 			}
 			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, max_points);
-			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
 		const resetScaleButton = createToggle('fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', false, false, () => {
 			const code = getPythonCode(PythonCodeKey.ResetScale);
-			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
 		const optionsModal = document.createElement("div");
@@ -751,7 +733,7 @@ class JupyphantExtension {
 
 		colorGradeSelect.onchange = () => {
 			const code = getPythonCode(PythonCodeKey.SetColorGrade, colorGradeSelect.value);
-			session.session!.kernel!.requestExecute({ code, store_history: false }).onIOPub = this.defaultOutputErrorListerner;
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		};
 
 		const colorGrade = document.createElement('div');
@@ -810,12 +792,12 @@ class JupyphantExtension {
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
 		let code = getPythonCode(PythonCodeKey.ToggleNeoTreeFilter, checkbox_id);
-		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
+		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 	}
 
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
 		let code = getPythonCode(PythonCodeKey.ExpandNeoTree, checked);
-		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
+		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 	}
 
 	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext): OutputArea {
@@ -841,44 +823,6 @@ class JupyphantExtension {
 		}
 		return outarea;
 	}
-
-	/**
-	 * Executes a code snippet in a designated OutputArea and displays the results.
-	 *
-	 * @param code The string of code to be executed by the kernel.
-	 * @param outputArea The Jupyter OutputArea widget where the execution results will be displayed.
-	 * @param sessionContext The session context, used to access the active kernel session.
-	 * @param showOutput A boolean flag that determines whether to display the output. Defaults to `true`.
-	 * @private
-	 */
-	private async executeCodeInOutputArea(code: string, outputArea: OutputArea, sessionContext: ISessionContext, showOutput: boolean = true) {
-		const kernel = sessionContext.session?.kernel;
-		if (!kernel) {
-			console.error("Kernel not available for execution.");
-			return;
-		}
-
-		let output = await this.kernelBridge?.executeCode(code, true);
-
-		if (output && showOutput) {
-			this.handleOutputs(output.outputs, outputArea);
-		}
-	}
-
-	private handleOutputs(outputs: any[], outputArea: OutputArea) {
-		if (outputArea == null) {
-			return;
-		}
-		outputArea.model.clear();
-		for (const output of outputs) {
-			if (output.output_type === 'clear_output') {
-				outputArea.model.clear(false);
-			} else {
-				outputArea.model.add(output);
-			}
-		}
-	}
-
 }; // end of JupyphantWidget class
 
 /*

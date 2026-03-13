@@ -1,5 +1,6 @@
 class PlotlyUtils:
     import quantities as pq
+    import sys
 
     def can_convert_units(unit, convert_unit):
         """
@@ -16,16 +17,19 @@ class PlotlyUtils:
     def convert_to_other_units(val, unit, convert_unit):
         q = PlotlyUtils.pq.Quantity(val, unit)
         return q.rescale(convert_unit).magnitude
+    
+    def print_warning(message):
+        pass
+        #print(f"WARNING: {message}", file=PlotlyUtils.sys.stderr)
 
 class PlotlyGraphFigure:
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     from IPython.display import display as ipython_display
-    import warnings
     from ipywidgets import HBox, Layout, Output, FloatRangeSlider
 
 
-    def __init__(self, data, overlapping=False, title=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=True, max_points=10000):
+    def __init__(self, data, overlapping=False, title=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=False, max_points=10000):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -40,9 +44,9 @@ class PlotlyGraphFigure:
 
         if not isinstance(data, PlotlyGraphDataTypeList):
             data = PlotlyGraphDataTypeList(data)
-        self.nGraphs = len(data.data_list)
-        self.compress = self.nGraphs > 10
-        data.normalize(x_range=x_range,offset_traces=self.compress and (not overlapping or not self.overlap_on_compress), shift_to_0=shift_to_0, max_points=max_points)
+        data.normalize(x_range=x_range,offset_traces_on_compress= not overlapping or not self.overlap_on_compress, shift_to_0=shift_to_0, max_points=max_points)
+        self.nGraphs = data.nGraphs
+        self.compress = data.compress
         self.data = data
         self.total_minX = data.minX
         self.total_maxX = data.maxX
@@ -61,7 +65,7 @@ class PlotlyGraphFigure:
                 vertical_spacing=self.vertical_spacing,
                 shared_xaxes=True
             ))
-        self.create_graphs()
+        self._create_graphs()
 
         if title is None:
             title=getattr(data, 'name', None)
@@ -74,7 +78,7 @@ class PlotlyGraphFigure:
 
         self.update_jupyterlab_theme(theme_name)
 
-        self.manage_axis_units()
+        self._manage_axis_units()
 
         if self.compress:
             if len(self.ticktext)==self.nGraphs:
@@ -83,50 +87,50 @@ class PlotlyGraphFigure:
                     tickvals=list(range(self.nGraphs)),
                     ticktext=self.ticktext,
                 )
-                self.update_layout_options_dict("yaxis", yaxis_options)
+                self._update_layout_options_dict("yaxis", yaxis_options)
             else:
                 if not overlapping:
-                    self.update_layout_options_dict('yaxis',dict(
+                    self._update_layout_options_dict('yaxis',dict(
                         showticklabels = False
                     ))
             self.hide_legend = True
-        self.update_legend()
-        self.create_annotations(annotation_data, x_range)
-        self.create_anntotation_intervals(annotation_interavals_data, x_range)
-        self.create_sliders()
-        self.format_annotations()
+        self._update_legend()
+        self._create_annotations(annotation_data, x_range)
+        self._create_annotation_intervals(annotation_interavals_data, x_range)
+        self._create_sliders()
+        self._format_annotations()
         # Set x_range to total min and max
         for i in range(1, self.nGraphs + 1):
-            self.update_layout_options_dict(f"xaxis{i}", dict(
+            self._update_layout_options_dict(f"xaxis{i}", dict(
                 range = [self.total_minX, self.total_maxX]
             ))
-        self.update_layout()
+        self._update_layout()
         
         if overlapping:
             self.overlapping = False
             self.overlap()
             self.overlapping = True
 
-    def update_layout_options_dict(self, key, options_dict):
+    def _update_layout_options_dict(self, key, options_dict):
         if key in self.layout_options:
             self.layout_options[key].update(options_dict)
         else:
             self.layout_options[key] = options_dict
 
-    def update_layout_options_list(self, key, options_list):
+    def _update_layout_options_list(self, key, options_list):
         if key in self.layout_options:
             self.layout_options[key].extend(options_list)
         else:
             self.layout_options[key] = options_list
 
-    def update_layout(self):
+    def _update_layout(self):
         """
         Updates all collected changes to layout in one update to improve performance
         """
         self.fig.update_layout(**self.layout_options)
         self.layout_options = dict()
 
-    def create_graphs(self):
+    def _create_graphs(self):
         """
         Adds traces to a Plotly figure from the extracted and normalized data
         """
@@ -150,7 +154,7 @@ class PlotlyGraphFigure:
                 marker_settings = default_marker | getattr(d, "marker", {})
                 line_settings   = default_line   | getattr(d, "line", {})
                 if callable(marker_settings["size"]):
-                    marker_settings["size"] = marker_settings["size"](self.getSubplotHeight())
+                    marker_settings["size"] = marker_settings["size"](self._getSubplotHeight())
                 
                 trace  = self.go.Scattergl(
                     x=d.x,
@@ -174,16 +178,16 @@ class PlotlyGraphFigure:
                             col=1
                         )
                     if d.units_x is not None:
-                        self.update_layout_options_dict(f"xaxis{row}",dict(
+                        self._update_layout_options_dict(f"xaxis{row}",dict(
                             title=d.units_x.__str__()
                         ))
                     if d.units_y is not None:
-                        self.update_layout_options_dict(f"yaxis{row}",dict(
+                        self._update_layout_options_dict(f"yaxis{row}",dict(
                             title=d.units_y.__str__()
                         ))
                     if hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
-                            self.update_layout_options_dict(f"yaxis{row}",dict(
+                            self._update_layout_options_dict(f"yaxis{row}",dict(
                                 tickvals=[0],
                                 ticktext=[d.name]
                             ))
@@ -194,9 +198,9 @@ class PlotlyGraphFigure:
                             else:
                                 self.hide_legend = d.use_name_as_ticklabels
             except Exception as e:
-                self.warnings.warn(f"Failed to add trace '{d.name}': {e}")
+                PlotlyUtils.print_warning(f"Failed to add trace '{d.name}': {e}")
     
-    def change_height_after_render(self, height):
+    def _change_height_after_render(self, height):
         """
         Changing height after the figure has already, is more complicated than just calling update_layout
         """
@@ -208,7 +212,7 @@ class PlotlyGraphFigure:
             autosize = True
         )
         self.fig._send_relayout_msg({"autosize": True})
-        self.update_y_slider()
+        self._update_y_slider()
     
     def overlap(self):
         """Overlapps the graphs"""
@@ -218,19 +222,19 @@ class PlotlyGraphFigure:
 
         self.saved_y_ranges = []
         for i in range(1, self.nGraphs + 1):
-            self.update_layout_options_dict(f"yaxis{i}", dict(
+            self._update_layout_options_dict(f"yaxis{i}", dict(
                 visible=self.data.common_units_y is not None and i==1,
                 domain=[0.0,1.0]
             ))
             y_range = self.fig.layout[f"yaxis{i}"].range
             self.saved_y_ranges.append(y_range)
 
-        self.change_height_after_render(self.default_height)
+        self._change_height_after_render(self.default_height)
         if hasattr(self, 'y_slider'):
             with self.fig.batch_update():
                     self.fig.update_yaxes(range=self.y_slider.value)
-        self.update_legend()
-        self.update_layout()
+        self._update_legend()
+        self._update_layout()
         
         
     def stack(self):
@@ -242,7 +246,7 @@ class PlotlyGraphFigure:
         n = self.nGraphs
         vertical_spacing = self.vertical_spacing
 
-        subplot_height = self.getSubplotHeight(1.0)
+        subplot_height = self._getSubplotHeight(1.0)
 
         for i in range(1, n + 1):
             # Domain goes from bottom to top
@@ -250,7 +254,7 @@ class PlotlyGraphFigure:
             start = end - subplot_height
             if(start<0): start=0 #floating point precision issue
 
-            self.update_layout_options_dict(f"yaxis{i}", 
+            self._update_layout_options_dict(f"yaxis{i}", 
                 dict(
                     visible=True,
                     domain=[start, end],
@@ -258,11 +262,11 @@ class PlotlyGraphFigure:
                 )
             )
 
-        self.change_height_after_render(self.height)
-        self.update_legend()
-        self.update_layout()
+        self._change_height_after_render(self.height)
+        self._update_legend()
+        self._update_layout()
 
-    def create_sliders(self):
+    def _create_sliders(self):
         """Updates the range slider to the last x-axis if shared_xaxes is True"""
         n = self.nGraphs
         x_bgcolor = "#1e7fcc"
@@ -276,7 +280,7 @@ class PlotlyGraphFigure:
                     thickness=x_height
                 )
             )
-            self.update_layout_options_dict("xaxis", xaxis_options)
+            self._update_layout_options_dict("xaxis", xaxis_options)
         else:
             for i in range(1, n + 1):
                 # Adding this range slider makes it impossible to manually zoom in vertically for this graph
@@ -290,9 +294,9 @@ class PlotlyGraphFigure:
                             thickness=x_height
                         )
                     )
-                    self.update_layout_options_dict(axis_key, xaxis_options)
+                    self._update_layout_options_dict(axis_key, xaxis_options)
 
-        y_slider_height = self.calculate_y_slider_height()
+        y_slider_height = self._calculate_y_slider_height()
 
         totalrange = [self.data.minY, self.data.maxY]
         self.y_slider = self.FloatRangeSlider(
@@ -309,7 +313,7 @@ class PlotlyGraphFigure:
         def update_ticklabels(new_range):
             if self.compress and len(self.ticktext)==self.nGraphs:
                 showticklabels = bool(new_range[1]-new_range[0]<26) and (not self.overlapping or not self.overlap_on_compress)
-                self.update_layout_options_dict("yaxis", dict(
+                self._update_layout_options_dict("yaxis", dict(
                     showticklabels=showticklabels,
                     zeroline=showticklabels,
                     showgrid=showticklabels
@@ -324,13 +328,13 @@ class PlotlyGraphFigure:
             with self.fig.batch_update():
                 self.fig.update_yaxes(range=new_range)
             if update_ticklabels(new_range):
-                self.update_layout()
+                self._update_layout()
 
         self.y_slider.observe(update_y_range, names='value')
-        self.update_y_slider()
+        self._update_y_slider()
         update_ticklabels(totalrange)
 
-    def update_legend(self):
+    def _update_legend(self):
         if self.nGraphs == 1:
             return
 
@@ -343,27 +347,27 @@ class PlotlyGraphFigure:
                     self.layout_options["showlegend"] = False
         
 
-    def update_y_slider(self):
+    def _update_y_slider(self):
         """Updates the y-axis slider height and visibility."""
         if hasattr(self, 'y_slider'):
-            y_slider_height = self.calculate_y_slider_height()
+            y_slider_height = self._calculate_y_slider_height()
             if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
                 self.y_slider.layout.height = f'{y_slider_height}px'
             visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
             if self.y_slider.layout.visibility != visible:
                 self.y_slider.layout.visibility = visible
 
-    def calculate_y_slider_height(self):
-        return int(0.875 * self.get_height() - 165)
+    def _calculate_y_slider_height(self):
+        return int(0.875 * self._get_height() - 165)
     
-    def get_height(self):
+    def _get_height(self):
         """Returns the current height of the figure."""
         if self.overlapping and not self.compress:
             return self.default_height
         else:
             return self.height
     
-    def create_annotations(self, annotation_data, x_range):
+    def _create_annotations(self, annotation_data, x_range):
         """Updates the graph annotations."""
         if annotation_data is None:
             return
@@ -463,10 +467,10 @@ class PlotlyGraphFigure:
             )
         """
 
-        self.update_layout_options_list("shapes", shapes)
-        self.update_layout_options_list("annotations", annotations)
+        self._update_layout_options_list("shapes", shapes)
+        self._update_layout_options_list("annotations", annotations)
 
-    def create_anntotation_intervals(self, annotation_interavals_data, x_range):
+    def _create_annotation_intervals(self, annotation_interavals_data, x_range):
         """Updates the graph annotation intervals."""
         if annotation_interavals_data is None:
             return
@@ -549,10 +553,10 @@ class PlotlyGraphFigure:
                 yanchor="top"
             ))
 
-        self.update_layout_options_list("shapes", shapes)
-        self.update_layout_options_list("annotations", annotations)
+        self._update_layout_options_list("shapes", shapes)
+        self._update_layout_options_list("annotations", annotations)
 
-    def format_annotations(self):
+    def _format_annotations(self):
         """Formats existing annotations to have consistent style."""
         if "annotations" not in self.layout_options:
             return
@@ -601,22 +605,22 @@ class PlotlyGraphFigure:
                     y = 0
                 current["y"] = y
 
-    def manage_axis_units(self):
+    def _manage_axis_units(self):
         """If all x-axes have the same units, move it to the last axis only."""
         if self.compress:
             if self.data.common_units_x is not None:
-                self.update_layout_options_dict("xaxis", dict(
+                self._update_layout_options_dict("xaxis", dict(
                     title=self.data.common_units_x.__str__()
                 ))
             if self.data.common_units_y is not None:
-                self.update_layout_options_dict("yaxis", dict(
+                self._update_layout_options_dict("yaxis", dict(
                     title=self.data.common_units_y.__str__()
                 ))
         else:
             if self.data.common_units_x is not None:
                 # Clear all units except the last one
                 for i in range(1, self.nGraphs):
-                    self.update_layout_options_dict(f"xaxis{i}", dict(title=None))
+                    self._update_layout_options_dict(f"xaxis{i}", dict(title=None))
 
     def update_jupyterlab_theme(self, theme_name):
         """Updates the Plotly figure theme based on JupyterLab theme name."""
@@ -638,7 +642,7 @@ class PlotlyGraphFigure:
             )
             PlotlyGraphFigure.ipython_display(hbox)
 
-    def getSubplotHeight(self, height=None):
+    def _getSubplotHeight(self, height=None):
         """Returns the height of each subplot in pixels."""
         if self.nGraphs == 0:
             return 0
@@ -656,8 +660,10 @@ class PlotlyGraphFigure:
     def isDownscaled(self):
         return self.data.is_downscaled
     
+    def isDefaultZeroBased(self):
+        return self.data.is_default_zero_based
+    
 class PlotlyGraphDataType:
-    import warnings
 
     def __init__(self, data, **kwargs):
         if data is None:
@@ -723,11 +729,10 @@ class PlotlyGraphDataType:
                 self.y = list(self.y)
 
         except Exception as e:
-            self.warnings.warn(f"Error extracting data for trace '{self.name}': {e}")
+            PlotlyUtils.print_warning(f"Error extracting data for trace '{self.name}': {e}")
             self.x, self.y = None, None
 
 class PlotlyGraphDataTypeList():
-    import warnings
     import numpy as np
 
     def __init__(self, data):
@@ -744,14 +749,14 @@ class PlotlyGraphDataTypeList():
                         d = PlotlyGraphDataType(d)
                     self.data_list.append(d)
                 except Exception as e:
-                    self.warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
+                    PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
         else:
             try:
                 if not isinstance(data, PlotlyGraphDataType):
                     data = PlotlyGraphDataType(data)
                 self.data_list = [data]
             except Exception as e:
-                self.warnings.warn(f"Failed to convert data to PlotlyGraphDataType: {e}")
+                PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
 
     def is_trace_list(self,data_list):
         """
@@ -779,19 +784,75 @@ class PlotlyGraphDataTypeList():
     
     def concat(self, plotlyGraphDataTypeList):
         self.data_list += plotlyGraphDataTypeList.data_list
+
+    def lttb_downsample(self,x, y, threshold):
+        threshold = int(threshold)
+        n = len(x)
+        if threshold >= n or threshold == 0:
+            return x, y
+
+        sampled_x = self.np.empty(threshold)
+        sampled_y = self.np.empty(threshold)
+
+        # always keep first point
+        sampled_x[0] = x[0]
+        sampled_y[0] = y[0]
+
+        bucket_size = (n - 2) / (threshold - 2)
+
+        a = 0  # index of previously selected point
+
+        for i in range(1, threshold - 1):
+
+            start = int(self.np.floor((i - 1) * bucket_size)) + 1
+            end   = int(self.np.floor(i * bucket_size)) + 1
+
+            next_start = end
+            next_end   = int(self.np.floor((i + 1) * bucket_size)) + 1
+            next_end   = min(next_end, n)
+
+            # average point of next bucket
+            avg_x = self.np.mean(x[next_start:next_end])
+            avg_y = self.np.mean(y[next_start:next_end])
+
+            bx = x[start:end]
+            by = y[start:end]
+
+            ax = x[a]
+            ay = y[a]
+
+            # triangle area calculation (vectorized)
+            area = self.np.abs(
+                (ax - avg_x) * (by - ay) -
+                (ax - bx)    * (avg_y - ay)
+            )
+
+            idx = self.np.argmax(area)
+            a = start + idx
+
+            sampled_x[i] = x[a]
+            sampled_y[i] = y[a]
+
+        # keep last point
+        sampled_x[-1] = x[-1]
+        sampled_y[-1] = y[-1]
+
+        return sampled_x, sampled_y
     
-    def normalize(self, x_range, offset_traces, shift_to_0, max_points):
+    def normalize(self, x_range, offset_traces_on_compress, shift_to_0, max_points):
         """
         Tries to normalize units to first unit found
+        Shifts all graphs to 0 if shift_to_0 is True and minX is not already close to 0
         Filters out all points outside of x_range if x_range is not None
         Decreases number of points if there are to many
-        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY
+        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY, is_default_zero_based, nGraphs, compress
         """
 
         nPoints = 0
         first = True
         common_units_x = None
         filtered = []
+        is_default_zero_based = True
         for data in self.data_list:
             units_x = None
             units_y = None
@@ -802,7 +863,7 @@ class PlotlyGraphDataTypeList():
             x_length = len(x_values)
             y_length = len(y_values)
             if data.x is None or data.y is None or x_length == 0 or y_length == 0 or x_length != y_length:
-                self.warnings.warn(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
+                PlotlyUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
                 continue
 
             if first:
@@ -824,8 +885,13 @@ class PlotlyGraphDataTypeList():
                 else:
                     common_units_x = None
 
-            if shift_to_0:
-                x_values = x_values - x_values.min()
+            minX = x_values.min()
+            if minX > 1e-9 or minX < -1e-9:
+                is_default_zero_based = False
+                if shift_to_0:
+                    x_values = x_values - minX
+                    minX = 0
+            data.minX = minX
 
             #Filter out of x_range
             if x_range is not None:
@@ -836,7 +902,7 @@ class PlotlyGraphDataTypeList():
 
             x_length = len(x_values)
             if x_length == 0:
-                self.warnings.warn(f"Skipping trace '{data.name}' because there is no data in the range")
+                PlotlyUtils.print_warning(f"Skipping trace '{data.name}' because there is no data after filtering by x_range.")
                 continue
             filtered.append(data)
 
@@ -847,8 +913,9 @@ class PlotlyGraphDataTypeList():
             data.x = x_values
             data.y = y_values
 
+        self.is_default_zero_based = is_default_zero_based
         if len(filtered) == 0:
-            self.warnings.warn("There is no valid data selected")
+            PlotlyUtils.print_warning("No valid data to display after normalization and filtering.")
             self.common_units_x = None
             self.common_units_y = None
             self.minX = 0
@@ -861,13 +928,11 @@ class PlotlyGraphDataTypeList():
         self.data_list = filtered
         self.common_units_x = common_units_x
 
-        #Calculate how many points to skip
-        skipFactor = int(self.np.ceil(nPoints / max_points))
-        skipFactor = max(skipFactor, 1)
-        max_points_per_graph = max_points / len(self.data_list)
-
-        if skipFactor > 1:
+        self.nGraphs = len(self.data_list)
+        self.compress = self.nGraphs > 10
+        if nPoints > max_points:
             self.is_downscaled = True
+            max_points_per_graph = max_points / self.nGraphs
         else:
             self.is_downscaled = False
         
@@ -881,10 +946,8 @@ class PlotlyGraphDataTypeList():
             x_values = data.x
             y_values = data.y
 
-            if self.is_downscaled and len(x_values)>max_points_per_graph:
-                #Reduce number of points
-                x_values = x_values[::skipFactor]
-                y_values = y_values[::skipFactor]
+            if self.is_downscaled:
+                x_values, y_values = self.lttb_downsample(x_values, y_values, max_points_per_graph)
 
             if index == 0:
                 if hasattr(data, "units_y"):
@@ -902,21 +965,23 @@ class PlotlyGraphDataTypeList():
                 else:
                     common_units_y = None
 
-            should_find_minX = not shift_to_0 or x_range is not None
+            should_find_new_minX = x_range is not None
             if index == 0:
-                if should_find_minX:
+                if should_find_new_minX:
                     minX = x_values.min()
+                else:
+                    minX = data.minX
                 minY = y_values.min()
                 maxX = x_values.max()
                 maxY = y_values.max()
                 previous_maxY = maxY
             else:
-                temp_minX = x_values.min() if should_find_minX else 0
+                temp_minX = x_values.min() if should_find_new_minX else data.minX
                 temp_minY = y_values.min()
                 temp_maxX = x_values.max()
                 temp_maxY = y_values.max()
 
-                if offset_traces:
+                if self.compress and offset_traces_on_compress:
                     offset = previous_maxY - temp_minY
                     span = (temp_maxY - temp_minY)
                     if span < 1e-9:
@@ -929,7 +994,7 @@ class PlotlyGraphDataTypeList():
                     temp_maxY += offset
                     previous_maxY = temp_maxY
 
-                if should_find_minX:
+                if should_find_new_minX or not shift_to_0:
                     if temp_minX < minX:
                         minX = temp_minX
                 if temp_minY < minY:

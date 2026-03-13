@@ -35,7 +35,6 @@ dependencies = [
 "jupyterlab-pygments",
 "jupyterlab-server",
 "jupyterlab-widgets",
-"matplotlib",
 "nodejs",
 "numpy",
 "pip",
@@ -54,7 +53,8 @@ test = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
-    "pytest-tornasync"
+    "pytest-tornasync",
+    "matplotlib"
 ]
 
 [tool.hatch.version]
