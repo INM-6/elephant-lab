@@ -86,6 +86,15 @@ class Jupyphant_plot:
             "color_grade": "Viridis"
         }
 
+    def _close_figure(self, plot_key):
+        plot_dict = self.plots[plot_key]
+        if plot_dict["fig"] is not None:
+            plot_dict["fig"]=None
+            output = plot_dict["output"]
+            with output:
+                Jupyphant_plot.clear_output()
+            output.layout.display = 'none'
+
     def _raw_plot(self):
         neo_object_dict = None
         selection_changed = not any(v["changed"] for v in self.plots.values())
@@ -125,30 +134,27 @@ class Jupyphant_plot:
 
             plot_dict = self.plots[plot_key]
             if all(empty_dict[k] for k in primary_keys):
-                if plot_dict["fig"] is not None:
-                    plot_dict["fig"]=None
-                    output = plot_dict["output"]
-                    with output:
-                        Jupyphant_plot.clear_output()
-                        output.layout.display = 'none'
+                self._close_figure(plot_key)
             else:
                 all_keys = primary_keys + secondary_keys
                 if plot_dict["changed"] or (selection_changed and any(change_dict[k] for k in all_keys)):
                     output = plot_dict["output"]
-                    with output:
-                        if plot_dict["fig"] is not None:
+                    if plot_dict["fig"] is not None:
+                        with output:
                             Jupyphant_plot.clear_output(wait=True)
-                        else:
-                            output.layout.display = 'block'
-                        loading = self.HTML("⏳ <b>Rendering plots...</b>")
+                    else:
+                        output.layout.display = 'block'
+                    loading = self.HTML("⏳ <b>Rendering plots...</b>")
+                    with output:
                         Jupyphant_plot.display(loading)
                         Jupyphant_plot.clear_output(wait=True)
-                        plot_kwargs = {
-                            key.value: self.previous_neo_object_dict[key]
-                            for key in all_keys if not empty_dict[key]
-                        }
-                        fig = plot_method(**plot_kwargs)
-                        plot_dict["fig"]=fig
+                    plot_kwargs = {
+                        key.value: self.previous_neo_object_dict[key]
+                        for key in all_keys if not empty_dict[key]
+                    }
+                    fig = plot_method(**plot_kwargs)
+                    plot_dict["fig"]=fig
+                    with output:
                         fig.display()
             plot_dict["changed"] = False
 
@@ -160,11 +166,7 @@ class Jupyphant_plot:
         if all(empty_dict[key] for key in keys_that_also_display_events):
             create_plot(self.RawPlotKey.RAW_EVENT, self._create_annotation_plot, [self.NeoKey.event, self.NeoKey.epoch], keys_that_also_display_events)
         else:
-            plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
-            if plot_dict["fig"] is not None:
-                plot_dict["fig"]=None
-                with plot_dict["output"]:
-                    Jupyphant_plot.clear_output()
+            self._close_figure(self.RawPlotKey.RAW_EVENT)
 
         create_plot(self.PLOT_IMGSEQUENCE, self._create_image_sequence, self.NeoKey.imagesequence)
 
