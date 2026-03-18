@@ -8,6 +8,7 @@ class Jupyphant_plot:
     import numpy as np
     from ipywidgets import Output, HTML
     from IPython.display import clear_output, display
+    from ipykernel.comm import Comm
 
     from typing import TypedDict, TYPE_CHECKING
 
@@ -52,8 +53,7 @@ class Jupyphant_plot:
         #   - changed: True if any value in the dict has changed, False otherwise;
         #              used to track if changes where by selecting different nodes or changing #              the settings (e.g., overlap)
         return {
-            "fig": None,
-            "output": self.Output(layout={'width': "100%", 'height': 'auto'}),
+            "is_plotted": False,
             "changed": False,
         }
 
@@ -70,6 +70,8 @@ class Jupyphant_plot:
             str,
             Jupyphant_plot.RawPlotDict | Jupyphant_plot.ImageSequencePlotDict
         ] = {}
+        self.update_counter = 0
+        self.comm = self.Comm(target_name="plot_channel")
 
         #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
         for key in self.RawPlotKey:
@@ -86,14 +88,40 @@ class Jupyphant_plot:
             "color_grade": "Viridis"
         }
 
-    def _close_figure(self, plot_key):
-        plot_dict = self.plots[plot_key]
-        if plot_dict["fig"] is not None:
-            plot_dict["fig"]=None
-            output = plot_dict["output"]
-            with output:
-                Jupyphant_plot.clear_output()
-            output.layout.display = 'none'
+    def _plot_configs(self):
+        return [
+        (
+            self.RawPlotKey.RAW_ST,
+            self._create_rasterplot,
+            [self.NeoKey.spiketrain],
+            [self.NeoKey.event, self.NeoKey.epoch],
+        ),
+        (
+            self.RawPlotKey.RAW_ANASIG,
+            self._create_lfpplot,
+            [self.NeoKey.analogsignal, self.NeoKey.irregularsignal],
+            [self.NeoKey.event, self.NeoKey.epoch],
+        ),
+        (
+            self.PLOT_IMGSEQUENCE,
+            self._create_image_sequence,
+            [self.NeoKey.imagesequence],
+            [],
+        ),
+        (
+            self.RawPlotKey.RAW_EVENT,
+            self._create_annotation_plot,
+            [self.NeoKey.event, self.NeoKey.epoch],
+            self._keys_that_also_display_events(),
+        )
+    ]
+
+    def _keys_that_also_display_events(self):
+        return [
+            self.NeoKey.spiketrain,
+            self.NeoKey.analogsignal,
+            self.NeoKey.irregularsignal,
+        ]
 
     def _raw_plot(self):
         neo_object_dict = None
@@ -126,56 +154,97 @@ class Jupyphant_plot:
         for key, current_set in self.previous_neo_object_dict.items():
             empty_dict[key] = len(current_set) == 0
 
-        def create_plot(plot_key, plot_method, primary_keys, secondary_keys=[]):
+        plots_to_remove = set()
+        plots_to_update = []
+
+        def should_update(plot_key, primary_keys, secondary_keys):
             if not isinstance(primary_keys, list):
                 primary_keys = [primary_keys]
             if not isinstance(secondary_keys, list):
                 secondary_keys = [secondary_keys]
 
             plot_dict = self.plots[plot_key]
+
+            if plot_key == self.RawPlotKey.RAW_EVENT:
+                if not all(empty_dict[key] for key in self._keys_that_also_display_events()):
+                    plots_to_remove.add(plot_key)
+                    return False
+
+            # Case 1: nothing to show → close plot
             if all(empty_dict[k] for k in primary_keys):
-                self._close_figure(plot_key)
-            else:
-                all_keys = primary_keys + secondary_keys
-                if plot_dict["changed"] or (selection_changed and any(change_dict[k] for k in all_keys)):
-                    output = plot_dict["output"]
-                    if plot_dict["fig"] is not None:
-                        with output:
-                            Jupyphant_plot.clear_output(wait=True)
-                    else:
-                        output.layout.display = 'block'
-                    loading = self.HTML("⏳ <b>Rendering plots...</b>")
-                    with output:
-                        Jupyphant_plot.display(loading)
-                        Jupyphant_plot.clear_output(wait=True)
-                    plot_kwargs = {
-                        key.value: self.previous_neo_object_dict[key]
-                        for key in all_keys if not empty_dict[key]
-                    }
-                    fig = plot_method(**plot_kwargs)
-                    plot_dict["fig"]=fig
-                    with output:
-                        fig.display()
+                plots_to_remove.add(plot_key)
+                return False
+
+            # Case 2: needs update
+            all_keys = primary_keys + secondary_keys
+            if plot_dict["changed"] or (
+                selection_changed and any(change_dict[k] for k in all_keys)
+            ):
+                return True
+
+            return False
+
+        plot_configs = self._plot_configs()
+
+        for plot_key, method, primary_keys, secondary_keys in plot_configs:
+            if should_update(plot_key, primary_keys, secondary_keys):
+                plots_to_update.append((plot_key, method, primary_keys, secondary_keys))
+
+        # -------- only remove the ones that are already plotted --------
+        filtered_plots_to_remove = set()
+        for plot_key in plots_to_remove:
+            plot_dict = self.plots[plot_key]
+            if plot_dict['is_plotted']:
+                plot_dict['is_plotted'] = False
+                filtered_plots_to_remove.add(plot_key)
+        plots_to_remove = filtered_plots_to_remove
+
+        # -------- notify frontend (loading state) --------
+        if plots_to_remove:
+            self.comm.send({
+                "type": "plots_remove",
+                "plots": [...]
+            })
+
+        if plots_to_update:
+            self.comm.send({
+                "type": "plots_loading",
+                "plots": [...]
+            })
+
+        # -------- compute --------
+        updated_figs = {}
+
+        for plot_key, method, primary_keys, secondary_keys in plots_to_update:
+            plot_dict = self.plots[plot_key]
+
+            all_keys = primary_keys + secondary_keys
+
+            plot_kwargs = {
+                key.value: self.previous_neo_object_dict[key]
+                for key in all_keys if not empty_dict[key]
+            }
+
+            fig = method(**plot_kwargs)
+            plot_dict["is_plotted"] = True
+
+            # store JSON for batch send
+            updated_figs[plot_key.value] = fig.to_dict()
+
             plot_dict["changed"] = False
 
-        create_plot(self.RawPlotKey.RAW_ST, self._create_rasterplot, self.NeoKey.spiketrain, [self.NeoKey.event, self.NeoKey.epoch])
-
-        create_plot(self.RawPlotKey.RAW_ANASIG, self._create_lfpplot, [self.NeoKey.analogsignal, self.NeoKey.irregularsignal], [self.NeoKey.event, self.NeoKey.epoch])
-
-        keys_that_also_display_events = [self.NeoKey.spiketrain, self.NeoKey.analogsignal, self.NeoKey.irregularsignal]
-        if all(empty_dict[key] for key in keys_that_also_display_events):
-            create_plot(self.RawPlotKey.RAW_EVENT, self._create_annotation_plot, [self.NeoKey.event, self.NeoKey.epoch], keys_that_also_display_events)
-        else:
-            self._close_figure(self.RawPlotKey.RAW_EVENT)
-
-        create_plot(self.PLOT_IMGSEQUENCE, self._create_image_sequence, self.NeoKey.imagesequence)
+        # -------- send updated figures --------
+        current_update_id = self.update_counter
+        if updated_figs:
+            self.comm.send({
+                "type": "plots_update",
+                "update_id": current_update_id,
+                "plots": updated_figs
+            })
+        self.update_counter += 1
 
 
     def create_explorer_raw_plot(self):
-        for plot_dict in self.plots.values():
-            output = plot_dict["output"]
-            Jupyphant_plot.display(output)
-            output.layout.display = 'none'
         self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self._raw_plot)
 
     def set_raw_plot_overlap(self, overlap):
