@@ -40,15 +40,15 @@ class Jupyphant_plot:
         x_range: list[float] | None
         max_points: int
         zero_based: bool
+        is_default_zero_based: bool
+        is_downscaled: bool
     
     class ImageSequencePlotDict(DefaultPlotDict):
         color_grade: str
 
     def _base_plot_dict(self) -> Jupyphant_plot.DefaultPlotDict:
         # Add all required options to each plot:
-        #   - fig: a wrapper of the figure with extra functionality (needs fig.display())
-        #   - output: the output area where the figure is displayed;
-        #             each figure has its own output so it can be cleared separately
+        #   - is_plotted: Is the plot plotted
         #   - changed: True if any value in the dict has changed, False otherwise;
         #              used to track if changes where by selecting different nodes or changing #              the settings (e.g., overlap)
         return {
@@ -80,7 +80,9 @@ class Jupyphant_plot:
                 "og_x_range": None,
                 "x_range": None,
                 "max_points": 10000,
-                "zero_based": False
+                "zero_based": False,
+                "is_default_zero_based": True,
+                "is_downscaled": False
             }
         self.plots[self.PLOT_IMGSEQUENCE]= {
             **self._base_plot_dict(),
@@ -268,7 +270,7 @@ class Jupyphant_plot:
             if zero_based != plot_dict['zero_based']:
                 plot_dict['zero_based']=zero_based
                 is_plotted = plot_dict['is_plotted']
-                if not is_plotted or fig.isDefaultZeroBased():
+                if not is_plotted or plot_dict['is_default_zero_based']:
                     continue
                 plot_dict['og_x_range']=None
                 plot_dict['x_range']=None
@@ -301,7 +303,7 @@ class Jupyphant_plot:
         if reload:
             self._raw_plot()
 
-    def upscale_raw_plot(self, max_points):
+    def upscale_raw_plot(self, max_points, x_ranges):
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
@@ -312,12 +314,12 @@ class Jupyphant_plot:
             is_plotted = plot_dict['is_plotted']
             if not is_plotted:
                 continue
-            x_range = fig.getXRange()
             previous_x_range = plot_dict['x_range']
+            x_range = x_ranges[key.value]
             if not self.np.allclose(x_range, previous_x_range, atol=1e-1):
                 plot_dict['x_range']=x_range
                 temp_reload = True
-            if(not fig.isDownscaled()):
+            if(not plot_dict['is_downscaled']):
                 temp_reload = False
             plot_dict['changed']=temp_reload
             reload = reload or temp_reload
@@ -337,6 +339,14 @@ class Jupyphant_plot:
                 reload = True
         if reload:
             self._raw_plot()
+
+    def _set_plot_dict_for_raw_plot(self, plot_dict, fig: PlotlyGraphFigure):
+        x_range = fig.getXRange()
+        plot_dict['x_range']=x_range
+        if plot_dict['og_x_range'] is None:
+            plot_dict['og_x_range']=x_range
+        plot_dict['is_default_zero_based']=fig.isDefaultZeroBased()
+        plot_dict['is_downscaled']=fig.isDownscaled()
         
     def _create_rasterplot(self, spiketrain=None, event=None, epoch=None):
         data = [self.SpikeTrainRasterPlot(st) for st in spiketrain]
@@ -348,10 +358,7 @@ class Jupyphant_plot:
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
         fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
-        x_range = fig.getXRange()
-        plot_dict['x_range']=x_range
-        if plot_dict['og_x_range'] is None:
-            plot_dict['og_x_range']=x_range
+        self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
     def _create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
@@ -372,10 +379,7 @@ class Jupyphant_plot:
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
         fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points, shift_to_0=zero_based)
-        x_range = fig.getXRange()
-        plot_dict['x_range']=x_range
-        if plot_dict['og_x_range'] is None:
-            plot_dict['og_x_range']=x_range
+        self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
     
     def _create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
@@ -387,10 +391,7 @@ class Jupyphant_plot:
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
         fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
-        x_range = fig.getXRange()
-        plot_dict['x_range']=x_range
-        if plot_dict['og_x_range'] is None:
-            plot_dict['og_x_range']=x_range
+        self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
     def _create_image_sequence(self, imagesequence=None):
