@@ -923,6 +923,8 @@ class PlotlyGraphDataTypeList():
             self.maxX = 0
             self.maxY = 0
             self.is_downscaled = False
+            self.compress = False
+            self.nGraphs = 0
             self.data_list = [PlotlyGraphDataType(None)]
             return
         self.data_list = filtered
