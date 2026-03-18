@@ -22,14 +22,12 @@ export class PlotlyFrontend {
         this.session.kernel?.registerCommTarget(
             'plot_channel',
             (comm, msg) => {
-                console.log('comm opened', msg)
                 comm.onMsg = (msg) => this.handleCommMessage(msg);
             }
         );
     }
 
     private handleCommMessage(msg: KernelMessage.ICommMsgMsg) {
-        console.log('handle message', msg)
         const data = msg.content.data;
 
         switch (data.type) {
@@ -69,7 +67,6 @@ export class PlotlyFrontend {
 
         const container = document.createElement('div');
         container.classList.add('plot-container');
-        container.style.border = '2px solid blue';
         wrapper.appendChild(container);
 
         if (this.outputArea) {
@@ -122,9 +119,17 @@ export class PlotlyFrontend {
             // render plot
             Plotly.react(state.container, figJson.data, figJson.layout);
 
-            const ro = new ResizeObserver(entries => {
-                Plotly.Plots.resize(state!.container);
-            });
+            function safeResizePlot(container: HTMLDivElement) {
+                const rect = container.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    Plotly.Plots.resize(container);
+                } else {
+                    // Retry later when it becomes visible
+                    setTimeout(() => safeResizePlot(container), 100);
+                }
+            }
+
+            const ro = new ResizeObserver(() => safeResizePlot(state!.container));
 
             ro.observe(state.container);
 
