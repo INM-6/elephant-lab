@@ -69,6 +69,7 @@ export class PlotlyFrontend {
 
         const container = document.createElement('div');
         container.classList.add('plot-container');
+        container.style.border = '2px solid blue';
         wrapper.appendChild(container);
 
         if (this.outputArea) {
@@ -120,6 +121,12 @@ export class PlotlyFrontend {
 
             // render plot
             Plotly.react(state.container, figJson.data, figJson.layout);
+
+            const ro = new ResizeObserver(entries => {
+                Plotly.Plots.resize(state!.container);
+            });
+
+            ro.observe(state.container);
 
             state.updateId = updateId;
             state.isLoading = false;

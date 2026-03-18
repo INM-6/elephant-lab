@@ -55,15 +55,15 @@ class PlotlyGraphFigure:
         if self.nGraphs > 2:
             self.height = 800
         if self.compress:
-            self.fig = self.go.FigureWidget(self.go.Figure())
+            self.fig = self.go.Figure()
             self.ticktext=[]
         else:
-            self.fig = self.go.FigureWidget(PlotlyGraphFigure.make_subplots(
+            self.fig = PlotlyGraphFigure.make_subplots(
                 rows=self.nGraphs,
                 cols=1,
                 vertical_spacing=self.vertical_spacing,
                 shared_xaxes=True
-            ))
+            )
         self._create_graphs()
 
         if title is None:
