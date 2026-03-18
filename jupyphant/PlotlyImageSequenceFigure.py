@@ -52,7 +52,7 @@ class PlotlyImageSequenceFigure():
                             label="Play",
                             method="animate",
                             args=[None, {
-                                "frame": {"duration": image_sequence.frame_duration.rescale(self.pq.ms).magnitude, "redraw": True},
+                                "frame": {"duration": duration.rescale(self.pq.ms).magnitude / num_frames, "redraw": True},
                                 "fromcurrent": True,
                                 "transition": {"duration": 0}
                             }]

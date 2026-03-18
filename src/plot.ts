@@ -117,7 +117,11 @@ export class PlotlyFrontend {
             (state as any).loading.style.display = 'none';
 
             // render plot
-            Plotly.react(state.container, figJson.data, figJson.layout);
+            Plotly.react(state.container, figJson.data, figJson.layout).then((gd) => {
+                if (figJson.frames) {
+                    Plotly.addFrames(gd, figJson.frames);
+                }
+            });
 
             function safeResizePlot(container: HTMLDivElement) {
                 const rect = container.getBoundingClientRect();
