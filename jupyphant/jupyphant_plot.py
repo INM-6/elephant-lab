@@ -89,6 +89,11 @@ class Jupyphant_plot:
             "color_grade": "Viridis"
         }
 
+    def _string_key(self, plot_key):
+        if isinstance(plot_key, str):
+            return plot_key
+        return plot_key.value
+
     def _plot_configs(self):
         return [
         (
@@ -204,13 +209,13 @@ class Jupyphant_plot:
         if plots_to_remove:
             self.comm.send({
                 "type": "plots_remove",
-                "plots": [...]
+                "plots": [self._string_key(plot_key) for plot_key in plots_to_remove]
             })
 
         if plots_to_update:
             self.comm.send({
                 "type": "plots_loading",
-                "plots": [...]
+                "plots": [self._string_key(plot_key)  for plot_key, *_ in plots_to_update]
             })
 
         # -------- compute --------
@@ -222,7 +227,7 @@ class Jupyphant_plot:
             all_keys = primary_keys + secondary_keys
 
             plot_kwargs = {
-                key.value: self.previous_neo_object_dict[key]
+                self._string_key(key) : self.previous_neo_object_dict[key]
                 for key in all_keys if not empty_dict[key]
             }
 
@@ -230,7 +235,7 @@ class Jupyphant_plot:
             plot_dict["is_plotted"] = True
 
             # store JSON for batch send
-            updated_figs[plot_key.value] = fig.to_dict()
+            updated_figs[self._string_key(plot_key) ] = fig.to_dict()
 
             plot_dict["changed"] = False
 
@@ -244,10 +249,16 @@ class Jupyphant_plot:
             })
         self.update_counter += 1
 
+    def on_selection_changed(self):
+        try:
+            self._raw_plot()
+        except Exception as e:
+            if self.comm:
+                self.comm.send({"type": "error", "message": str(e)})
 
     def create_explorer_raw_plot(self):
         self.comm = self.Comm(target_name="plot_channel")
-        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self._raw_plot)
+        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
 
     def set_raw_plot_overlap(self, overlap):
         reload = False
@@ -297,7 +308,7 @@ class Jupyphant_plot:
             return
         self.jupyterlab_theme = theme_name
         reload = False
-        for plot_dict in self.plots.values:
+        for plot_dict in self.plots.values():
             if plot_dict['is_plotted']:
                 plot_dict['changed'] = True
                 reload = True

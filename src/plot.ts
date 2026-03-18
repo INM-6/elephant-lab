@@ -58,19 +58,26 @@ export class PlotlyFrontend {
         }
     }
 
-    private getContainer(): HTMLDivElement {
+    private getContainer(): { wrapper: HTMLDivElement; container: HTMLDivElement; loading: HTMLDivElement } {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('plot-wrapper');
+
+        const loading = document.createElement('div');
+        loading.classList.add('plot-loading');
+        loading.innerHTML = '⏳ <b>Loading...</b>';
+        wrapper.appendChild(loading);
+
         const container = document.createElement('div');
         container.classList.add('plot-container');
+        wrapper.appendChild(container);
 
         if (this.outputArea) {
-            // Render inside the output area's node
-            this.outputArea.node.appendChild(container);
+            this.outputArea.node.appendChild(wrapper);
         } else {
-            // Fallback to body
-            document.body.appendChild(container);
+            document.body.appendChild(wrapper);
         }
 
-        return container;
+        return { wrapper, container, loading };
     }
 
     private handleRemove(plotKeys: string[]) {
@@ -87,14 +94,13 @@ export class PlotlyFrontend {
         plotKeys.forEach((key) => {
             let state = this.plots.get(key);
             if (!state) {
-                const container = this.getContainer();
-                container.innerHTML = '⏳ <b>Loading...</b>';
+                const { container, loading } = this.getContainer();
                 state = { container, isLoading: true, updateId: -1 };
+                // store loading div reference
+                (state as any).loading = loading;
                 this.plots.set(key, state);
-            } else {
-                state.container.innerHTML = '⏳ <b>Loading...</b>';
-                state.isLoading = true;
             }
+            (state as any).loading.style.display = 'block';
         });
     }
 
@@ -102,19 +108,17 @@ export class PlotlyFrontend {
         Object.entries(figs).forEach(([key, figJson]) => {
             let state = this.plots.get(key);
 
-            // Ignore stale updates
-            if (state && state.updateId >= updateId) {
-                return;
-            }
-
-            // Create container if missing
             if (!state) {
-                const container = this.getContainer();
+                const { container, loading } = this.getContainer();
                 state = { container, isLoading: false, updateId };
+                (state as any).loading = loading;
                 this.plots.set(key, state);
             }
 
-            // Render or update plot
+            // hide loading indicator
+            (state as any).loading.style.display = 'none';
+
+            // render plot
             Plotly.react(state.container, figJson.data, figJson.layout);
 
             state.updateId = updateId;
