@@ -22,12 +22,14 @@ export class PlotlyFrontend {
         this.session.kernel?.registerCommTarget(
             'plot_channel',
             (comm, msg) => {
+                console.log('comm opened', msg)
                 comm.onMsg = (msg) => this.handleCommMessage(msg);
             }
         );
     }
 
     private handleCommMessage(msg: KernelMessage.ICommMsgMsg) {
+        console.log('handle message', msg)
         const data = msg.content.data;
 
         switch (data.type) {

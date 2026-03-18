@@ -3,7 +3,6 @@ class PlotlyImageSequenceFigure():
     import numpy as np
     import quantities as pq
     from neo.core import ImageSequence
-    from IPython.display import display as ipython_display
 
     def __init__(self, image_sequences, title=None, theme_name='plotly_dark', color_scale='Viridis'):
         """
@@ -67,6 +66,6 @@ class PlotlyImageSequenceFigure():
                 ) for k in range(num_frames)]
             ))
 
-    def display(self):
+    def to_dict(self):
         for fig in self.figs:
-            PlotlyImageSequenceFigure.ipython_display(fig)
+            return fig.to_dict()

@@ -83,6 +83,8 @@ class JupyphantExtension {
 	private docManager: IDocumentManager;
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
+	// @ts-ignore
+	private plotlyFrontend: PlotlyFrontend | null;
 
 
 	// Construct a new JupyphantExtension
@@ -105,6 +107,7 @@ class JupyphantExtension {
 		this.outarea_neo_tree = null;
 		this.output_tabs = null;
 		this.kernelBridge = null;
+		this.plotlyFrontend = null;
 	}; // end of constructor()
 
 
@@ -124,8 +127,8 @@ class JupyphantExtension {
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerInfo, this.outarea_nodeexplorer_info!);
+			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
-			new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Jupyphant: FAILED to initialize kernel state:", error);

@@ -70,7 +70,7 @@ class Jupyphant_plot:
             Jupyphant_plot.RawPlotDict | Jupyphant_plot.ImageSequencePlotDict
         ] = {}
         self.update_counter = 0
-        self.comm = self.Comm(target_name="plot_channel")
+        self.comm: "Jupyphant_plot.Comm" = None
 
         #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
         for key in self.RawPlotKey:
@@ -226,7 +226,7 @@ class Jupyphant_plot:
                 for key in all_keys if not empty_dict[key]
             }
 
-            fig = method(**plot_kwargs)
+            fig: Jupyphant_plot.PlotlyGraphFigure | Jupyphant_plot.PlotlyImageSequenceFigure = method(**plot_kwargs)
             plot_dict["is_plotted"] = True
 
             # store JSON for batch send
@@ -246,6 +246,7 @@ class Jupyphant_plot:
 
 
     def create_explorer_raw_plot(self):
+        self.comm = self.Comm(target_name="plot_channel")
         self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self._raw_plot)
 
     def set_raw_plot_overlap(self, overlap):

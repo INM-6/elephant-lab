@@ -25,8 +25,7 @@ class PlotlyUtils:
 class PlotlyGraphFigure:
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
-    from IPython.display import display as ipython_display
-    from ipywidgets import HBox, Layout, Output, FloatRangeSlider
+    from ipywidgets import HBox, FloatRangeSlider
 
 
     def __init__(self, data, overlapping=False, title=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=False, max_points=10000):
@@ -629,18 +628,10 @@ class PlotlyGraphFigure:
         else:
             self.fig.update_layout(template="plotly_white")
 
-    def display(self):
+    def to_dict(self):
         """Displays the Plotly figure in a Jupyter notebook."""
         if self.fig:
-            output_fig = self.Output(layout={'width': "100%", 'height': 'auto', 'min_width': '0px'})
-            with output_fig:
-                PlotlyGraphFigure.ipython_display(self.fig)
-            hbox = self.HBox([self.y_slider, output_fig], 
-                layout=self.Layout(
-                    width='100%',
-                ),
-            )
-            PlotlyGraphFigure.ipython_display(hbox)
+            return self.fig.to_dict()
 
     def _getSubplotHeight(self, height=None):
         """Returns the height of each subplot in pixels."""
