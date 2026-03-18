@@ -31,8 +31,7 @@ class Jupyphant_plot:
     PLOT_IMGSEQUENCE = 'raw_imgsequence'
 
     class DefaultPlotDict(TypedDict):
-        fig: Jupyphant_plot.PlotlyGraphFigure | Jupyphant_plot.PlotlyImageSequenceFigure | None
-        output: Jupyphant_plot.Output
+        is_plotted: bool
         changed: bool
 
     class RawPlotDict(DefaultPlotDict):
@@ -254,16 +253,11 @@ class Jupyphant_plot:
             if overlap == plot_dict['overlapping']:
                 continue
             plot_dict['overlapping']=overlap
-            fig = plot_dict['fig']
-            if fig is None:
+            is_plotted = plot_dict['is_plotted']
+            if not is_plotted:
                 continue
-            if overlap:
-                fig.overlap()
-            else:
-                fig.stack()
-            if fig.compress and fig.overlap_on_compress:
-                plot_dict['changed']=True
-                reload = True
+            plot_dict['changed']=True
+            reload = True
         if reload:
             self._raw_plot()
     
@@ -273,8 +267,8 @@ class Jupyphant_plot:
             plot_dict = self.plots[key]
             if zero_based != plot_dict['zero_based']:
                 plot_dict['zero_based']=zero_based
-                fig = plot_dict['fig']
-                if fig is None or fig.isDefaultZeroBased():
+                is_plotted = plot_dict['is_plotted']
+                if not is_plotted or fig.isDefaultZeroBased():
                     continue
                 plot_dict['og_x_range']=None
                 plot_dict['x_range']=None
@@ -288,8 +282,8 @@ class Jupyphant_plot:
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         if color_grade != plot_dict['color_grade']:
             plot_dict['color_grade']=color_grade
-            fig = plot_dict['fig']
-            if fig:
+            is_plotted = plot_dict['is_plotted']
+            if is_plotted:
                 plot_dict['changed']=True
                 reload = True
         if reload:
@@ -299,13 +293,12 @@ class Jupyphant_plot:
         if self.jupyterlab_theme == theme_name:
             return
         self.jupyterlab_theme = theme_name
-        for key in self.RawPlotKey:
-            fig = self.plots[key]['fig']
-            if fig is not None:
-                fig.update_jupyterlab_theme(theme_name)
-        plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
-        if plot_dict['fig'] is not None:
-            plot_dict['changed']=True
+        reload = False
+        for plot_dict in self.plots.values:
+            if plot_dict['is_plotted']:
+                plot_dict['changed'] = True
+                reload = True
+        if reload:
             self._raw_plot()
 
     def upscale_raw_plot(self, max_points):
@@ -316,8 +309,8 @@ class Jupyphant_plot:
             if(max_points != plot_dict['max_points']):
                 plot_dict['max_points']=max_points
                 temp_reload = True
-            fig = plot_dict['fig']
-            if fig is None:
+            is_plotted = plot_dict['is_plotted']
+            if not is_plotted:
                 continue
             x_range = fig.getXRange()
             previous_x_range = plot_dict['x_range']
@@ -335,8 +328,8 @@ class Jupyphant_plot:
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
-            fig = plot_dict['fig']
-            if fig is None:
+            is_plotted = plot_dict['is_plotted']
+            if not is_plotted:
                 continue
             if not self.np.allclose(plot_dict['og_x_range'], plot_dict['x_range'], atol=1e-1):
                 plot_dict['x_range']=plot_dict['og_x_range']
