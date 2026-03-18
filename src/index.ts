@@ -63,6 +63,7 @@ import '../style/index.css';
 import '../style/base.css'
 import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
+import { PlotlyFrontend } from './plot';
 import jupyphantLogo from '../doc/Jupyphant-Logo.png';
 
 class JupyphantExtension {
@@ -124,6 +125,7 @@ class JupyphantExtension {
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerInfo, this.outarea_nodeexplorer_info!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
+			new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Jupyphant: FAILED to initialize kernel state:", error);
