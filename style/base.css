@@ -160,3 +160,18 @@
 .jp-visible {
   display: flex !important;
 }
+
+.my-slider.noUi-target {
+  background: #124c7a;
+  border: none;
+}
+
+.my-slider .noUi-connect {
+  background: #1e7fcc;
+  border: none;
+}
+
+.my-slider .noUi-handle {
+  background: #ffffff;
+  border: none;
+}

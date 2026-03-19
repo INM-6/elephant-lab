@@ -631,7 +631,10 @@ class PlotlyGraphFigure:
     def to_dict(self):
         """Displays the Plotly figure in a Jupyter notebook."""
         if self.fig:
-            return self.fig.to_dict()
+            fig_dict = self.fig.to_dict()
+            if((self.overlapping or self.compress or self.nGraphs==1) and self.data.maxY - self.data.minY > 1e-9):
+                fig_dict['y_slider']= (self.data.minY, self.data.maxY)
+            return fig_dict
 
     def _getSubplotHeight(self, height=None):
         """Returns the height of each subplot in pixels."""
