@@ -211,6 +211,45 @@ class JupyphantExtension {
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
 
+
+		// Handle HTML tree interactions (expand/collapse + selection)
+		this.outarea_neo_tree!.node.addEventListener('click', (e) => {
+			const target = e.target as HTMLElement;
+
+			// Expand/collapse -> pure JS 
+			const toggle = target.closest('.jup-toggle') as HTMLElement;
+			if (toggle) {
+				const row = toggle.closest('.jup-row') as HTMLElement;
+				const children = row?.nextElementSibling as HTMLElement;
+				if (children?.classList.contains('jup-children')) {
+					const isOpen = children.classList.contains('jup-open');
+					children.classList.toggle('jup-open', !isOpen);
+					toggle.innerHTML = isOpen ? '<i class="fa fa-plus"></i>' : '<i class="fa fa-minus"></i>';
+				}
+				return;
+			}
+
+			// Selection -> tell Python which node was clicked
+			const row = target.closest('.jup-row[data-node-id]') as HTMLElement;
+			if (row) {
+				const nodeId = row.getAttribute('data-node-id');
+				const multiSelect = e.ctrlKey || e.metaKey;
+
+				// Visual feedback immediately
+				if (!multiSelect) {
+					this.outarea_neo_tree!.node
+						.querySelectorAll('.jup-row.jup-selected')
+						.forEach(el => el.classList.remove('jup-selected'));
+				}
+				row.classList.toggle('jup-selected');
+
+				// Notify Python
+				const multiSelectPy = multiSelect ? 'True' : 'False';
+				const code = `jupyphant_entity.jupyphant_tree.handle_selection('${nodeId}', ${multiSelectPy})`;
+				this.kernelBridge!.executeCode(code, null, false);
+			}
+		});
+
 		// Listener for cell execution
 		NotebookActions.executed.connect((sender, exec_data) => {
 			if (exec_data.notebook !== newPanel.content) {
@@ -224,7 +263,7 @@ class JupyphantExtension {
 
 			this._updateTimer = window.setTimeout(async () => {
 				await Promise.all([
-					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_nodeexplorer_info!, false, true, initialSession),
+					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, initialSession),
 				]);
 			}, 500);
 		});
