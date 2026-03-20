@@ -7,10 +7,12 @@ export class PlotlyFrontend {
     private session: Session.ISessionConnection;
     private plots: Map<string, PlotContainer> = new Map();
     private outputArea: OutputArea | null;
+    private is_plot_theme_dark: boolean;
 
     constructor(session: Session.ISessionConnection, outputArea: OutputArea | null = null) {
         this.session = session;
         this.outputArea = outputArea;
+        this.is_plot_theme_dark = true
 
         // Register the comm target to receive messages from Python
         this.session.kernel?.registerCommTarget(
@@ -92,8 +94,18 @@ export class PlotlyFrontend {
             state.hideLoading()
 
             state.setUpdateId(updateId)
-            state.render(figJson, updateId)
+            state.render(figJson, updateId, this.is_plot_theme_dark)
         });
+    }
+
+    public setThemes(is_dark: boolean) {
+        if (this.is_plot_theme_dark == is_dark) {
+            return;
+        }
+        this.is_plot_theme_dark = is_dark;
+        for (const plot of this.plots.values()) {
+            plot.setTheme(is_dark)
+        }
     }
 
     public getXRanges(): string {

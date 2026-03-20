@@ -59,7 +59,7 @@ export class PlotContainer {
         return newId > this.updateId;
     }
 
-    render(figJson: any, updateId: number) {
+    render(figJson: any, updateId: number, is_plot_theme_dark: boolean) {
         const currentId = updateId;
 
         Plotly.react(this.container, figJson.data, figJson.layout).then((gd) => {
@@ -81,6 +81,8 @@ export class PlotContainer {
             } else {
                 this.removeYRangeSlider()
             }
+
+            this.setTheme(is_plot_theme_dark)
         })
             .catch((err) => {
                 console.error('Plotly render error:', err);
@@ -156,6 +158,39 @@ export class PlotContainer {
 
     resize() {
         Plotly.Plots.resize(this.container);
+    }
+
+    setTheme(is_dark: boolean) {
+        const gd = this.container as any;
+        if (!gd || !gd.data) return;
+
+        const theme = is_dark
+            ? { paper_bgcolor: '#111111', plot_bgcolor: '#111111', fontColor: '#fff', gridColor: '#444' }
+            : { paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff', fontColor: '#000', gridColor: '#e5e5e5' };
+
+        const layoutCopy: Partial<Plotly.Layout> = {
+            paper_bgcolor: theme.paper_bgcolor,
+            plot_bgcolor: theme.plot_bgcolor,
+            font: { ...gd.layout?.font, color: theme.fontColor },
+        };
+
+        // Cast to any for dynamic axis assignment
+        const layoutAny = layoutCopy as any;
+
+        // Loop over all keys in layout that start with "xaxis" or "yaxis"
+        Object.keys(gd.layout).forEach((key) => {
+            if (key.startsWith('xaxis') || key.startsWith('yaxis')) {
+                layoutAny[key] = {
+                    ...gd.layout[key], // preserve existing range, tickvals, ticktext
+                    gridcolor: theme.gridColor,
+                    zerolinecolor: theme.gridColor,
+                    color: theme.fontColor,
+                };
+            }
+        });
+
+        // Apply the theme without overwriting ranges, ticks, etc.
+        Plotly.relayout(this.container, layoutCopy);
     }
 
     getXRange(): [number, number] | undefined {

@@ -64,7 +64,6 @@ class Jupyphant_plot:
         """ 
         self.jupyphant_entity: "Jupyphant_plot.Jupyphant" = jupyphant_entity
         self.previous_neo_object_dict = {key: [] for key in self.NeoKey}
-        self.jupyterlab_theme = 'plotly_dark'
         self.plots: dict[
             str,
             Jupyphant_plot.RawPlotDict | Jupyphant_plot.ImageSequencePlotDict
@@ -307,18 +306,6 @@ class Jupyphant_plot:
         if reload:
             self._raw_plot()
 
-    def update_jupyterlab_plot_theme(self, theme_name):
-        if self.jupyterlab_theme == theme_name:
-            return
-        self.jupyterlab_theme = theme_name
-        reload = False
-        for plot_dict in self.plots.values():
-            if plot_dict['is_plotted']:
-                plot_dict['changed'] = True
-                reload = True
-        if reload:
-            self._raw_plot()
-
     def upscale_raw_plot(self, max_points, x_ranges):
         reload = False
         for key in self.RawPlotKey:
@@ -373,7 +360,7 @@ class Jupyphant_plot:
         x_range = plot_dict['x_range']
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
-        fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
@@ -394,7 +381,7 @@ class Jupyphant_plot:
         x_range = plot_dict['x_range']
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
-        fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, max_points=max_points, shift_to_0=zero_based)
+        fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, max_points=max_points, shift_to_0=zero_based)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
     
@@ -406,11 +393,11 @@ class Jupyphant_plot:
         x_range = plot_dict['x_range']
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
-        fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, theme_name=self.jupyterlab_theme, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
     def _create_image_sequence(self, imagesequence=None):
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         color_grade = plot_dict['color_grade']
-        return self.PlotlyImageSequenceFigure(image_sequences=imagesequence, theme_name=self.jupyterlab_theme, color_scale=color_grade)
+        return self.PlotlyImageSequenceFigure(image_sequences=imagesequence, color_scale=color_grade)

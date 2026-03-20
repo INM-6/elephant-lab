@@ -47,10 +47,6 @@ function saveSelectedNeoObjects(filePath: string): string {
 	return `jupyphant_entity.save_selected_neo_objects('${filePath}')`;
 }
 
-function darkModeToggle(state: boolean): string {
-	return `jupyphant_entity.jupyphant_plot.update_jupyterlab_plot_theme("${state ? "dark" : "white"}")`;
-}
-
 function overlapToggle(state: boolean): string {
 	return `jupyphant_entity.jupyphant_plot.set_raw_plot_overlap(${convert_bool_to_python_bool(state)})`;
 }
@@ -90,7 +86,6 @@ export enum PythonCodeKey {
 	InsertCode = 'insertCode',
 	SetVarName = 'setVarName',
 	SaveSelectedNeoObjects = 'saveSelectedNeoObjects',
-	DarkModeToggle = 'darkModeToggle',
 	OverlapToggle = 'overlapToggle',
 	ZeroBasedToggle = 'zeroBasedToggle',
 	UpscaleRawPlot = 'upscaleRawPlot',
@@ -112,7 +107,6 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.InsertCode]: insertCode,
 	[PythonCodeKey.SetVarName]: (...args: any[]) => setVarName(args[0], args[1], args[2]),
 	[PythonCodeKey.SaveSelectedNeoObjects]: (...args: any[]) => saveSelectedNeoObjects(args[0]),
-	[PythonCodeKey.DarkModeToggle]: (...args: any[]) => darkModeToggle(args[0]),
 	[PythonCodeKey.OverlapToggle]: (...args: any[]) => overlapToggle(args[0]),
 	[PythonCodeKey.ZeroBasedToggle]: (...args: any[]) => zeroBasedToggle(args[0]),
 	[PythonCodeKey.UpscaleRawPlot]: (...args: any[]) => upscaleRawPlot(args[0], args[1]),

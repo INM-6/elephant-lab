@@ -6,7 +6,7 @@ class PlotlyGraphFigure:
     from ipywidgets import HBox, FloatRangeSlider
 
 
-    def __init__(self, data, overlapping=False, title=None, theme_name="plotly_dark", annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=False, max_points=10000):
+    def __init__(self, data, overlapping=False, title=None, annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=False, max_points=10000):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -52,8 +52,6 @@ class PlotlyGraphFigure:
         self.layout_options["dragmode"] = "pan"
         self.layout_options["height"] = self.height
         self.layout_options["autosize"] = True
-
-        self.update_jupyterlab_theme(theme_name)
 
         self._manage_axis_units()
 
@@ -598,13 +596,6 @@ class PlotlyGraphFigure:
                 # Clear all units except the last one
                 for i in range(1, self.nGraphs):
                     self._update_layout_options_dict(f"xaxis{i}", dict(title=None))
-
-    def update_jupyterlab_theme(self, theme_name):
-        """Updates the Plotly figure theme based on JupyterLab theme name."""
-        if "dark" in theme_name.lower():
-            self.fig.update_layout(template="plotly_dark")
-        else:
-            self.fig.update_layout(template="plotly_white")
 
     def to_dict(self):
         """Displays the Plotly figure in a Jupyter notebook."""

@@ -653,8 +653,7 @@ class JupyphantExtension {
 		};
 
 		const darkmodeToggle = createToggle('fa-moon', 'Dark', 'Switch between dark and light mode', true, true, (state) => {
-			const code = getPythonCode(PythonCodeKey.DarkModeToggle, state);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
+			this.plotlyFrontend?.setThemes(state);
 		});
 
 		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
