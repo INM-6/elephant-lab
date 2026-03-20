@@ -9,8 +9,6 @@ export class PlotContainer {
     updateId: number;
     private slider?: HTMLElement;
     private ticklabel_limit?: number;
-    private tickvals?: number[];
-    private ticktext?: string[];
 
     constructor(outputArea: OutputArea | null) {
         const wrapper = document.createElement('div');
@@ -70,8 +68,6 @@ export class PlotContainer {
             }
             if (figJson.ticklabel_limit) {
                 this.ticklabel_limit = figJson.ticklabel_limit;
-                this.tickvals = figJson.layout.yaxis.tickvals as number[];
-                this.ticktext = figJson.layout.yaxis.ticktext as string[];
             } else {
                 this.ticklabel_limit = undefined
             }
@@ -111,41 +107,22 @@ export class PlotContainer {
             }
         });
         sliderInstance.on('update', (values) => {
+            const gd = this.container as any;
+            if (!gd || !gd.data) return;
+
             const min = Number(values[0]);
             const max = Number(values[1]);
 
-            let update: Partial<Plotly.Layout>;
-            if (!this.ticklabel_limit) {
-                update = {
-                    yaxis: {
-                        range: [min, max],
-                    }
-                };
-            } else {
+            const yaxis = gd.layout.yaxis;
+            yaxis.range = [min, max];
+            yaxis.autorange = false
+            if (this.ticklabel_limit) {
                 const showticklabels = this.ticklabel_limit > max - min;
-                if (showticklabels) {
-                    update = {
-                        yaxis: {
-                            range: [min, max],
-                            showticklabels: showticklabels,
-                            zeroline: showticklabels,
-                            showgrid: showticklabels,
-                            tickvals: this.tickvals,
-                            ticktext: this.ticktext
-                        }
-                    };
-                } else {
-                    update = {
-                        yaxis: {
-                            range: [min, max],
-                            showticklabels: showticklabels,
-                            zeroline: showticklabels,
-                            showgrid: showticklabels,
-                        }
-                    };
-                }
+                yaxis.showticklabels = showticklabels;
+                yaxis.zeroline = showticklabels;
+                yaxis.showgrid = showticklabels;
             }
-            Plotly.relayout(this.container, update);
+            Plotly.relayout(this.container, { yaxis: yaxis });
         });
         this.slider = slider;
     }
