@@ -46,7 +46,7 @@ class Jupyphant_plot:
     class ImageSequencePlotDict(DefaultPlotDict):
         color_grade: str
 
-    def _base_plot_dict(self) -> Jupyphant_plot.DefaultPlotDict:
+    def _base_plot_dict(self) -> "Jupyphant_plot.DefaultPlotDict":
         # Add all required options to each plot:
         #   - is_plotted: Is the plot plotted
         #   - changed: True if any value in the dict has changed, False otherwise;
