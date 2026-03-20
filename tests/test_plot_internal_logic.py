@@ -64,7 +64,7 @@ def test_None_data(none_plotlyGraphFigure):
     none_plotlyGraphFigure.overlap()
     assert none_plotlyGraphFigure.fig is not None
     assert none_plotlyGraphFigure.data.common_units_y is None
-    assert np.allclose(none_plotlyGraphFigure.getXRange(), [0,0], atol=1e-6)
+    assert np.allclose(none_plotlyGraphFigure.getXRange(), [0,0], rtol=1e-3)
 
 def test_is_not_Downscaled(none_plotlyGraphFigure):
     assert not none_plotlyGraphFigure.isDownscaled()
@@ -120,9 +120,9 @@ def test_shift_to_0():
 def test_custom_x_range():
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, overlap_on_compress=False, x_range=[-5,4])
-    assert not np.allclose(plotlyGraphFigure.getXRange(), [-5,4], atol=1e-6)
-    assert np.allclose(plotlyGraphFigure.getXRange(), [0,3], atol=1e-6)
-    assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0,1,2,3], atol=1e-6)
+    assert not np.allclose(plotlyGraphFigure.getXRange(), [-5,4], rtol=1e-3)
+    assert np.allclose(plotlyGraphFigure.getXRange(), [0,3], rtol=1e-3)
+    assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0,1,2,3], rtol=1e-3)
 
 def test_shift_to_0_and_custom_x_range():
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([3,6,10] * pq.s, t_stop=10 * pq.s))
