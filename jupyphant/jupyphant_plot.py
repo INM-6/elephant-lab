@@ -42,6 +42,7 @@ class Jupyphant_plot:
         zero_based: bool
         is_default_zero_based: bool
         is_downscaled: bool
+        changes_on_overlap: bool
     
     class ImageSequencePlotDict(DefaultPlotDict):
         color_grade: str
@@ -81,7 +82,8 @@ class Jupyphant_plot:
                 "max_points": 10000,
                 "zero_based": False,
                 "is_default_zero_based": True,
-                "is_downscaled": False
+                "is_downscaled": False,
+                "changes_on_overlap": True
             }
         self.plots[self.PLOT_IMGSEQUENCE]= {
             **self._base_plot_dict(),
@@ -267,6 +269,8 @@ class Jupyphant_plot:
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
+            if not plot_dict['changes_on_overlap']:
+                continue
             if overlap == plot_dict['overlapping']:
                 continue
             plot_dict['overlapping']=overlap
@@ -350,6 +354,7 @@ class Jupyphant_plot:
             plot_dict['og_x_range']=x_range
         plot_dict['is_default_zero_based']=fig.isDefaultZeroBased()
         plot_dict['is_downscaled']=fig.isDownscaled()
+        plot_dict['changes_on_overlap']=fig.changesOnOverlap()
         
     def _create_rasterplot(self, spiketrain=None, event=None, epoch=None):
         data = [self.SpikeTrainRasterPlot(st) for st in spiketrain]

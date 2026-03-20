@@ -628,5 +628,8 @@ class PlotlyGraphFigure:
     def isDefaultZeroBased(self):
         return self.data.is_default_zero_based
     
+    def changesOnOverlap(self):
+        return not self.compress or self.overlap_on_compress
+    
     def _should_have_y_slider(self):
         return (self.overlapping or self.compress or self.nGraphs==1) and self.data.maxY - self.data.minY > 1e-9
