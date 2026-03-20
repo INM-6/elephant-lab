@@ -59,8 +59,8 @@ function zeroBasedToggle(state: boolean): string {
 	return `jupyphant_entity.jupyphant_plot.set_zero_based(${convert_bool_to_python_bool(state)})`
 }
 
-function upscaleRawPlot(max_points: number): string {
-	return `jupyphant_entity.jupyphant_plot.upscale_raw_plot(${max_points})`
+function upscaleRawPlot(max_points: number, x_ranges: string): string {
+	return `jupyphant_entity.jupyphant_plot.upscale_raw_plot(${max_points}, ${x_ranges})`
 }
 
 const resetScale = `jupyphant_entity.jupyphant_plot.reset_scale()`;
@@ -115,7 +115,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.DarkModeToggle]: (...args: any[]) => darkModeToggle(args[0]),
 	[PythonCodeKey.OverlapToggle]: (...args: any[]) => overlapToggle(args[0]),
 	[PythonCodeKey.ZeroBasedToggle]: (...args: any[]) => zeroBasedToggle(args[0]),
-	[PythonCodeKey.UpscaleRawPlot]: (...args: any[]) => upscaleRawPlot(args[0]),
+	[PythonCodeKey.UpscaleRawPlot]: (...args: any[]) => upscaleRawPlot(args[0], args[1]),
 	[PythonCodeKey.ResetScale]: resetScale,
 	[PythonCodeKey.SetColorGrade]: (...args: any[]) => setColorGrade(args[0]),
 	[PythonCodeKey.ToggleNeoTreeFilter]: (...args: any[]) => toggleNeoTreeFilter(args[0]),

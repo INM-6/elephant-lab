@@ -151,11 +151,6 @@ class Jupyphant_plot:
                 }
             self.previous_neo_object_dict = neo_object_dict
 
-            for key in self.RawPlotKey:
-                plot_dict = self.plots[key]
-                plot_dict['x_range']=None
-                plot_dict['og_x_range']=None
-
         empty_dict = {}
         for key, current_set in self.previous_neo_object_dict.items():
             empty_dict[key] = len(current_set) == 0
@@ -171,13 +166,20 @@ class Jupyphant_plot:
 
             plot_dict = self.plots[plot_key]
 
+            def remove_x_range():
+                for key in ('og_x_range', 'x_range'):
+                    if key in plot_dict:
+                        plot_dict[key] = None
+
             if plot_key == self.RawPlotKey.RAW_EVENT:
                 if not all(empty_dict[key] for key in self._keys_that_also_display_events()):
+                    remove_x_range()
                     plots_to_remove.add(plot_key)
                     return False
 
             # Case 1: nothing to show → close plot
             if all(empty_dict[k] for k in primary_keys):
+                remove_x_range()
                 plots_to_remove.add(plot_key)
                 return False
 
@@ -186,6 +188,8 @@ class Jupyphant_plot:
             if plot_dict["changed"] or (
                 selection_changed and any(change_dict[k] for k in all_keys)
             ):
+                if selection_changed:
+                    remove_x_range()
                 return True
 
             return False

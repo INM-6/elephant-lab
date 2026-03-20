@@ -158,6 +158,11 @@ export class PlotContainer {
         Plotly.Plots.resize(this.container);
     }
 
+    getXRange(): [number, number] | undefined {
+        const gd = this.container as any;
+        return gd?.layout?.xaxis?.range;
+    }
+
     destroy() {
         Plotly.purge(this.container);
         this.wrapper.remove();

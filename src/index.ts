@@ -83,7 +83,6 @@ class JupyphantExtension {
 	private docManager: IDocumentManager;
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
-	// @ts-ignore
 	private plotlyFrontend: PlotlyFrontend | null;
 
 
@@ -674,7 +673,7 @@ class JupyphantExtension {
 				max_points = min_max_points;
 				numberInput.value = max_points.toString();
 			}
-			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, max_points);
+			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, max_points, this.plotlyFrontend?.getXRanges());
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 

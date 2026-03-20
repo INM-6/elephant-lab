@@ -95,4 +95,15 @@ export class PlotlyFrontend {
             state.render(figJson, updateId)
         });
     }
+
+    public getXRanges(): string {
+        const result: Record<string, [number, number] | null> = {};
+
+        for (const [key, plot] of this.plots.entries()) {
+            result[key] = plot.getXRange() ?? null;
+        }
+
+        const json = JSON.stringify(result).replace(/\bnull\b/g, "None");
+        return json;
+    }
 }
