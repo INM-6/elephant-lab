@@ -283,6 +283,7 @@ class JupyphantExtension {
 		this.widget.id = 'jupyphant-right-panel';
 		// Title of the tab
 		this.widget.title.label = 'Jupyphant';
+		this.widget.title.iconClass = 'elephant-trunk-icon';
 		// Adds the x to close the tab?
 		this.widget.title.closable = true;
 		const session = this.notebook_tracker.currentWidget?.sessionContext;
