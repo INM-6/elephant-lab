@@ -11,8 +11,6 @@ export class PlotContainer {
     private ticklabel_limit?: number;
     private tickvals?: number[];
     private ticktext?: string[];
-    private resizeObserver?: ResizeObserver;
-    private destroyed = false;
 
     constructor(outputArea: OutputArea | null) {
         const wrapper = document.createElement('div');
@@ -156,31 +154,11 @@ export class PlotContainer {
         this.slider = undefined
     }
 
-    attachResizeObserver() {
-        if (this.resizeObserver) return;
-
-        let retryTimeout: number | null = null;
-
-        const safeResizePlot = () => {
-            if (this.destroyed) return;
-            const rect = this.container.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
-                Plotly.Plots.resize(this.container);
-            } else if (retryTimeout === null) {
-                retryTimeout = window.setTimeout(() => {
-                    retryTimeout = null;
-                    safeResizePlot();
-                }, 100);
-            }
-        };
-
-        this.resizeObserver = new ResizeObserver(safeResizePlot);
-        this.resizeObserver.observe(this.container);
+    resize() {
+        Plotly.Plots.resize(this.container);
     }
 
     destroy() {
-        this.destroyed = true;
-        this.resizeObserver?.disconnect();
         Plotly.purge(this.container);
         this.wrapper.remove();
     }

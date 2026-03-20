@@ -19,6 +19,15 @@ export class PlotlyFrontend {
                 comm.onMsg = (msg) => this.handleCommMessage(msg);
             }
         );
+
+        const resizePlots = () => {
+            for (const plot of this.plots.values()) {
+                plot.resize()
+            }
+        };
+
+        const resizeObserver = new ResizeObserver(resizePlots);
+        resizeObserver.observe(outputArea!.node);
     }
 
     private handleCommMessage(msg: KernelMessage.ICommMsgMsg) {
@@ -84,8 +93,6 @@ export class PlotlyFrontend {
 
             state.setUpdateId(updateId)
             state.render(figJson, updateId)
-
-            state.attachResizeObserver();
         });
     }
 }
