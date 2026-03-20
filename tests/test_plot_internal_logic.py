@@ -5,6 +5,7 @@ import neo
 import re
 from matplotlib.colors import to_rgb
 from jupyphant.PlotlyGraphFigure import *
+from jupyphant.PlotlyGraphContainer import *
 from jupyphant.PlotlyGraphDataTypes import SpikeTrainRasterPlot
 from jupyphant.PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
 from ipywidgets import FloatRangeSlider
