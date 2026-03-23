@@ -57,7 +57,7 @@ export class PlotlyFrontend {
                 this.handleUpdate(figs, updateId);
                 break;
             default:
-                console.warn('Unknown plot message type', data.type);
+                console.warn('Unknown plot message type', data.type, data.message);
         }
     }
 
