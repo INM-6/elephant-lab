@@ -285,6 +285,28 @@ class JupyphantExtension {
 			}
 		});
 
+		// Tag click listener on the Details panel
+		this.outarea_nodeexplorer_info!.node.addEventListener('click', async (e) => {
+			const target = e.target as HTMLElement;
+			const tag = target.closest('.tag-clickable') as HTMLElement;
+			if (tag) {
+				const annoKey = tag.getAttribute('data-anno-key');
+				if (!annoKey) return;
+
+				// collect currently selected node IDs as the scope
+				const currentIds = Array.from(
+					this.outarea_neo_tree!.node.querySelectorAll('.jup-row.jup-selected[data-node-id]')
+				).map(el => el.getAttribute('data-node-id')!);
+
+				const scopeJson = JSON.stringify(currentIds);
+				const code = `jupyphant_entity.jupyphant_tree.select_by_annotation_key('${annoKey}', ${scopeJson})`;
+				const result = await this.kernelBridge!.executeCode(code, null, false);
+				this._applyTreeSelection(result);
+				return;
+			}
+		});
+
+
 		// Listener for cell execution
 		NotebookActions.executed.connect((sender, exec_data) => {
 			if (exec_data.notebook !== newPanel.content) {
@@ -327,6 +349,37 @@ class JupyphantExtension {
 		});
 
 		console.log("Jupyphant: Event listeners registered.");
+	}
+
+	private _applyTreeSelection(result: any) {
+		if (!result?.resultKey) return;
+		const selectedIds: string[] = JSON.parse(result.resultKey);
+
+		this.outarea_neo_tree!.node
+			.querySelectorAll('.jup-row.jup-selected')
+			.forEach(el => el.classList.remove('jup-selected'));
+
+		selectedIds.forEach(id => {
+			const row = this.outarea_neo_tree!.node
+				.querySelector(`.jup-row[data-node-id="${id}"]`) as HTMLElement;
+			if (row) {
+				row.classList.add('jup-selected');
+				let parent = row.parentElement;
+				while (parent) {
+					if (parent.classList.contains('jup-children')) {
+						parent.classList.add('jup-open');
+						const toggle = parent.previousElementSibling
+							?.querySelector('.jup-toggle') as HTMLElement;
+						if (toggle) toggle.innerHTML = '<i class="fa fa-minus"></i>';
+					}
+					parent = parent.parentElement;
+				}
+			}
+		});
+
+		if (selectedIds.length > 0) {
+			this._lastClickedNode = selectedIds[selectedIds.length - 1];
+		}
 	}
 
 	public attachTab() {

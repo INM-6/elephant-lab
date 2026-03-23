@@ -37,6 +37,8 @@ class Jupyphant_info:
     .jup-info .scroll { overflow-x: auto; max-width: 100%; margin-top: 4px; }
     .jup-info .tag { display: inline-block; padding: 0px 4px; background: var(--jp-layout-color2); border-radius: 4px; font-size: 0.9em; }
     .jup-info .anno-section { margin-top: 6px; }
+    .jup-info .tag-clickable { cursor: pointer; border: 1px solid var(--jp-brand-color1); }
+    .jup-info .tag-clickable:hover { background: var(--jp-brand-color3); }
     </style>
     """
 
@@ -112,7 +114,9 @@ class Jupyphant_info:
     def _kv(self, key: str, value) -> str:
         return f'<div class="kv-row"><span class="key">{key}:</span><span class="val">{value}</span></div>'
 
-    def _tag(self, text: str) -> str:
+    def _tag(self, text: str, clickable_key: str = None) -> str:
+        if clickable_key:
+            return f'<span class="tag tag-clickable" data-anno-key="{clickable_key}" title="Click to select all objects with this annotation">{text}</span>'
         return f'<span class="tag">{text}</span>'
 
     def _section(self, *content) -> str:
@@ -174,10 +178,10 @@ class Jupyphant_info:
             parts.append(self._section(self._h3('Identical Annotations'), f'<div class="kv">{rows}</div>'))
         if different:
             parts.append(self._section(self._h3('Diverging Annotations'),
-                ' '.join(self._tag(k) for k in different)))
+                ' '.join(self._tag(k, clickable_key=k) for k in different)))
         if partial:
             parts.append(self._section(self._h3('Unique Annotations'),
-                ' '.join(self._tag(k) for k in partial)))
+                ' '.join(self._tag(k, clickable_key=k) for k in partial)))
         return ''.join(parts)
 
     def _html_array_annotations(self, neo_obj) -> str:
