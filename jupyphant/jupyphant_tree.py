@@ -323,6 +323,27 @@ class Jupyphant_tree:
 
         self.jupyphant_entity.on_selected_neo_objects_changed.fire()
     
+    # First collect all selected nodes, then fire the event only once
+    # this prevents continous analyzing and plotting for multiple node selection
+    # used when Shift+Clicking 
+    def handle_selection_range(self, node_ids: list):
+        """Selects a range of nodes and fires the event only once at the end."""
+        self.jupyphant_entity.selected_neo_objects.clear()
+        
+        for node_id in node_ids:
+            if node_id not in self._node_registry:
+                continue
+            node = self._node_registry[node_id]
+            self.jupyphant_entity.selected_neo_objects.add(node)
+            def select_children(n):
+                for child in n.nodes:
+                    self.jupyphant_entity.selected_neo_objects.add(child)
+                    select_children(child)
+            select_children(node)
+
+        # Fire only once after all nodes are selected
+        self.jupyphant_entity.on_selected_neo_objects_changed.fire()
+        
     def create_tree(self):
         import ipywidgets as widgets
         self._tree_widget = widgets.HTML(value='')
