@@ -269,13 +269,11 @@ class Jupyphant_plot:
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
-            if not plot_dict['changes_on_overlap']:
-                continue
             if overlap == plot_dict['overlapping']:
                 continue
             plot_dict['overlapping']=overlap
             is_plotted = plot_dict['is_plotted']
-            if not is_plotted:
+            if not is_plotted or not plot_dict['changes_on_overlap']:
                 continue
             plot_dict['changed']=True
             reload = True
@@ -286,27 +284,30 @@ class Jupyphant_plot:
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
-            if zero_based != plot_dict['zero_based']:
-                plot_dict['zero_based']=zero_based
-                is_plotted = plot_dict['is_plotted']
-                if not is_plotted or plot_dict['is_default_zero_based']:
-                    continue
-                plot_dict['og_x_range']=None
-                plot_dict['x_range']=None
-                plot_dict['changed']=True
-                reload = True
+            if zero_based == plot_dict['zero_based']:
+                continue
+            plot_dict['zero_based']=zero_based
+            is_plotted = plot_dict['is_plotted']
+            if not is_plotted or plot_dict['is_default_zero_based']:
+                continue
+            plot_dict['og_x_range']=None
+            plot_dict['x_range']=None
+            plot_dict['changed']=True
+            reload = True
         if reload:
             self._raw_plot()
 
     def set_color_grade(self, color_grade):
         reload = False
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
-        if color_grade != plot_dict['color_grade']:
-            plot_dict['color_grade']=color_grade
-            is_plotted = plot_dict['is_plotted']
-            if is_plotted:
-                plot_dict['changed']=True
-                reload = True
+        if color_grade == plot_dict['color_grade']:
+            return
+        plot_dict['color_grade']=color_grade
+        is_plotted = plot_dict['is_plotted']
+        if not is_plotted:
+            return
+        plot_dict['changed']=True
+        reload = True
         if reload:
             self._raw_plot()
 
@@ -319,15 +320,13 @@ class Jupyphant_plot:
                 plot_dict['max_points']=max_points
                 temp_reload = True
             is_plotted = plot_dict['is_plotted']
-            if not is_plotted:
+            if not is_plotted or not plot_dict['is_downscaled']:
                 continue
             previous_x_range = plot_dict['x_range']
             x_range = x_ranges[key.value]
             if not self.np.allclose(x_range, previous_x_range, rtol=1e-3):
                 plot_dict['x_range']=x_range
                 temp_reload = True
-            if(not plot_dict['is_downscaled']):
-                temp_reload = False
             plot_dict['changed']=temp_reload
             reload = reload or temp_reload
         if reload:
