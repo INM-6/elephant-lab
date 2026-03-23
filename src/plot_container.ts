@@ -97,14 +97,24 @@ export class PlotContainer {
             const currentMin = currentRange.min;
             const currentMax = currentRange.max;
 
+            const EPSILON = 1e-6;
+
+            const isDifferent =
+                Math.abs(currentMin - minY) > EPSILON ||
+                Math.abs(currentMax - maxY) > EPSILON;
+
             // Update only if range changed
-            if (currentMin !== minY || currentMax !== maxY) {
+            if (isDifferent) {
                 sliderInstance.updateOptions({
                     range: {
                         min: minY,
                         max: maxY
                     }
                 });
+            } else {
+                const values = sliderInstance.get(); // returns [min, max] as strings
+                minY = Number(values[0]);
+                maxY = Number(values[1]);
             }
         } else {
             // --- Create slider (only once) ---
