@@ -4,6 +4,7 @@ class PlotlyGraphFigure:
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     from ipywidgets import HBox, FloatRangeSlider
+    import numpy as np
 
 
     def __init__(self, data, overlapping=False, title=None, annotation_data=None, annotation_interavals_data=None, overlap_on_compress=True, x_range=None, shift_to_0=False, max_points=10000):
@@ -50,6 +51,7 @@ class PlotlyGraphFigure:
         self.layout_options["dragmode"] = "pan"
         self.layout_options["height"] = self.height
         self.layout_options["autosize"] = True
+        self.layout_options["hovermode"] = "x"
 
         self._manage_axis_units()
         self._manage_ticklabels()
@@ -57,7 +59,6 @@ class PlotlyGraphFigure:
         self._create_annotations(annotation_data, x_range)
         self._create_annotation_intervals(annotation_interavals_data, x_range)
         self._create_slider()
-        self._format_annotations()
         # Set x_range to total min and max
         for i in range(1, self.nGraphs + 1):
             self._update_layout_options_dict(f"xaxis{i}", dict(
@@ -178,6 +179,7 @@ class PlotlyGraphFigure:
 
     def _manage_legend(self):
         if self.nGraphs == 1:
+            self.layout_options["showlegend"] = False
             return
         
         if self.compress:
@@ -210,89 +212,68 @@ class PlotlyGraphFigure:
 
         self.total_minX = min(self.total_minX, xs.min())
         self.total_maxX = max(self.total_maxX, xs.max())
-        
-        shapes = []
-        annotations = []
 
-        for x, text, unit in zip(xs, texts, units):
-            if self.data.common_units_x is not None:
-                can_convert = self.PlotlyUtils.can_convert_units(unit=unit, convert_unit=self.data.common_units_x)
-                if can_convert == -1:
-                    continue
-                if can_convert == 1:
-                    x = self.PlotlyUtils.convert_to_other_units(x, unit=unit, convert_unit=self.data.common_units_x)
-            shapes.append(dict(
-                type="line",
-                x0=x,
-                x1=x,
-                y0=0,
-                y1=1,
-                xref="x",
-                yref="paper",
-                line=dict(
-                    width=0.5,
-                    dash="dash",
-                    color="rgba(255,0,0,1)"
+        if self.data.common_units_x is not None:
+            for i, (x, unit) in enumerate(zip(xs, units)):
+                can_convert = self.PlotlyUtils.can_convert_units(
+                    unit=unit,
+                    convert_unit=self.data.common_units_x
                 )
-            ))
+                if can_convert == -1:  # cannot convert → keep original
+                    pass
+                elif can_convert == 1:  # needs conversion
+                    xs[i] = self.PlotlyUtils.convert_to_other_units(
+                        x, unit=unit, convert_unit=self.data.common_units_x
+                    )
+                else:  # already compatible
+                    pass
 
-            # Top annotation: main label
-            annotations.append(dict(
-                x=x,
-                y=1,
-                xref="x",
-                yref="paper",
-                text=text,
-                showarrow=False,
-                font=dict(size=11, color="#194D89"),
-                xanchor="center",
-                yanchor="bottom",
-            ))
+        # === Prepare trace with None to break lines ===
+        x_plot = []
+        y_plot = []
+        hover_texts = []
 
-            # Bottom annotation: x value
-            annotations.append(dict(
-                x=x,
-                y=0,
-                xref="x",
-                yref="paper",
-                text=f"{x:.2f}",
-                showarrow=False,
-                font=dict(size=10, color="#666"),
-                xanchor="center",
-                yanchor="top"
-            ))
+        ymin = self.data.minY
+        ymax = self.data.maxY
+        if ymax - ymin < 1e-9:
+            ymin -= 1
+            ymax += 1
 
-        """
-        # Convert paper y to data y for hover scatter
-        y_range = [self.minY, self.maxY]
+        for x, text in zip(xs, texts):
+            x_plot.extend([x, x, None])       # third None breaks the line
+            y_plot.extend([ymin, ymax, None])
+            hover_texts.extend([text, text, None])  # hover works on the vertical segment
 
-        x_trace = []
-        y_trace = []
-        for x in xs:
-            x_trace.extend([x, x, None])  # None to break the line
-            y_trace.extend([y_range[0], y_range[1], None])
-
-        # Add invisible scatter for hover
-        annotation_hovertext_trace = go.Scattergl(
-            x=x_trace,
-            y=y_trace,
-            mode='markers',
-            marker=dict(opacity=0),
-            hovertemplate=f"X: %{{x}}<extra></extra>",
+        trace = self.go.Scatter(
+            x=x_plot,
+            y=y_plot,
+            mode="lines",
+            line=dict(width=2, color="red"),
+            opacity=0.4,
+            hoverinfo="text",
+            hovertext=hover_texts,
             showlegend=False
         )
-        if self.compress:
-            self.fig.add_trace(annotation_hovertext_trace)
+        if self._is_single_plot():
+            # Add scatter trace
+            self.fig.add_trace(self.go.Scatter(
+                x=x_plot,
+                y=y_plot,
+                mode="lines",
+                line=dict(width=2, color="red"),
+                opacity=0.4,
+                hoverinfo="text",
+                hovertext=hover_texts,
+                showlegend=False
+            ))
         else:
-            self.fig.add_trace(
-                annotation_hovertext_trace,
-                row=1,
-                col=1
-            )
-        """
+            for i in range(1, self.nGraphs + 1):
+                self.fig.add_trace(
+                        trace, 
+                        row=i,
+                        col=1
+                    )
 
-        self._update_layout_options_list("shapes", shapes)
-        self._update_layout_options_list("annotations", annotations)
 
     def _create_annotation_intervals(self, annotation_interavals_data, x_range):
         """Updates the graph annotation intervals."""
@@ -379,55 +360,6 @@ class PlotlyGraphFigure:
 
         self._update_layout_options_list("shapes", shapes)
         self._update_layout_options_list("annotations", annotations)
-
-    def _format_annotations(self):
-        """Formats existing annotations to have consistent style."""
-        if "annotations" not in self.layout_options:
-            return
-        all_annotations = self.layout_options["annotations"]
-        # Separate annotations by y (top vs bottom)
-        top_annotations = [ann for ann in all_annotations if ann.get("y", 1) > 0.5]
-        bottom_annotations = [ann for ann in all_annotations if ann.get("y", 1) <= 0.5]
-
-        # Sort each list by x coordinate
-        top_annotations.sort(key=lambda ann: ann.get("x", 0))
-        bottom_annotations.sort(key=lambda ann: ann.get("x", 0))
-
-        # Parameters
-        min_x_distance_percent = 0.02 # minimum horizontal distance as percent of x-axis range
-        min_x_distance = (self.data.maxX - self.data.minX) * min_x_distance_percent
-        y_shift = 0.0175         # vertical shift amount if overlapping
-        max_y_shift = y_shift * 2.5    # maximum vertical shift
-
-        l_bottom = len(top_annotations)
-        for i in range(1, l_bottom):
-            current = top_annotations[i]
-            x = current.get("x", 0)
-            y = current.get("y", 1)  # default top if missing
-            previous = top_annotations[i - 1]
-            prev_x = previous.get("x", 0)
-            prev_y = previous.get("y", 1)
-            if abs(x - prev_x) < min_x_distance:
-                # Collision detected → shift vertically
-                y = prev_y + y_shift
-                if y > 1+max_y_shift:  # prevent going too far off top
-                    y = 1
-                current["y"] = y
-
-        l_bottom = len(bottom_annotations)
-        for i in range(1, l_bottom):
-            current = bottom_annotations[i]
-            x = current.get("x", 0)
-            y = current.get("y", 0)  # default bottom if missing
-            previous = bottom_annotations[i - 1]
-            prev_x = previous.get("x", 0)
-            prev_y = previous.get("y", 1)
-            if abs(x - prev_x) < min_x_distance:
-                # Collision detected → shift vertically
-                y = prev_y - y_shift
-                if y < 0-max_y_shift:  # prevent going too far off bottom
-                    y = 0
-                current["y"] = y
 
     def _manage_axis_units(self):
         """If all x-axes have the same units, move it to the last axis only."""
