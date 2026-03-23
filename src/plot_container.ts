@@ -86,45 +86,75 @@ export class PlotContainer {
     }
 
     addYRangeSlider(minY: number, maxY: number) {
-        if (this.slider) return;
+        let sliderInstance;
 
-        const slider = document.createElement('div');
-        slider.classList.add('my-slider');
-        slider.style.width = '20px';
-        slider.style.flexShrink = '0';
-        slider.style.marginTop = `100px`;
-        slider.style.marginBottom = `100px`;
-        slider.style.marginLeft = '15px'
-        this.wrapper.insertBefore(slider, this.container);
-        const sliderInstance = noUiSlider.create(slider, {
-            start: [minY, maxY], // initial range
-            connect: true,   // enables colored range between handles
-            orientation: 'vertical',
-            direction: 'rtl', // makes lower value at bottom (feels natural for Y)
-            range: {
-                min: minY,
-                max: maxY
+        // If slider already exists → reuse it
+        if (this.slider) {
+            sliderInstance = (this.slider as any).noUiSlider;
+            if (!sliderInstance) return;
+
+            const currentRange = sliderInstance.options.range;
+            const currentMin = currentRange.min;
+            const currentMax = currentRange.max;
+
+            // Update only if range changed
+            if (currentMin !== minY || currentMax !== maxY) {
+                sliderInstance.updateOptions({
+                    range: {
+                        min: minY,
+                        max: maxY
+                    }
+                });
             }
-        });
-        sliderInstance.on('update', (values) => {
-            const gd = this.container as any;
-            if (!gd || !gd.data) return;
+        } else {
+            // --- Create slider (only once) ---
+            const slider = document.createElement('div');
+            slider.classList.add('my-slider');
+            slider.style.width = '20px';
+            slider.style.flexShrink = '0';
+            slider.style.marginTop = `100px`;
+            slider.style.marginBottom = `100px`;
+            slider.style.marginLeft = '15px';
 
-            const min = Number(values[0]);
-            const max = Number(values[1]);
+            this.wrapper.insertBefore(slider, this.container);
 
-            const yaxis = gd.layout.yaxis;
-            yaxis.range = [min, max];
-            yaxis.autorange = false
-            if (this.ticklabel_limit) {
-                const showticklabels = this.ticklabel_limit > max - min;
-                yaxis.showticklabels = showticklabels;
-                yaxis.zeroline = showticklabels;
-                yaxis.showgrid = showticklabels;
-            }
-            Plotly.relayout(this.container, { yaxis: yaxis });
-        });
-        this.slider = slider;
+            sliderInstance = noUiSlider.create(slider, {
+                start: [minY, maxY],
+                connect: true,
+                orientation: 'vertical',
+                direction: 'rtl',
+                range: {
+                    min: minY,
+                    max: maxY
+                }
+            });
+
+            sliderInstance.on('update', (values) => {
+                const gd = this.container as any;
+                if (!gd || !gd.data) return;
+
+                const min = Number(values[0]);
+                const max = Number(values[1]);
+
+                const yaxis = gd.layout.yaxis;
+                yaxis.range = [min, max];
+                yaxis.autorange = false;
+
+                if (this.ticklabel_limit) {
+                    const showticklabels = this.ticklabel_limit > max - min;
+                    yaxis.showticklabels = showticklabels;
+                    yaxis.zeroline = showticklabels;
+                    yaxis.showgrid = showticklabels;
+                }
+
+                Plotly.relayout(this.container, { yaxis });
+            });
+
+            this.slider = slider;
+        }
+
+        // ALWAYS trigger update logic
+        sliderInstance.set([minY, maxY]);
     }
 
     removeYRangeSlider() {

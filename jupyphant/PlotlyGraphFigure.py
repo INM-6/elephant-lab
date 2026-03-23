@@ -13,7 +13,6 @@ class PlotlyGraphFigure:
         If many traces are created, it gets compressed, so it still works efficient and is visually pleasing
         """
         self.vertical_spacing = 0.075
-        self.default_height = 600
         self.layout_options = dict()
 
         self.overlapping = overlapping
@@ -29,12 +28,11 @@ class PlotlyGraphFigure:
         self.total_maxX = data.maxX
 
 
-        self.height = self.default_height
-        if self.nGraphs > 2:
-            self.height = 800
-        if self.compress:
+        self.height = 800 if (self.nGraphs > 2 and not self._should_overlap()) else 600
+        if self._is_single_plot():
             self.fig = self.go.Figure()
-            self.ticktext=[]
+            if self.compress:
+                self.ticktext=[]
         else:
             self.fig = PlotlyGraphFigure.make_subplots(
                 rows=self.nGraphs,
@@ -54,25 +52,11 @@ class PlotlyGraphFigure:
         self.layout_options["autosize"] = True
 
         self._manage_axis_units()
-
-        if self.compress:
-            if len(self.ticktext)==self.nGraphs:
-                yaxis_options = dict(
-                    showticklabels=False,
-                    tickvals=list(range(self.nGraphs)),
-                    ticktext=self.ticktext,
-                )
-                self._update_layout_options_dict("yaxis", yaxis_options)
-            else:
-                if not overlapping:
-                    self._update_layout_options_dict('yaxis',dict(
-                        showticklabels = False
-                    ))
-            self.hide_legend = True
-        self._update_legend()
+        self._manage_ticklabels()
+        self._manage_legend()
         self._create_annotations(annotation_data, x_range)
         self._create_annotation_intervals(annotation_interavals_data, x_range)
-        self._create_sliders()
+        self._create_slider()
         self._format_annotations()
         # Set x_range to total min and max
         for i in range(1, self.nGraphs + 1):
@@ -80,11 +64,6 @@ class PlotlyGraphFigure:
                 range = [self.total_minX, self.total_maxX]
             ))
         self._update_layout()
-        
-        if overlapping:
-            self.overlapping = False
-            self.overlap()
-            self.overlapping = True
 
     def _update_layout_options_dict(self, key, options_dict):
         if key in self.layout_options:
@@ -140,11 +119,17 @@ class PlotlyGraphFigure:
                     line=line_settings
                 )
 
-                if self.compress:
+                if self._is_single_plot():
                     self.fig.add_trace(trace)
-                    if hasattr(d, 'use_name_as_ticklabels'):
+                    if self._can_have_custom_ticklabes() and hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
-                            self.ticktext.append(d.name)
+                            if self.compress:
+                                self.ticktext.append(d.name)
+                            else:
+                                self._update_layout_options_dict(f"yaxis",dict(
+                                    tickvals=[0],
+                                    ticktext=[d.name]
+                                ))
                 else:
                     row = index + 1
                     self.fig.add_trace(
@@ -160,7 +145,7 @@ class PlotlyGraphFigure:
                         self._update_layout_options_dict(f"yaxis{row}",dict(
                             title=d.units_y.__str__()
                         ))
-                    if hasattr(d, 'use_name_as_ticklabels'):
+                    if self._can_have_custom_ticklabes() and hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
                             self._update_layout_options_dict(f"yaxis{row}",dict(
                                 tickvals=[0],
@@ -174,173 +159,37 @@ class PlotlyGraphFigure:
                                 self.hide_legend = d.use_name_as_ticklabels
             except Exception as e:
                 self.PlotlyUtils.print_warning(f"Failed to add trace '{d.name}': {e}")
-    
-    def _change_height_after_render(self, height):
-        """
-        Changing height after the figure has already, is more complicated than just calling update_layout
-        """
-        if self.fig.layout.height == height:
-            return
-        
-        self.fig.update_layout(
-            height = height,
-            autosize = True
-        )
-        self.fig._send_relayout_msg({"autosize": True})
-        self._update_y_slider()
-    
-    def overlap(self):
-        """Overlapps the graphs"""
-        if self.overlapping or self.compress:
-            return
-        self.overlapping = True
 
-        self.saved_y_ranges = []
-        for i in range(1, self.nGraphs + 1):
-            self._update_layout_options_dict(f"yaxis{i}", dict(
-                visible=self.data.common_units_y is not None and i==1,
-                domain=[0.0,1.0]
-            ))
-            y_range = self.fig.layout[f"yaxis{i}"].range
-            self.saved_y_ranges.append(y_range)
-
-        self._change_height_after_render(self.default_height)
-        if hasattr(self, 'y_slider'):
-            with self.fig.batch_update():
-                    self.fig.update_yaxes(range=self.y_slider.value)
-        self._update_legend()
-        self._update_layout()
-        
-        
-    def stack(self):
-        """Stacks the graphs"""
-        if not self.overlapping or self.compress:
-            return
-        self.overlapping = False
-
-        n = self.nGraphs
-        vertical_spacing = self.vertical_spacing
-
-        subplot_height = self._getSubplotHeight(1.0)
-
-        for i in range(1, n + 1):
-            # Domain goes from bottom to top
-            end = 1 - (i - 1) * (subplot_height + vertical_spacing)
-            start = end - subplot_height
-            if(start<0): start=0 #floating point precision issue
-
-            self._update_layout_options_dict(f"yaxis{i}", 
-                dict(
-                    visible=True,
-                    domain=[start, end],
-                    range = self.saved_y_ranges[i-1]
-                )
-            )
-
-        self._change_height_after_render(self.height)
-        self._update_legend()
-        self._update_layout()
-
-    def _create_sliders(self):
-        """Updates the range slider to the last x-axis if shared_xaxes is True"""
+    def _create_slider(self):
+        """Updates the range slider to the last x-axis"""
         n = self.nGraphs
         x_bgcolor = "#1e7fcc"
         PIXELS = 25
         x_height = max(0.02, PIXELS / self.height)
-        if self.compress:
-            xaxis_options = dict(
-                rangeslider=dict(
-                    visible=True,
-                    bgcolor=x_bgcolor,
-                    thickness=x_height
-                )
+        xaxis_options = dict(
+            rangeslider=dict(
+                visible=True,
+                bgcolor=x_bgcolor,
+                thickness=x_height
             )
-            self._update_layout_options_dict("xaxis", xaxis_options)
-        else:
-            for i in range(1, n + 1):
-                # Adding this range slider makes it impossible to manually zoom in vertically for this graph
-                addX_slider = i == n
-                if addX_slider:
-                    axis_key = f'xaxis{i}'
-                    xaxis_options = dict(
-                        rangeslider=dict(
-                            visible=True,
-                            bgcolor=x_bgcolor,
-                            thickness=x_height
-                        )
-                    )
-                    self._update_layout_options_dict(axis_key, xaxis_options)
-
-        y_slider_height = self._calculate_y_slider_height()
-
-        totalrange = [self.data.minY, self.data.maxY]
-        self.y_slider = self.FloatRangeSlider(
-            value=totalrange,
-            min=self.data.minY,
-            max=self.data.maxY,
-            step=0.1,
-            orientation='vertical',
-            continuous_update=True,
-            readout=False,
-            layout={'height': f'{y_slider_height}px', 'margin': '100px 0 0 0'}
         )
+        axis_key = 'xaxis' if self._is_single_plot() else f'xaxis{n}'
+        self._update_layout_options_dict(axis_key, xaxis_options)
 
-        def update_ticklabels(new_range):
-            if self.compress and len(self.ticktext)==self.nGraphs:
-                showticklabels = bool(new_range[1]-new_range[0]<26) and (not self.overlapping or not self.overlap_on_compress)
-                self._update_layout_options_dict("yaxis", dict(
-                    showticklabels=showticklabels,
-                    zeroline=showticklabels,
-                    showgrid=showticklabels
-                ))
-                return True
-            return False
-
-        # Callback to update y-axis
-        def update_y_range(change):
-            new_range = change['new']
-            # Use batch_update to avoid flickering
-            with self.fig.batch_update():
-                self.fig.update_yaxes(range=new_range)
-            if update_ticklabels(new_range):
-                self._update_layout()
-
-        self.y_slider.observe(update_y_range, names='value')
-        self._update_y_slider()
-        update_ticklabels(totalrange)
-
-    def _update_legend(self):
+    def _manage_legend(self):
         if self.nGraphs == 1:
             return
-
-        if self.overlapping and not self.compress:
-            if not self.fig.layout.showlegend:
-                self.layout_options["showlegend"] = True
-        else:
-            if hasattr(self, 'hide_legend'):
-                if self.hide_legend:
-                    self.layout_options["showlegend"] = False
         
+        if self.compress:
+            self.layout_options["showlegend"] = False
+            return
+        
+        if self.overlapping:
+            self.layout_options["showlegend"] = True
 
-    def _update_y_slider(self):
-        """Updates the y-axis slider height and visibility."""
-        if hasattr(self, 'y_slider'):
-            y_slider_height = self._calculate_y_slider_height()
-            if y_slider_height != int(self.y_slider.layout.height.replace('px','')):
-                self.y_slider.layout.height = f'{y_slider_height}px'
-            visible = 'visible' if self.overlapping or self.compress or self.nGraphs==1 else 'hidden'
-            if self.y_slider.layout.visibility != visible:
-                self.y_slider.layout.visibility = visible
-
-    def _calculate_y_slider_height(self):
-        return int(0.875 * self._get_height() - 165)
-    
-    def _get_height(self):
-        """Returns the current height of the figure."""
-        if self.overlapping and not self.compress:
-            return self.default_height
-        else:
-            return self.height
+        if hasattr(self, 'hide_legend'):
+            if self.hide_legend:
+                self.layout_options["showlegend"] = False
     
     def _create_annotations(self, annotation_data, x_range):
         """Updates the graph annotations."""
@@ -582,7 +431,7 @@ class PlotlyGraphFigure:
 
     def _manage_axis_units(self):
         """If all x-axes have the same units, move it to the last axis only."""
-        if self.compress:
+        if self._is_single_plot():
             if self.data.common_units_x is not None:
                 self._update_layout_options_dict("xaxis", dict(
                     title=self.data.common_units_x.__str__()
@@ -597,27 +446,32 @@ class PlotlyGraphFigure:
                 for i in range(1, self.nGraphs):
                     self._update_layout_options_dict(f"xaxis{i}", dict(title=None))
 
+    def _manage_ticklabels(self):
+        if self.compress:
+            has_custom_ticklabels = False
+            if self._can_have_custom_ticklabes:
+                if len(self.ticktext)==self.nGraphs:
+                    has_custom_ticklabels = True
+                    yaxis_options = dict(
+                        showticklabels=False,
+                        tickvals=list(range(self.nGraphs)),
+                        ticktext=self.ticktext,
+                    )
+                    self._update_layout_options_dict("yaxis", yaxis_options)
+            if not has_custom_ticklabels and not self._should_overlap():
+                self._update_layout_options_dict('yaxis',dict(
+                    showticklabels = False
+                ))
+
     def to_dict(self):
         """Displays the Plotly figure in a Jupyter notebook."""
         if self.fig:
             fig_dict = self.fig.to_dict()
             if(self._should_have_y_slider()):
                 fig_dict['y_slider']= (self.data.minY, self.data.maxY)
-            if self.compress and not self.overlapping and len(self.ticktext)==self.nGraphs:
+            if self.compress and not self._should_overlap() and len(self.ticktext)==self.nGraphs:
                 fig_dict['ticklabel_limit'] = 26
             return fig_dict
-
-    def _getSubplotHeight(self, height=None):
-        """Returns the height of each subplot in pixels."""
-        if self.nGraphs == 0:
-            return 0
-        if height is None:
-            height = self.height
-        total_gap = self.vertical_spacing * (self.nGraphs - 1)
-        subplot_height = (height - total_gap) / self.nGraphs
-        if self.compress:
-            subplot_height = subplot_height/3.
-        return subplot_height
     
     def getXRange(self):
         return self.fig.layout.xaxis.range
@@ -629,7 +483,28 @@ class PlotlyGraphFigure:
         return self.data.is_default_zero_based
     
     def changesOnOverlap(self):
-        return not self.compress or self.overlap_on_compress
+        return (not self.compress or self.overlap_on_compress) and self.nGraphs != 1
+
+    def _should_overlap(self):
+        return self.overlapping and self.changesOnOverlap()
     
     def _should_have_y_slider(self):
         return (self.overlapping or self.compress or self.nGraphs==1) and self.data.maxY - self.data.minY > 1e-9
+    
+    def _is_single_plot(self):
+        return self.overlapping or self.compress or self.nGraphs==1
+    
+    def _can_have_custom_ticklabes(self):
+        return not self._should_overlap()
+    
+    def _getSubplotHeight(self, height=None):
+        """Returns the height of each subplot in pixels."""
+        if self.nGraphs == 0:
+            return 0
+        if height is None:
+            height = self.height
+        total_gap = self.vertical_spacing * (self.nGraphs - 1)
+        subplot_height = (height - total_gap) / self.nGraphs
+        if self.compress:
+            subplot_height = subplot_height/3.
+        return subplot_height
