@@ -18,7 +18,7 @@ jupyphant_entity = Jupyphant()`;
 const create_tree = `jupyphant_entity.jupyphant_tree.create_tree()`;
 
 // Call to the function that shows metadata info of selected nodes in Info-tab of the node-explorer Dockpanel
-const create_explorer_info = `jupyphant_entity.jupyphant_info.create_explorer_info()`;
+const create_details_panel = `jupyphant_entity.jupyphant_info.create_details_panel()`;
 
 // Call to the function that updates the ipytree tree view of the neo hierarchy
 const update_tree = `jupyphant_entity.jupyphant_tree.update_tree()`;
@@ -82,7 +82,7 @@ function expandNeoTree(checked: boolean): string {
 export enum PythonCodeKey {
 	SetupEnv = 'setupEnv',
 	CreateTree = 'createTree',
-	CreateExplorerInfo = 'createExplorerInfo',
+	CreateDetailsPanel = 'create_details_panel',
 	UpdateTree = 'updateTree',
 	CreateExplorerRaw = 'createExplorerRaw',
 	Version = 'version',
@@ -104,7 +104,7 @@ export enum PythonCodeKey {
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
 	[PythonCodeKey.SetupEnv]: setup_env,
 	[PythonCodeKey.CreateTree]: create_tree,
-	[PythonCodeKey.CreateExplorerInfo]: create_explorer_info,
+	[PythonCodeKey.CreateDetailsPanel]: create_details_panel,
 	[PythonCodeKey.UpdateTree]: update_tree,
 	[PythonCodeKey.CreateExplorerRaw]: createExplorerRawPlot,
 	[PythonCodeKey.Version]: version,
