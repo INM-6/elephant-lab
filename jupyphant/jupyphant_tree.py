@@ -98,6 +98,7 @@ class Jupyphant_tree:
         
         self._tree_widget = None  # ipywidgets.HTML
         self._node_registry: dict = {}  # hash_id -> SimpleNode, for selection
+        self._stat_cache: dict = {}
         self.expand_all = False
 
     def expand_neo_tree(self, opened):
@@ -118,8 +119,14 @@ class Jupyphant_tree:
         self.jupyphant_entity.filter_changed = True
         self.update_tree()
 
+    def cache_stat(self, hash_id: str, stat_name: str, value: float):
+        if hash_id not in self._stat_cache:
+            self._stat_cache[hash_id] = {}
+        self._stat_cache[hash_id][stat_name] = value
+
     def update_tree(self):
         self.jupyphant_entity.update()
+        self._stat_cache.clear()
         if self._tree_widget is None or not self.jupyphant_entity.neo_objs_changed_after_update:
             return
 
@@ -404,10 +411,9 @@ class Jupyphant_tree:
                     else:
                         result.append(hash_id)
                 return result
-            expanded = expand_ids(scope_ids)
             candidates = {
                 hid: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.get(hid)
-                for hid in expanded
+                for hid in expand_ids(scope_ids)
                 if hid in self.jupyphant_entity.map_ipytree_node_id_to_neo_obj
             }
         else:
@@ -419,7 +425,7 @@ class Jupyphant_tree:
 
         self.jupyphant_entity.selected_neo_objects.clear()
         selected_ids = []
-        tol = 1e-6
+        tol = 1e-4
         value = filter_data['value']
 
         for hash_id, neo_obj in candidates.items():
@@ -427,27 +433,39 @@ class Jupyphant_tree:
                 continue
             match = False
             try:
+                cached = self._stat_cache.get(hash_id, {})
+
                 if filter_type == 'firing_rate':
-                    if hasattr(neo_obj, 't_start') and hasattr(neo_obj, 't_stop') and neo_obj.t_stop > neo_obj.t_start:
-                        fr = elephant_stats.mean_firing_rate(neo_obj).magnitude
-                        match = abs(fr - value) < tol
+                    computed = cached.get('firing_rate')
+                    if computed is None:
+                        if hasattr(neo_obj, 't_start') and neo_obj.t_stop > neo_obj.t_start:
+                            computed = float(elephant_stats.mean_firing_rate(neo_obj).magnitude)
+                    match = computed is not None and abs(computed - value) < tol
 
                 elif filter_type == 'cv':
-                    if hasattr(neo_obj, 'times') and len(neo_obj) > 1:
-                        cv = elephant_stats.cv(elephant_stats.isi(neo_obj))
-                        match = abs(cv - value) < tol
+                    computed = cached.get('cv')
+                    if computed is None:
+                        if hasattr(neo_obj, 'times') and len(neo_obj) > 1:
+                            computed = float(elephant_stats.cv(elephant_stats.isi(neo_obj)))
+                    match = computed is not None and abs(computed - value) < tol
 
                 elif filter_type == 't_start':
-                    if hasattr(neo_obj, 't_start'):
-                        match = abs(float(neo_obj.t_start.magnitude) - value) < tol
+                    computed = cached.get('t_start')
+                    if computed is None and hasattr(neo_obj, 't_start'):
+                        computed = float(neo_obj.t_start.magnitude)
+                    match = computed is not None and abs(computed - value) < tol
 
                 elif filter_type == 't_stop':
-                    if hasattr(neo_obj, 't_stop'):
-                        match = abs(float(neo_obj.t_stop.magnitude) - value) < tol
+                    computed = cached.get('t_stop')
+                    if computed is None and hasattr(neo_obj, 't_stop'):
+                        computed = float(neo_obj.t_stop.magnitude)
+                    match = computed is not None and abs(computed - value) < tol
 
                 elif filter_type == 'duration':
-                    if hasattr(neo_obj, 'duration'):
-                        match = abs(float(neo_obj.duration.magnitude) - value) < tol
+                    computed = cached.get('duration')
+                    if computed is None and hasattr(neo_obj, 'duration'):
+                        computed = float(neo_obj.duration.magnitude)
+                    match = computed is not None and abs(computed - value) < tol
 
             except Exception:
                 pass

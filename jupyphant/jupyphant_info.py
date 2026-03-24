@@ -233,6 +233,12 @@ class Jupyphant_info:
         all_t_starts = [st.t_start for st in spiketrains]
         all_t_stops = [st.t_stop for st in spiketrains]
 
+        tree = self.jupyphant_entity.jupyphant_tree
+        for st in spiketrains:
+            hash_id = self.jupyphant_entity.get_neo_hash(st, hash_name='sha1')
+            tree.cache_stat(hash_id, 't_start', float(st.t_start.magnitude))
+            tree.cache_stat(hash_id, 't_stop', float(st.t_stop.magnitude))
+
         parts = [
             self._h3(f'SpikeTrain Overview ({count})'),
             self._kv('Total Spikes', total_spikes),
@@ -257,43 +263,51 @@ class Jupyphant_info:
             parts += [
             self._h3('Time Range'),
             self._kv_selectable('t_start Min', str(min(all_t_starts)), 't_start',
-                {'value': float(min(all_t_starts).magnitude),
-                'unit': str(min(all_t_starts).units.dimensionality),
-                'op': 'min'}),
+            {'value': float(min(all_t_starts).magnitude)}),
             self._kv_selectable('t_stop Max', str(max(all_t_stops)), 't_stop',
-                {'value': float(max(all_t_stops).magnitude),
-                'unit': str(max(all_t_stops).units.dimensionality),
-                'op': 'max'}),
+                {'value': float(max(all_t_stops).magnitude)}),
             ]
                     
         # Firing rates
-        firing_rates = [self.statistics.mean_firing_rate(st) for st in spiketrains if st.t_stop > st.t_start]
-        if firing_rates:
-            rate_units = firing_rates[0].units.dimensionality
-            mags = [fr.magnitude for fr in firing_rates]
+        firing_rates_per_st = {
+            self.jupyphant_entity.get_neo_hash(st, hash_name='sha1'):
+                float(self.statistics.mean_firing_rate(st).magnitude)
+            for st in spiketrains if st.t_stop > st.t_start
+        }
+        for hash_id, fr in firing_rates_per_st.items():
+            tree.cache_stat(hash_id, 'firing_rate', fr)
+
+        if firing_rates_per_st:
+            mags = list(firing_rates_per_st.values())
+            rate_units = self.statistics.mean_firing_rate(spiketrains[0]).units.dimensionality
             parts += [
                 self._h3(f'Firing Rates ({rate_units})'),
                 self._kv_selectable('Min', f'{min(mags):.4f}', 'firing_rate',
-                    {'value': float(min(mags)), 'op': 'min'}),
+                    {'value': float(min(mags))}),
                 self._kv_selectable('Max', f'{max(mags):.4f}', 'firing_rate',
-                    {'value': float(max(mags)), 'op': 'max'}),
+                    {'value': float(max(mags))}),
                 self._kv('Average', f'{self.np.mean(mags):.4f}'),
             ]
 
-
         # CV
-        isis_list = [self.statistics.isi(st) for st in spiketrains if len(st) > 1]
-        if isis_list:
-            cvs = [self.statistics.cv(isis) for isis in isis_list]
-            if cvs:
-                parts += [
-                    self._h3('Coefficient of Variation (CV)'),
-                    self._kv_selectable('Min', f'{min(cvs):.4f}', 'cv',
-                        {'value': float(min(cvs)), 'op': 'min'}),
-                    self._kv_selectable('Max', f'{max(cvs):.4f}', 'cv',
-                        {'value': float(max(cvs)), 'op': 'max'}),
-                    self._kv('Average', f'{self.np.mean(cvs):.4f}'),
-                ]
+        cv_per_st = {}
+        for st in spiketrains:
+            if len(st) > 1:
+                hash_id = self.jupyphant_entity.get_neo_hash(st, hash_name='sha1')
+                cv = float(self.statistics.cv(self.statistics.isi(st)))
+                cv_per_st[hash_id] = cv
+                tree.cache_stat(hash_id, 'cv', cv)
+
+        if cv_per_st:
+            cvs = list(cv_per_st.values())
+            parts += [
+                self._h3('Coefficient of Variation (CV)'),
+                self._kv_selectable('Min', f'{min(cvs):.4f}', 'cv',
+                    {'value': float(min(cvs))}),
+                self._kv_selectable('Max', f'{max(cvs):.4f}', 'cv',
+                    {'value': float(max(cvs))}),
+                self._kv('Average', f'{self.np.mean(cvs):.4f}'),
+            ]
 
 
         all_annotations = [st.annotations for st in spiketrains]
