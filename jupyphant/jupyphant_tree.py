@@ -388,6 +388,79 @@ class Jupyphant_tree:
         self.jupyphant_entity.on_selected_neo_objects_changed.fire()
         print(f"JUPYPHANT_RESULT_KEY:{json.dumps(selected_ids)}")
     
+    def select_by_stat(self, filter_type: str, filter_data: dict, scope_ids: list = None):
+        import json
+        from elephant import statistics as elephant_stats
+
+        # reuse same scope expansion logic as select_by_annotation_key
+        if scope_ids:
+            def expand_ids(ids):
+                result = []
+                for hash_id in ids:
+                    if hash_id.startswith('folder-'):
+                        node = self._node_registry.get(hash_id)
+                        if node:
+                            result.extend(expand_ids([c._id for c in node.nodes]))
+                    else:
+                        result.append(hash_id)
+                return result
+            expanded = expand_ids(scope_ids)
+            candidates = {
+                hid: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.get(hid)
+                for hid in expanded
+                if hid in self.jupyphant_entity.map_ipytree_node_id_to_neo_obj
+            }
+        else:
+            candidates = {
+                hid: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.get(hid)
+                for hid in self._node_registry
+                if not hid.startswith('folder-')
+            }
+
+        self.jupyphant_entity.selected_neo_objects.clear()
+        selected_ids = []
+        tol = 1e-6
+        value = filter_data['value']
+
+        for hash_id, neo_obj in candidates.items():
+            if neo_obj is None:
+                continue
+            match = False
+            try:
+                if filter_type == 'firing_rate':
+                    if hasattr(neo_obj, 't_start') and hasattr(neo_obj, 't_stop') and neo_obj.t_stop > neo_obj.t_start:
+                        fr = elephant_stats.mean_firing_rate(neo_obj).magnitude
+                        match = abs(fr - value) < tol
+
+                elif filter_type == 'cv':
+                    if hasattr(neo_obj, 'times') and len(neo_obj) > 1:
+                        cv = elephant_stats.cv(elephant_stats.isi(neo_obj))
+                        match = abs(cv - value) < tol
+
+                elif filter_type == 't_start':
+                    if hasattr(neo_obj, 't_start'):
+                        match = abs(float(neo_obj.t_start.magnitude) - value) < tol
+
+                elif filter_type == 't_stop':
+                    if hasattr(neo_obj, 't_stop'):
+                        match = abs(float(neo_obj.t_stop.magnitude) - value) < tol
+
+                elif filter_type == 'duration':
+                    if hasattr(neo_obj, 'duration'):
+                        match = abs(float(neo_obj.duration.magnitude) - value) < tol
+
+            except Exception:
+                pass
+
+            if match:
+                node = self._node_registry.get(hash_id)
+                if node:
+                    self.jupyphant_entity.selected_neo_objects.add(node)
+                    selected_ids.append(hash_id)
+
+        self.jupyphant_entity.on_selected_neo_objects_changed.fire()
+        print(f"JUPYPHANT_RESULT_KEY:{json.dumps(selected_ids)}")
+    
     def create_tree(self):
         import ipywidgets as widgets
         self._tree_widget = widgets.HTML(value='')

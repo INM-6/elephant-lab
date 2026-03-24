@@ -304,6 +304,24 @@ class JupyphantExtension {
 				this._applyTreeSelection(result);
 				return;
 			}
+
+			const stat = target.closest('.selectable-stat') as HTMLElement;
+			if (stat) {
+				const filterType = stat.getAttribute('data-filter-type');
+				const filterDataRaw = stat.getAttribute('data-filter');
+				if (!filterType || !filterDataRaw) return;
+
+				const currentIds = Array.from(
+					this.outarea_neo_tree!.node.querySelectorAll('.jup-row.jup-selected[data-node-id]')
+				).map(el => el.getAttribute('data-node-id')!);
+				const scopeJson = JSON.stringify(currentIds);
+				const filterJson = filterDataRaw.replace(/&quot;/g, '"');
+
+				const code = `jupyphant_entity.jupyphant_tree.select_by_stat('${filterType}', ${filterJson}, ${scopeJson})`;
+				const result = await this.kernelBridge!.executeCode(code, null, false);
+				this._applyTreeSelection(result);
+			}
+
 		});
 
 

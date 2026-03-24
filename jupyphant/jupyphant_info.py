@@ -3,7 +3,6 @@ class Jupyphant_info:
     from IPython.display import display, clear_output, HTML
     from ipywidgets import Output
     import numpy as np
-    import quantities as pq
     from elephant import statistics
     from neo.core.regionofinterest import CircularRegionOfInterest, RectangularRegionOfInterest, PolygonRegionOfInterest
     from neo import SpikeTrain, AnalogSignal, Event, Epoch
@@ -23,7 +22,7 @@ class Jupyphant_info:
     _CSS = """
     <style>
     .jup-info { font-family: var(--jp-ui-font-family); font-size: var(--jp-ui-font-size1); color: var(--jp-ui-font-color1); }
-    .jup-info h3 { margin: 0 0 6px 0; font-size: 1.05em; border-bottom: 1px solid var(--jp-border-color2); padding-bottom: 3px; }
+    .jup-info h3 { margin: 5px 0 6px 0; font-size: 1.05em; border-top: 2px solid var(--jp-border-color2); border-bottom: none; padding-bottom: 3px; padding-top: 4px;}
     .jup-info .section { margin-bottom: 10px; }
     .jup-info .kv { display: flex; flex-wrap: wrap; gap: 2px 12px; }
     .jup-info .kv-row { display: flex; gap: 4px; }
@@ -39,6 +38,8 @@ class Jupyphant_info:
     .jup-info .anno-section { margin-top: 6px; }
     .jup-info .tag-clickable { cursor: pointer; border: 1px solid var(--jp-brand-color1); }
     .jup-info .tag-clickable:hover { background: var(--jp-brand-color3); }
+    .jup-info .selectable-stat { cursor: pointer; border-bottom: 1px dashed var(--jp-brand-color1); }
+    .jup-info .selectable-stat:hover { background: var(--jp-brand-color3); border-radius: 3px; }
     </style>
     """
 
@@ -119,6 +120,20 @@ class Jupyphant_info:
             return f'<span class="tag tag-clickable" data-anno-key="{clickable_key}" title="Click to select all objects with this annotation">{text}</span>'
         return f'<span class="tag">{text}</span>'
 
+    def _kv_selectable(self, key: str, value, filter_type: str, filter_data: dict) -> str:
+        import json
+        try:
+            data_attr = json.dumps(filter_data).replace('"', '&quot;')
+        except:
+            data_attr = filter_data
+        return f'''<div class="kv-row">
+            <span class="key">{key}:</span>
+            <span class="val selectable-stat"
+                data-filter-type="{filter_type}"
+                data-filter="{data_attr}"
+                title="Click to select matching objects">{value}</span>
+        </div>'''
+    
     def _section(self, *content) -> str:
         return f'<div class="section">{"".join(content)}</div>'
 
@@ -239,7 +254,18 @@ class Jupyphant_info:
                 self._kv('Spike Time Min', f'{self.np.min(all_mag):.4f} {unit_str}'),
                 self._kv('Spike Time Max', f'{self.np.max(all_mag):.4f} {unit_str}'),
             ]
-
+            parts += [
+            self._h3('Time Range'),
+            self._kv_selectable('t_start Min', str(min(all_t_starts)), 't_start',
+                {'value': float(min(all_t_starts).magnitude),
+                'unit': str(min(all_t_starts).units.dimensionality),
+                'op': 'min'}),
+            self._kv_selectable('t_stop Max', str(max(all_t_stops)), 't_stop',
+                {'value': float(max(all_t_stops).magnitude),
+                'unit': str(max(all_t_stops).units.dimensionality),
+                'op': 'max'}),
+            ]
+                    
         # Firing rates
         firing_rates = [self.statistics.mean_firing_rate(st) for st in spiketrains if st.t_stop > st.t_start]
         if firing_rates:
@@ -247,10 +273,13 @@ class Jupyphant_info:
             mags = [fr.magnitude for fr in firing_rates]
             parts += [
                 self._h3(f'Firing Rates ({rate_units})'),
-                self._kv('Min', f'{min(mags):.4f}'),
-                self._kv('Max', f'{max(mags):.4f}'),
+                self._kv_selectable('Min', f'{min(mags):.4f}', 'firing_rate',
+                    {'value': float(min(mags)), 'op': 'min'}),
+                self._kv_selectable('Max', f'{max(mags):.4f}', 'firing_rate',
+                    {'value': float(max(mags)), 'op': 'max'}),
                 self._kv('Average', f'{self.np.mean(mags):.4f}'),
             ]
+
 
         # CV
         isis_list = [self.statistics.isi(st) for st in spiketrains if len(st) > 1]
@@ -259,10 +288,13 @@ class Jupyphant_info:
             if cvs:
                 parts += [
                     self._h3('Coefficient of Variation (CV)'),
-                    self._kv('Min', f'{min(cvs):.4f}'),
-                    self._kv('Max', f'{max(cvs):.4f}'),
+                    self._kv_selectable('Min', f'{min(cvs):.4f}', 'cv',
+                        {'value': float(min(cvs)), 'op': 'min'}),
+                    self._kv_selectable('Max', f'{max(cvs):.4f}', 'cv',
+                        {'value': float(max(cvs)), 'op': 'max'}),
                     self._kv('Average', f'{self.np.mean(cvs):.4f}'),
                 ]
+
 
         all_annotations = [st.annotations for st in spiketrains]
         return self._section(*parts) + self._html_annotations_overview(all_annotations, count)
@@ -276,13 +308,14 @@ class Jupyphant_info:
         all_t_stops = [s.t_stop for s in signals]
 
         parts = [
-            self._h3(f'AnalogSignal Overview ({count})'),
-            self._kv('Total Channels', sum(s.shape[1] for s in signals)),
-            self._kv('Sampling Rates', ', '.join(sampling_rates)),
-            self._kv('Duration Min', min(durations)),
-            self._kv('Duration Max', max(durations)),
-            self._kv('t_start Min', min(all_t_starts)),
-            self._kv('t_stop Max', max(all_t_stops)),
+            self._kv_selectable('Duration Min', str(min(durations)), 'duration',
+            {'value': float(min(durations).magnitude), 'op': 'min'}),
+            self._kv_selectable('Duration Max', str(max(durations)), 'duration',
+            {'value': float(max(durations).magnitude), 'op': 'max'}),
+            self._kv_selectable('t_start Min', str(min(all_t_starts)), 't_start',
+            {'value': float(min(all_t_starts).magnitude), 'op': 'min'}),
+            self._kv_selectable('t_stop Max', str(max(all_t_stops)), 't_stop',
+            {'value': float(max(all_t_stops).magnitude), 'op': 'max'}),
         ]
 
         all_annotations = [s.annotations for s in signals]
