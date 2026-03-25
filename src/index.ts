@@ -270,12 +270,31 @@ class JupyphantExtension {
 					this.kernelBridge!.executeCode(code, null, false);
 				}
 			} else {
-				if (!isCtrl) {
+				if (isCtrl) {
+					row.classList.toggle('jup-selected');
+					const childContainer = row.nextElementSibling as HTMLElement;
+					if (childContainer?.classList.contains('jup-children')) {
+						if (!row.classList.contains('jup-selected')) {
+							// just deselected — remove children too
+							childContainer.querySelectorAll('.jup-row[data-node-id]')
+								.forEach(el => el.classList.remove('jup-selected'));
+						} else {
+							// just selected — add children too
+							childContainer.querySelectorAll('.jup-row[data-node-id]')
+								.forEach(el => el.classList.add('jup-selected'));
+						}
+					}
+				} else {
 					this.outarea_neo_tree!.node
 						.querySelectorAll('.jup-row.jup-selected')
 						.forEach(el => el.classList.remove('jup-selected'));
+					row.classList.add('jup-selected');
+					const childContainer = row.nextElementSibling as HTMLElement;
+					if (childContainer?.classList.contains('jup-children')) {
+						childContainer.querySelectorAll('.jup-row[data-node-id]')
+							.forEach(el => el.classList.add('jup-selected'));
+					}
 				}
-				row.classList.toggle('jup-selected');
 
 				// Notify Python
 				const multiSelectPy = isCtrl ? 'True' : 'False';
