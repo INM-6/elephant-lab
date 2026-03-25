@@ -5,7 +5,7 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
 
     def extract_data(self, spiketrain):
         """Extracts SpikeTrainRasterPlotData from a SpikeTrain"""
-        self.name = getattr(spiketrain,'name', 'SpikeTrain')
+        self.name = getattr(spiketrain,'name', None)
         self.mode = 'markers'
 
         def calcSize(subplot_height):
@@ -28,7 +28,7 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
         import numpy as np
         def extract_data(self, analogsignal_dict):
             """Extracts AnalogSignalLFPPlotData from a dict containing info about an AnalogSignal"""
-            self.name = analogsignal_dict.get('name', 'AnalogSignal')
+            self.name = analogsignal_dict.get('name', None)
             self.mode = 'lines'
 
             channel_data = analogsignal_dict['channel_data']
@@ -46,7 +46,7 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
             self.y = norm_data
 
     # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
-    def plot_lfp(self,lfps, times, names):
+    def plot_lfp(self,lfps, times, names, name_fallback):
         """
         Plot LFPs using plotly.
 
@@ -71,12 +71,13 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                         channel_data=channel_data,
                         times=times, 
                         name=f"{names[trial_id]}",
-                    ), 
+                    ),
+                    name_fallback,
                     units_x = times.units,
                     units_y = lfp.units
                 ))
 
-    def extract_data(self, data):
+    def extract_data(self, data, name_fallback):
         """Extracts AnalogSignalLFPPlotData from a list of AnalogSignals"""
         max_duration_limit = 10 * self.pq.s 
     
@@ -95,15 +96,16 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
         
         self.plot_lfp(
             sliced_signals, 
-            times=plot_times,
-            names=[sig.name for sig in data]
+            plot_times,
+            [sig.name for sig in data],
+            name_fallback
         )
 
 class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
     class IrregularlySampledSignalPlot(PlotlyGraphDataType):
         def extract_data(self, irregular_signal):
             """Extracts IrregularlySampledSignalPlotData from a IrregularlySampledSignal"""
-            self.name = getattr(irregular_signal,'name', 'IrregularSignal')
+            self.name = getattr(irregular_signal,'name', None)
             self.mode = 'markers+lines'
 
             self.x=irregular_signal.times.magnitude.flatten()
@@ -111,10 +113,10 @@ class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
             self.units_x = irregular_signal.times.units
             self.units_y = irregular_signal.units
 
-    def extract_data(self, data):
+    def extract_data(self, data, name_fallback):
         """Extracts IrregularlySampledSignalData from a list of IrregularlySampledSignals"""
         for iss in data:
-            self.data_list.append(self.IrregularlySampledSignalPlot(iss))
+            self.data_list.append(self.IrregularlySampledSignalPlot(iss, name_fallback))
 
 
 class EventAnnotations(PlotlyGraphAnnotations):

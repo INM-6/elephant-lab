@@ -24,7 +24,7 @@ class PlotlyUtils:
 
 class PlotlyGraphDataType:
 
-    def __init__(self, data, **kwargs):
+    def __init__(self, data, name_fallback='Trace', **kwargs):
         if data is None:
             self.x = [0]
             self.y = [0]
@@ -32,6 +32,11 @@ class PlotlyGraphDataType:
             self.mode = 'markers'
         else:
             self.extract_data(data)
+            if self.name is None:
+                if callable(name_fallback):
+                    self.name = name_fallback(data)
+                else:
+                    self.name = str(name_fallback)
             # Override / add attributes from kwargs
             for key, value in kwargs.items():
                 setattr(self, key, value)
@@ -94,25 +99,25 @@ class PlotlyGraphDataType:
 class PlotlyGraphDataTypeList():
     import numpy as np
 
-    def __init__(self, data):
+    def __init__(self, data, name_fallback='Trace'):
         self.data_list = []
-        self.extract_data(data)
+        self.extract_data(data, name_fallback)
 
-    def extract_data(self, data):
+    def extract_data(self, data, name_fallback):
         if data is None:
-            self.data_list = [PlotlyGraphDataType(None)]
+            self.data_list = [PlotlyGraphDataType(None, name_fallback)]
         elif isinstance(data, list) and self.is_trace_list(data):
             for d in data:
                 try:
                     if not isinstance(d, PlotlyGraphDataType):
-                        d = PlotlyGraphDataType(d)
+                        d = PlotlyGraphDataType(d, name_fallback)
                     self.data_list.append(d)
                 except Exception as e:
                     PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
         else:
             try:
                 if not isinstance(data, PlotlyGraphDataType):
-                    data = PlotlyGraphDataType(data)
+                    data = PlotlyGraphDataType(data, name_fallback)
                 self.data_list = [data]
             except Exception as e:
                 PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")

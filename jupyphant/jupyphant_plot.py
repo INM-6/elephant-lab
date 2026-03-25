@@ -356,7 +356,7 @@ class Jupyphant_plot:
         plot_dict['changes_on_overlap']=fig.changesOnOverlap()
         
     def _create_rasterplot(self, spiketrain=None, event=None, epoch=None):
-        data = [self.SpikeTrainRasterPlot(st) for st in spiketrain]
+        data = [self.SpikeTrainRasterPlot(st, self.jupyphant_entity.names_for) for st in spiketrain]
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_ST]
@@ -371,9 +371,9 @@ class Jupyphant_plot:
     def _create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
         data = None
         if analogsignal is not None:
-            data = self.AnalogSignalLFPPlotList(analogsignal)
+            data = self.AnalogSignalLFPPlotList(analogsignal, self.jupyphant_entity.names_for)
         if irregularsignal is not None:
-            irregular_data = self.IrregularlySampledSignalPlotList(irregularsignal)
+            irregular_data = self.IrregularlySampledSignalPlotList(irregularsignal, self.jupyphant_entity.names_for)
             if data is None:
                 data = irregular_data
             else:
