@@ -61,21 +61,17 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
             if data.ndim == 1:
                 data = data.reshape(-1, 1)
             
-            num_channels = data.shape[1]
-            
-            for ch_idx in range(num_channels):
-                
-                channel_data = data[:, ch_idx]
+            channel_data = data.mean(axis=1)
 
-                self.data_list.append(self.AnalogSignalLFPPlot(dict(
-                        channel_data=channel_data,
-                        times=times, 
-                        name=f"{names[trial_id]}",
-                    ),
-                    name_fallback,
-                    units_x = times.units,
-                    units_y = lfp.units
-                ))
+            self.data_list.append(self.AnalogSignalLFPPlot(dict(
+                    channel_data=channel_data,
+                    times=times, 
+                    name=f"{names[trial_id]}",
+                ),
+                name_fallback[trial_id],
+                units_x = times.units,
+                units_y = lfp.units
+            ))
 
     def extract_data(self, data, name_fallback):
         """Extracts AnalogSignalLFPPlotData from a list of AnalogSignals"""
@@ -98,7 +94,7 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
             sliced_signals, 
             plot_times,
             [sig.name for sig in data],
-            name_fallback
+            [name_fallback(sig) for sig in data]
         )
 
 class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
