@@ -323,8 +323,10 @@ class Jupyphant_plot:
             if not is_plotted or not plot_dict['is_downscaled']:
                 continue
             previous_x_range = plot_dict['x_range']
+            if key.value not in x_ranges:
+                continue
             x_range = x_ranges[key.value]
-            if not self.np.allclose(x_range, previous_x_range, rtol=1e-3):
+            if not self.np.allclose(x_range, previous_x_range, atol=1e-6, rtol=1e-3):
                 plot_dict['x_range']=x_range
                 temp_reload = True
             plot_dict['changed']=temp_reload
@@ -339,7 +341,7 @@ class Jupyphant_plot:
             is_plotted = plot_dict['is_plotted']
             if not is_plotted:
                 continue
-            if not self.np.allclose(plot_dict['og_x_range'], plot_dict['x_range'], rtol=1e-3):
+            if not self.np.allclose(plot_dict['og_x_range'], plot_dict['x_range'], atol=1e-6, rtol=1e-3):
                 plot_dict['x_range']=plot_dict['og_x_range']
                 plot_dict['changed']=True
                 reload = True
