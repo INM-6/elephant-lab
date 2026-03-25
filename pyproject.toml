@@ -44,7 +44,6 @@ dependencies = [
 "quantities",
 "traitlets",
 "plotly",
-"anywidget",
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 
