@@ -1,5 +1,6 @@
 class PlotlyUtils:
     import quantities as pq
+    import numpy as np
     import sys
 
     def can_convert_units(unit, convert_unit):
@@ -17,6 +18,15 @@ class PlotlyUtils:
     def convert_to_other_units(val, unit, convert_unit):
         q = PlotlyUtils.pq.Quantity(val, unit)
         return q.rescale(convert_unit).magnitude
+    
+    def calc_round_digits(values):
+        # Avoid log10 issues with zero
+        abs_xs = PlotlyUtils.np.abs(values)
+        abs_xs[abs_xs == 0] = 1
+
+        # Determine number of decimal places
+        digits = PlotlyUtils.np.clip(2 - PlotlyUtils.np.floor(PlotlyUtils.np.log10(abs_xs)), 0, 6).astype(int)
+        return digits
     
     def print_warning(message):
         pass
@@ -96,10 +106,12 @@ class PlotlyGraphDataTypeList():
 
     def __init__(self, data):
         self.data_list = []
+        self.is_empty = False
         self.extract_data(data)
 
     def extract_data(self, data):
         if data is None:
+            self.is_empty = True
             self.data_list = [PlotlyGraphDataType(None)]
         elif isinstance(data, list) and self.is_trace_list(data):
             for d in data:
@@ -142,6 +154,7 @@ class PlotlyGraphDataTypeList():
         return False
     
     def concat(self, plotlyGraphDataTypeList):
+        self.is_empty = self.is_empty and plotlyGraphDataTypeList.is_empty
         self.data_list += plotlyGraphDataTypeList.data_list
 
     def lttb_downsample(self,x, y, threshold):
@@ -204,8 +217,22 @@ class PlotlyGraphDataTypeList():
         Shifts all graphs to 0 if shift_to_0 is True and minX is not already close to 0
         Filters out all points outside of x_range if x_range is not None
         Decreases number of points if there are to many
-        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY, is_default_zero_based, nGraphs, compress
+        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY, is_default_zero_based, nGraphs, compress, is_empty
         """
+        #set default
+        self.common_units_x = None
+        self.common_units_y = None
+        self.minX = 0
+        self.minY = 0
+        self.maxX = 0
+        self.maxY = 0
+        self.is_downscaled = False
+        self.compress = False
+        self.nGraphs = 1
+        self.is_default_zero_based = True
+        if(self.is_empty):
+            return
+        self.is_empty = True
 
         nPoints = 0
         first = True
@@ -275,17 +302,9 @@ class PlotlyGraphDataTypeList():
         self.is_default_zero_based = is_default_zero_based
         if len(filtered) == 0:
             PlotlyUtils.print_warning("No valid data to display after normalization and filtering.")
-            self.common_units_x = None
-            self.common_units_y = None
-            self.minX = 0
-            self.minY = 0
-            self.maxX = 0
-            self.maxY = 0
-            self.is_downscaled = False
-            self.compress = False
-            self.nGraphs = 1
             self.data_list = [PlotlyGraphDataType(None)]
             return
+        self.is_empty = False
         self.data_list = filtered
         self.common_units_x = common_units_x
 
@@ -376,14 +395,16 @@ class PlotlyGraphDataTypeList():
         self.maxY = maxY
 
 class PlotlyGraphAnnotations():
-    def __init__(self, x, text, units):
+    def __init__(self, x, text, unit_indice, units):
         self.x = x
         self.text = text
+        self.unit_indice = unit_indice
         self.units = units
 
 class PlotlyGraphAnnotationIntervals():
-    def __init__(self, x0, x1, text, units):
+    def __init__(self, x0, x1, text, unit_indice, units):
         self.x0 = x0
         self.x1 = x1
         self.text = text
+        self.unit_indice = unit_indice
         self.units = units

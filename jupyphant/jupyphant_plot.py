@@ -364,7 +364,7 @@ class Jupyphant_plot:
         x_range = plot_dict['x_range']
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
-        fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
@@ -385,7 +385,7 @@ class Jupyphant_plot:
         x_range = plot_dict['x_range']
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
-        fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, max_points=max_points, shift_to_0=zero_based)
+        fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interval_data=epoch_intervals, max_points=max_points, shift_to_0=zero_based)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
     
@@ -397,7 +397,7 @@ class Jupyphant_plot:
         x_range = plot_dict['x_range']
         max_points = plot_dict['max_points']
         zero_based = plot_dict['zero_based']
-        fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interavals_data=epoch_intervals, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
