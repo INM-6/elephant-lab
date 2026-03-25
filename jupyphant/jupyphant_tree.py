@@ -17,6 +17,7 @@ class Jupyphant_tree:
     from neo.core.baseneo import BaseNeo
     from neo.core.regionofinterest import RegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
+    import ipywidgets as widgets
 
     from typing import TYPE_CHECKING
 
@@ -345,7 +346,6 @@ class Jupyphant_tree:
         self.jupyphant_entity.on_selected_neo_objects_changed.fire()
         
     def create_tree(self):
-        import ipywidgets as widgets
-        self._tree_widget = widgets.HTML(value='')
+        self._tree_widget = self.widgets.HTML(value='')
         self._tree_widget.layout.width = '100%'
         Jupyphant_tree.display(self._tree_widget)
