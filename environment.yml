@@ -6,7 +6,6 @@ dependencies:
   - ipykernel=6.16.1=pyh210e3f2_0
   - ipympl=0.9.3=pyhd8ed1ab_0
   - ipython=8.5.0=pyh41d4057_1
-  - ipytree=0.2.2=pyhd8ed1ab_0
   - ipywidgets=8.0.2=pyhd8ed1ab_1
   - json5=0.9.5=pyh9f0ad1d_0
   - jsonschema=4.16.0=pyhd8ed1ab_0

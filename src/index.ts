@@ -84,7 +84,7 @@ class JupyphantExtension {
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
 	private plotlyFrontend: PlotlyFrontend | null;
-
+	private _lastClickedNode: string | null = null;
 
 	// Construct a new JupyphantExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -125,7 +125,7 @@ class JupyphantExtension {
 			// Execute Jupyphant Code to create Neo Tree / Information and Plots 
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
-			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerInfo, this.outarea_nodeexplorer_info!);
+			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
 			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
@@ -215,6 +215,99 @@ class JupyphantExtension {
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
 
+
+		// Handle HTML tree interactions (expand/collapse + selection)
+		// Also handles Shift+Click multi selection in neo tree
+		this.outarea_neo_tree!.node.addEventListener('click', (e) => {
+			const target = e.target as HTMLElement;
+
+			// Expand/collapse -> pure JS 
+			const toggle = target.closest('.jup-toggle') as HTMLElement;
+			if (toggle) {
+				const row = toggle.closest('.jup-row') as HTMLElement;
+				const children = row?.nextElementSibling as HTMLElement;
+				if (children?.classList.contains('jup-children')) {
+					const isOpen = children.classList.contains('jup-open');
+					children.classList.toggle('jup-open', !isOpen);
+					toggle.innerHTML = isOpen ? '<i class="fa fa-plus"></i>' : '<i class="fa fa-minus"></i>';
+				}
+				return;
+			}
+
+			const row = target.closest('.jup-row[data-node-id]') as HTMLElement;
+			if (!row) return;
+
+			const nodeId = row.getAttribute('data-node-id')!;
+			const isShift = (e as MouseEvent).shiftKey;
+			const isCtrl = (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey;
+
+			if (isShift && this._lastClickedNode) {
+				// Collect all visible node rows in DOM order
+				const allRows = Array.from(
+					this.outarea_neo_tree!.node.querySelectorAll('.jup-row[data-node-id]')
+				) as HTMLElement[];
+
+				const ids = allRows.map(r => r.getAttribute('data-node-id')!);
+				const fromIdx = ids.indexOf(this._lastClickedNode);
+				const toIdx = ids.indexOf(nodeId);
+
+				if (fromIdx !== -1 && toIdx !== -1) {
+					const [start, end] = fromIdx < toIdx
+						? [fromIdx, toIdx]
+						: [toIdx, fromIdx];
+
+					// Clear previous selection visually
+					this.outarea_neo_tree!.node
+						.querySelectorAll('.jup-row.jup-selected')
+						.forEach(el => el.classList.remove('jup-selected'));
+
+					// Select the range visually
+					const rangeIds: string[] = [];
+					for (let i = start; i <= end; i++) {
+						allRows[i].classList.add('jup-selected');
+						rangeIds.push(ids[i]);
+					}
+
+					// Call Python method with the whole range
+					const idsJson = JSON.stringify(rangeIds);
+					const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson);
+					this.kernelBridge!.executeCode(code, null, false);
+				}
+			} else {
+				if (isCtrl) {
+					row.classList.toggle('jup-selected');
+					const childContainer = row.nextElementSibling as HTMLElement;
+					if (childContainer?.classList.contains('jup-children')) {
+						if (!row.classList.contains('jup-selected')) {
+							// just deselected — remove children too
+							childContainer.querySelectorAll('.jup-row[data-node-id]')
+								.forEach(el => el.classList.remove('jup-selected'));
+						} else {
+							// just selected — add children too
+							childContainer.querySelectorAll('.jup-row[data-node-id]')
+								.forEach(el => el.classList.add('jup-selected'));
+						}
+					}
+				} else {
+					this.outarea_neo_tree!.node
+						.querySelectorAll('.jup-row.jup-selected')
+						.forEach(el => el.classList.remove('jup-selected'));
+					row.classList.add('jup-selected');
+					const childContainer = row.nextElementSibling as HTMLElement;
+					if (childContainer?.classList.contains('jup-children')) {
+						childContainer.querySelectorAll('.jup-row[data-node-id]')
+							.forEach(el => el.classList.add('jup-selected'));
+					}
+				}
+
+				// Notify Python
+				const multiSelectPy = isCtrl ? 'True' : 'False';
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, multiSelectPy);
+				this.kernelBridge!.executeCode(code, null, false);
+				this._lastClickedNode = nodeId;
+			}
+		});
+
 		// Listener for cell execution
 		NotebookActions.executed.connect((sender, exec_data) => {
 			if (exec_data.notebook !== newPanel.content) {
@@ -228,7 +321,7 @@ class JupyphantExtension {
 
 			this._updateTimer = window.setTimeout(async () => {
 				await Promise.all([
-					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_nodeexplorer_info!, false, true, initialSession),
+					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, initialSession),
 				]);
 			}, 500);
 		});
