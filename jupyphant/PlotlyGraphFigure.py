@@ -122,7 +122,7 @@ class PlotlyGraphFigure:
 
                 if self._is_single_plot():
                     self.fig.add_trace(trace)
-                    if self._can_have_custom_ticklabes() and hasattr(d, 'use_name_as_ticklabels'):
+                    if self._can_have_custom_ticklabels() and hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
                             if self.compress:
                                 self.ticktext.append(d.name)
@@ -146,7 +146,7 @@ class PlotlyGraphFigure:
                         self._update_layout_options_dict(f"yaxis{row}",dict(
                             title=d.units_y.__str__()
                         ))
-                    if self._can_have_custom_ticklabes() and hasattr(d, 'use_name_as_ticklabels'):
+                    if self._can_have_custom_ticklabels() and hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
                             self._update_layout_options_dict(f"yaxis{row}",dict(
                                 tickvals=[0],
@@ -339,7 +339,7 @@ class PlotlyGraphFigure:
     def _manage_ticklabels(self):
         if self.compress:
             has_custom_ticklabels = False
-            if self._can_have_custom_ticklabes:
+            if self._can_have_custom_ticklabels():
                 if len(self.ticktext)==self.nGraphs:
                     has_custom_ticklabels = True
                     yaxis_options = dict(
@@ -384,7 +384,7 @@ class PlotlyGraphFigure:
     def _is_single_plot(self):
         return self.overlapping or self.compress or self.nGraphs==1
     
-    def _can_have_custom_ticklabes(self):
+    def _can_have_custom_ticklabels(self):
         return not self._should_overlap()
     
     def _getSubplotHeight(self, height=None):

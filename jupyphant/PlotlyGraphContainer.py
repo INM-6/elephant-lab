@@ -3,6 +3,7 @@ class PlotlyUtils:
     import numpy as np
     import sys
 
+    @staticmethod
     def can_convert_units(unit, convert_unit):
         """
         Returns 0 if no conversion is needed
@@ -15,10 +16,12 @@ class PlotlyUtils:
             return -1
         return 1
         
+    @staticmethod
     def convert_to_other_units(val, unit, convert_unit):
         q = PlotlyUtils.pq.Quantity(val, unit)
         return q.rescale(convert_unit).magnitude
     
+    @staticmethod
     def calc_round_digits(values):
         # Avoid log10 issues with zero
         abs_xs = PlotlyUtils.np.abs(values)
@@ -28,6 +31,7 @@ class PlotlyUtils:
         digits = PlotlyUtils.np.clip(2 - PlotlyUtils.np.floor(PlotlyUtils.np.log10(abs_xs)), 0, 6).astype(int)
         return digits
     
+    @staticmethod
     def print_warning(message):
         pass
         #print(f"WARNING: {message}", file=PlotlyUtils.sys.stderr)

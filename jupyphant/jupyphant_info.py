@@ -28,7 +28,7 @@ class Jupyphant_info:
         """ 
         self.jupyphant_entity: "Jupyphant_info.Jupyphant" = jupyphant_entity
 
-    def create_explorer_info(self):
+    def create_details_panel(self):
         def on_selected_change_info():
             with output_node_info:
                 Jupyphant_info.clear_output()

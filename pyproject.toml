@@ -22,7 +22,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
-"ipytree",
 "ipympl",
 "joblib",
 "ipywidgets",
@@ -44,7 +43,6 @@ dependencies = [
 "quantities",
 "traitlets",
 "plotly",
-"anywidget",
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 

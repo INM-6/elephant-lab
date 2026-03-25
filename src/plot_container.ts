@@ -3,9 +3,9 @@ import * as noUiSlider from 'nouislider';
 import { OutputArea } from '@jupyterlab/outputarea';
 
 export class PlotContainer {
-    wrapper: HTMLDivElement;
-    container: HTMLDivElement;
-    loading: HTMLDivElement;
+    private wrapper: HTMLDivElement;
+    private container: HTMLDivElement;
+    private loading: HTMLDivElement;
     updateId: number;
     private slider?: HTMLElement;
     private ticklabel_limit?: number;
