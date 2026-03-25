@@ -266,7 +266,7 @@ class JupyphantExtension {
 
 					// Call Python method with the whole range
 					const idsJson = JSON.stringify(rangeIds);
-					const code = `jupyphant_entity.jupyphant_tree.handle_selection_range(${idsJson})`;
+					const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson);
 					this.kernelBridge!.executeCode(code, null, false);
 				}
 			} else {
@@ -279,7 +279,7 @@ class JupyphantExtension {
 
 				// Notify Python
 				const multiSelectPy = isCtrl ? 'True' : 'False';
-				const code = `jupyphant_entity.jupyphant_tree.handle_selection('${nodeId}', ${multiSelectPy})`;
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, multiSelectPy);
 				this.kernelBridge!.executeCode(code, null, false);
 				this._lastClickedNode = nodeId;
 			}

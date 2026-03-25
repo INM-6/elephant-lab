@@ -77,6 +77,14 @@ function expandNeoTree(checked: boolean): string {
 	return `jupyphant_entity.jupyphant_tree.expand_neo_tree(${convert_bool_to_python_bool(checked)})`
 }
 
+function handleTreeSelection(nodeId: string, multiSelectPy: boolean) {
+	return `jupyphant_entity.jupyphant_tree.handle_selection('${nodeId}', ${multiSelectPy})`;
+}
+
+function handleSelectionRange(idsJson: string) {
+	return `jupyphant_entity.jupyphant_tree.handle_selection_range(${idsJson})`;
+}
+
 // Make all strings publicly available in a dict
 // This dict is used in index.ts to actually execute the code
 export enum PythonCodeKey {
@@ -99,6 +107,8 @@ export enum PythonCodeKey {
 	ToggleNeoTreeFilter = 'toggleNeoTreeFilter',
 	ExpandNeoTree = 'expandNeoTree',
 	GetIOClass = 'getIOClass',
+	HandleTreeSelection = 'handleTreeSelection',
+	HandleSelectionRange = 'handleSelectionRange',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -121,6 +131,8 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.ToggleNeoTreeFilter]: (...args: any[]) => toggleNeoTreeFilter(args[0]),
 	[PythonCodeKey.ExpandNeoTree]: (...args: any[]) => expandNeoTree(args[0]),
 	[PythonCodeKey.GetIOClass]: (...args: any[]) => getNeoIOClass(args[0]),
+	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1]),
+	[PythonCodeKey.HandleSelectionRange]: (...args: any[]) => handleSelectionRange(args[0]),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {
