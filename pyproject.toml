@@ -42,7 +42,7 @@ dependencies = [
 "elephant",
 "quantities",
 "traitlets",
-"plotly<6"
+"plotly",
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 

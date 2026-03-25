@@ -63,6 +63,7 @@ import '../style/index.css';
 import '../style/base.css'
 import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
+import { PlotlyFrontend } from './plot';
 import jupyphantLogo from '../doc/Jupyphant-Logo.png';
 
 class JupyphantExtension {
@@ -82,6 +83,7 @@ class JupyphantExtension {
 	private docManager: IDocumentManager;
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
+	private plotlyFrontend: PlotlyFrontend | null;
 	private _lastClickedNode: string | null = null;
 
 	// Construct a new JupyphantExtension
@@ -104,6 +106,7 @@ class JupyphantExtension {
 		this.outarea_neo_tree = null;
 		this.output_tabs = null;
 		this.kernelBridge = null;
+		this.plotlyFrontend = null;
 	}; // end of constructor()
 
 
@@ -123,6 +126,7 @@ class JupyphantExtension {
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
+			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
@@ -743,8 +747,7 @@ class JupyphantExtension {
 		};
 
 		const darkmodeToggle = createToggle('fa-moon', 'Dark', 'Switch between dark and light mode', true, true, (state) => {
-			const code = getPythonCode(PythonCodeKey.DarkModeToggle, state);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
+			this.plotlyFrontend?.setThemes(state);
 		});
 
 		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
@@ -763,7 +766,7 @@ class JupyphantExtension {
 				max_points = min_max_points;
 				numberInput.value = max_points.toString();
 			}
-			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, max_points);
+			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, max_points, this.plotlyFrontend?.getXRanges());
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 

@@ -1,72 +1,148 @@
-class PlotlyImageSequenceFigure():
+class PlotlyImageSequenceFigure:
+
     import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
     import numpy as np
     import quantities as pq
     from neo.core import ImageSequence
-    from IPython.display import display as ipython_display
+    import math
 
-    def __init__(self, image_sequences, title=None, theme_name='plotly_dark', color_scale='Viridis'):
-        """
-        Creates a plotly.Heatmap with animation to display the image_sequence
-        """
+    def __init__(self, image_sequences, title=None, color_scale='Viridis', max_cols=2):
         if isinstance(image_sequences, self.ImageSequence):
             image_sequences = [image_sequences]
 
-        template = "plotly_white"
-        if "dark" in theme_name.lower():
-            template = "plotly_dark"
-        self.figs = []
-        for image_sequence in image_sequences:
-            # Shape: (num_frames, height, width)
-            num_frames, height, width = image_sequence.shape
+        num_sequences = len(image_sequences)
+        cols = min(num_sequences, max_cols)
+        rows = self.math.ceil(num_sequences / cols)
 
-            seq_name = getattr(image_sequence, "name", "Unnamed sequence")
-            duration = image_sequence.t_stop - image_sequence.t_start
-            title_text = f"{seq_name}<br><sup>Duration: {duration}</sup>"
+        fig_height = 500 * rows
+        pixel_spacing = 80
 
-            self.figs.append(self.go.Figure(
-                data=self.go.Heatmap(
-                    z=image_sequence[0].magnitude,  # first frame
+        horizontal_spacing = 0.1
+        vertical_spacing = pixel_spacing / fig_height
+
+        # Create subplots
+        self.fig = PlotlyImageSequenceFigure.make_subplots(
+            rows=rows,
+            cols=cols,
+            horizontal_spacing=horizontal_spacing,
+            vertical_spacing=vertical_spacing
+        )
+
+        self.frames = []
+        updatemenus = []
+
+        def get_total_spaced_x_space():
+            return (cols-1) * horizontal_spacing
+        
+        def get_total_free_x_space():
+            return 1 - get_total_spaced_x_space()
+        
+        def get_subplot_free_x_space():
+            return get_total_free_x_space() / cols
+        
+        def get_total_spaced_y_space():
+            return (rows-1) * vertical_spacing
+        
+        def get_total_free_y_space():
+            return 1 - get_total_spaced_y_space()
+        
+        def get_subplot_free_y_space():
+            return get_total_free_y_space() / rows
+
+        # Helper functions for positioning
+        def get_colorbar_x(col_index):
+            return col_index * get_subplot_free_x_space() + (col_index-1) * horizontal_spacing
+
+        def get_colorbar_y(row_index):
+            row_index = rows - row_index + 1
+            subplot_free_y_space = get_subplot_free_y_space()
+            return row_index * subplot_free_y_space + (row_index-1) * vertical_spacing - subplot_free_y_space * 0.5
+
+        def get_button_x(col_index):
+            subplot_free_x_space = get_subplot_free_x_space()
+            return col_index * subplot_free_x_space + (col_index-1) * horizontal_spacing - subplot_free_x_space * 0.5
+
+        def get_button_y(row_index):
+            row_index = rows - row_index + 1
+            subplot_free_y_space = get_subplot_free_y_space()
+            return row_index * subplot_free_y_space + (row_index-1) * vertical_spacing + subplot_free_y_space * 0.01
+
+        for idx, seq in enumerate(image_sequences):
+            row = idx // cols + 1
+            col = idx % cols + 1
+            num_frames, height, width = seq.shape
+            duration_ms = (seq.t_stop - seq.t_start).rescale(self.pq.ms).magnitude
+
+            zmin = self.np.min(seq.magnitude)
+            zmax = self.np.max(seq.magnitude)
+
+            # Colorbar
+            colorbar_x = get_colorbar_x(col)
+            colorbar_y = get_colorbar_y(row)
+            heatmap = self.go.Heatmap(
+                z=seq[0].magnitude,
+                colorscale=color_scale,
+                zmin=zmin,
+                zmax=zmax,
+                showscale=True,
+                colorbar=dict(
+                    title=str(seq.units),
+                    x=colorbar_x,
+                    y=colorbar_y,
+                    len=get_subplot_free_y_space()
+                )
+            )
+            self.fig.add_trace(heatmap, row=row, col=col)
+
+            # Animation frames
+            for k in range(num_frames):
+                frame_data = [self.go.Heatmap(
+                    z=seq[k].magnitude,
                     colorscale=color_scale,
-                    zmin=self.np.min(image_sequence.magnitude),
-                    zmax=self.np.max(image_sequence.magnitude),
-                    colorbar=dict(
-                        title=image_sequence.units.__str__()
-                    )
-                ),
-                layout=self.go.Layout(
-                    title=dict(
-                        text=title_text,
-                        x=0.5,   # center
-                        xanchor="center"
-                    ),
-                    height=500,
-                    xaxis=dict(title=image_sequence.spatial_scale.__str__()),
-                    yaxis=dict(
-                        title=image_sequence.spatial_scale.__str__(),
-                        scaleanchor="x",   # lock y scale to x
-                        scaleratio=1       # 1 unit in x = 1 unit in y
-                    ),
-                    updatemenus=[dict(
-                        type="buttons",
-                        buttons=[dict(
-                            label="Play",
-                            method="animate",
-                            args=[None, {
-                                "frame": {"duration": image_sequence.frame_duration.rescale(self.pq.ms).magnitude, "redraw": True},
-                                "fromcurrent": True,
-                                "transition": {"duration": 0}
-                            }]
-                        )]
-                    )],
-                    template=template
-                ),
-                frames=[self.go.Frame(
-                    data=self.go.Heatmap(z=image_sequence[k].magnitude, colorscale=color_scale),
-                    name=str(k)
-                ) for k in range(num_frames)]
-            ))
+                    zmin=zmin,
+                    zmax=zmax
+                )]
+                self.frames.append(self.go.Frame(
+                    data=frame_data,
+                    name=f"{idx}_{k}",
+                    traces=[idx]
+                ))
 
-    def display(self):
-        for fig in self.figs:
-            PlotlyImageSequenceFigure.ipython_display(fig)
+            # Button above column
+            button_x = get_button_x(col)
+            button_y = get_button_y(row)
+            button = dict(
+                type="buttons",
+                buttons=[dict(
+                    label=f"{getattr(seq, 'name', 'seq')}",
+                    method="animate",
+                    args=[[f"{idx}_{k}" for k in range(num_frames)],
+                          {"frame": {"duration": duration_ms / num_frames, "redraw": True},
+                           "fromcurrent": True,
+                           "transition": {"duration": 0}}]
+                )],
+                direction="left",
+                showactive=True,
+                x=button_x,
+                y=button_y,
+                xanchor="center",
+                yanchor="bottom"
+            )
+            updatemenus.append(button)
+
+            # Lock aspect ratio
+            self.fig.update_xaxes(scaleanchor=f'y{idx+1}', row=row, col=col)
+            self.fig.update_yaxes(scaleratio=1, row=row, col=col)
+
+        # Final layout
+        self.fig.frames = self.frames
+        self.fig.update_layout(
+            height=fig_height,
+            title=dict(text=title or "Image Sequences", x=0.5, xanchor="center"),
+            updatemenus=updatemenus,
+            showlegend=False
+        )
+
+    def to_dict(self):
+        return self.fig.to_dict()
