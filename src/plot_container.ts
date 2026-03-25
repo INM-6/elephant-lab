@@ -13,14 +13,10 @@ export class PlotContainer {
     constructor(outputArea: OutputArea | null) {
         const wrapper = document.createElement('div');
         wrapper.classList.add('plot-wrapper');
+        wrapper.style.position = 'relative';
         wrapper.style.display = 'flex';
         wrapper.style.alignItems = 'stretch'; // ensure children stretch vertically
-
-        // Loading overlay
-        const loading = document.createElement('div');
-        loading.classList.add('plot-loading');
-        loading.innerHTML = '⏳ <b>Loading...</b>';
-        wrapper.appendChild(loading);
+        wrapper.style.minHeight = '300px';
 
         // Plot container
         const container = document.createElement('div');
@@ -28,6 +24,29 @@ export class PlotContainer {
         container.style.flex = '1'; // fill remaining space
         container.style.minWidth = '0'; // allow shrinking in flex
         wrapper.appendChild(container);
+
+        // Loading overlay
+        const loading = document.createElement('div');
+        loading.classList.add('plot-loading');
+        loading.innerHTML = '⏳ <b>Loading...</b>';
+        Object.assign(loading.style, {
+            position: 'absolute',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: 'rgba(255,255,255,0.8)',
+            color: '#333',
+            fontSize: '1.2em',
+            zIndex: '10',
+            pointerEvents: 'none', // allow interaction if needed
+            transition: 'opacity 0.2s',
+            opacity: '0',
+        });
+        wrapper.appendChild(loading);
 
         if (outputArea) {
             outputArea.node.appendChild(wrapper);
@@ -42,13 +61,28 @@ export class PlotContainer {
     }
 
     showLoading() {
-        this.loading.style.display = 'block';
+        const gd = this.container as any;
+        if (!gd || !gd.data || gd.data.length === 0) {
+            // Get the current JupyterLab theme background color
+            const rootStyles = getComputedStyle(document.documentElement);
+            const layoutColor = rootStyles.getPropertyValue('--jp-layout-color0').trim() || '#f0f0f0';
+            const textColor = rootStyles.getPropertyValue('--jp-ui-font-color1').trim() || '#333';
+            // No plot yet → loading overlay behaves like "placeholder"
+            this.loading.style.backgroundColor = layoutColor;
+            this.loading.style.color = textColor;
+        } else {
+            // Existing plot → dark overlay
+            this.loading.style.backgroundColor = 'rgba(0,0,0,0.3)';
+            this.loading.style.color = '#fff';
+        }
+        this.loading.style.opacity = '1';
+        this.loading.style.pointerEvents = 'all';
     }
 
     hideLoading() {
-        this.loading.style.display = 'none';
+        this.loading.style.opacity = '0';
+        this.loading.style.pointerEvents = 'none';
     }
-
     setUpdateId(id: number) {
         this.updateId = id;
     }
@@ -79,10 +113,11 @@ export class PlotContainer {
             }
 
             this.setTheme(is_plot_theme_dark)
-        })
-            .catch((err) => {
-                console.error('Plotly render error:', err);
-            });
+        }).catch((err) => {
+            console.error('Plotly render error:', err);
+        }).finally(() => {
+            this.hideLoading();
+        });
     }
 
     addYRangeSlider(minY: number, maxY: number) {
