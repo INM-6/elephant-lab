@@ -285,8 +285,17 @@ class PlotlyGraphFigure:
             # Build hover text
             hover_texts = self.np.where(
                 widths == 0,
-                texts + "<br>Time: " + xs_str,
-                texts + "<br>Start: " + start_str + "<br>End: " + end_str
+                self.np.char.add(
+                    self.np.char.add(texts, "<br>Time: "),
+                    xs_str
+                ),
+                self.np.char.add(
+                    self.np.char.add(
+                        self.np.char.add(texts, "<br>Start: "),
+                        start_str
+                    ),
+                    self.np.char.add("<br>End: ", end_str)
+                )
             )
 
             trace = self.go.Bar(
