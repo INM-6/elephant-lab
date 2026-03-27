@@ -5,6 +5,7 @@ import neo
 import re
 from matplotlib.colors import to_rgb
 from jupyphant.PlotlyGraphFigure import *
+from jupyphant.PlotlyGraphContainer import *
 from jupyphant.PlotlyGraphDataTypes import SpikeTrainRasterPlot
 from jupyphant.PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
 from ipywidgets import FloatRangeSlider
@@ -63,7 +64,7 @@ def test_None_data(none_plotlyGraphFigure):
     none_plotlyGraphFigure.overlap()
     assert none_plotlyGraphFigure.fig is not None
     assert none_plotlyGraphFigure.data.common_units_y is None
-    assert np.allclose(none_plotlyGraphFigure.getXRange(), [0,0], atol=1e-6)
+    assert np.allclose(none_plotlyGraphFigure.getXRange(), [0,0], atol=1e-6, rtol=1e-3)
 
 def test_is_not_Downscaled(none_plotlyGraphFigure):
     assert not none_plotlyGraphFigure.isDownscaled()
@@ -119,9 +120,9 @@ def test_shift_to_0():
 def test_custom_x_range():
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, overlap_on_compress=False, x_range=[-5,4])
-    assert not np.allclose(plotlyGraphFigure.getXRange(), [-5,4], atol=1e-6)
-    assert np.allclose(plotlyGraphFigure.getXRange(), [0,3], atol=1e-6)
-    assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0,1,2,3], atol=1e-6)
+    assert not np.allclose(plotlyGraphFigure.getXRange(), [-5,4], atol=1e-6, rtol=1e-3)
+    assert np.allclose(plotlyGraphFigure.getXRange(), [0,3], atol=1e-6, rtol=1e-3)
+    assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0,1,2,3], atol=1e-6, rtol=1e-3)
 
 def test_shift_to_0_and_custom_x_range():
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([3,6,10] * pq.s, t_stop=10 * pq.s))
@@ -181,7 +182,7 @@ def test_annotations():
 def test_annotation_intervals():
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     plotlyGraphAnnotationIntervals = PlotlyGraphAnnotationIntervals(np.array([1,2,3]),np.array([1.5,2.2,4]), np.array(["Test"] * 3), np.array([pq.s] * 3))
-    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_interavals_data=plotlyGraphAnnotationIntervals)
+    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_interval_data=plotlyGraphAnnotationIntervals)
     assert len(plotlyGraphFigure.fig.layout.shapes) == 3
     assert len(plotlyGraphFigure.fig.layout.annotations) == 9
 

@@ -63,6 +63,7 @@ import '../style/index.css';
 import '../style/base.css'
 import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
+import { PlotlyFrontend } from './plot';
 import jupyphantLogo from '../doc/Jupyphant-Logo.png';
 
 class JupyphantExtension {
@@ -82,6 +83,7 @@ class JupyphantExtension {
 	private docManager: IDocumentManager;
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
+	private plotlyFrontend: PlotlyFrontend | null;
 	private _lastClickedNode: string | null = null;
 
 	// Construct a new JupyphantExtension
@@ -104,6 +106,7 @@ class JupyphantExtension {
 		this.outarea_neo_tree = null;
 		this.output_tabs = null;
 		this.kernelBridge = null;
+		this.plotlyFrontend = null;
 	}; // end of constructor()
 
 
@@ -123,6 +126,7 @@ class JupyphantExtension {
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
+			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
 			console.log("Jupyphant: Kernel state and UI plots initialized.");
 		} catch (error) {
@@ -266,20 +270,39 @@ class JupyphantExtension {
 
 					// Call Python method with the whole range
 					const idsJson = JSON.stringify(rangeIds);
-					const code = `jupyphant_entity.jupyphant_tree.handle_selection_range(${idsJson})`;
+					const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson);
 					this.kernelBridge!.executeCode(code, null, false);
 				}
 			} else {
-				if (!isCtrl) {
+				if (isCtrl) {
+					row.classList.toggle('jup-selected');
+					const childContainer = row.nextElementSibling as HTMLElement;
+					if (childContainer?.classList.contains('jup-children')) {
+						if (!row.classList.contains('jup-selected')) {
+							// just deselected — remove children too
+							childContainer.querySelectorAll('.jup-row[data-node-id]')
+								.forEach(el => el.classList.remove('jup-selected'));
+						} else {
+							// just selected — add children too
+							childContainer.querySelectorAll('.jup-row[data-node-id]')
+								.forEach(el => el.classList.add('jup-selected'));
+						}
+					}
+				} else {
 					this.outarea_neo_tree!.node
 						.querySelectorAll('.jup-row.jup-selected')
 						.forEach(el => el.classList.remove('jup-selected'));
+					row.classList.add('jup-selected');
+					const childContainer = row.nextElementSibling as HTMLElement;
+					if (childContainer?.classList.contains('jup-children')) {
+						childContainer.querySelectorAll('.jup-row[data-node-id]')
+							.forEach(el => el.classList.add('jup-selected'));
+					}
 				}
-				row.classList.toggle('jup-selected');
 
 				// Notify Python
 				const multiSelectPy = isCtrl ? 'True' : 'False';
-				const code = `jupyphant_entity.jupyphant_tree.handle_selection('${nodeId}', ${multiSelectPy})`;
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, multiSelectPy);
 				this.kernelBridge!.executeCode(code, null, false);
 				this._lastClickedNode = nodeId;
 			}
@@ -428,6 +451,7 @@ class JupyphantExtension {
 		this.widget.id = 'jupyphant-right-panel';
 		// Title of the tab
 		this.widget.title.label = 'Jupyphant';
+		this.widget.title.iconClass = 'elephant-trunk-icon';
 		// Adds the x to close the tab?
 		this.widget.title.closable = true;
 		const session = this.notebook_tracker.currentWidget?.sessionContext;
@@ -794,8 +818,7 @@ class JupyphantExtension {
 		};
 
 		const darkmodeToggle = createToggle('fa-moon', 'Dark', 'Switch between dark and light mode', true, true, (state) => {
-			const code = getPythonCode(PythonCodeKey.DarkModeToggle, state);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
+			this.plotlyFrontend?.setThemes(state);
 		});
 
 		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
@@ -814,7 +837,7 @@ class JupyphantExtension {
 				max_points = min_max_points;
 				numberInput.value = max_points.toString();
 			}
-			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, max_points);
+			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, max_points, this.plotlyFrontend?.getXRanges());
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 

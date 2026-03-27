@@ -66,6 +66,13 @@
   color: var(--jp-ui-font-color1);
 }
 
+.lm-TabBar-tab.jupyphant-active-notebook .lm-TabBar-tabLabel::after,
+.elephant-trunk-icon {
+  background-image: url('../doc/elephant_trunk.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
 .lm-TabBar-tab.jupyphant-active-notebook .lm-TabBar-tabLabel::after {
   content: '';
   display: inline-block;
@@ -73,9 +80,17 @@
   height: 14px;
   margin-left: 8px;
   vertical-align: middle;
-  background-image: url('../doc/Jupyphant-Logo.png');
-  background-size: contain;
-  background-repeat: no-repeat;
+}
+
+.elephant-trunk-icon {
+  background-position: center;
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  transform: rotate(90deg);
+  position: relative;
+  top: -8px;
+  right: -6px;
 }
 
 .unchecked-label:hover,
@@ -159,4 +174,19 @@
 
 .jp-visible {
   display: flex !important;
+}
+
+.my-slider.noUi-target {
+  background: #124c7a;
+  border: none;
+}
+
+.my-slider .noUi-connect {
+  background: #1e7fcc;
+  border: none;
+}
+
+.my-slider .noUi-handle {
+  background: #ffffff;
+  border: none;
 }
