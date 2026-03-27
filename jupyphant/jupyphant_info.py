@@ -22,7 +22,7 @@ class Jupyphant_info:
     # Shared Style
     _CSS = """
     <style>
-    .jup-info { font-family: var(--jp-ui-font-family); font-size: var(--jp-ui-font-size1); color: var(--jp-ui-font-color1); }
+    .jup-info { font-family: var(--jp-ui-font-family); font-size: var(--jp-ui-font-size1); color: var(--jp-ui-font-color1); padding-left: 8px; }
     .jup-info h3 { margin: 5px 0 6px 0; font-size: 1.05em; border-top: 2px solid var(--jp-border-color2); border-bottom: none; padding-bottom: 3px; padding-top: 4px;}
     .jup-info .section { margin-bottom: 10px; }
     .jup-info .kv { display: flex; flex-wrap: wrap; gap: 2px 12px; }
