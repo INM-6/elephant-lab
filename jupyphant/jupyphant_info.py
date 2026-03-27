@@ -94,6 +94,8 @@ class Jupyphant_info:
             if len(items) > 1:
                 if issubclass(obj_type, self.SpikeTrain):
                     parts.append(self._html_spiketrain_overview(items))
+                elif issubclass(obj_type, self.IrregularlySampledSignal):
+                    parts.append(self._html_irregularlysampledsignal_overview(items))
                 elif issubclass(obj_type, self.AnalogSignal):
                     parts.append(self._html_analogsignal_overview(items))
                 else:
@@ -279,6 +281,37 @@ class Jupyphant_info:
             self._kv('Duration Max', max(durations)),
             self._kv('t_start Min', min(all_t_starts)),
             self._kv('t_stop Max', max(all_t_stops)),
+        ]
+
+        all_annotations = [s.annotations for s in signals]
+        return self._section(*parts) + self._html_annotations_overview(all_annotations, count)
+
+    def _html_irregularlysampledsignal_overview(self, items: list) -> str:
+        signals = [item['obj'] for item in items]
+        count = len(signals)
+        durations = [s.duration for s in signals]
+        all_t_starts = [s.t_start for s in signals]
+        all_t_stops = [s.t_stop for s in signals]
+        all_sample_counts = [s.shape[0] for s in signals]
+        units = set(str(s.units.dimensionality) for s in signals)
+
+        # Sampling intervals across all signals
+        all_intervals = self.np.concatenate([s.sampling_intervals.magnitude for s in signals])
+        interval_unit = signals[0].sampling_intervals.units.dimensionality
+
+        parts = [
+            self._h3(f'IrregularlySampledSignal Overview ({count})'),
+            self._kv('Total Channels', sum(s.shape[1] for s in signals)),
+            self._kv('Units', ', '.join(units)),
+            self._kv('Total Samples', sum(all_sample_counts)),
+            self._kv('Samples Min / Max', f'{min(all_sample_counts)} / {max(all_sample_counts)}'),
+            self._kv('Duration Min', min(durations)),
+            self._kv('Duration Max', max(durations)),
+            self._kv('t_start Min', min(all_t_starts)),
+            self._kv('t_stop Max', max(all_t_stops)),
+            self._kv(f'Sampling Interval Min ({interval_unit})', f'{self.np.min(all_intervals):.4f}'),
+            self._kv(f'Sampling Interval Max ({interval_unit})', f'{self.np.max(all_intervals):.4f}'),
+            self._kv(f'Sampling Interval Mean ({interval_unit})', f'{self.np.mean(all_intervals):.4f}'),
         ]
 
         all_annotations = [s.annotations for s in signals]
