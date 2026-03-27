@@ -54,7 +54,7 @@ class Jupyphant_info:
                 Jupyphant_info.clear_output()
                 self.pretty_print_of_selected_neo_objects()
 
-        output_node_info = self.Output(layout={'border': '1px solid orange'})
+        output_node_info = self.Output()
         self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
         Jupyphant_info.display(output_node_info)
 
