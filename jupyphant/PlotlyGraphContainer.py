@@ -115,10 +115,12 @@ class PlotlyGraphDataTypeList():
 
     def __init__(self, data, name_fallback='Trace'):
         self.data_list = []
+        self.is_empty = False
         self.extract_data(data, name_fallback)
 
     def extract_data(self, data, name_fallback):
         if data is None:
+            self.is_empty = True
             self.data_list = [PlotlyGraphDataType(None, name_fallback)]
         elif isinstance(data, list) and self.is_trace_list(data):
             for d in data:
