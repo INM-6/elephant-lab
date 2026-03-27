@@ -182,7 +182,7 @@ def test_annotations():
 def test_annotation_intervals():
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     plotlyGraphAnnotationIntervals = PlotlyGraphAnnotationIntervals(np.array([1,2,3]),np.array([1.5,2.2,4]), np.array(["Test"] * 3), np.array([pq.s] * 3))
-    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_interavals_data=plotlyGraphAnnotationIntervals)
+    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_interval_data=plotlyGraphAnnotationIntervals)
     assert len(plotlyGraphFigure.fig.layout.shapes) == 3
     assert len(plotlyGraphFigure.fig.layout.annotations) == 9
 
