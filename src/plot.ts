@@ -91,8 +91,6 @@ export class PlotlyFrontend {
             }
             if (!state.canUpdate(updateId)) return;
 
-            state.hideLoading()
-
             state.setUpdateId(updateId)
             state.render(figJson, updateId, this.is_plot_theme_dark)
         });

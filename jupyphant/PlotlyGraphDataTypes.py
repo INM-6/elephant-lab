@@ -122,13 +122,15 @@ class EventAnnotations(PlotlyGraphAnnotations):
     def __init__(self, events):
         x=[]
         text=[]
-        unit=[]
-        for event in events:
+        unit_indice=[]
+        units=[]
+        for i, event in enumerate(events):
             x.append(event.times.magnitude)
             text.append(event.labels)
             n = len(event.times.magnitude)
-            unit.append(self.np.full(n, event.times.units, dtype=object))
-        super().__init__(self.np.concatenate(x), self.np.concatenate(text), self.np.concatenate(unit))
+            unit_indice.append(self.np.full(n, i))
+            units.append(event.times.units)
+        super().__init__(self.np.concatenate(x), self.np.concatenate(text), self.np.concatenate(unit_indice), units)
 
 class EpochIntervals(PlotlyGraphAnnotationIntervals):
     import numpy as np
@@ -137,13 +139,15 @@ class EpochIntervals(PlotlyGraphAnnotationIntervals):
         x=[]
         duration=[]
         text=[]
-        unit=[]
-        for epoch in epochs:
+        unit_indice=[]
+        units=[]
+        for i, epoch in enumerate(epochs):
             x.append(epoch.times.magnitude)
             duration.append(epoch.durations.magnitude)
             text.append(epoch.labels)
             n = len(epoch.times.magnitude)
-            unit.append(self.np.full(n, epoch.times.units, dtype=object))
+            unit_indice.append(self.np.full(n, i))
+            units.append(epoch.times.units)
         x = self.np.concatenate(x)
         duration = self.np.concatenate(duration)
-        super().__init__(x, x+duration, self.np.concatenate(text), self.np.concatenate(unit))
+        super().__init__(x, x+duration, self.np.concatenate(text), self.np.concatenate(unit_indice), units)
