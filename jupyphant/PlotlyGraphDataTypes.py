@@ -69,33 +69,40 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                 else:
                     norm_data = channel_data - min_val
 
+                channel_name = name
                 if num_channels > 1:
-                    name += f' Ch{ch_idx}'
+                    channel_name += f' Ch{ch_idx}'
                 # Plot
-                self.data_list.append(self.AnalogSignalChannelLFPPlot({ 'x': times, 'y': norm_data, 'name': name }))
+                self.data_list.append(self.AnalogSignalChannelLFPPlot({ 'x': times, 'y': norm_data, 'name': channel_name }))
 
     def extract_data(self, data, name_fallback):
         """Extracts AnalogSignalLFPPlotData from a list of AnalogSignals"""
-        max_duration_limit = 10 * self.pq.s 
+        max_duration_limit = 10 * self.pq.s
+        for sig in data:
 
-        durations = [(sig.t_stop - sig.t_start) for sig in data]
-        
-        min_available_duration = min(durations)
+            durations = [(sig.t_stop - sig.t_start)]
+            
+            min_available_duration = min(durations)
 
-        cut_duration = min(max_duration_limit, min_available_duration)
+            cut_duration = min(max_duration_limit, min_available_duration)
 
-        sliced_signals = [
-            sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
-            for sig in data
-        ]
+            sliced_signals = [
+                sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
+            ]
 
-        plot_times = sliced_signals[0].times - sliced_signals[0].t_start
-        
-        self.plot_lfp(
-            sliced_signals, 
-            plot_times,
-            [getattr(sig, 'name', name_fallback(sig)) for sig in sliced_signals]
-        )
+            plot_times = sliced_signals[0].times - sliced_signals[0].t_start
+
+            names = []
+            name = getattr(sig, 'name', None)
+            if name is None:
+                name = name_fallback(sig)
+            names.append(name)
+            
+            self.plot_lfp(
+                sliced_signals, 
+                plot_times,
+                names
+            )
 
 class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
     class IrregularlySampledSignalPlot(PlotlyGraphDataType):

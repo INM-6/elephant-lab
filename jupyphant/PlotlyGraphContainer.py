@@ -51,9 +51,9 @@ class PlotlyGraphDataType:
                     self.name = name_fallback(data)
                 else:
                     self.name = str(name_fallback)
-            # Override / add attributes from kwargs
-            for key, value in kwargs.items():
-                setattr(self, key, value)
+        # Override / add attributes from kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def extract_data(self, data):
         """Generic extraction of x, y, mode, and name from various simple data types."""
