@@ -413,6 +413,7 @@ class Jupyphant_info:
             self._kv('dtype', str(neo_obj.dtype)),
             self._kv('t_start', neo_obj.t_start),
             self._kv('t_stop', neo_obj.t_stop),
+            self._kv('Duration', neo_obj.t_stop - neo_obj.t_start),
             self._kv('Description', neo_obj.description) if neo_obj.description else '',
             self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
         )]
@@ -420,7 +421,7 @@ class Jupyphant_info:
             parts.append(self._html_annotations(neo_obj.annotations))
 
         times = neo_obj.times
-        table_data = [[f'Index ({len(neo_obj)} spikes)', f'Time (in {neo_obj.units.dimensionality}, {neo_obj.dtype})']]
+        table_data = [[f'Index ({len(neo_obj)} spikes)', f'Time ({neo_obj.units.dimensionality})']]
 
         aa = getattr(neo_obj, 'array_annotations', {})
         aa_keys = list(aa.keys())
@@ -446,9 +447,12 @@ class Jupyphant_info:
     def _html_analogsignal(self, neo_obj) -> str:
         parts = [self._section(
             self._kv('Shape', f'{neo_obj.shape[1]} channels × {neo_obj.shape[0]} samples'),
+            self._kv('Units', str(neo_obj.units.dimensionality)),
+            self._kv('dtype', str(neo_obj.dtype)),
             self._kv('Sampling Rate', neo_obj.sampling_rate),
             self._kv('t_start', neo_obj.t_start),
             self._kv('t_stop', neo_obj.t_stop),
+            self._kv('Duration', neo_obj.duration),
             self._kv('Description', neo_obj.description) if neo_obj.description else '',
             self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
         )]
@@ -487,6 +491,9 @@ class Jupyphant_info:
             self._kv('Epochs', len(neo_obj)),
             self._kv('Units', str(neo_obj.units.dimensionality)),
             self._kv('dtype', str(neo_obj.dtype)),
+            self._kv('t_start', neo_obj.times[0] if len(neo_obj) else '—'),
+            self._kv('t_stop', neo_obj.times[-1] if len(neo_obj) else '—'),
+            self._kv('Duration', neo_obj.times[-1] - neo_obj.times[0] if len(neo_obj) > 1 else '—'),
             self._kv('Description', neo_obj.description) if neo_obj.description else '',
             self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
         )]
@@ -500,7 +507,7 @@ class Jupyphant_info:
         aa = getattr(neo_obj, 'array_annotations', {})
         aa_keys = list(aa.keys())
 
-        header = ['Index', f'Time ({neo_obj.units.dimensionality.string}, {neo_obj.dtype})',
+        header = ['Index', f'Time ({neo_obj.units.dimensionality.string})',
                   f'Duration ({neo_obj.units.dimensionality.string})', 'Label'] + aa_keys
         table_data = [header]
 
@@ -526,8 +533,8 @@ class Jupyphant_info:
         n_frames, height, width = neo_obj.shape
         parts = [self._section(
             self._kv('Shape', f'{n_frames} frames × {height} rows × {width} cols'),
-            self._kv('dtype', str(neo_obj.dtype)),
             self._kv('Units', str(neo_obj.units.dimensionality)),
+            self._kv('dtype', str(neo_obj.dtype)),
             self._kv('Sampling Rate', neo_obj.sampling_rate),
             self._kv('Spatial Scale', neo_obj.spatial_scale),
             self._kv('t_start', neo_obj.t_start),
@@ -603,6 +610,9 @@ class Jupyphant_info:
             self._kv('Events', len(neo_obj)),
             self._kv('Units', str(neo_obj.units.dimensionality)),
             self._kv('dtype', str(neo_obj.dtype)),
+            self._kv('t_start', neo_obj.times[0] if len(neo_obj) else '—'),
+            self._kv('t_stop', neo_obj.times[-1] if len(neo_obj) else '—'),
+            self._kv('Duration', neo_obj.times[-1] - neo_obj.times[0] if len(neo_obj) > 1 else '—'),
             self._kv('Description', neo_obj.description) if neo_obj.description else '',
             self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
         )]
@@ -615,7 +625,7 @@ class Jupyphant_info:
         aa = getattr(neo_obj, 'array_annotations', {})
         aa_keys = list(aa.keys())
 
-        header = ['Index', f'Time ({neo_obj.units.dimensionality.string}, {neo_obj.dtype})', 'Label'] + aa_keys
+        header = ['Index', f'Time ({neo_obj.units.dimensionality.string})', 'Label'] + aa_keys
         table_data = [header]
 
         def make_row(i):
