@@ -26,12 +26,12 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
     import quantities as pq
     class AnalogSignalChannelLFPPlot(PlotlyGraphDataType):
         import numpy as np
-        def extract_data(self, x, y, name):
+        def extract_data(self, dict_with_signal_info):
             """Extracts AnalogSignalChannelLFPPlot from a dict containing info about an AnalogSignal"""
-            self.name = name
+            self.name = dict_with_signal_info.get('name')
             self.mode = 'lines'
-            self.x = x
-            self.y = y
+            self.x = dict_with_signal_info.get('x')
+            self.y = dict_with_signal_info.get('y')
 
     # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
     def plot_lfp(self, lfps, times, name):
@@ -70,33 +70,30 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                     norm_data = channel_data - min_val
 
                 # Plot
-                self.data_list.append(self.AnalogSignalChannelLFPPlot(times, norm_data, name))
+                self.data_list.append(self.AnalogSignalChannelLFPPlot({ 'x': times, 'y': norm_data, 'name': name }))
 
     def extract_data(self, data, name_fallback):
         """Extracts AnalogSignalLFPPlotData from a list of AnalogSignals"""
         max_duration_limit = 10 * self.pq.s 
 
-        for raw_signals in data:
+        durations = [(sig.t_stop - sig.t_start) for sig in data]
+        
+        min_available_duration = min(durations)
 
-            if raw_signals:
-                durations = [(sig.t_stop - sig.t_start) for sig in raw_signals]
-                
-                min_available_duration = min(durations)
+        cut_duration = min(max_duration_limit, min_available_duration)
 
-                cut_duration = min(max_duration_limit, min_available_duration)
+        sliced_signals = [
+            sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
+            for sig in data
+        ]
 
-                sliced_signals = [
-                    sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
-                    for sig in raw_signals
-                ]
-
-                plot_times = sliced_signals[0].times - sliced_signals[0].t_start
-                
-                self.plot_lfp(
-                    sliced_signals, 
-                    plot_times,
-                    getattr(raw_signals, 'name', name_fallback(raw_signals))
-                )
+        plot_times = sliced_signals[0].times - sliced_signals[0].t_start
+        
+        self.plot_lfp(
+            sliced_signals, 
+            plot_times,
+            'test'
+        )
 
 class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
     class IrregularlySampledSignalPlot(PlotlyGraphDataType):
