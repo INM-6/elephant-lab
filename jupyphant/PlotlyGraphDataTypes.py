@@ -34,7 +34,7 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
             self.y = dict_with_signal_info.get('y')
 
     # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
-    def plot_lfp(self, lfps, times, name):
+    def plot_lfp(self, lfps, times, names):
         """
         Plot LFPs using plotly.
 
@@ -48,7 +48,7 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
         color:      color to used for plotting
         """
         
-        for lfp in lfps:
+        for lfp, name in zip(lfps, names):
             data = lfp.magnitude
             
             if data.ndim == 1:
@@ -69,6 +69,8 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                 else:
                     norm_data = channel_data - min_val
 
+                if num_channels > 1:
+                    name += f' Ch{ch_idx}'
                 # Plot
                 self.data_list.append(self.AnalogSignalChannelLFPPlot({ 'x': times, 'y': norm_data, 'name': name }))
 
@@ -92,7 +94,7 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
         self.plot_lfp(
             sliced_signals, 
             plot_times,
-            'test'
+            [getattr(sig, 'name', name_fallback(sig)) for sig in sliced_signals]
         )
 
 class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
