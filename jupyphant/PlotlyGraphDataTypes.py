@@ -24,78 +24,79 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
 
 class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
     import quantities as pq
-    class AnalogSignalLFPPlot(PlotlyGraphDataType):
+    class AnalogSignalChannelLFPPlot(PlotlyGraphDataType):
         import numpy as np
-        def extract_data(self, analogsignal_dict):
-            """Extracts AnalogSignalLFPPlotData from a dict containing info about an AnalogSignal"""
-            self.name = analogsignal_dict.get('name', None)
+        def extract_data(self, x, y, name):
+            """Extracts AnalogSignalChannelLFPPlot from a dict containing info about an AnalogSignal"""
+            self.name = name
             self.mode = 'lines'
-
-            channel_data = analogsignal_dict['channel_data']
-
-            min_val = self.np.min(channel_data)
-            max_val = self.np.max(channel_data)
-            range_val = max_val - min_val
-
-            if range_val > 0:
-                norm_data = (channel_data - min_val) / range_val
-            else:
-                norm_data = channel_data - min_val
-            
-            self.x = analogsignal_dict['times']
-            self.y = norm_data
+            self.x = x
+            self.y = y
 
     # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
-    def plot_lfp(self,lfps, times, names, name_fallback):
+    def plot_lfp(self, lfps, times, name):
         """
         Plot LFPs using plotly.
 
+        fig:        plotly figure
+        row, col:   subplot location
         lfps:       LFP signals with trial_id as first dimension and sample_id as second dimension.
                     LFP signals must be arranged according to trial ID.
         times:      time stamps of the recorded LFP samples. Must be of same length as second dimenion of lfps
+        title:      title of the figure
+        spacing:    vertical spacing between two LFP signals
+        color:      color to used for plotting
         """
         
-        for trial_id, lfp in enumerate(lfps):
+        for lfp in lfps:
             data = lfp.magnitude
             
             if data.ndim == 1:
                 data = data.reshape(-1, 1)
             
-            channel_data = data.mean(axis=1)
+            num_channels = data.shape[1]
+            
+            for ch_idx in range(num_channels):
+                
+                channel_data = data[:, ch_idx]
 
-            self.data_list.append(self.AnalogSignalLFPPlot(dict(
-                    channel_data=channel_data,
-                    times=times, 
-                    name=f"{names[trial_id]}",
-                ),
-                name_fallback[trial_id],
-                units_x = times.units,
-                units_y = lfp.units
-            ))
+                min_val = self.np.min(channel_data)
+                max_val = self.np.max(channel_data)
+                range_val = max_val - min_val
+
+                if range_val > 0:
+                    norm_data = (channel_data - min_val) / range_val
+                else:
+                    norm_data = channel_data - min_val
+
+                # Plot
+                self.data_list.append(self.AnalogSignalChannelLFPPlot(times, norm_data, name))
 
     def extract_data(self, data, name_fallback):
         """Extracts AnalogSignalLFPPlotData from a list of AnalogSignals"""
         max_duration_limit = 10 * self.pq.s 
-    
-        durations = [(sig.t_stop - sig.t_start) for sig in data]
-        
-        min_available_duration = min(durations)
 
-        cut_duration = min(max_duration_limit, min_available_duration)
+        for raw_signals in data:
 
-        sliced_signals = [
-            sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
-            for sig in data
-        ]
+            if raw_signals:
+                durations = [(sig.t_stop - sig.t_start) for sig in raw_signals]
+                
+                min_available_duration = min(durations)
 
-        plot_times = sliced_signals[0].times - sliced_signals[0].t_start
-        
-        self.plot_lfp(
-            sliced_signals, 
-            plot_times,
-            [sig.name for sig in data],
-            [name_fallback(sig) for sig in data]
-        )
+                cut_duration = min(max_duration_limit, min_available_duration)
+
+                sliced_signals = [
+                    sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
+                    for sig in raw_signals
+                ]
+
+                plot_times = sliced_signals[0].times - sliced_signals[0].t_start
+                
+                self.plot_lfp(
+                    sliced_signals, 
+                    plot_times,
+                    getattr(raw_signals, 'name', name_fallback(raw_signals))
+                )
 
 class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
     class IrregularlySampledSignalPlot(PlotlyGraphDataType):
