@@ -151,7 +151,7 @@
   outline: none;
 }
 
-.jp-rawplot-input:focus {
+.jp-rawplot-input:focus:not(.anno-filter-no-match) {
   border-color: var(--jp-brand-color1);
   box-shadow: 0 0 0 1px var(--jp-brand-color1);
 }
