@@ -428,7 +428,7 @@ class Jupyphant_info:
         table_data[0] += aa_keys
 
         def make_row(i):
-            row = [i, f'{times[i]:.4f}']
+            row = [i, f'{times[i].magnitude:.4f}']
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')
@@ -473,7 +473,7 @@ class Jupyphant_info:
         times = neo_obj.times
 
         def make_row(i):
-            return [i, f'{times[i]:.3f}'] + [f'{neo_obj[i, ch].item():.3f}' for ch in channel_indices]
+            return [i, f'{times[i].magnitude:.3f}'] + [f'{neo_obj[i, ch].item():.3f}' for ch in channel_indices]
 
         if len(times) > 20:
             for i in range(10): table_data.append(make_row(i))
@@ -512,7 +512,7 @@ class Jupyphant_info:
         table_data = [header]
 
         def make_row(i):
-            row = [i, f'{times[i]:.4f}', f'{durations[i]:.4f}', labels[i]]
+            row = [i, f'{times[i].magnitude:.4f}', f'{durations[i].magnitude:.4f}', labels[i]]
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')
@@ -552,7 +552,7 @@ class Jupyphant_info:
         table_data = [header]
 
         def make_row(i):
-            return [i, f'{times[i]:.4f}', f'{self.np.mean(neo_obj[i].magnitude):.4f}']
+            return [i, f'{times[i].magnitude:.4f}', f'{self.np.mean(neo_obj[i].magnitude):.4f}']
 
         if n_frames > 20:
             for i in range(10): table_data.append(make_row(i))
@@ -592,7 +592,7 @@ class Jupyphant_info:
         table_data = [header]
 
         def make_row(i):
-            return [i, f'{times[i]:.4f}'] + [f'{neo_obj[i, ch].item():.4f}' for ch in channel_indices]
+            return [i, f'{times[i].magnitude:.4f}'] + [f'{neo_obj[i, ch].item():.4f}' for ch in channel_indices]
 
         if n_samples > 20:
             for i in range(10): table_data.append(make_row(i))
@@ -629,7 +629,7 @@ class Jupyphant_info:
         table_data = [header]
 
         def make_row(i):
-            row = [i, f'{times[i]:.4f}', labels[i]]
+            row = [i, f'{times[i].magnitude:.4f}', labels[i]]
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')
