@@ -266,21 +266,10 @@ class PlotlyGraphFigure:
 
             y_vals = self.np.full(xs.shape, ymax - ymin)
 
-            # Get per-value digits
-            digits_time = self.PlotlyUtils.calc_round_digits(xs)
-            digits_start = self.PlotlyUtils.calc_round_digits(xs - widths/2)
-            digits_end = self.PlotlyUtils.calc_round_digits(xs + widths/2)
-
-            # Element-wise formatter
-            def fmt(val, d):
-                return f"{val:.{int(d)}f}"
-
-            vfmt = self.np.vectorize(fmt)
-
             # Format values
-            xs_str = vfmt(xs, digits_time)
-            start_str = vfmt(xs - widths/2, digits_start)
-            end_str = vfmt(xs + widths/2, digits_end)
+            xs_str = self.PlotlyUtils.format_with_auto_digits(xs)
+            start_str = self.PlotlyUtils.format_with_auto_digits(xs - widths/2)
+            end_str = self.PlotlyUtils.format_with_auto_digits(xs + widths/2)
 
             # Build hover text
             hover_texts = self.np.where(
