@@ -428,6 +428,10 @@ class PlotlyGraphDataTypeList():
                 minY = y_values.min()
                 maxX = x_values.max()
                 maxY = y_values.max()
+                data.minX = minX
+                data.minY = minY
+                data.maxX = maxX
+                data.maxY = maxY
                 previous_maxY = maxY
             else:
                 temp_minX = x_values.min() if should_find_new_minX else data.minX
@@ -448,6 +452,10 @@ class PlotlyGraphDataTypeList():
                     temp_maxY += offset
                     previous_maxY = temp_maxY
 
+                data.minX = temp_minX
+                data.minY = temp_minY
+                data.maxX = temp_maxX
+                data.maxY = temp_maxY
                 if should_find_new_minX or not shift_to_0:
                     if temp_minX < minX:
                         minX = temp_minX
