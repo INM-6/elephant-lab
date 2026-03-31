@@ -22,6 +22,51 @@ class PlotlyUtils:
         return q.rescale(convert_unit).magnitude
     
     @staticmethod
+    def convert_unit_to_label(unit):
+        if unit is None:
+            return ""
+        pq = PlotlyUtils.pq
+
+        def simplify(unit):
+            return unit.simplified.dimensionality
+
+        unit_to_label = {
+            simplify(pq.s): "Time",
+            simplify(pq.m): "Length",
+            simplify(pq.kg): "Mass",
+            simplify(pq.A): "Electric Current",
+            simplify(pq.K): "Temperature",
+            simplify(pq.mol): "Amount of Substance",
+            simplify(pq.cd): "Luminous Intensity",
+
+            simplify(pq.Hz): "Frequency",
+            simplify((pq.m / pq.s)): "Velocity",
+            simplify((pq.m / pq.s**2)): "Acceleration",
+            simplify(pq.N): "Force",
+            simplify(pq.J): "Energy",
+            simplify(pq.Pa): "Pressure",
+            simplify(pq.W): "Power",
+            simplify(pq.C): "Electric Charge",
+            simplify(pq.V): "Voltage",
+            simplify(pq.Ohm): "Resistance",
+            simplify(pq.F): "Capacitance",
+            simplify(pq.H): "Inductance",
+            simplify(pq.T): "Magnetic Flux Density",
+            simplify(pq.Wb): "Magnetic Flux",
+            simplify(pq.sr): "Solid Angle",
+            simplify(pq.B): "Bel",
+            simplify(pq.kg * pq.m / pq.s): "Momentum",
+            simplify(pq.N * pq.m): "Torque",
+            simplify(pq.W / pq.m**2): "Irradiance",
+            simplify(pq.J / pq.K): "Entropy",
+        }
+
+        unit_key = simplify(unit)
+        if unit_key in unit_to_label:
+            return f"{unit_to_label[unit_key]}({unit.dimensionality})"
+        return f"({unit.dimensionality})"
+    
+    @staticmethod
     def format_with_auto_digits(values):
         """
         Fully vectorized formatting of values with automatic per-value decimal digits.
@@ -71,9 +116,9 @@ class PlotlyGraphDataType:
                     self.name = name_fallback(data)
                 else:
                     self.name = str(name_fallback)
-            # Override / add attributes from kwargs
-            for key, value in kwargs.items():
-                setattr(self, key, value)
+        # Override / add attributes from kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def extract_data(self, data):
         """Generic extraction of x, y, mode, and name from various simple data types."""
