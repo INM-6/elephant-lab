@@ -81,10 +81,8 @@ function handleSelectionRange(idsJson: string) {
 	return `jupyphant_entity.jupyphant_tree.handle_selection_range(${idsJson})`;
 }
 
-function selectByAnnotationFilter(expression: string, scopeIds: string[] = []): string {
-	const jsonExpr = JSON.stringify(expression);
-	const scopeJson = JSON.stringify(scopeIds);
-	return `jupyphant_entity.jupyphant_tree.select_by_annotation_filter(${jsonExpr}, ${scopeJson})`;
+function selectByAnnotationFilter(expression: string): string {
+	return `jupyphant_entity.jupyphant_tree.select_by_annotation_filter(${JSON.stringify(expression)})`;
 }
 
 // Make all strings publicly available in a dict
@@ -134,7 +132,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.GetIOClass]: (...args: any[]) => getNeoIOClass(args[0]),
 	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1]),
 	[PythonCodeKey.HandleSelectionRange]: (...args: any[]) => handleSelectionRange(args[0]),
-	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0], args[1]),
+	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {

@@ -355,33 +355,21 @@ class Jupyphant_tree:
         # Fire only once after all nodes are selected
         self.jupyphant_entity.on_selected_neo_objects_changed.fire()
 
-    def select_by_stat(self, filter_type: str, filter_data: dict, scope_ids: list = None):
+    def _get_candidates(self) -> dict:
+        selected = self.jupyphant_entity.selected_neo_objects
+        source = selected if selected else self._node_registry.values()
+        return {
+            node._id: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj[node._id]
+            for node in source
+            if not node._id.startswith('folder-')
+            and node._id in self.jupyphant_entity.map_ipytree_node_id_to_neo_obj
+        }
+
+    def select_by_stat(self, filter_type: str, filter_data: dict):
         import json
         from elephant import statistics as elephant_stats
 
-        # reuse same scope expansion logic as select_by_annotation_key
-        if scope_ids:
-            def expand_ids(ids):
-                result = []
-                for hash_id in ids:
-                    if hash_id.startswith('folder-'):
-                        node = self._node_registry.get(hash_id)
-                        if node:
-                            result.extend(expand_ids([c._id for c in node.nodes]))
-                    else:
-                        result.append(hash_id)
-                return result
-            candidates = {
-                hid: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.get(hid)
-                for hid in expand_ids(scope_ids)
-                if hid in self.jupyphant_entity.map_ipytree_node_id_to_neo_obj
-            }
-        else:
-            candidates = {
-                hid: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.get(hid)
-                for hid in self._node_registry
-                if not hid.startswith('folder-')
-            }
+        candidates = self._get_candidates()
 
         self.jupyphant_entity.selected_neo_objects.clear()
         selected_ids = []
@@ -439,7 +427,7 @@ class Jupyphant_tree:
         self.jupyphant_entity.on_selected_neo_objects_changed.fire()
         print(f"JUPYPHANT_RESULT_KEY:{json.dumps(selected_ids)}")
     
-    def select_by_annotation_filter(self, expression: str, scope_ids: list = None):
+    def select_by_annotation_filter(self, expression: str):
         def _eval_node(node, annotations, agg_values):
             if isinstance(node, self.ast.Expression):
                 return _eval_node(node.body, annotations, agg_values)
@@ -504,28 +492,7 @@ class Jupyphant_tree:
                     isinstance(node.args[0], self.ast.Name)):
                 agg_keys.add((node.func.id, node.args[0].id))
 
-        if scope_ids:
-            def expand_ids(ids):
-                result = []
-                for hash_id in ids:
-                    if hash_id.startswith('folder-'):
-                        node = self._node_registry.get(hash_id)
-                        if node:
-                            result.extend(expand_ids([c._id for c in node.nodes]))
-                    else:
-                        result.append(hash_id)
-                return result
-            candidates = {
-                hid: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.get(hid)
-                for hid in expand_ids(scope_ids)
-                if hid in self.jupyphant_entity.map_ipytree_node_id_to_neo_obj
-            }
-        else:
-            candidates = {
-                hid: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.get(hid)
-                for hid in self._node_registry
-                if not hid.startswith('folder-')
-            }
+        candidates = self._get_candidates()
 
         # evaluate with max/min -> True to get base candidates
         base_candidates = {}

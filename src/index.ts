@@ -318,13 +318,9 @@ class JupyphantExtension {
 				const filterDataRaw = stat.getAttribute('data-filter');
 				if (!filterType || !filterDataRaw) return;
 
-				const currentIds = Array.from(
-					this.outarea_neo_tree!.node.querySelectorAll('.jup-row.jup-selected[data-node-id]')
-				).map(el => el.getAttribute('data-node-id')!);
-				const scopeJson = JSON.stringify(currentIds);
 				const filterJson = filterDataRaw.replace(/&quot;/g, '"');
 
-				const code = `jupyphant_entity.jupyphant_tree.select_by_stat('${filterType}', ${filterJson}, ${scopeJson})`;
+				const code = `jupyphant_entity.jupyphant_tree.select_by_stat('${filterType}', ${filterJson})`;
 				const result = await this.kernelBridge!.executeCode(code, null, false);
 				this._applyTreeSelection(result);
 			}
@@ -784,11 +780,7 @@ class JupyphantExtension {
 			
 			if (!expression) return;
 			
-			const currentIds = Array.from(
-				this.outarea_neo_tree!.node.querySelectorAll('.jup-row.jup-selected[data-node-id]')
-			).map(el => el.getAttribute('data-node-id')!);
-			
-			const code = getPythonCode(PythonCodeKey.SelectByAnnotationFilter, expression, currentIds);
+			const code = getPythonCode(PythonCodeKey.SelectByAnnotationFilter, expression);
 			const result = await this.kernelBridge!.executeCode(code, null, false);
 			this._applyTreeSelection(result);
 		};
