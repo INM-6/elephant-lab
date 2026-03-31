@@ -368,7 +368,7 @@ class PlotlyGraphFigure:
         return self.overlapping and self.changesOnOverlap()
     
     def _should_have_y_slider(self):
-        return (self.overlapping or self.compress or self.nGraphs==1) and self.total_maxY - self.total_minY > 1e-9
+        return (self.overlapping or self.compress or self.nGraphs==1) and self.data.maxY - self.data.minY > 1e-9
     
     def _is_single_plot(self):
         return self.overlapping or self.compress or self.nGraphs==1
