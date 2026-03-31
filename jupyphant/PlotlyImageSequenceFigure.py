@@ -7,7 +7,7 @@ class PlotlyImageSequenceFigure:
     from neo.core import ImageSequence
     import math
 
-    def __init__(self, image_sequences, title=None, color_scale='Viridis', max_cols=2):
+    def __init__(self, image_sequences, title=None, color_scale='Viridis', max_cols=2, name_fallback="Image Sequence"):
         if isinstance(image_sequences, self.ImageSequence):
             image_sequences = [image_sequences]
 
@@ -113,7 +113,13 @@ class PlotlyImageSequenceFigure:
                     traces=[idx]
                 ))
 
-            label = f"▶ {getattr(seq, 'name', 'seq')}" 
+            label_text = getattr(seq, 'name', None)
+            if label_text is None:
+                if callable(name_fallback):
+                    label_text = name_fallback(seq)
+                else:
+                    label_text = str(name_fallback)
+            label = f"▶ {label_text}" 
             # Button above column
             button_x = get_button_x(col, label)
             button_y = get_button_y(row)
