@@ -18,6 +18,9 @@ class Jupyphant_tree:
     from neo.core.regionofinterest import RegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
     import ipywidgets as widgets
+    import json
+    import ast 
+
 
     from typing import TYPE_CHECKING
 
@@ -480,6 +483,138 @@ class Jupyphant_tree:
         self.jupyphant_entity.on_selected_neo_objects_changed.fire()
         print(f"JUPYPHANT_RESULT_KEY:{json.dumps(selected_ids)}")
     
+    def select_by_annotation_filter(self, expression: str, scope_ids: list = None):
+        def _eval_node(node, annotations, agg_values):
+            if isinstance(node, self.ast.Expression):
+                return _eval_node(node.body, annotations, agg_values)
+            if isinstance(node, self.ast.BoolOp):
+                if isinstance(node.op, self.ast.And):
+                    return all(_eval_node(v, annotations, agg_values) for v in node.values)
+                if isinstance(node.op, self.ast.Or):
+                    return any(_eval_node(v, annotations, agg_values) for v in node.values)
+            if isinstance(node, self.ast.UnaryOp) and isinstance(node.op, self.ast.Not):
+                return not _eval_node(node.operand, annotations, agg_values)
+            if isinstance(node, self.ast.Compare):
+                left = _eval_node(node.left, annotations, agg_values)
+                for op, comp in zip(node.ops, node.comparators):
+                    right = _eval_node(comp, annotations, agg_values)
+                    if isinstance(op, self.ast.Eq)    and not (left == right): return False
+                    if isinstance(op, self.ast.NotEq) and not (left != right): return False
+                    if isinstance(op, self.ast.Gt)    and not (left >  right): return False
+                    if isinstance(op, self.ast.Lt)    and not (left <  right): return False
+                    if isinstance(op, self.ast.GtE)   and not (left >= right): return False
+                    if isinstance(op, self.ast.LtE)   and not (left <= right): return False
+                    left = right
+                return True
+            if isinstance(node, self.ast.Call):
+                if (isinstance(node.func, self.ast.Name) and
+                        node.func.id in ('max', 'min') and
+                        len(node.args) == 1 and
+                        isinstance(node.args[0], self.ast.Name)):
+                    func, key = node.func.id, node.args[0].id
+                    if agg_values is None:
+                        return True  # first run: ignore aggregates
+                    agg_val = agg_values.get((func, key))
+                    if agg_val is None:
+                        return False
+                    ann_val = annotations.get(key)
+                    try:
+                        return float(ann_val) == agg_val
+                    except (TypeError, ValueError):
+                        return ann_val == agg_val
+                raise ValueError(f'Unsupported function: {self.ast.dump(node.func)}')
+            if isinstance(node, self.ast.Name):
+                if node.id in ('True', 'False', 'None'):
+                    return {'True': True, 'False': False, 'None': None}[node.id]
+                # look up annotation value
+                return annotations.get(node.id)
+            if isinstance(node, self.ast.Constant):
+                return node.value
+            raise ValueError(f'Unsupported expression node: {type(node).__name__}')
+
+        try:
+            tree = self.ast.parse(expression.strip(), mode='eval')
+        except SyntaxError as e:
+            print(f"JUPYPHANT_FILTER_ERROR:Syntax error — {e}")
+            return
+
+        # Collect all max/min aggregate calls present in the expression
+        agg_keys = set()
+        for node in self.ast.walk(tree):
+            if (isinstance(node, self.ast.Call) and
+                    isinstance(node.func, self.ast.Name) and
+                    node.func.id in ('max', 'min') and
+                    len(node.args) == 1 and
+                    isinstance(node.args[0], self.ast.Name)):
+                agg_keys.add((node.func.id, node.args[0].id))
+
+        if scope_ids:
+            def expand_ids(ids):
+                result = []
+                for hash_id in ids:
+                    if hash_id.startswith('folder-'):
+                        node = self._node_registry.get(hash_id)
+                        if node:
+                            result.extend(expand_ids([c._id for c in node.nodes]))
+                    else:
+                        result.append(hash_id)
+                return result
+            candidates = {
+                hid: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.get(hid)
+                for hid in expand_ids(scope_ids)
+                if hid in self.jupyphant_entity.map_ipytree_node_id_to_neo_obj
+            }
+        else:
+            candidates = {
+                hid: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.get(hid)
+                for hid in self._node_registry
+                if not hid.startswith('folder-')
+            }
+
+        # evaluate with max/min -> True to get base candidates
+        base_candidates = {}
+        for hash_id, neo_obj in candidates.items():
+            if neo_obj is None:
+                continue
+            annotations = getattr(neo_obj, 'annotations', {}) or {}
+            try:
+                if bool(_eval_node(tree, annotations, agg_values=None)):
+                    base_candidates[hash_id] = (neo_obj, annotations)
+            except Exception:
+                pass
+
+        # Compute aggregate values across base candidates
+        agg_values = {}
+        for func, key in agg_keys:
+            values = []
+            for _, (_, annotations) in base_candidates.items():
+                v = annotations.get(key)
+                if v is not None:
+                    try:
+                        values.append(float(v))
+                    except (TypeError, ValueError):
+                        pass
+            if values:
+                agg_values[(func, key)] = (max if func == 'max' else min)(values)
+
+        self.jupyphant_entity.selected_neo_objects.clear()
+        selected_ids = []
+
+        for hash_id, (neo_obj, annotations) in base_candidates.items():
+            try:
+                # re-evaluate with aggregate values substituted (skip if no aggregates)
+                if agg_keys and not bool(_eval_node(tree, annotations, agg_values)):
+                    continue
+                node = self._node_registry.get(hash_id)
+                if node:
+                    self.jupyphant_entity.selected_neo_objects.add(node)
+                    selected_ids.append(hash_id)
+            except Exception:
+                pass
+
+        self.jupyphant_entity.on_selected_neo_objects_changed.fire()
+        print(f"JUPYPHANT_RESULT_KEY:{self.json.dumps(selected_ids)}")
+
     def create_tree(self):
         self._tree_widget = self.widgets.HTML(value='')
         self._tree_widget.layout.width = '100%'

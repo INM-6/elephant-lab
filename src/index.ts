@@ -780,7 +780,45 @@ class JupyphantExtension {
 		}
 
 
+		// Annotation filter row
+		const annoFilterRow = document.createElement('div');
+		annoFilterRow.style.cssText = 'display:flex;gap:4px;align-items:center;padding-top:6px;width:100%;';
+
+		const annoFilterInput = document.createElement('input');
+		annoFilterInput.className = 'jp-rawplot-input';
+		annoFilterInput.style.flex = '1';
+		annoFilterInput.style.minWidth = '0';
+		annoFilterInput.placeholder = 'e.g. sua==True AND spike_count>500';
+		annoFilterInput.title = 'Filter by annotations: key==value AND/OR key>value ...';
+
+		const annoFilterButton = document.createElement('button');
+		annoFilterButton.className = 'workflow-button';
+		annoFilterButton.innerHTML = '<i class="fa fa-filter" aria-hidden="true"></i>';
+		annoFilterButton.title = 'Apply annotation filter';
+		annoFilterButton.onclick = async () => {
+			const expression = annoFilterInput.value.trim();
+			
+			if (!expression) return;
+			
+			const currentIds = Array.from(
+				this.outarea_neo_tree!.node.querySelectorAll('.jup-row.jup-selected[data-node-id]')
+			).map(el => el.getAttribute('data-node-id')!);
+			
+			const code = getPythonCode(PythonCodeKey.SelectByAnnotationFilter, expression, currentIds);
+			const result = await this.kernelBridge!.executeCode(code, null, false);
+			this._applyTreeSelection(result);
+		};
+		annoFilterInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') { 
+				annoFilterButton.click(); 
+			}
+		});
+
+		annoFilterRow.appendChild(annoFilterInput);
+		annoFilterRow.appendChild(annoFilterButton);
+
 		filterContainer.classList.add('sticky-filter');
+		filterContainer.appendChild(annoFilterRow);
 		filterContainer.appendChild(document.createElement('br'));
 		filterContainer.appendChild(document.createElement('br'));
 		filterContainer.appendChild(loadNeoFileButton);

@@ -81,6 +81,12 @@ function handleSelectionRange(idsJson: string) {
 	return `jupyphant_entity.jupyphant_tree.handle_selection_range(${idsJson})`;
 }
 
+function selectByAnnotationFilter(expression: string, scopeIds: string[] = []): string {
+	const jsonExpr = JSON.stringify(expression);
+	const scopeJson = JSON.stringify(scopeIds);
+	return `jupyphant_entity.jupyphant_tree.select_by_annotation_filter(${jsonExpr}, ${scopeJson})`;
+}
+
 // Make all strings publicly available in a dict
 // This dict is used in index.ts to actually execute the code
 export enum PythonCodeKey {
@@ -104,6 +110,7 @@ export enum PythonCodeKey {
 	GetIOClass = 'getIOClass',
 	HandleTreeSelection = 'handleTreeSelection',
 	HandleSelectionRange = 'handleSelectionRange',
+	SelectByAnnotationFilter = 'selectByAnnotationFilter',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -127,6 +134,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.GetIOClass]: (...args: any[]) => getNeoIOClass(args[0]),
 	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1]),
 	[PythonCodeKey.HandleSelectionRange]: (...args: any[]) => handleSelectionRange(args[0]),
+	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0], args[1]),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {
