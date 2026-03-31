@@ -777,16 +777,25 @@ class JupyphantExtension {
 		annoFilterButton.title = 'Apply annotation filter';
 		annoFilterButton.onclick = async () => {
 			const expression = annoFilterInput.value.trim();
-			
+
 			if (!expression) return;
 			
 			const code = getPythonCode(PythonCodeKey.SelectByAnnotationFilter, expression);
 			const result = await this.kernelBridge!.executeCode(code, null, false);
 			this._applyTreeSelection(result);
+			const matched = result?.resultKey ? (JSON.parse(result.resultKey) as string[]) : null;
+			if (matched !== null && matched.length === 0) {
+				annoFilterInput.classList.add('anno-filter-no-match');
+			} else {
+				annoFilterInput.classList.remove('anno-filter-no-match');
+			}
 		};
+		annoFilterInput.addEventListener('input', () => {
+			annoFilterInput.classList.remove('anno-filter-no-match');
+		});
 		annoFilterInput.addEventListener('keydown', (e) => {
-			if (e.key === 'Enter') { 
-				annoFilterButton.click(); 
+			if (e.key === 'Enter') {
+				annoFilterButton.click();
 			}
 		});
 
