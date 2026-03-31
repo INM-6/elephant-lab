@@ -18,6 +18,9 @@ class Jupyphant_tree:
     from neo.core.regionofinterest import RegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
     import ipywidgets as widgets
+    import json
+    import ast 
+
 
     from typing import TYPE_CHECKING
 
@@ -99,6 +102,7 @@ class Jupyphant_tree:
         
         self._tree_widget = None  # ipywidgets.HTML
         self._node_registry: dict = {}  # hash_id -> SimpleNode, for selection
+        self._stat_cache: dict = {}
         self.expand_all = False
 
     def expand_neo_tree(self, opened):
@@ -119,8 +123,14 @@ class Jupyphant_tree:
         self.jupyphant_entity.filter_changed = True
         self.update_tree()
 
+    def cache_stat(self, hash_id: str, stat_name: str, value: float):
+        if hash_id not in self._stat_cache:
+            self._stat_cache[hash_id] = {}
+        self._stat_cache[hash_id][stat_name] = value
+
     def update_tree(self):
         self.jupyphant_entity.update()
+        self._stat_cache.clear()
         if self._tree_widget is None or not self.jupyphant_entity.neo_objs_changed_after_update:
             return
 
@@ -344,7 +354,190 @@ class Jupyphant_tree:
 
         # Fire only once after all nodes are selected
         self.jupyphant_entity.on_selected_neo_objects_changed.fire()
-        
+
+    def _get_candidates(self) -> dict:
+        selected = self.jupyphant_entity.selected_neo_objects
+        source = selected if selected else self._node_registry.values()
+        return {
+            node._id: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj[node._id]
+            for node in source
+            if not node._id.startswith('folder-')
+            and node._id in self.jupyphant_entity.map_ipytree_node_id_to_neo_obj
+        }
+
+    def select_by_stat(self, filter_type: str, filter_data: dict):
+        import json
+        from elephant import statistics as elephant_stats
+
+        candidates = self._get_candidates()
+
+        self.jupyphant_entity.selected_neo_objects.clear()
+        selected_ids = []
+        tol = 1e-4
+        value = filter_data['value']
+
+        for hash_id, neo_obj in candidates.items():
+            if neo_obj is None:
+                continue
+            match = False
+            try:
+                cached = self._stat_cache.get(hash_id, {})
+
+                if filter_type == 'firing_rate':
+                    computed = cached.get('firing_rate')
+                    if computed is None:
+                        if hasattr(neo_obj, 't_start') and neo_obj.t_stop > neo_obj.t_start:
+                            computed = float(elephant_stats.mean_firing_rate(neo_obj).magnitude)
+                    match = computed is not None and abs(computed - value) < tol
+
+                elif filter_type == 'cv':
+                    computed = cached.get('cv')
+                    if computed is None:
+                        if hasattr(neo_obj, 'times') and len(neo_obj) > 1:
+                            computed = float(elephant_stats.cv(elephant_stats.isi(neo_obj)))
+                    match = computed is not None and abs(computed - value) < tol
+
+                elif filter_type == 't_start':
+                    computed = cached.get('t_start')
+                    if computed is None and hasattr(neo_obj, 't_start'):
+                        computed = float(neo_obj.t_start.magnitude)
+                    match = computed is not None and abs(computed - value) < tol
+
+                elif filter_type == 't_stop':
+                    computed = cached.get('t_stop')
+                    if computed is None and hasattr(neo_obj, 't_stop'):
+                        computed = float(neo_obj.t_stop.magnitude)
+                    match = computed is not None and abs(computed - value) < tol
+
+                elif filter_type == 'duration':
+                    computed = cached.get('duration')
+                    if computed is None and hasattr(neo_obj, 'duration'):
+                        computed = float(neo_obj.duration.magnitude)
+                    match = computed is not None and abs(computed - value) < tol
+
+            except Exception:
+                pass
+
+            if match:
+                node = self._node_registry.get(hash_id)
+                if node:
+                    self.jupyphant_entity.selected_neo_objects.add(node)
+                    selected_ids.append(hash_id)
+
+        self.jupyphant_entity.on_selected_neo_objects_changed.fire()
+        print(f"JUPYPHANT_RESULT_KEY:{json.dumps(selected_ids)}")
+    
+    def select_by_annotation_filter(self, expression: str):
+        def _eval_node(node, annotations, agg_values):
+            if isinstance(node, self.ast.Expression):
+                return _eval_node(node.body, annotations, agg_values)
+            if isinstance(node, self.ast.BoolOp):
+                if isinstance(node.op, self.ast.And):
+                    return all(_eval_node(v, annotations, agg_values) for v in node.values)
+                if isinstance(node.op, self.ast.Or):
+                    return any(_eval_node(v, annotations, agg_values) for v in node.values)
+            if isinstance(node, self.ast.UnaryOp) and isinstance(node.op, self.ast.Not):
+                return not _eval_node(node.operand, annotations, agg_values)
+            if isinstance(node, self.ast.Compare):
+                left = _eval_node(node.left, annotations, agg_values)
+                for op, comp in zip(node.ops, node.comparators):
+                    right = _eval_node(comp, annotations, agg_values)
+                    if isinstance(op, self.ast.Eq)    and not (left == right): return False
+                    if isinstance(op, self.ast.NotEq) and not (left != right): return False
+                    if isinstance(op, self.ast.Gt)    and not (left >  right): return False
+                    if isinstance(op, self.ast.Lt)    and not (left <  right): return False
+                    if isinstance(op, self.ast.GtE)   and not (left >= right): return False
+                    if isinstance(op, self.ast.LtE)   and not (left <= right): return False
+                    left = right
+                return True
+            if isinstance(node, self.ast.Call):
+                if (isinstance(node.func, self.ast.Name) and
+                        node.func.id in ('max', 'min') and
+                        len(node.args) == 1 and
+                        isinstance(node.args[0], self.ast.Name)):
+                    func, key = node.func.id, node.args[0].id
+                    if agg_values is None:
+                        return True  # first run: ignore aggregates
+                    agg_val = agg_values.get((func, key))
+                    if agg_val is None:
+                        return False
+                    ann_val = annotations.get(key)
+                    try:
+                        return float(ann_val) == agg_val
+                    except (TypeError, ValueError):
+                        return ann_val == agg_val
+                raise ValueError(f'Unsupported function: {self.ast.dump(node.func)}')
+            if isinstance(node, self.ast.Name):
+                if node.id in ('True', 'False', 'None'):
+                    return {'True': True, 'False': False, 'None': None}[node.id]
+                # look up annotation value
+                return annotations.get(node.id)
+            if isinstance(node, self.ast.Constant):
+                return node.value
+            raise ValueError(f'Unsupported expression node: {type(node).__name__}')
+
+        try:
+            tree = self.ast.parse(expression.strip(), mode='eval')
+        except SyntaxError as e:
+            print(f"JUPYPHANT_FILTER_ERROR:Syntax error — {e}")
+            return
+
+        # Collect all max/min aggregate calls present in the expression
+        agg_keys = set()
+        for node in self.ast.walk(tree):
+            if (isinstance(node, self.ast.Call) and
+                    isinstance(node.func, self.ast.Name) and
+                    node.func.id in ('max', 'min') and
+                    len(node.args) == 1 and
+                    isinstance(node.args[0], self.ast.Name)):
+                agg_keys.add((node.func.id, node.args[0].id))
+
+        candidates = self._get_candidates()
+
+        # evaluate with max/min -> True to get base candidates
+        base_candidates = {}
+        for hash_id, neo_obj in candidates.items():
+            if neo_obj is None:
+                continue
+            annotations = getattr(neo_obj, 'annotations', {}) or {}
+            try:
+                if bool(_eval_node(tree, annotations, agg_values=None)):
+                    base_candidates[hash_id] = (neo_obj, annotations)
+            except Exception:
+                pass
+
+        # Compute aggregate values across base candidates
+        agg_values = {}
+        for func, key in agg_keys:
+            values = []
+            for _, (_, annotations) in base_candidates.items():
+                v = annotations.get(key)
+                if v is not None:
+                    try:
+                        values.append(float(v))
+                    except (TypeError, ValueError):
+                        pass
+            if values:
+                agg_values[(func, key)] = (max if func == 'max' else min)(values)
+
+        self.jupyphant_entity.selected_neo_objects.clear()
+        selected_ids = []
+
+        for hash_id, (neo_obj, annotations) in base_candidates.items():
+            try:
+                # re-evaluate with aggregate values substituted (skip if no aggregates)
+                if agg_keys and not bool(_eval_node(tree, annotations, agg_values)):
+                    continue
+                node = self._node_registry.get(hash_id)
+                if node:
+                    self.jupyphant_entity.selected_neo_objects.add(node)
+                    selected_ids.append(hash_id)
+            except Exception:
+                pass
+
+        self.jupyphant_entity.on_selected_neo_objects_changed.fire()
+        print(f"JUPYPHANT_RESULT_KEY:{self.json.dumps(selected_ids)}")
+
     def create_tree(self):
         self._tree_widget = self.widgets.HTML(value='')
         self._tree_widget.layout.width = '100%'

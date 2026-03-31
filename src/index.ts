@@ -308,6 +308,26 @@ class JupyphantExtension {
 			}
 		});
 
+		// Click listener on the Details panel
+		this.outarea_nodeexplorer_info!.node.addEventListener('click', async (e) => {
+			const target = e.target as HTMLElement;
+
+			const stat = target.closest('.selectable-stat') as HTMLElement;
+			if (stat) {
+				const filterType = stat.getAttribute('data-filter-type');
+				const filterDataRaw = stat.getAttribute('data-filter');
+				if (!filterType || !filterDataRaw) return;
+
+				const filterJson = filterDataRaw.replace(/&quot;/g, '"');
+
+				const code = `jupyphant_entity.jupyphant_tree.select_by_stat('${filterType}', ${filterJson})`;
+				const result = await this.kernelBridge!.executeCode(code, null, false);
+				this._applyTreeSelection(result);
+			}
+
+		});
+
+
 		// Listener for cell execution
 		NotebookActions.executed.connect((sender, exec_data) => {
 			if (exec_data.notebook !== newPanel.content) {
@@ -350,6 +370,37 @@ class JupyphantExtension {
 		});
 
 		console.log("Jupyphant: Event listeners registered.");
+	}
+
+	private _applyTreeSelection(result: any) {
+		if (!result?.resultKey) return;
+		const selectedIds: string[] = JSON.parse(result.resultKey);
+
+		this.outarea_neo_tree!.node
+			.querySelectorAll('.jup-row.jup-selected')
+			.forEach(el => el.classList.remove('jup-selected'));
+
+		selectedIds.forEach(id => {
+			const row = this.outarea_neo_tree!.node
+				.querySelector(`.jup-row[data-node-id="${id}"]`) as HTMLElement;
+			if (row) {
+				row.classList.add('jup-selected');
+				let parent = row.parentElement;
+				while (parent) {
+					if (parent.classList.contains('jup-children')) {
+						parent.classList.add('jup-open');
+						const toggle = parent.previousElementSibling
+							?.querySelector('.jup-toggle') as HTMLElement;
+						if (toggle) toggle.innerHTML = '<i class="fa fa-minus"></i>';
+					}
+					parent = parent.parentElement;
+				}
+			}
+		});
+
+		if (selectedIds.length > 0) {
+			this._lastClickedNode = selectedIds[selectedIds.length - 1];
+		}
 	}
 
 	public attachTab() {
@@ -709,7 +760,52 @@ class JupyphantExtension {
 		}
 
 
+		// Annotation filter row
+		const annoFilterRow = document.createElement('div');
+		annoFilterRow.style.cssText = 'display:flex;gap:4px;align-items:center;padding-top:6px;width:100%;';
+
+		const annoFilterInput = document.createElement('input');
+		annoFilterInput.className = 'jp-rawplot-input';
+		annoFilterInput.style.flex = '1';
+		annoFilterInput.style.minWidth = '0';
+		annoFilterInput.placeholder = 'e.g. sua==True AND spike_count>500';
+		annoFilterInput.title = 'Filter by annotations: key==value AND/OR key>value ...';
+
+		const annoFilterButton = document.createElement('button');
+		annoFilterButton.className = 'workflow-button';
+		annoFilterButton.innerHTML = '<i class="fa fa-filter" aria-hidden="true"></i>';
+		annoFilterButton.title = 'Apply annotation filter';
+		annoFilterButton.onclick = async () => {
+			const expression = annoFilterInput.value.trim();
+
+			if (!expression) return;
+			
+			const code = getPythonCode(PythonCodeKey.SelectByAnnotationFilter, expression);
+			const result = await this.kernelBridge!.executeCode(code, null, false);
+			this._applyTreeSelection(result);
+			const matched = result?.resultKey ? (JSON.parse(result.resultKey) as string[]) : null;
+			if (matched !== null && matched.length === 0) {
+				annoFilterInput.classList.remove('anno-filter-no-match');
+				void annoFilterInput.offsetWidth;
+				annoFilterInput.classList.add('anno-filter-no-match');
+			} else {
+				annoFilterInput.classList.remove('anno-filter-no-match');
+			}
+		};
+		annoFilterInput.addEventListener('input', () => {
+			annoFilterInput.classList.remove('anno-filter-no-match');
+		});
+		annoFilterInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				annoFilterButton.click();
+			}
+		});
+
+		annoFilterRow.appendChild(annoFilterInput);
+		annoFilterRow.appendChild(annoFilterButton);
+
 		filterContainer.classList.add('sticky-filter');
+		filterContainer.appendChild(annoFilterRow);
 		filterContainer.appendChild(document.createElement('br'));
 		filterContainer.appendChild(document.createElement('br'));
 		filterContainer.appendChild(loadNeoFileButton);

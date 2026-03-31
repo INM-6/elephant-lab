@@ -3,7 +3,6 @@ class Jupyphant_info:
     from IPython.display import display, clear_output, HTML
     from ipywidgets import Output
     import numpy as np
-    import quantities as pq
     from elephant import statistics
     from neo.core.regionofinterest import CircularRegionOfInterest, RectangularRegionOfInterest, PolygonRegionOfInterest
     from neo import SpikeTrain, AnalogSignal, Event, Epoch, ImageSequence, IrregularlySampledSignal
@@ -37,6 +36,8 @@ class Jupyphant_info:
     .jup-info .scroll { overflow-x: auto; max-width: 100%; margin-top: 4px; }
     .jup-info .tag { display: inline-block; padding: 0px 4px; background: var(--jp-layout-color2); border-radius: 4px; font-size: 0.9em; }
     .jup-info .anno-section { margin-top: 6px; }
+    .jup-info .selectable-stat { cursor: pointer; border-bottom: 1px dashed var(--jp-brand-color1); }
+    .jup-info .selectable-stat:hover { background: var(--jp-brand-color3); border-radius: 3px; }
     </style>
     """
 
@@ -117,6 +118,20 @@ class Jupyphant_info:
     def _tag(self, text: str) -> str:
         return f'<span class="tag">{text}</span>'
 
+    def _kv_selectable(self, key: str, value, filter_type: str, filter_data: dict) -> str:
+        import json
+        try:
+            data_attr = json.dumps(filter_data).replace('"', '&quot;')
+        except:
+            data_attr = filter_data
+        return f'''<div class="kv-row">
+            <span class="key">{key}:</span>
+            <span class="val selectable-stat"
+                data-filter-type="{filter_type}"
+                data-filter="{data_attr}"
+                title="Click to select matching objects">{value}</span>
+        </div>'''
+    
     def _section(self, *content) -> str:
         return f'<div class="section">{"".join(content)}</div>'
 
@@ -216,6 +231,12 @@ class Jupyphant_info:
         all_t_starts = [st.t_start for st in spiketrains]
         all_t_stops = [st.t_stop for st in spiketrains]
 
+        tree = self.jupyphant_entity.jupyphant_tree
+        for st in spiketrains:
+            hash_id = self.jupyphant_entity.get_neo_hash(st, hash_name='sha1')
+            tree.cache_stat(hash_id, 't_start', float(st.t_start.magnitude))
+            tree.cache_stat(hash_id, 't_stop', float(st.t_stop.magnitude))
+
         parts = [
             self._h3(f'SpikeTrain Overview ({count})'),
             self._kv('Total Spikes', total_spikes),
@@ -237,30 +258,55 @@ class Jupyphant_info:
                 self._kv('Spike Time Min', f'{self.np.min(all_mag):.4f} {unit_str}'),
                 self._kv('Spike Time Max', f'{self.np.max(all_mag):.4f} {unit_str}'),
             ]
-
+            parts += [
+            self._h3('Time Range'),
+            self._kv_selectable('t_start Min', str(min(all_t_starts)), 't_start',
+            {'value': float(min(all_t_starts).magnitude)}),
+            self._kv_selectable('t_stop Max', str(max(all_t_stops)), 't_stop',
+                {'value': float(max(all_t_stops).magnitude)}),
+            ]
+                    
         # Firing rates
-        firing_rates = [self.statistics.mean_firing_rate(st) for st in spiketrains if st.t_stop > st.t_start]
-        if firing_rates:
-            rate_units = firing_rates[0].units.dimensionality
-            mags = [fr.magnitude for fr in firing_rates]
+        firing_rates_per_st = {
+            self.jupyphant_entity.get_neo_hash(st, hash_name='sha1'):
+                float(self.statistics.mean_firing_rate(st).magnitude)
+            for st in spiketrains if st.t_stop > st.t_start
+        }
+        for hash_id, fr in firing_rates_per_st.items():
+            tree.cache_stat(hash_id, 'firing_rate', fr)
+
+        if firing_rates_per_st:
+            mags = list(firing_rates_per_st.values())
+            rate_units = self.statistics.mean_firing_rate(spiketrains[0]).units.dimensionality
             parts += [
                 self._h3(f'Firing Rates ({rate_units})'),
-                self._kv('Min', f'{min(mags):.4f}'),
-                self._kv('Max', f'{max(mags):.4f}'),
+                self._kv_selectable('Min', f'{min(mags):.4f}', 'firing_rate',
+                    {'value': float(min(mags))}),
+                self._kv_selectable('Max', f'{max(mags):.4f}', 'firing_rate',
+                    {'value': float(max(mags))}),
                 self._kv('Average', f'{self.np.mean(mags):.4f}'),
             ]
 
         # CV
-        isis_list = [self.statistics.isi(st) for st in spiketrains if len(st) > 1]
-        if isis_list:
-            cvs = [self.statistics.cv(isis) for isis in isis_list]
-            if cvs:
-                parts += [
-                    self._h3('Coefficient of Variation (CV)'),
-                    self._kv('Min', f'{min(cvs):.4f}'),
-                    self._kv('Max', f'{max(cvs):.4f}'),
-                    self._kv('Average', f'{self.np.mean(cvs):.4f}'),
-                ]
+        cv_per_st = {}
+        for st in spiketrains:
+            if len(st) > 1:
+                hash_id = self.jupyphant_entity.get_neo_hash(st, hash_name='sha1')
+                cv = float(self.statistics.cv(self.statistics.isi(st)))
+                cv_per_st[hash_id] = cv
+                tree.cache_stat(hash_id, 'cv', cv)
+
+        if cv_per_st:
+            cvs = list(cv_per_st.values())
+            parts += [
+                self._h3('Coefficient of Variation (CV)'),
+                self._kv_selectable('Min', f'{min(cvs):.4f}', 'cv',
+                    {'value': float(min(cvs))}),
+                self._kv_selectable('Max', f'{max(cvs):.4f}', 'cv',
+                    {'value': float(max(cvs))}),
+                self._kv('Average', f'{self.np.mean(cvs):.4f}'),
+            ]
+
 
         all_annotations = [st.annotations for st in spiketrains]
         return self._section(*parts) + self._html_annotations_overview(all_annotations, count)
@@ -277,10 +323,14 @@ class Jupyphant_info:
             self._h3(f'AnalogSignal Overview ({count})'),
             self._kv('Total Channels', sum(s.shape[1] for s in signals)),
             self._kv('Sampling Rates', ', '.join(sampling_rates)),
-            self._kv('Duration Min', min(durations)),
-            self._kv('Duration Max', max(durations)),
-            self._kv('t_start Min', min(all_t_starts)),
-            self._kv('t_stop Max', max(all_t_stops)),
+            self._kv_selectable('Duration Min', str(min(durations)), 'duration',
+            {'value': float(min(durations).magnitude), 'op': 'min'}),
+            self._kv_selectable('Duration Max', str(max(durations)), 'duration',
+            {'value': float(max(durations).magnitude), 'op': 'max'}),
+            self._kv_selectable('t_start Min', str(min(all_t_starts)), 't_start',
+            {'value': float(min(all_t_starts).magnitude), 'op': 'min'}),
+            self._kv_selectable('t_stop Max', str(max(all_t_stops)), 't_stop',
+            {'value': float(max(all_t_stops).magnitude), 'op': 'max'}),
         ]
 
         all_annotations = [s.annotations for s in signals]
