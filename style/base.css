@@ -29,13 +29,42 @@
   border-bottom: 1px solid var(--jp-border-color1);
 }
 
+/* Button text styling */
 .plotly .updatemenu-button text {
-  fill: rgb(0, 0, 0) !important;
+  fill: var(--jp-ui-font-color1) !important;
+  font-size: 14px !important;
+  /* Bigger text */
+  font-weight: 600 !important;
+  /* Slightly bolder */
 }
 
+/* Button background */
 .plotly .updatemenu-button rect {
-  fill: rgb(101, 101, 101) !important;
-  stroke: rgb(41, 41, 41) !important;
+  fill: var(--jp-layout-color2) !important;
+  transform: scaleX(1.175);
+  stroke: var(--jp-border-color2) !important;
+  stroke-width: 1.5px !important;
+  rx: 6px !important;
+  /* Rounded corners */
+}
+
+/* Hover effect */
+.plotly .updatemenu-button:hover rect {
+  fill: var(--jp-layout-color3) !important;
+  stroke: var(--jp-border-color1) !important;
+  cursor: pointer;
+}
+
+/* Active/pressed effect */
+.plotly .updatemenu-button:active rect {
+  fill: var(--jp-brand-color1) !important;
+  stroke: var(--jp-brand-color0) !important;
+}
+
+/* Optional: smooth transitions */
+.plotly .updatemenu-button rect,
+.plotly .updatemenu-button text {
+  transition: all 0.2s ease;
 }
 
 .jp-rawplot-label {

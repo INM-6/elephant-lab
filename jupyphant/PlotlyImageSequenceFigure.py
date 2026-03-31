@@ -58,10 +58,14 @@ class PlotlyImageSequenceFigure:
             row_index = rows - row_index + 1
             subplot_free_y_space = get_subplot_free_y_space()
             return row_index * subplot_free_y_space + (row_index-1) * vertical_spacing - subplot_free_y_space * 0.5
+        
+        def get_button_x_offset(label):
+            return len(label) * 0.00075
 
-        def get_button_x(col_index):
+
+        def get_button_x(col_index, label):
             subplot_free_x_space = get_subplot_free_x_space()
-            return col_index * subplot_free_x_space + (col_index-1) * horizontal_spacing - subplot_free_x_space * 0.5
+            return col_index * subplot_free_x_space + (col_index-1) * horizontal_spacing - subplot_free_x_space * 0.5 - get_button_x_offset(label)
 
         def get_button_y(row_index):
             row_index = rows - row_index + 1
@@ -109,13 +113,14 @@ class PlotlyImageSequenceFigure:
                     traces=[idx]
                 ))
 
+            label = f"▶ {getattr(seq, 'name', 'seq')}" 
             # Button above column
-            button_x = get_button_x(col)
+            button_x = get_button_x(col, label)
             button_y = get_button_y(row)
             button = dict(
                 type="buttons",
                 buttons=[dict(
-                    label=f"{getattr(seq, 'name', 'seq')}",
+                    label=label,
                     method="animate",
                     args=[[f"{idx}_{k}" for k in range(num_frames)],
                           {"frame": {"duration": duration_ms / num_frames, "redraw": True},
