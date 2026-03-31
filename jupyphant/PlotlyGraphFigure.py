@@ -140,11 +140,11 @@ class PlotlyGraphFigure:
                         )
                     if d.units_x is not None:
                         self._update_layout_options_dict(f"xaxis{row}",dict(
-                            title=d.units_x.__str__()
+                            title=self.PlotlyUtils.convert_unit_to_label(d.units_x)
                         ))
                     if d.units_y is not None:
                         self._update_layout_options_dict(f"yaxis{row}",dict(
-                            title=d.units_y.__str__()
+                            title=self.PlotlyUtils.convert_unit_to_label(d.units_y)
                         ))
                     if self._can_have_custom_ticklabels() and hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
@@ -324,11 +324,11 @@ class PlotlyGraphFigure:
         if self._is_single_plot():
             if self.data.common_units_x is not None:
                 self._update_layout_options_dict("xaxis", dict(
-                    title=self.data.common_units_x.__str__()
+                    title=self.PlotlyUtils.convert_unit_to_label(self.data.common_units_x)
                 ))
             if self.data.common_units_y is not None:
                 self._update_layout_options_dict("yaxis", dict(
-                    title=self.data.common_units_y.__str__()
+                    title=self.PlotlyUtils.convert_unit_to_label(self.data.common_units_y)
                 ))
         else:
             if self.data.common_units_x is not None:
