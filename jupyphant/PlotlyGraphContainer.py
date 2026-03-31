@@ -22,14 +22,34 @@ class PlotlyUtils:
         return q.rescale(convert_unit).magnitude
     
     @staticmethod
-    def calc_round_digits(values):
-        # Avoid log10 issues with zero
-        abs_xs = PlotlyUtils.np.abs(values)
-        abs_xs[abs_xs == 0] = 1
+    def format_with_auto_digits(values):
+        """
+        Fully vectorized formatting of values with automatic per-value decimal digits.
+        Handles zeros, NaN, and inf without warnings.
+        """
+        np = PlotlyUtils.np
+        abs_xs = np.abs(values)
 
-        # Determine number of decimal places
-        digits = PlotlyUtils.np.clip(2 - PlotlyUtils.np.floor(PlotlyUtils.np.log10(abs_xs)), 0, 6).astype(int)
-        return digits
+        # Replace zeros, NaN, and inf with 1 for log10
+        safe_xs = np.where(np.isfinite(abs_xs) & (abs_xs != 0), abs_xs, 1.0)
+
+        # Compute digits, clip to [0,6]
+        digits = np.clip(2 - np.floor(np.log10(safe_xs)), 0, 6).astype(int)
+
+        # NaN/inf get 0 digits
+        digits[~np.isfinite(abs_xs)] = 0
+
+        # Cast digits and values to Python types for np.char.mod
+        digits_py = digits.astype(int).tolist()
+        values_py = values.astype(float).tolist()
+
+        # Use np.char.mod with Python ints
+        formatted = np.array([
+            f"{v:.{d}f}" if np.isfinite(v) else ("nan" if np.isnan(v) else "inf")
+            for v, d in zip(values_py, digits_py)
+        ])
+
+        return formatted
     
     @staticmethod
     def print_warning(message):
