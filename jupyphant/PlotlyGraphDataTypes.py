@@ -23,9 +23,7 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
         self.use_name_as_ticklabels = True
 
 class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
-    import quantities as pq
     class AnalogSignalChannelLFPPlot(PlotlyGraphDataType):
-        import numpy as np
         def extract_data(self, dict_with_signal_info):
             """Extracts AnalogSignalChannelLFPPlot from a dict containing info about an AnalogSignal"""
             self.name = dict_with_signal_info.get('name')
@@ -35,22 +33,10 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
             self.units_x = dict_with_signal_info.get('units_x')
             self.units_y = dict_with_signal_info.get('units_y')
 
-    # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
-    def plot_lfp(self, lfps, name_fallback):
-        """
-        Plot LFPs using plotly.
-
-        fig:        plotly figure
-        row, col:   subplot location
-        lfps:       LFP signals with trial_id as first dimension and sample_id as second dimension.
-                    LFP signals must be arranged according to trial ID.
-        times:      time stamps of the recorded LFP samples. Must be of same length as second dimenion of lfps
-        title:      title of the figure
-        spacing:    vertical spacing between two LFP signals
-        color:      color to used for plotting
-        """
-        
-        for lfp in lfps:
+    def extract_data(self, data, name_fallback):
+        """Extracts AnalogSignalLFPPlotData from a list of AnalogSignals"""
+            
+        for lfp in data:
             name = getattr(lfp, 'name', None)
             if name is None:
                 name = name_fallback(lfp)
@@ -63,28 +49,11 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                 
                 channel_data = data[:, ch_idx]
 
-                min_val = self.np.min(channel_data)
-                max_val = self.np.max(channel_data)
-                range_val = max_val - min_val
-
-                if range_val > 0:
-                    norm_data = (channel_data - min_val) / range_val
-                else:
-                    norm_data = channel_data - min_val
-
                 channel_name = name
                 if num_channels > 1:
                     channel_name += f' Ch{ch_idx}'
                 # Plot
-                self.data_list.append(self.AnalogSignalChannelLFPPlot({ 'x': lfp.times.magnitude, 'y': norm_data, 'name': channel_name, 'units_x': lfp.times.units, 'units_y': lfp.units}))
-
-    def extract_data(self, data, name_fallback):
-        """Extracts AnalogSignalLFPPlotData from a list of AnalogSignals"""
-            
-        self.plot_lfp(
-            data, 
-            name_fallback
-        )
+                self.data_list.append(self.AnalogSignalChannelLFPPlot({ 'x': lfp.times.magnitude, 'y': channel_data, 'name': channel_name, 'units_x': lfp.times.units, 'units_y': lfp.units}))
 
 class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
     class IrregularlySampledSignalPlot(PlotlyGraphDataType):
