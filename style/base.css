@@ -148,12 +148,27 @@
   border: 1px solid var(--jp-border-color2);
   background: var(--jp-layout-color1);
   color: var(--jp-ui-font-color1);
+  outline: none;
+}
+
+.jp-rawplot-input:focus {
+  border-color: var(--jp-brand-color1);
+  box-shadow: 0 0 0 1px var(--jp-brand-color1);
+}
+
+@keyframes anno-filter-shake {
+  0%   { border-color: var(--jp-error-color1); box-shadow: 0 0 0 1px var(--jp-error-color1); }
+  25%  { border-color: transparent;            box-shadow: none; }
+  50%  { border-color: var(--jp-error-color1); box-shadow: 0 0 0 1px var(--jp-error-color1); }
+  75%  { border-color: transparent;            box-shadow: none; }
+  100% { border-color: var(--jp-error-color1); box-shadow: 0 0 0 1px var(--jp-error-color1); }
 }
 
 .anno-filter-no-match {
   border-color: var(--jp-error-color1) !important;
   outline: none;
   box-shadow: 0 0 0 1px var(--jp-error-color1);
+  animation: anno-filter-shake 0.4s ease;
 }
 
 .jp-rawplot-select {

@@ -785,6 +785,8 @@ class JupyphantExtension {
 			this._applyTreeSelection(result);
 			const matched = result?.resultKey ? (JSON.parse(result.resultKey) as string[]) : null;
 			if (matched !== null && matched.length === 0) {
+				annoFilterInput.classList.remove('anno-filter-no-match');
+				void annoFilterInput.offsetWidth;
 				annoFilterInput.classList.add('anno-filter-no-match');
 			} else {
 				annoFilterInput.classList.remove('anno-filter-no-match');
