@@ -6,7 +6,8 @@ export class PlotContainer {
     private wrapper: HTMLDivElement;
     private container: HTMLDivElement;
     private loading: HTMLDivElement;
-    updateId: number;
+    private updateId: number;
+    private hasFrames: boolean;
     private slider?: HTMLElement;
     private ticklabel_limit?: number;
 
@@ -58,6 +59,7 @@ export class PlotContainer {
         this.container = container;
         this.loading = loading;
         this.updateId = -1;
+        this.hasFrames = false;
     }
 
     showLoading() {
@@ -93,11 +95,19 @@ export class PlotContainer {
 
     render(figJson: any, updateId: number, is_plot_theme_dark: boolean) {
         const currentId = updateId;
+        const gd = this.container as any;
+        if (!gd) return;
+
+        if (this.hasFrames) {
+            this.hasFrames = false;
+            Plotly.purge(this.container);
+        }
 
         Plotly.react(this.container, figJson.data, figJson.layout).then((gd) => {
             if (this.updateId !== currentId) return;
 
             if (figJson.frames) {
+                this.hasFrames = true;
                 Plotly.addFrames(gd, figJson.frames);
             }
             if (figJson.ticklabel_limit) {
