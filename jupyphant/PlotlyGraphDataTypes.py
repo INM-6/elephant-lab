@@ -23,83 +23,37 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
         self.use_name_as_ticklabels = True
 
 class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
-    import quantities as pq
-    class AnalogSignalLFPPlot(PlotlyGraphDataType):
-        import numpy as np
-        def extract_data(self, analogsignal_dict):
-            """Extracts AnalogSignalLFPPlotData from a dict containing info about an AnalogSignal"""
-            self.name = analogsignal_dict.get('name', None)
+    class AnalogSignalChannelLFPPlot(PlotlyGraphDataType):
+        def extract_data(self, dict_with_signal_info):
+            """Extracts AnalogSignalChannelLFPPlot from a dict containing info about an AnalogSignal"""
+            self.name = dict_with_signal_info.get('name')
             self.mode = 'lines'
+            self.x = dict_with_signal_info.get('x')
+            self.y = dict_with_signal_info.get('y')
+            self.units_x = dict_with_signal_info.get('units_x')
+            self.units_y = dict_with_signal_info.get('units_y')
 
-            channel_data = analogsignal_dict['channel_data']
-
-            min_val = self.np.min(channel_data)
-            max_val = self.np.max(channel_data)
-            range_val = max_val - min_val
-
-            if range_val > 0:
-                norm_data = (channel_data - min_val) / range_val
-            else:
-                norm_data = channel_data - min_val
+    def extract_data(self, data, name_fallback):
+        """Extracts AnalogSignalLFPPlotData from a list of AnalogSignals"""
             
-            self.x = analogsignal_dict['times']
-            self.y = norm_data
+        for lfp in data:
+            name = getattr(lfp, 'name', None)
+            if name is None:
+                name = name_fallback(lfp)
 
-    # Pre-existing routine for plotting AnalogSignals, developed by Robin Gutzen
-    def plot_lfp(self,lfps, times, names, name_fallback):
-        """
-        Plot LFPs using plotly.
-
-        lfps:       LFP signals with trial_id as first dimension and sample_id as second dimension.
-                    LFP signals must be arranged according to trial ID.
-        times:      time stamps of the recorded LFP samples. Must be of same length as second dimenion of lfps
-        """
-        
-        for trial_id, lfp in enumerate(lfps):
             data = lfp.magnitude
             
-            if data.ndim == 1:
-                data = data.reshape(-1, 1)
-            
             num_channels = data.shape[1]
-            
+
             for ch_idx in range(num_channels):
                 
                 channel_data = data[:, ch_idx]
 
-                self.data_list.append(self.AnalogSignalLFPPlot(dict(
-                        channel_data=channel_data,
-                        times=times, 
-                        name=f"{names[trial_id]}",
-                    ),
-                    name_fallback,
-                    units_x = times.units,
-                    units_y = lfp.units
-                ))
-
-    def extract_data(self, data, name_fallback):
-        """Extracts AnalogSignalLFPPlotData from a list of AnalogSignals"""
-        max_duration_limit = 10 * self.pq.s 
-    
-        durations = [(sig.t_stop - sig.t_start) for sig in data]
-        
-        min_available_duration = min(durations)
-
-        cut_duration = min(max_duration_limit, min_available_duration)
-
-        sliced_signals = [
-            sig.time_slice(sig.t_start, sig.t_start + cut_duration) 
-            for sig in data
-        ]
-
-        plot_times = sliced_signals[0].times - sliced_signals[0].t_start
-        
-        self.plot_lfp(
-            sliced_signals, 
-            plot_times,
-            [sig.name for sig in data],
-            name_fallback
-        )
+                channel_name = name
+                if num_channels > 1:
+                    channel_name += f' Ch{ch_idx}'
+                # Plot
+                self.data_list.append(self.AnalogSignalChannelLFPPlot({ 'x': lfp.times.magnitude, 'y': channel_data, 'name': channel_name, 'units_x': lfp.times.units, 'units_y': lfp.units}))
 
 class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
     class IrregularlySampledSignalPlot(PlotlyGraphDataType):

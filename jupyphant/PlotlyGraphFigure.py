@@ -101,7 +101,7 @@ class PlotlyGraphFigure:
             # Add the trace
             try:
                 # Default settings
-                default_marker = dict(size=1)
+                default_marker = dict(size=6)
                 default_line   = dict(width=1)
 
 
@@ -115,7 +115,7 @@ class PlotlyGraphFigure:
                     x=d.x,
                     y=d.y,
                     name=getattr(d, 'name', 'Trace'),
-                    mode=getattr(d, "mode", "markers"),
+                    mode="markers" if d.x.size < 2 else getattr(d, "mode", "markers"),
                     marker=marker_settings,
                     line=line_settings
                 )
