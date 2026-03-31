@@ -32,6 +32,7 @@
 /* Button text styling */
 .plotly .updatemenu-button text {
   fill: var(--jp-ui-font-color1) !important;
+  transform: translateX(-1%);
   font-size: 14px !important;
   /* Bigger text */
   font-weight: 600 !important;
@@ -41,7 +42,7 @@
 /* Button background */
 .plotly .updatemenu-button rect {
   fill: var(--jp-layout-color2) !important;
-  transform: scaleX(1.175);
+  transform: scaleX(1.175) translateX(-0.75%);
   stroke: var(--jp-border-color2) !important;
   stroke-width: 1.5px !important;
   rx: 6px !important;
