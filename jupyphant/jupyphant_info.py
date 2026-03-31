@@ -5,7 +5,7 @@ class Jupyphant_info:
     import numpy as np
     from elephant import statistics
     from neo.core.regionofinterest import CircularRegionOfInterest, RectangularRegionOfInterest, PolygonRegionOfInterest
-    from neo import SpikeTrain, AnalogSignal, Event, Epoch
+    from neo import SpikeTrain, AnalogSignal, Event, Epoch, ImageSequence, IrregularlySampledSignal
     from neo.core.baseneo import BaseNeo
     from neo.core.container import Container
     from neo.core.spiketrainlist import SpikeTrainList
@@ -21,7 +21,7 @@ class Jupyphant_info:
     # Shared Style
     _CSS = """
     <style>
-    .jup-info { font-family: var(--jp-ui-font-family); font-size: var(--jp-ui-font-size1); color: var(--jp-ui-font-color1); }
+    .jup-info { font-family: var(--jp-ui-font-family); font-size: var(--jp-ui-font-size1); color: var(--jp-ui-font-color1); padding-left: 8px; }
     .jup-info h3 { margin: 5px 0 6px 0; font-size: 1.05em; border-top: 2px solid var(--jp-border-color2); border-bottom: none; padding-bottom: 3px; padding-top: 4px;}
     .jup-info .section { margin-bottom: 10px; }
     .jup-info .kv { display: flex; flex-wrap: wrap; gap: 2px 12px; }
@@ -55,7 +55,7 @@ class Jupyphant_info:
                 Jupyphant_info.clear_output()
                 self.pretty_print_of_selected_neo_objects()
 
-        output_node_info = self.Output(layout={'border': '1px solid orange'})
+        output_node_info = self.Output()
         self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
         Jupyphant_info.display(output_node_info)
 
@@ -95,6 +95,8 @@ class Jupyphant_info:
             if len(items) > 1:
                 if issubclass(obj_type, self.SpikeTrain):
                     parts.append(self._html_spiketrain_overview(items))
+                elif issubclass(obj_type, self.IrregularlySampledSignal):
+                    parts.append(self._html_irregularlysampledsignal_overview(items))
                 elif issubclass(obj_type, self.AnalogSignal):
                     parts.append(self._html_analogsignal_overview(items))
                 else:
@@ -318,6 +320,9 @@ class Jupyphant_info:
         all_t_stops = [s.t_stop for s in signals]
 
         parts = [
+            self._h3(f'AnalogSignal Overview ({count})'),
+            self._kv('Total Channels', sum(s.shape[1] for s in signals)),
+            self._kv('Sampling Rates', ', '.join(sampling_rates)),
             self._kv_selectable('Duration Min', str(min(durations)), 'duration',
             {'value': float(min(durations).magnitude), 'op': 'min'}),
             self._kv_selectable('Duration Max', str(max(durations)), 'duration',
@@ -326,6 +331,37 @@ class Jupyphant_info:
             {'value': float(min(all_t_starts).magnitude), 'op': 'min'}),
             self._kv_selectable('t_stop Max', str(max(all_t_stops)), 't_stop',
             {'value': float(max(all_t_stops).magnitude), 'op': 'max'}),
+        ]
+
+        all_annotations = [s.annotations for s in signals]
+        return self._section(*parts) + self._html_annotations_overview(all_annotations, count)
+
+    def _html_irregularlysampledsignal_overview(self, items: list) -> str:
+        signals = [item['obj'] for item in items]
+        count = len(signals)
+        durations = [s.duration for s in signals]
+        all_t_starts = [s.t_start for s in signals]
+        all_t_stops = [s.t_stop for s in signals]
+        all_sample_counts = [s.shape[0] for s in signals]
+        units = set(str(s.units.dimensionality) for s in signals)
+
+        # Sampling intervals across all signals
+        all_intervals = self.np.concatenate([s.sampling_intervals.magnitude for s in signals])
+        interval_unit = signals[0].sampling_intervals.units.dimensionality
+
+        parts = [
+            self._h3(f'IrregularlySampledSignal Overview ({count})'),
+            self._kv('Total Channels', sum(s.shape[1] for s in signals)),
+            self._kv('Units', ', '.join(units)),
+            self._kv('Total Samples', sum(all_sample_counts)),
+            self._kv('Samples Min / Max', f'{min(all_sample_counts)} / {max(all_sample_counts)}'),
+            self._kv('Duration Min', min(durations)),
+            self._kv('Duration Max', max(durations)),
+            self._kv('t_start Min', min(all_t_starts)),
+            self._kv('t_stop Max', max(all_t_stops)),
+            self._kv(f'Sampling Interval Min ({interval_unit})', f'{self.np.min(all_intervals):.4f}'),
+            self._kv(f'Sampling Interval Max ({interval_unit})', f'{self.np.max(all_intervals):.4f}'),
+            self._kv(f'Sampling Interval Mean ({interval_unit})', f'{self.np.mean(all_intervals):.4f}'),
         ]
 
         all_annotations = [s.annotations for s in signals]
@@ -362,6 +398,10 @@ class Jupyphant_info:
             return header + self._html_list(neo_obj)
         if neo_obj.__class__.__name__ == 'ObjectList':
             return header + self._html_objectlist(neo_obj)
+        if isinstance(neo_obj, self.ImageSequence):
+            return header + self._html_imagesequence(neo_obj)
+        if isinstance(neo_obj, self.IrregularlySampledSignal):
+            return header + self._html_irregularlysampledsignal(neo_obj)
         if isinstance(neo_obj, self.AnalogSignal):
             return header + self._html_analogsignal(neo_obj)
         if isinstance(neo_obj, self.SpikeTrain):
@@ -423,6 +463,7 @@ class Jupyphant_info:
             self._kv('dtype', str(neo_obj.dtype)),
             self._kv('t_start', neo_obj.t_start),
             self._kv('t_stop', neo_obj.t_stop),
+            self._kv('Duration', neo_obj.t_stop - neo_obj.t_start),
             self._kv('Description', neo_obj.description) if neo_obj.description else '',
             self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
         )]
@@ -430,14 +471,14 @@ class Jupyphant_info:
             parts.append(self._html_annotations(neo_obj.annotations))
 
         times = neo_obj.times
-        table_data = [[f'Index ({len(neo_obj)} spikes)', f'Time (in {neo_obj.units.dimensionality}, {neo_obj.dtype})']]
+        table_data = [[f'Index ({len(neo_obj)} spikes)', f'Time ({neo_obj.units.dimensionality})']]
 
         aa = getattr(neo_obj, 'array_annotations', {})
         aa_keys = list(aa.keys())
         table_data[0] += aa_keys
 
         def make_row(i):
-            row = [i, f'{times[i]:.4f}']
+            row = [i, f'{times[i].magnitude:.4f}']
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')
@@ -456,9 +497,12 @@ class Jupyphant_info:
     def _html_analogsignal(self, neo_obj) -> str:
         parts = [self._section(
             self._kv('Shape', f'{neo_obj.shape[1]} channels × {neo_obj.shape[0]} samples'),
+            self._kv('Units', str(neo_obj.units.dimensionality)),
+            self._kv('dtype', str(neo_obj.dtype)),
             self._kv('Sampling Rate', neo_obj.sampling_rate),
             self._kv('t_start', neo_obj.t_start),
             self._kv('t_stop', neo_obj.t_stop),
+            self._kv('Duration', neo_obj.duration),
             self._kv('Description', neo_obj.description) if neo_obj.description else '',
             self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
         )]
@@ -479,7 +523,7 @@ class Jupyphant_info:
         times = neo_obj.times
 
         def make_row(i):
-            return [i, f'{times[i]:.3f}'] + [f'{neo_obj[i, ch].item():.3f}' for ch in channel_indices]
+            return [i, f'{times[i].magnitude:.3f}'] + [f'{neo_obj[i, ch].item():.3f}' for ch in channel_indices]
 
         if len(times) > 20:
             for i in range(10): table_data.append(make_row(i))
@@ -497,6 +541,9 @@ class Jupyphant_info:
             self._kv('Epochs', len(neo_obj)),
             self._kv('Units', str(neo_obj.units.dimensionality)),
             self._kv('dtype', str(neo_obj.dtype)),
+            self._kv('t_start', neo_obj.times[0] if len(neo_obj) else '—'),
+            self._kv('t_stop', neo_obj.times[-1] if len(neo_obj) else '—'),
+            self._kv('Duration', neo_obj.times[-1] - neo_obj.times[0] if len(neo_obj) > 1 else '—'),
             self._kv('Description', neo_obj.description) if neo_obj.description else '',
             self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
         )]
@@ -510,12 +557,12 @@ class Jupyphant_info:
         aa = getattr(neo_obj, 'array_annotations', {})
         aa_keys = list(aa.keys())
 
-        header = ['Index', f'Time ({neo_obj.units.dimensionality.string}, {neo_obj.dtype})',
+        header = ['Index', f'Time ({neo_obj.units.dimensionality.string})',
                   f'Duration ({neo_obj.units.dimensionality.string})', 'Label'] + aa_keys
         table_data = [header]
 
         def make_row(i):
-            row = [i, f'{times[i]:.4f}', f'{durations[i]:.4f}', labels[i]]
+            row = [i, f'{times[i].magnitude:.4f}', f'{durations[i].magnitude:.4f}', labels[i]]
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')
@@ -532,11 +579,90 @@ class Jupyphant_info:
         parts.append(self._section(self._h3('Data'), self._table_html(table_data)))
         return ''.join(parts)
 
+    def _html_imagesequence(self, neo_obj) -> str:
+        n_frames, height, width = neo_obj.shape
+        parts = [self._section(
+            self._kv('Shape', f'{n_frames} frames × {height} rows × {width} cols'),
+            self._kv('Units', str(neo_obj.units.dimensionality)),
+            self._kv('dtype', str(neo_obj.dtype)),
+            self._kv('Sampling Rate', neo_obj.sampling_rate),
+            self._kv('Spatial Scale', neo_obj.spatial_scale),
+            self._kv('t_start', neo_obj.t_start),
+            self._kv('t_stop', neo_obj.t_stop),
+            self._kv('Duration', neo_obj.duration),
+            self._kv('Description', neo_obj.description) if neo_obj.description else '',
+            self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
+        )]
+        if neo_obj.annotations:
+            parts.append(self._html_annotations(neo_obj.annotations))
+
+        times = neo_obj.times
+        header = ['Frame', f'Time ({times.units.dimensionality.string})',
+                  f'Mean ({neo_obj.units.dimensionality})']
+        table_data = [header]
+
+        def make_row(i):
+            return [i, f'{times[i].magnitude:.4f}', f'{self.np.mean(neo_obj[i].magnitude):.4f}']
+
+        if n_frames > 20:
+            for i in range(10): table_data.append(make_row(i))
+            table_data.append(['...'] * len(header))
+            for i in range(n_frames - 10, n_frames): table_data.append(make_row(i))
+        else:
+            for i in range(n_frames): table_data.append(make_row(i))
+
+        parts.append(self._section(self._h3('Frames'), self._table_html(table_data)))
+        return ''.join(parts)
+
+    def _html_irregularlysampledsignal(self, neo_obj) -> str:
+        n_samples, n_channels = neo_obj.shape
+        channel_indices = list(range(n_channels))
+        note = ''
+        if n_channels > 4:
+            channel_indices = list(range(2)) + list(range(n_channels - 2, n_channels))
+            note = f'<div class="dim">Showing first 2 and last 2 of {n_channels} channels</div>'
+        elif n_channels > 1:
+            note = f'<div class="dim">Showing all {n_channels} channels</div>'
+
+        parts = [self._section(
+            self._kv('Shape', f'{n_channels} channels × {n_samples} samples'),
+            self._kv('Units', str(neo_obj.units.dimensionality)),
+            self._kv('dtype', str(neo_obj.dtype)),
+            self._kv('t_start', neo_obj.t_start),
+            self._kv('t_stop', neo_obj.t_stop),
+            self._kv('Duration', neo_obj.duration),
+            self._kv('Description', neo_obj.description) if neo_obj.description else '',
+            self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
+        )]
+        if neo_obj.annotations:
+            parts.append(self._html_annotations(neo_obj.annotations))
+
+        times = neo_obj.times
+        header = ['Index', f'Time ({times.units.dimensionality.string})'] + [f'Ch{i}' for i in channel_indices]
+        table_data = [header]
+
+        def make_row(i):
+            return [i, f'{times[i].magnitude:.4f}'] + [f'{neo_obj[i, ch].item():.4f}' for ch in channel_indices]
+
+        if n_samples > 20:
+            for i in range(10): table_data.append(make_row(i))
+            table_data.append(['...'] * len(header))
+            for i in range(n_samples - 10, n_samples): table_data.append(make_row(i))
+        else:
+            for i in range(n_samples): table_data.append(make_row(i))
+
+        parts.append(self._section(self._h3('Data'), note, self._table_html(table_data)))
+        parts.append(self._html_array_annotations(neo_obj))
+        return ''.join(parts)
+
     def _html_event(self, neo_obj) -> str:
         parts = [self._section(
             self._kv('Events', len(neo_obj)),
             self._kv('Units', str(neo_obj.units.dimensionality)),
             self._kv('dtype', str(neo_obj.dtype)),
+            self._kv('t_start', neo_obj.times[0] if len(neo_obj) else '—'),
+            self._kv('t_stop', neo_obj.times[-1] if len(neo_obj) else '—'),
+            self._kv('Duration', neo_obj.times[-1] - neo_obj.times[0] if len(neo_obj) > 1 else '—'),
             self._kv('Description', neo_obj.description) if neo_obj.description else '',
             self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
         )]
@@ -549,11 +675,11 @@ class Jupyphant_info:
         aa = getattr(neo_obj, 'array_annotations', {})
         aa_keys = list(aa.keys())
 
-        header = ['Index', f'Time ({neo_obj.units.dimensionality.string}, {neo_obj.dtype})', 'Label'] + aa_keys
+        header = ['Index', f'Time ({neo_obj.units.dimensionality.string})', 'Label'] + aa_keys
         table_data = [header]
 
         def make_row(i):
-            row = [i, f'{times[i]:.4f}', labels[i]]
+            row = [i, f'{times[i].magnitude:.4f}', labels[i]]
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')
