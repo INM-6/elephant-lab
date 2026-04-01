@@ -600,6 +600,11 @@ class JupyphantExtension {
 			// Prevent double-click from triggering JupyterLab's file-open handler
 			let dialogNode: Element | null = null;
 			const stopDblClick = (e: Event) => {
+				const item = (e.target as Element).closest('.jp-DirListing-item');
+				// Allow double-click on folders so navigation still works
+				if (item?.getAttribute('data-isdir') === 'true') {
+					return;
+				}
 				e.stopImmediatePropagation();
 				e.stopPropagation();
 				const acceptBtn = dialogNode?.querySelector('.jp-Dialog-button.jp-mod-accept') as HTMLElement | null;
