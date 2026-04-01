@@ -111,7 +111,7 @@ class PlotlyGraphDataType:
             self.mode = 'markers'
         else:
             self.extract_data(data)
-            if self.name is None:
+            if not hasattr(self, 'name') or self.name is None:
                 if callable(name_fallback):
                     self.name = name_fallback(data)
                 else:
