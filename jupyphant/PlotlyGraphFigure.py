@@ -252,20 +252,6 @@ class PlotlyGraphFigure:
 
             min_bar_width = (self.total_maxX - self.total_minX) / 500
 
-
-            # === Prepare trace ===
-            ymin = self.total_minY
-            ymax = self.total_maxY
-            if ymax - ymin < 1e-9:
-                ymin -= 1
-                ymax += 1
-            span = ymax - ymin
-            ymax += span * 0.05
-            self.total_minY = ymin
-            self.total_maxY = ymax
-
-            y_vals = self.np.full(xs.shape, ymax - ymin)
-
             # Format values
             xs_str = self.PlotlyUtils.format_with_auto_digits(xs)
             start_str = self.PlotlyUtils.format_with_auto_digits(xs - widths/2)
@@ -287,23 +273,42 @@ class PlotlyGraphFigure:
                 )
             )
 
-            trace = self.go.Bar(
-                x=xs,
-                width= self.np.where(widths==0, min_bar_width, widths),
-                y=y_vals,
-                base=ymin,
-                hovertext=hover_texts,
-                hoverinfo='text',
-                marker_color='red',
-                opacity=0.3,
-                showlegend=False
-            )
+            def calc_new_y(ymin, ymax):
+                if ymax - ymin < 1e-9:
+                    ymin -= 1
+                    ymax += 1
+                span = ymax - ymin
+                ymax += span * 0.05
+                return ymin, ymax
+
+            def create_trace(ymin, ymax):
+                return self.go.Bar(
+                    x=xs,
+                    width= self.np.where(widths==0, min_bar_width, widths),
+                    y=self.np.full(xs.shape, ymax - ymin),
+                    base=ymin,
+                    hovertext=hover_texts,
+                    hoverinfo='text',
+                    marker_color='red',
+                    opacity=0.3,
+                    showlegend=False
+                )
             if self._is_single_plot():
-                self.fig.add_trace(trace)
+                # === Prepare trace ===
+                ymin = self.total_minY
+                ymax = self.total_maxY
+                ymin, ymax = calc_new_y(ymin, ymax)
+                self.total_minY = ymin
+                self.total_maxY = ymax
+                self.fig.add_trace(create_trace(ymin, ymax))
             else:
                 for i in range(1, self.nGraphs + 1):
+                    graph_trace_data = self.data.data_list[i-1]
+                    ymin = graph_trace_data.minY
+                    ymax = graph_trace_data.maxY
+                    ymin, ymax = calc_new_y(ymin, ymax)
                     self.fig.add_trace(
-                        trace, 
+                        create_trace(ymin, ymax),
                         row=i,
                         col=1
                     )
@@ -368,7 +373,7 @@ class PlotlyGraphFigure:
         return self.overlapping and self.changesOnOverlap()
     
     def _should_have_y_slider(self):
-        return (self.overlapping or self.compress or self.nGraphs==1) and self.total_maxY - self.total_minY > 1e-9
+        return (self.overlapping or self.compress or self.nGraphs==1) and self.data.maxY - self.data.minY > 1e-9
     
     def _is_single_plot(self):
         return self.overlapping or self.compress or self.nGraphs==1
