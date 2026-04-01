@@ -4,6 +4,7 @@ class Jupyphant_util:
     import __main__
     import neo
     import sys
+    from jupyphant import __version__
 
     def __init__(self):
         """
