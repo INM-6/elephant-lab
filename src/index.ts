@@ -779,7 +779,7 @@ class JupyphantExtension {
 			const expression = annoFilterInput.value.trim();
 
 			if (!expression) return;
-			
+
 			const code = getPythonCode(PythonCodeKey.SelectByAnnotationFilter, expression);
 			const result = await this.kernelBridge!.executeCode(code, null, false);
 			this._applyTreeSelection(result);
@@ -871,6 +871,11 @@ class JupyphantExtension {
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
+		const normalizeYValuesToggle = createToggle('fa-chart-y-axis', 'NormalizeY', 'Normalize the y-values of the plots', false, true, (state) => {
+			const code = getPythonCode(PythonCodeKey.NormalizeYValuesToggle, state);
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
+		});
+
 		const optionsModal = document.createElement("div");
 		optionsModal.classList.add("jp-rawplot-options-modal");
 
@@ -943,6 +948,7 @@ class JupyphantExtension {
 			zeroBasedToggle,
 			upscaleButton,
 			resetScaleButton,
+			normalizeYValuesToggle,
 			optionsToggle
 		);
 

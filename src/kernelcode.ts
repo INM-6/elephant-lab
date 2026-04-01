@@ -65,6 +65,10 @@ function setColorGrade(colorGrade: string): string {
 	return `jupyphant_entity.jupyphant_plot.set_color_grade("${colorGrade}")`
 }
 
+function normalizeYValuesToggle(state: boolean): string {
+	return `jupyphant_entity.jupyphant_plot.set_normalize_y_values(${convert_bool_to_python_bool(state)})`;
+}
+
 function toggleNeoTreeFilter(checkbox_id: string): string {
 	return `jupyphant_entity.jupyphant_tree.show_neo_obj("${checkbox_id}")`
 }
@@ -109,6 +113,7 @@ export enum PythonCodeKey {
 	HandleTreeSelection = 'handleTreeSelection',
 	HandleSelectionRange = 'handleSelectionRange',
 	SelectByAnnotationFilter = 'selectByAnnotationFilter',
+	NormalizeYValuesToggle = 'normalizeYValuesToggle',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -133,6 +138,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1]),
 	[PythonCodeKey.HandleSelectionRange]: (...args: any[]) => handleSelectionRange(args[0]),
 	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
+	[PythonCodeKey.NormalizeYValuesToggle]: (...args: any[]) => normalizeYValuesToggle(args[0]),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {
