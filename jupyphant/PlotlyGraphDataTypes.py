@@ -14,7 +14,7 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
                 30,  # cap size to avoid absurdly large lines
                 subplot_height * 0.9
                 )
-            , 0.5)  # ensure at least this size
+            , 1)  # ensure at least this size
 
         self.marker = dict(symbol='line-ns-open', size=calcSize)
         self.x = spiketrain.times.magnitude
