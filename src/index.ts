@@ -913,33 +913,74 @@ class JupyphantExtension {
 		maxNumberInput.appendChild(numberLabel);
 		maxNumberInput.appendChild(numberInput);
 
-		// --- COLOR GRADE SELECT ---
-		const colorGradeLabel = document.createElement('label');
-		colorGradeLabel.innerHTML = `<i class="fa fa-palette"></i> Color Grade`;
-		colorGradeLabel.classList.add("jp-rawplot-label");
+		function createLabeledSelect(options: {
+			label: string;
+			icon?: string;
+			selectOptions: string[];
+			defaultValue?: string;
+			title?: string;
+			onChange: (value: string) => void;
+		}): HTMLDivElement {
+			// Create label
+			const labelEl = document.createElement('label');
+			labelEl.classList.add("jp-rawplot-label");
+			labelEl.innerHTML = options.icon ? `<i class="fa ${options.icon}"></i> ${options.label}` : options.label;
 
-		const colorGradeSelect = document.createElement('select');
-		colorGradeSelect.classList.add("jp-rawplot-select");
-		["Viridis", "Plasma", "Inferno", "Magma", "Cividis", "Turbo"].forEach(grade => {
-			const opt = document.createElement("option");
-			opt.value = grade;
-			opt.textContent = grade;
-			colorGradeSelect.appendChild(opt);
+			// Create select
+			const selectEl = document.createElement('select');
+			selectEl.classList.add("jp-rawplot-select");
+
+			options.selectOptions.forEach(optValue => {
+				const opt = document.createElement("option");
+				opt.value = optValue;
+				opt.textContent = optValue;
+				selectEl.appendChild(opt);
+			});
+
+			if (options.defaultValue) {
+				selectEl.value = options.defaultValue;
+			}
+
+			selectEl.onchange = () => {
+				options.onChange(selectEl.value);
+			};
+
+			// Create container
+			const container = document.createElement('div');
+			container.classList.add("jp-rawplot-row");
+			if (options.title) container.title = options.title;
+			container.appendChild(labelEl);
+			container.appendChild(selectEl);
+
+			return container;
+		}
+
+		const normalizationMethod = createLabeledSelect({
+			label: "Normalization Method",
+			icon: "fa-compress",
+			selectOptions: ['minmax', 'zscore', 'l2'],
+			defaultValue: 'zscore',
+			title: "Method used to normalize the y-values when 'Normalize Y' is enabled",
+			onChange: (value) => {
+				const code = getPythonCode(PythonCodeKey.SetNormalizationMethod, value);
+				this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
+			}
 		});
-		colorGradeSelect.value = "Viridis";
 
-		colorGradeSelect.onchange = () => {
-			const code = getPythonCode(PythonCodeKey.SetColorGrade, colorGradeSelect.value);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-		};
-
-		const colorGrade = document.createElement('div');
-		colorGrade.classList.add("jp-rawplot-row");
-		colorGrade.title = "Color grade for the image sequence plot";
-		colorGrade.appendChild(colorGradeLabel);
-		colorGrade.appendChild(colorGradeSelect);
+		const colorGrade = createLabeledSelect({
+			label: "Color Grade",
+			icon: "fa-palette",
+			selectOptions: ["Viridis", "Plasma", "Inferno", "Magma", "Cividis", "Turbo"],
+			defaultValue: "Viridis",
+			title: "Color grade for the image sequence plot",
+			onChange: (value) => {
+				const code = getPythonCode(PythonCodeKey.SetColorGrade, value);
+				this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
+			}
+		});
 
 		optionsModal.appendChild(maxNumberInput);
+		optionsModal.appendChild(normalizationMethod);
 		optionsModal.appendChild(colorGrade);
 
 		buttonContainer.append(

@@ -61,6 +61,10 @@ function upscaleRawPlot(max_points: number, x_ranges: string): string {
 
 const resetScale = `jupyphant_entity.jupyphant_plot.reset_scale()`;
 
+function setNormalizationMethod(method: string): string {
+	return `jupyphant_entity.jupyphant_plot.set_normalization_method("${method}")`
+}
+
 function setColorGrade(colorGrade: string): string {
 	return `jupyphant_entity.jupyphant_plot.set_color_grade("${colorGrade}")`
 }
@@ -114,6 +118,7 @@ export enum PythonCodeKey {
 	HandleSelectionRange = 'handleSelectionRange',
 	SelectByAnnotationFilter = 'selectByAnnotationFilter',
 	NormalizeYValuesToggle = 'normalizeYValuesToggle',
+	SetNormalizationMethod = 'setNormalizationMethod',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -139,6 +144,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.HandleSelectionRange]: (...args: any[]) => handleSelectionRange(args[0]),
 	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
 	[PythonCodeKey.NormalizeYValuesToggle]: (...args: any[]) => normalizeYValuesToggle(args[0]),
+	[PythonCodeKey.SetNormalizationMethod]: (...args: any[]) => setNormalizationMethod(args[0]),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {
