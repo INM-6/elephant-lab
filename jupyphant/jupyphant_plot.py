@@ -45,6 +45,7 @@ class Jupyphant_plot:
         changes_on_overlap: bool
         normalize_y_values: bool
         is_default_normalized_y: bool
+        normalization_method: str
     
     class ImageSequencePlotDict(DefaultPlotDict):
         color_grade: str
@@ -87,7 +88,8 @@ class Jupyphant_plot:
                 "is_downscaled": False,
                 "changes_on_overlap": True,
                 "normalize_y_values": False,
-                "is_default_normalized_y": True
+                "is_default_normalized_y": True,
+                "normalization_method": "zscore"
             }
         self.plots[self.PLOT_IMGSEQUENCE]= {
             **self._base_plot_dict(),
@@ -367,13 +369,29 @@ class Jupyphant_plot:
         if reload:
             self._raw_plot()
 
+    def set_normalization_method(self, method):
+        reload = False
+        for key in self.RawPlotKey:
+            plot_dict = self.plots[key]
+            if method == plot_dict['normalization_method']:
+                continue
+            plot_dict['normalization_method']=method
+            is_plotted = plot_dict['is_plotted']
+            if not is_plotted:
+                continue
+            plot_dict['changed']=True
+            reload = True
+        if reload:
+            self._raw_plot()
+
     def _create_plot_dict_for_raw_plot(self, plot_dict):
         return {
             'overlapping': plot_dict['overlapping'],
             'x_range': plot_dict['x_range'],
             'max_points': plot_dict['max_points'],
             'shift_to_0': plot_dict['zero_based'],
-            'normalize_y_values': plot_dict['normalize_y_values']
+            'normalize_y_values': plot_dict['normalize_y_values'],
+            'normalization_method': plot_dict['normalization_method']
         }
 
     def _set_plot_dict_for_raw_plot(self, plot_dict, fig: PlotlyGraphFigure):

@@ -113,6 +113,7 @@ class PlotlyUtils:
             # Return values unchanged; they are considered already normalized
             return values, True
 
+        method = method.lower()
         if method == "minmax":
             vmin = values.min()
             vmax = values.max()
@@ -343,7 +344,7 @@ class PlotlyGraphDataTypeList():
         self.is_empty = self.is_empty and plotlyGraphDataTypeList.is_empty
         self.data_list += plotlyGraphDataTypeList.data_list
     
-    def normalize(self, x_range, offset_traces_on_compress, shift_to_0, max_points, normalize_y_values):
+    def normalize(self, x_range, offset_traces_on_compress, shift_to_0, max_points, normalize_y_values, normalization_method):
         """
         Tries to normalize units to first unit found
         Shifts all graphs to 0 if shift_to_0 is True and minX is not already close to 0
@@ -485,7 +486,7 @@ class PlotlyGraphDataTypeList():
 
             # Only normalize if requested
             y_values, is_data_default_normalized_y = PlotlyUtils.normalize(
-                y_values, method="zscore", do_normalize=normalize_y_values
+                y_values, method=normalization_method, do_normalize=normalize_y_values
             )
 
             if not is_data_default_normalized_y:
