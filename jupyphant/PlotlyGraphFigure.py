@@ -7,7 +7,7 @@ class PlotlyGraphFigure:
     import numpy as np
 
 
-    def __init__(self, data, overlapping=False, title=None, annotation_data=None, annotation_interval_data=None, overlap_on_compress=True, x_range=None, shift_to_0=False, max_points=10000):
+    def __init__(self, data, overlapping=False, title=None, annotation_data=None, annotation_interval_data=None, overlap_on_compress=True, x_range=None, shift_to_0=False, max_points=10000, normalize_y_values=False):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -21,7 +21,7 @@ class PlotlyGraphFigure:
 
         if not isinstance(data, self.PlotlyGraphDataTypeList):
             data = self.PlotlyGraphDataTypeList(data)
-        data.normalize(x_range=x_range,offset_traces_on_compress= not overlapping or not self.overlap_on_compress, shift_to_0=shift_to_0, max_points=max_points)
+        data.normalize(x_range=x_range,offset_traces_on_compress= not overlapping or not self.overlap_on_compress, shift_to_0=shift_to_0, max_points=max_points, normalize_y_values=normalize_y_values)
         self.nGraphs = data.nGraphs
         self.compress = data.compress
         self.data = data

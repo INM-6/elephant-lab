@@ -101,6 +101,87 @@ class PlotlyUtils:
         pass
         #print(f"WARNING: {message}", file=PlotlyUtils.sys.stderr)
 
+    @staticmethod
+    def normalize(values, method="minmax"):
+        np = PlotlyUtils.np
+        values = np.asarray(values, dtype=float)
+        
+        eps = np.finfo(values.dtype).eps
+
+        if method == "minmax":
+            vmin = values.min()
+            vmax = values.max()
+            denom = vmax - vmin
+            return (values - vmin) / denom if denom > eps else np.zeros_like(values)
+        
+        elif method == "zscore":
+            mean = values.mean()
+            std = values.std()
+            return (values - mean) / std if std > eps else np.zeros_like(values)
+        
+        elif method == "l2":
+            norm = np.linalg.norm(values)
+            return values / norm if norm > eps else np.zeros_like(values)
+        
+        else:
+            raise ValueError("Unknown normalization method")
+        
+    @staticmethod
+    def lttb_downsample(x, y, threshold):
+        threshold = int(threshold)
+        n = len(x)
+        if threshold >= n or threshold == 0:
+            return x, y
+        np = PlotlyUtils.np
+
+        sampled_x = np.empty(threshold)
+        sampled_y = np.empty(threshold)
+
+        # always keep first point
+        sampled_x[0] = x[0]
+        sampled_y[0] = y[0]
+
+        bucket_size = (n - 2) / (threshold - 2)
+
+        a = 0  # index of previously selected point
+
+        for i in range(1, threshold - 1):
+
+            start = int(np.floor((i - 1) * bucket_size)) + 1
+            end   = int(np.floor(i * bucket_size)) + 1
+
+            next_start = end
+            next_end   = int(np.floor((i + 1) * bucket_size)) + 1
+            next_end   = min(next_end, n)
+
+            # average point of next bucket
+            avg_x = np.mean(x[next_start:next_end])
+            avg_y = np.mean(y[next_start:next_end])
+
+            bx = x[start:end]
+            by = y[start:end]
+
+            ax = x[a]
+            ay = y[a]
+
+            # triangle area calculation (vectorized)
+            area = np.abs(
+                (ax - avg_x) * (by - ay) -
+                (ax - bx)    * (avg_y - ay)
+            )
+
+            idx = np.argmax(area)
+            a = start + idx
+
+            sampled_x[i] = x[a]
+            sampled_y[i] = y[a]
+
+        # keep last point
+        sampled_x[-1] = x[-1]
+        sampled_y[-1] = y[-1]
+
+        return sampled_x, sampled_y
+
 class PlotlyGraphDataType:
 
     def __init__(self, data, name_fallback='Trace', **kwargs):
@@ -230,62 +311,8 @@ class PlotlyGraphDataTypeList():
     def concat(self, plotlyGraphDataTypeList):
         self.is_empty = self.is_empty and plotlyGraphDataTypeList.is_empty
         self.data_list += plotlyGraphDataTypeList.data_list
-
-    def lttb_downsample(self,x, y, threshold):
-        threshold = int(threshold)
-        n = len(x)
-        if threshold >= n or threshold == 0:
-            return x, y
-
-        sampled_x = self.np.empty(threshold)
-        sampled_y = self.np.empty(threshold)
-
-        # always keep first point
-        sampled_x[0] = x[0]
-        sampled_y[0] = y[0]
-
-        bucket_size = (n - 2) / (threshold - 2)
-
-        a = 0  # index of previously selected point
-
-        for i in range(1, threshold - 1):
-
-            start = int(self.np.floor((i - 1) * bucket_size)) + 1
-            end   = int(self.np.floor(i * bucket_size)) + 1
-
-            next_start = end
-            next_end   = int(self.np.floor((i + 1) * bucket_size)) + 1
-            next_end   = min(next_end, n)
-
-            # average point of next bucket
-            avg_x = self.np.mean(x[next_start:next_end])
-            avg_y = self.np.mean(y[next_start:next_end])
-
-            bx = x[start:end]
-            by = y[start:end]
-
-            ax = x[a]
-            ay = y[a]
-
-            # triangle area calculation (vectorized)
-            area = self.np.abs(
-                (ax - avg_x) * (by - ay) -
-                (ax - bx)    * (avg_y - ay)
-            )
-
-            idx = self.np.argmax(area)
-            a = start + idx
-
-            sampled_x[i] = x[a]
-            sampled_y[i] = y[a]
-
-        # keep last point
-        sampled_x[-1] = x[-1]
-        sampled_y[-1] = y[-1]
-
-        return sampled_x, sampled_y
     
-    def normalize(self, x_range, offset_traces_on_compress, shift_to_0, max_points):
+    def normalize(self, x_range, offset_traces_on_compress, shift_to_0, max_points, normalize_y_values):
         """
         Tries to normalize units to first unit found
         Shifts all graphs to 0 if shift_to_0 is True and minX is not already close to 0
@@ -331,6 +358,8 @@ class PlotlyGraphDataTypeList():
                 if hasattr(data, "units_x"):
                     units_x = data.units_x
                     common_units_x = units_x
+                else:
+                    common_units_x = None
                 first = False
             else:
                 #Try to convert to common_units
@@ -401,12 +430,14 @@ class PlotlyGraphDataTypeList():
             y_values = data.y
 
             if self.is_downscaled:
-                x_values, y_values = self.lttb_downsample(x_values, y_values, max_points_per_graph)
+                x_values, y_values = PlotlyUtils.lttb_downsample(x_values, y_values, max_points_per_graph)
 
             if index == 0:
                 if hasattr(data, "units_y"):
                     units_y = data.units_y
                     common_units_y = units_y
+                else:
+                    common_units_y = None
             else:
                 if common_units_y is not None and hasattr(data, "units_y"):
                     units_y = data.units_y
@@ -418,6 +449,9 @@ class PlotlyGraphDataTypeList():
                         units_y = common_units_y
                 else:
                     common_units_y = None
+
+            if normalize_y_values:
+                y_values = PlotlyUtils.normalize(y_values, method="zscore")
 
             should_find_new_minX = x_range is not None
             if index == 0:

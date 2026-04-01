@@ -43,6 +43,7 @@ class Jupyphant_plot:
         is_default_zero_based: bool
         is_downscaled: bool
         changes_on_overlap: bool
+        normalize_y_values: bool
     
     class ImageSequencePlotDict(DefaultPlotDict):
         color_grade: str
@@ -83,7 +84,8 @@ class Jupyphant_plot:
                 "zero_based": False,
                 "is_default_zero_based": True,
                 "is_downscaled": False,
-                "changes_on_overlap": True
+                "changes_on_overlap": True,
+                "normalize_y_values": False
             }
         self.plots[self.PLOT_IMGSEQUENCE]= {
             **self._base_plot_dict(),
@@ -348,6 +350,30 @@ class Jupyphant_plot:
         if reload:
             self._raw_plot()
 
+    def set_normalize_y_values(self, normalize_y_values):
+        reload = False
+        for key in self.RawPlotKey:
+            plot_dict = self.plots[key]
+            if normalize_y_values == plot_dict['normalize_y_values']:
+                continue
+            plot_dict['normalize_y_values']=normalize_y_values
+            is_plotted = plot_dict['is_plotted']
+            if not is_plotted:
+                continue
+            plot_dict['changed']=True
+            reload = True
+        if reload:
+            self._raw_plot()
+
+    def _create_plot_dict_for_raw_plot(self, plot_dict):
+        return {
+            'overlapping': plot_dict['overlapping'],
+            'x_range': plot_dict['x_range'],
+            'max_points': plot_dict['max_points'],
+            'zero_based': plot_dict['zero_based'],
+            'normalize_y_values': plot_dict['normalize_y_values']
+        }
+
     def _set_plot_dict_for_raw_plot(self, plot_dict, fig: PlotlyGraphFigure):
         x_range = fig.getXRange()
         plot_dict['x_range']=x_range
@@ -361,12 +387,8 @@ class Jupyphant_plot:
         data = [self.SpikeTrainRasterPlot(st, self.jupyphant_entity.names_for) for st in spiketrain]
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
-        plot_dict = self.plots[self.RawPlotKey.RAW_ST]
-        overlapping = plot_dict['overlapping']
-        x_range = plot_dict['x_range']
-        max_points = plot_dict['max_points']
-        zero_based = plot_dict['zero_based']
-        fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        plot_dict = self._create_plot_dict_for_raw_plot(self.plots[self.RawPlotKey.RAW_ST])
+        fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **plot_dict)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
@@ -382,24 +404,16 @@ class Jupyphant_plot:
                 data.concat(irregular_data)
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
-        plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
-        overlapping = plot_dict['overlapping']
-        x_range = plot_dict['x_range']
-        max_points = plot_dict['max_points']
-        zero_based = plot_dict['zero_based']
-        fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interval_data=epoch_intervals, max_points=max_points, shift_to_0=zero_based)
+        plot_dict = self._create_plot_dict_for_raw_plot(self.plots[self.RawPlotKey.RAW_ANASIG])
+        fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, **plot_dict)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
     
     def _create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
-        plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
-        overlapping = plot_dict['overlapping']
-        x_range = plot_dict['x_range']
-        max_points = plot_dict['max_points']
-        zero_based = plot_dict['zero_based']
-        fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", overlapping=overlapping, x_range=x_range, annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, max_points=max_points, shift_to_0=zero_based)
+        plot_dict = self._create_plot_dict_for_raw_plot(self.plots[self.RawPlotKey.RAW_EVENT])
+        fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **plot_dict)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
