@@ -102,29 +102,60 @@ class PlotlyUtils:
         #print(f"WARNING: {message}", file=PlotlyUtils.sys.stderr)
 
     @staticmethod
-    def normalize(values, method="minmax"):
+    def normalize(values, method="minmax", do_normalize=True):
         np = PlotlyUtils.np
         values = np.asarray(values, dtype=float)
         
         eps = np.finfo(values.dtype).eps
 
+        # Fast exit: all values are near zero
+        if np.all(np.abs(values) <= eps):
+            # Return values unchanged; they are considered already normalized
+            return values, True
+
         if method == "minmax":
             vmin = values.min()
             vmax = values.max()
             denom = vmax - vmin
-            return (values - vmin) / denom if denom > eps else np.zeros_like(values)
-        
+
+            # Stricter check: already normalized to [0,1]
+            if denom > eps and np.isclose(vmin, 0, atol=eps) and np.isclose(vmax, 1, atol=eps):
+                return values, True
+
+            if do_normalize:
+                # Only normalize if requested
+                return (values - vmin) / denom if denom > eps else np.zeros_like(values), False
+            else:
+                # Skip normalization; just indicate it's not normalized
+                return values, False
+
         elif method == "zscore":
             mean = values.mean()
             std = values.std()
-            return (values - mean) / std if std > eps else np.zeros_like(values)
-        
+
+            # Already standardized (mean≈0, std≈1)
+            if std > eps and np.isclose(mean, 0, atol=eps) and np.isclose(std, 1, atol=eps):
+                return values, True
+
+            if do_normalize:
+                return (values - mean) / std if std > eps else np.zeros_like(values), False
+            else:
+                return values, False
+
         elif method == "l2":
             norm = np.linalg.norm(values)
-            return values / norm if norm > eps else np.zeros_like(values)
-        
+
+            # Already unit norm
+            if norm > eps and np.isclose(norm, 1, atol=eps):
+                return values, True
+
+            if do_normalize:
+                return values / norm if norm > eps else np.zeros_like(values), False
+            else:
+                return values, False
+
         else:
-            raise ValueError("Unknown normalization method")
+            raise ValueError(f"Unknown normalization method: {method}")
         
     @staticmethod
     def lttb_downsample(x, y, threshold):
@@ -318,7 +349,7 @@ class PlotlyGraphDataTypeList():
         Shifts all graphs to 0 if shift_to_0 is True and minX is not already close to 0
         Filters out all points outside of x_range if x_range is not None
         Decreases number of points if there are to many
-        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY, is_default_zero_based, nGraphs, compress, is_empty
+        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY, is_default_zero_based, nGraphs, compress, is_empty, is_default_normalized_y
         """
         #set default
         self.common_units_x = None
@@ -331,6 +362,7 @@ class PlotlyGraphDataTypeList():
         self.compress = False
         self.nGraphs = 1
         self.is_default_zero_based = True
+        self.is_default_normalized_y = True
         if(self.is_empty):
             return
         self.is_empty = True
@@ -425,6 +457,7 @@ class PlotlyGraphDataTypeList():
         maxX = None
         maxY = None
         previous_maxY = None
+        is_default_normalized_y = True
         for index, data in enumerate(self.data_list):
             x_values = data.x
             y_values = data.y
@@ -450,8 +483,13 @@ class PlotlyGraphDataTypeList():
                 else:
                     common_units_y = None
 
-            if normalize_y_values:
-                y_values = PlotlyUtils.normalize(y_values, method="zscore")
+            # Only normalize if requested
+            y_values, is_data_default_normalized_y = PlotlyUtils.normalize(
+                y_values, method="zscore", do_normalize=normalize_y_values
+            )
+
+            if not is_data_default_normalized_y:
+                is_default_normalized_y = False
 
             should_find_new_minX = x_range is not None
             if index == 0:
@@ -509,6 +547,7 @@ class PlotlyGraphDataTypeList():
         self.minY = minY
         self.maxX = maxX
         self.maxY = maxY
+        self.is_default_normalized_y = is_default_normalized_y
 
 class PlotlyGraphAnnotations():
     def __init__(self, x, text, unit_indice, units):

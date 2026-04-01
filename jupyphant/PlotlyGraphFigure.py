@@ -366,6 +366,9 @@ class PlotlyGraphFigure:
     def isDefaultZeroBased(self):
         return self.data.is_default_zero_based
     
+    def isDefaultNormalizedY(self):
+        return self.data.is_default_normalized_y
+    
     def changesOnOverlap(self):
         return (not self.compress or self.overlap_on_compress) and self.nGraphs != 1
 

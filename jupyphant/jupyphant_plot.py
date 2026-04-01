@@ -44,6 +44,7 @@ class Jupyphant_plot:
         is_downscaled: bool
         changes_on_overlap: bool
         normalize_y_values: bool
+        is_default_normalized_y: bool
     
     class ImageSequencePlotDict(DefaultPlotDict):
         color_grade: str
@@ -85,7 +86,8 @@ class Jupyphant_plot:
                 "is_default_zero_based": True,
                 "is_downscaled": False,
                 "changes_on_overlap": True,
-                "normalize_y_values": False
+                "normalize_y_values": False,
+                "is_default_normalized_y": True
             }
         self.plots[self.PLOT_IMGSEQUENCE]= {
             **self._base_plot_dict(),
@@ -358,7 +360,7 @@ class Jupyphant_plot:
                 continue
             plot_dict['normalize_y_values']=normalize_y_values
             is_plotted = plot_dict['is_plotted']
-            if not is_plotted:
+            if not is_plotted  or plot_dict['is_default_normalized_y']:
                 continue
             plot_dict['changed']=True
             reload = True
@@ -381,6 +383,7 @@ class Jupyphant_plot:
             plot_dict['og_x_range']=x_range
         plot_dict['is_default_zero_based']=fig.isDefaultZeroBased()
         plot_dict['is_downscaled']=fig.isDownscaled()
+        plot_dict['is_default_normalized_y']=fig.isDefaultNormalizedY()
         plot_dict['changes_on_overlap']=fig.changesOnOverlap()
         
     def _create_rasterplot(self, spiketrain=None, event=None, epoch=None):
