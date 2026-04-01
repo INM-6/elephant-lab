@@ -871,7 +871,7 @@ class JupyphantExtension {
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const normalizeYValuesToggle = createToggle('fa-chart-y-axis', 'NormalizeY', 'Normalize the y-values of the plots', false, true, (state) => {
+		const normalizeYValuesToggle = createToggle('fa-compress', 'Normalize Y', 'Normalize the y-values of the plots', false, true, (state) => {
 			const code = getPythonCode(PythonCodeKey.NormalizeYValuesToggle, state);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
