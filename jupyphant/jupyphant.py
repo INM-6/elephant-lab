@@ -430,6 +430,17 @@ class Jupyphant:
 
         walk(self.jupyphant_tree.ipytree_of_neo_objects)
 
+        # remove duplicate neo objects (e.g., if same neo object is referenced in multiple containers)
+        processed_hashes = set()
+        for key in list(result.keys()):
+            unique_objs = []
+            for neo_obj in result[key]:
+                obj_hash = self.get_neo_hash(neo_obj, hash_name='sha1')
+                if obj_hash not in processed_hashes:
+                    unique_objs.append(neo_obj)
+                    processed_hashes.add(obj_hash)
+            result[key] = unique_objs
+
         return result
         
 
