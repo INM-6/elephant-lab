@@ -31,7 +31,7 @@ class Jupyphant:
     import __main__
     import json
 
-    import joblib
+    import hashlib as _hashlib
 
     class SimpleEvent:
         def __init__(self):
@@ -163,83 +163,45 @@ class Jupyphant:
         
     def get_neo_hash(self, neo_obj, hash_name="sha1"):
         """
-        Creates a hash value for neo objects,
-        taking into account the data, units and metadata.
+        Returns a stable, unique identifier for a neo object.
         """
-        try:
-            obj_id = id(neo_obj)
-            if obj_id in self.hash_cache:
-                return self.hash_cache[obj_id]
-        except Exception:
-            pass
+        obj_id = id(neo_obj)
 
-        if isinstance(neo_obj, self.AnalogSignal):
-            hashable_summary = (
-                neo_obj.magnitude,
-                str(neo_obj.units),
-                float(neo_obj.sampling_rate),
-                str(neo_obj.sampling_rate),
-                float(neo_obj.t_start),
-                neo_obj.name,
-                neo_obj.description,
-                neo_obj.annotations
-            )
-            result = self.joblib.hash(hashable_summary, hash_name=hash_name)
+        if isinstance(neo_obj, self.Segment):
+            parts = [f"{obj_id:016x}", "Segment"]
+            if neo_obj.name:
+                parts.append(neo_obj.name)
+            for container_name in neo_obj._child_containers:
+                parts.append(f"{container_name}:{len(getattr(neo_obj, container_name, []))}")
+            return self._hashlib.sha1("|".join(parts).encode()).hexdigest()
 
-        elif isinstance(neo_obj, self.IrregularlySampledSignal):
-            hashable_summary = (
-                neo_obj.magnitude,
-                str(neo_obj.units),
-                float(neo_obj.t_start),
-                neo_obj.name,
-                neo_obj.description,
-                neo_obj.annotations
-            )
-            result = self.joblib.hash(hashable_summary, hash_name=hash_name)
+        if isinstance(neo_obj, self.Block):
+            parts = [f"{obj_id:016x}", "Block"]
+            if neo_obj.name:
+                parts.append(neo_obj.name)
+            for container_name in neo_obj._child_containers:
+                container = getattr(neo_obj, container_name, [])
+                if container_name == 'segments':
+                    parts.append(f"segments:{len(container)}")
+                    for seg in container:
+                        parts.append(self.get_neo_hash(seg, hash_name))
+                else:
+                    parts.append(f"{container_name}:{len(container)}")
+            return self._hashlib.sha1("|".join(parts).encode()).hexdigest()
 
-        elif isinstance(neo_obj, self.SpikeTrain):
-            hashable_summary = (
-                neo_obj.times,
-                str(neo_obj.units),
-                float(neo_obj.t_start),
-                float(neo_obj.t_stop),
-                neo_obj.name,
-                neo_obj.description,
-                neo_obj.annotations
-            )
-            result = self.joblib.hash(hashable_summary, hash_name=hash_name)
-
-        elif isinstance(neo_obj, (self.Epoch, self.Event)):
-            hashable_summary = (
-                neo_obj.times,
-                neo_obj.labels,
-                str(neo_obj.units),
-                neo_obj.name,
-                neo_obj.description,
-                neo_obj.annotations
-            )
-            result = self.joblib.hash(hashable_summary, hash_name=hash_name)
-
-        elif isinstance(neo_obj, (self.Block, self.Segment)):
-            hashable_summary = [
-                neo_obj.name,
-                neo_obj.description,
-                neo_obj.annotations
-            ]
-            for child_container_name in neo_obj._child_containers:
-                child_container = getattr(neo_obj, child_container_name)
-                for child in child_container:
-                    hashable_summary.append(self.get_neo_hash(child, hash_name))
-
-            result = self.joblib.hash(tuple(hashable_summary), hash_name=hash_name)
-
-        else:
-            result = self.joblib.hash(neo_obj, hash_name)
+        # Leaf objects: cache by object identity
+        if obj_id in self.hash_cache:
+            return self.hash_cache[obj_id]
 
         try:
-            self.hash_cache[obj_id] = result
+            parts = [f"{obj_id:016x}", neo_obj.__class__.__name__]
+            if hasattr(neo_obj, 'name') and neo_obj.name:
+                parts.append(str(neo_obj.name))
+            result = self._hashlib.sha1("|".join(parts).encode()).hexdigest()
         except Exception:
-            pass
+            result = f"{obj_id:040x}"
+
+        self.hash_cache[obj_id] = result
         return result
         
     def update(self):
@@ -248,8 +210,7 @@ class Jupyphant:
         created by the notebook user.
         Called before updating plots, thus, usually at every cell execution.
         """
-        self.hash_cache = {}
-        neo_objs_hash_before_update = self.joblib.hash(self.last_known_hashes, hash_name='sha1')
+        neo_objs_hash_before_update = self._hashlib.sha1("|".join(self.last_known_hashes).encode()).hexdigest()
 
         self.neo_objs_and_lists_of_neo_objs_with_var_name.clear()
 
@@ -281,8 +242,13 @@ class Jupyphant:
                 self.neo_objs_and_lists_of_neo_objs_with_var_name[variable_name] = obj_from_kernel_ns
 
 
+        live_ids = {id(obj) for obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values()}
+        for stale_id in list(self.hash_cache.keys()):
+            if stale_id not in live_ids:
+                del self.hash_cache[stale_id]
+
         current_hashes = [self.get_neo_hash(obj, 'sha1') for obj in self.neo_objs_and_lists_of_neo_objs_with_var_name.values()]
-        neo_objs_hash_after_update = self.joblib.hash(current_hashes, hash_name='sha1')
+        neo_objs_hash_after_update = self._hashlib.sha1("|".join(current_hashes).encode()).hexdigest()
 
         if neo_objs_hash_before_update != neo_objs_hash_after_update or self.filter_changed:
             self.neo_objs_changed_after_update = True
