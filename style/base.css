@@ -4,15 +4,15 @@
     https://jupyterlab.readthedocs.io/en/stable/developer/css.html
 */
 
-/* Basic style of the Jupyphant-tab */
-.my-jupyphantWidget {
+/* Basic style of the Elephant Lab tab */
+.my-elephant-lab-widget {
   display: flex;
   flex-direction: column;
   align-items: center;
   overflow: auto;
 }
 
-.my-jupyphantWidget .p-SplitPanel-handle {
+.my-elephant-lab-widget .p-SplitPanel-handle {
   background-color: darkgrey;
 }
 
@@ -96,14 +96,14 @@
   color: var(--jp-ui-font-color1);
 }
 
-.lm-TabBar-tab.jupyphant-active-notebook .lm-TabBar-tabLabel::after,
+.lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabLabel::after,
 .elephant-trunk-icon {
   background-image: url('../doc/elephant_trunk.png');
   background-size: contain;
   background-repeat: no-repeat;
 }
 
-.lm-TabBar-tab.jupyphant-active-notebook .lm-TabBar-tabLabel::after {
+.lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabLabel::after {
   content: '';
   display: inline-block;
   width: 14px;

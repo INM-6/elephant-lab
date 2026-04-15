@@ -1,19 +1,19 @@
 import { test, expect, Page } from '@playwright/test';
 // TODO: Move other plot tests here as well
 
-async function ensureJupyphantActive(page: Page) {
-  const jupyphantTab = page.getByRole('tab', { name: 'Jupyphant', exact: true });
+async function ensureElephantLabActive(page: Page) {
+  const elephantLabTab = page.getByRole('tab', { name: 'Elephant Lab', exact: true });
 
-  if (await jupyphantTab.count() === 0) {
-    throw new Error('Jupyphant tab not found - extension may not be loaded');
+  if (await elephantLabTab.count() === 0) {
+    throw new Error('Elephant Lab tab not found - extension may not be loaded');
   }
 
-  if (await jupyphantTab.getAttribute('aria-selected') !== 'true') {
-    await jupyphantTab.click();
+  if (await elephantLabTab.getAttribute('aria-selected') !== 'true') {
+    await elephantLabTab.click();
     await page.waitForTimeout(300);
   }
 
-  await expect(jupyphantTab).toHaveAttribute('aria-selected', 'true', { timeout: 3000 });
+  await expect(elephantLabTab).toHaveAttribute('aria-selected', 'true', { timeout: 3000 });
 }
 
 // Helper function to capture plot data for comparison
@@ -66,7 +66,7 @@ async function getPlotVisualHash(plotContainer: any) {
   });
 }
 
-test.describe('Jupyphant: Explore Tab Toggles', () => {
+test.describe('Elephant Lab: Explore Tab Toggles', () => {
   test.setTimeout(120000);
 
   test.beforeEach(async ({ page }) => {
@@ -178,14 +178,14 @@ print("Created:", test_block.name)
       await expect(outputArea).toContainText('Created: TestBlock', { timeout: 2000 });
     }).toPass({ timeout: 30000 });
 
-    // 5. Activate Jupyphant sidebar
+    // 5. Activate Elephant Lab sidebar
     await page.evaluate(async () => {
       const commands = window.jupyterapp.commands.listCommands();
-      const cmdId = commands.find(id => id.toLowerCase().includes('jupyphant'));
+      const cmdId = commands.find(id => id.toLowerCase().includes('elephant-lab'));
       if (cmdId) await window.jupyterapp.commands.execute(cmdId);
     });
 
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
 
     // 6. Ensure tree is populated
     const treeWidget = page.getByRole('tree');
@@ -196,7 +196,7 @@ print("Created:", test_block.name)
 
   // Clean up after each test
   test.afterEach(async ({ page }) => {
-    const rightPanel = page.locator('#jupyphant-right-panel');
+    const rightPanel = page.locator('#elephant-lab-right-panel');
 
     const darkToggle = rightPanel.getByRole('button', { name: /Dark/i }).first();
     const darkPressed = await darkToggle.getAttribute('aria-pressed');
@@ -224,9 +224,9 @@ print("Created:", test_block.name)
 
   // --- TEST 1: Dark Mode Toggle ---
   test('should toggle Dark mode in Explore tab for AnalogSignal', async ({ page }) => {
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
 
-    const rightPanel = page.locator('#jupyphant-right-panel');
+    const rightPanel = page.locator('#elephant-lab-right-panel');
 
     // 1. Select an AnalogSignal node
     const treeContainer = rightPanel.locator('div[role="tree"]');
@@ -241,7 +241,7 @@ print("Created:", test_block.name)
     await exploreTab.click();
     await page.waitForTimeout(800);
 
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
 
     // 3. Verify plot is visible
     const plotContainer = rightPanel.locator('div[data-plot], .plotly-graph-div, .js-plotly-plot').first();
@@ -270,9 +270,9 @@ print("Created:", test_block.name)
 
   // --- TEST 2: Overlap Toggle ---
   test('should toggle Overlap mode in Explore tab for AnalogSignal', async ({ page }) => {
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
 
-    const rightPanel = page.locator('#jupyphant-right-panel');
+    const rightPanel = page.locator('#elephant-lab-right-panel');
 
     // 1. Select an AnalogSignal node
     const treeContainer = rightPanel.locator('div[role="tree"]');
@@ -329,9 +329,9 @@ print("Created:", test_block.name)
 
   // --- TEST 3: Zero Based Toggle ---
   test('should toggle Zero Based mode in Explore tab for AnalogSignal', async ({ page }) => {
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
 
-    const rightPanel = page.locator('#jupyphant-right-panel');
+    const rightPanel = page.locator('#elephant-lab-right-panel');
 
     // 1. Select an AnalogSignal node
     const treeContainer = rightPanel.locator('div[role="tree"]');
@@ -386,10 +386,10 @@ print("Created:", test_block.name)
   });
 
   test('should re-render plots in the Explore tab when colormap is changed', async ( { page }) => {
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
   
     // 1. Select the "ImageSequence" node in the tree
-    const imagesequenceNode = page.locator('#jupyphant-right-panel')
+    const imagesequenceNode = page.locator('#elephant-lab-right-panel')
                                .locator('[role="treeitem"]', { hasText: 'my imagesequence' })
                                .first();
   
@@ -402,7 +402,7 @@ print("Created:", test_block.name)
     await page.waitForTimeout(500);
   
     // 2. Switch to the Explore tab
-    const rightPanel = page.locator('#jupyphant-right-panel');
+    const rightPanel = page.locator('#elephant-lab-right-panel');
     const exploreTab = rightPanel.getByRole('tab', { name: 'Explore', exact: true });
     await exploreTab.click();
   

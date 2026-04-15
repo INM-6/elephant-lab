@@ -1,4 +1,4 @@
-class Jupyphant_plot:
+class ElephantLab_plot:
     from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
     from .PlotlyGraphFigure import PlotlyGraphFigure
     from .PlotlyGraphDataTypes import SpikeTrainRasterPlot, AnalogSignalLFPPlotList, EventAnnotations, EpochIntervals, IrregularlySampledSignalPlotList
@@ -13,7 +13,7 @@ class Jupyphant_plot:
     from typing import TypedDict, TYPE_CHECKING
 
     if TYPE_CHECKING:
-        from .jupyphant import Jupyphant  # only for type hints
+        from .elephant_lab import ElephantLab  # only for type hints
 
     class NeoKey(Enum):
         spiketrain = 'spiketrain'
@@ -50,7 +50,7 @@ class Jupyphant_plot:
     class ImageSequencePlotDict(DefaultPlotDict):
         color_grade: str
 
-    def _base_plot_dict(self) -> "Jupyphant_plot.DefaultPlotDict":
+    def _base_plot_dict(self) -> "ElephantLab_plot.DefaultPlotDict":
         # Add all required options to each plot:
         #   - is_plotted: Is the plot plotted
         #   - changed: True if any value in the dict has changed, False otherwise;
@@ -60,20 +60,20 @@ class Jupyphant_plot:
             "changed": False,
         }
 
-    def __init__(self, jupyphant_entity: "Jupyphant_plot.Jupyphant"):
+    def __init__(self, elephant_lab_entity: "ElephantLab_plot.ElephantLab"):
         """
-        Class to outsource some jupyphant logic:
-            -all logic regarding the plotting of Jupyphant
+        Class to outsource some elephant lab logic:
+            -all logic regarding the plotting of Elephant Lab
         Is a Class to minimize the amount of name clutter in the notebook
-        """ 
-        self.jupyphant_entity: "Jupyphant_plot.Jupyphant" = jupyphant_entity
+        """
+        self.elephant_lab_entity: "ElephantLab_plot.ElephantLab" = elephant_lab_entity
         self.previous_neo_object_dict = {key: [] for key in self.NeoKey}
         self.plots: dict[
             str,
-            Jupyphant_plot.RawPlotDict | Jupyphant_plot.ImageSequencePlotDict
+            ElephantLab_plot.RawPlotDict | ElephantLab_plot.ImageSequencePlotDict
         ] = {}
         self.update_counter = 0
-        self.comm: "Jupyphant_plot.Comm" = None
+        self.comm: "ElephantLab_plot.Comm" = None
 
         #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
         for key in self.RawPlotKey:
@@ -148,13 +148,13 @@ class Jupyphant_plot:
                 self.NeoKey.epoch: self.Epoch,
                 self.NeoKey.imagesequence: self.ImageSequence
             }
-            neo_object_dict = self.jupyphant_entity._get_selected_neo_objects_by_class(neo_object_dict)
+            neo_object_dict = self.elephant_lab_entity._get_selected_neo_objects_by_class(neo_object_dict)
             change_dict = {}
             for key, current_list in neo_object_dict.items():
                 previous_list = self.previous_neo_object_dict[key]
-                change_dict[key] = { self.jupyphant_entity.get_neo_hash(o) for o in current_list
+                change_dict[key] = { self.elephant_lab_entity.get_neo_hash(o) for o in current_list
                 } != {
-                    self.jupyphant_entity.get_neo_hash(o) for o in previous_list
+                    self.elephant_lab_entity.get_neo_hash(o) for o in previous_list
                 }
             self.previous_neo_object_dict = neo_object_dict
 
@@ -242,7 +242,7 @@ class Jupyphant_plot:
                 for key in all_keys if not empty_dict[key]
             }
 
-            fig: Jupyphant_plot.PlotlyGraphFigure | Jupyphant_plot.PlotlyImageSequenceFigure = method(**plot_kwargs)
+            fig: ElephantLab_plot.PlotlyGraphFigure | ElephantLab_plot.PlotlyImageSequenceFigure = method(**plot_kwargs)
             plot_dict["is_plotted"] = True
 
             # store JSON for batch send
@@ -269,7 +269,7 @@ class Jupyphant_plot:
 
     def create_explorer_raw_plot(self):
         self.comm = self.Comm(target_name="plot_channel")
-        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
+        self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
 
     def set_raw_plot_overlap(self, overlap):
         reload = False
@@ -405,7 +405,7 @@ class Jupyphant_plot:
         plot_dict['changes_on_overlap']=fig.changesOnOverlap()
         
     def _create_rasterplot(self, spiketrain=None, event=None, epoch=None):
-        data = [self.SpikeTrainRasterPlot(st, self.jupyphant_entity.names_for) for st in spiketrain]
+        data = [self.SpikeTrainRasterPlot(st, self.elephant_lab_entity.names_for) for st in spiketrain]
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_ST]
@@ -417,9 +417,9 @@ class Jupyphant_plot:
     def _create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
         data = None
         if analogsignal is not None:
-            data = self.AnalogSignalLFPPlotList(analogsignal, self.jupyphant_entity.names_for)
+            data = self.AnalogSignalLFPPlotList(analogsignal, self.elephant_lab_entity.names_for)
         if irregularsignal is not None:
-            irregular_data = self.IrregularlySampledSignalPlotList(irregularsignal, self.jupyphant_entity.names_for)
+            irregular_data = self.IrregularlySampledSignalPlotList(irregularsignal, self.elephant_lab_entity.names_for)
             if data is None:
                 data = irregular_data
             else:
@@ -444,4 +444,4 @@ class Jupyphant_plot:
     def _create_image_sequence(self, imagesequence=None):
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         color_grade = plot_dict['color_grade']
-        return self.PlotlyImageSequenceFigure(image_sequences=imagesequence, color_scale=color_grade, name_fallback=self.jupyphant_entity.names_for)
+        return self.PlotlyImageSequenceFigure(image_sequences=imagesequence, color_scale=color_grade, name_fallback=self.elephant_lab_entity.names_for)

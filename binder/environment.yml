@@ -1,10 +1,10 @@
-# a mybinder.org-ready environment for demoing jupyphant
+# a mybinder.org-ready environment for demoing elephant-lab
 # this environment may also be used locally on Linux/MacOS/Windows, e.g.
 #
 #   conda env update --file binder/environment.yml
-#   conda activate jupyphant-demo
+#   conda activate elephant-lab-demo
 #
-name: jupyphant-demo
+name: elephant-lab-demo
 
 channels:
   - conda-forge

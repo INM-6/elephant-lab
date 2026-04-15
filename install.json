@@ -1,6 +1,6 @@
 {
   "packageManager": "python",
-  "packageName": "jupyphant",
-  "uninstallPlugin": "jupyphant:uninstall",
-  "resource": "share/jupyter/labextensions/jupyphant"
+  "packageName": "elephant-lab",
+  "uninstallPlugin": "elephant-lab:uninstall",
+  "resource": "share/jupyter/labextensions/elephant-lab"
 }

@@ -1,5 +1,5 @@
 {
-  "name": "jupyphant",
+  "name": "elephant-lab",
   "version": "0.1.0",
   "description": "A JupyterLab extension for interactive exploration, analysis and visualization of electrophysiological data.",
   "keywords": [
@@ -32,7 +32,7 @@
     "clean": "jlpm clean:lib",
     "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
     "clean:lintcache": "rimraf .eslintcache .stylelintcache",
-    "clean:labextension": "rimraf jupyphant/labextension",
+    "clean:labextension": "rimraf elephant_lab/labextension",
     "clean:all": "jlpm clean:lib && jlpm clean:labextension && jlpm clean:lintcache",
     "eslint": "jlpm eslint:check --fix",
     "eslint:check": "eslint . --cache --ext .ts,.tsx",
@@ -85,7 +85,7 @@
   },
   "jupyterlab": {
     "extension": true,
-    "outputDir": "jupyphant/labextension",
+    "outputDir": "elephant_lab/labextension",
     "sharedPackages": {
       "@jupyterlab/application": {
         "bundled": false,
