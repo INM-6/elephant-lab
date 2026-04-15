@@ -12,10 +12,13 @@
     "url": "https://github.com/INM-6/jupyphant/issues"
   },
   "license": "BSD-3-Clause",
-  "author": {
-    "name": "Maximilian Kramer",
-    "email": "m.kramer@fz-juelich.de"
-  },
+  "contributors": [
+    {"name": "Tobias Michels"},
+    {"name": "Jan Nolten"},
+    {"name": "Maximilian Kramer"},
+    {"name": "Björn Müller"},
+    {"name": "Michael Denker"}
+  ],
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "style": "style/index.css",
