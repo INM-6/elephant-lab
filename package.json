@@ -13,21 +13,11 @@
   },
   "license": "BSD-3-Clause",
   "contributors": [
-    {
-      "name": "Tobias Michels"
-    },
-    {
-      "name": "Jan Nolten"
-    },
-    {
-      "name": "Maximilian Kramer"
-    },
-    {
-      "name": "Björn Müller"
-    },
-    {
-      "name": "Michael Denker"
-    }
+    {"name": "Tobias Michels"},
+    {"name": "Jan Nolten"},
+    {"name": "Maximilian Kramer"},
+    {"name": "Björn Müller"},
+    {"name": "Michael Denker"}
   ],
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
