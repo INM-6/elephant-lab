@@ -1,10 +1,10 @@
-class Jupyphant:
+class ElephantLab:
     # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
-    from .jupyphant_util import Jupyphant_util
-    from .jupyphant_tree import Jupyphant_tree
-    from .jupyphant_info import Jupyphant_info
-    from .jupyphant_plot import Jupyphant_plot
+    from .elephant_lab_util import ElephantLab_util
+    from .elephant_lab_tree import ElephantLab_tree
+    from .elephant_lab_info import ElephantLab_info
+    from .elephant_lab_plot import ElephantLab_plot
 
     # Dealing with the Python kernel's namespace, e.g.,
     # listing all defined variables
@@ -52,7 +52,7 @@ class Jupyphant:
 
     def __init__(self):
         """   # TODO: rewrite docstring
-        Constructor of JupyphantVisualization
+        Constructor of ElephantLabVisualization
         Called upon activation of the extension.
         Initializes some persistent variables that store references to the current neo objects
         and plots.
@@ -62,17 +62,17 @@ class Jupyphant:
         self.neo_objs_and_lists_of_neo_objs_with_var_name = {}
         self.neo_objs_changed_after_update = False
         self.selected_neo_objects = set()
-        self.on_selected_neo_objects_changed: Jupyphant.SimpleEvent = self.SimpleEvent()
+        self.on_selected_neo_objects_changed: ElephantLab.SimpleEvent = self.SimpleEvent()
         self.map_ipytree_node_id_to_neo_obj_hash = {}
         self.map_ipytree_node_id_to_neo_obj = {}
         self.map_neo_obj_hash_to_neo_obj = {}
         self.filter_changed = False
         self.last_known_hashes = []
         self.hash_cache = {}
-        self.jupyphant_util: Jupyphant.Jupyphant_util = self.Jupyphant_util()
-        self.jupyphant_tree: Jupyphant.Jupyphant_tree = self.Jupyphant_tree(self)
-        self.jupyphant_info: Jupyphant.Jupyphant_info = self.Jupyphant_info(self)
-        self.jupyphant_plot: Jupyphant.Jupyphant_plot = self.Jupyphant_plot(self)
+        self.elephant_lab_util: ElephantLab.ElephantLab_util = self.ElephantLab_util()
+        self.elephant_lab_tree: ElephantLab.ElephantLab_tree = self.ElephantLab_tree(self)
+        self.elephant_lab_info: ElephantLab.ElephantLab_info = self.ElephantLab_info(self)
+        self.elephant_lab_plot: ElephantLab.ElephantLab_plot = self.ElephantLab_plot(self)
 
     def get_selected_neo_ids(self):
         selected_ids = [
@@ -217,7 +217,7 @@ class Jupyphant:
         # Get ALL variables in current kernel namespace
         all_variable_names_in_current_kernel_namespace = self.nsm.who_ls()
         for variable_name in all_variable_names_in_current_kernel_namespace:
-            if variable_name.startswith("jupyphant"):
+            if variable_name.startswith("elephant_lab"):
                 continue
             # Access objects created within the notebook
             # XXX Importing __main__ is in general considered bad practice
@@ -314,7 +314,7 @@ class Jupyphant:
                 code_to_insert = ""
                 if len(paths) > 1:
                     all_vars = list(self.__main__.__dict__.keys())
-                    list_base_name = "jupyphant_list"
+                    list_base_name = "elephant_lab_list"
                     counter = 0
                     list_var_name = f"{list_base_name}_{counter}"
                     while list_var_name in all_vars:
@@ -394,7 +394,7 @@ class Jupyphant:
             for child in getattr(node, "nodes", []):
                 walk(child)
 
-        walk(self.jupyphant_tree.ipytree_of_neo_objects)
+        walk(self.elephant_lab_tree.ipytree_of_neo_objects)
 
         return result
         

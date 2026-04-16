@@ -1,4 +1,4 @@
-class Jupyphant_info:
+class ElephantLab_info:
 
     from IPython.display import display, clear_output, HTML
     from ipywidgets import Output
@@ -16,7 +16,7 @@ class Jupyphant_info:
     from typing import TYPE_CHECKING
 
     if TYPE_CHECKING:
-        from .jupyphant import Jupyphant  # only for type hints
+        from .elephant_lab import ElephantLab  # only for type hints
 
     # Shared Style
     _CSS = """
@@ -41,36 +41,36 @@ class Jupyphant_info:
     </style>
     """
 
-    def __init__(self, jupyphant_entity: "Jupyphant_info.Jupyphant"):
+    def __init__(self, elephant_lab_entity: "ElephantLab_info.ElephantLab"):
         """
-        Class to outsource some jupyphant logic:
-            -all logic regarding the neo info of Jupyphant
+        Class to outsource some elephant lab logic:
+            -all logic regarding the neo info of Elephant Lab
         Is a Class to minimize the amount of name clutter in the notebook
-        """ 
-        self.jupyphant_entity: "Jupyphant_info.Jupyphant" = jupyphant_entity
+        """
+        self.elephant_lab_entity: "ElephantLab_info.ElephantLab" = elephant_lab_entity
 
     def create_details_panel(self):
         def on_selected_change_info():
             with output_node_info:
-                Jupyphant_info.clear_output()
+                ElephantLab_info.clear_output()
                 self.pretty_print_of_selected_neo_objects()
 
         output_node_info = self.Output()
-        self.jupyphant_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
-        Jupyphant_info.display(output_node_info)
+        self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
+        ElephantLab_info.display(output_node_info)
 
     def pretty_print_of_selected_neo_objects(self):
-        if not self.jupyphant_entity.selected_neo_objects:
+        if not self.elephant_lab_entity.selected_neo_objects:
             return
 
         selected_objects_with_node_name = [
             {
-                'obj': self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.get(node._id),
+                'obj': self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.get(node._id),
                 'node_name': node.name,
                 'variable_name': node.metadata.get('variable_name', '')
             }
-            for node in self.jupyphant_entity.selected_neo_objects
-            if node._id in self.jupyphant_entity.map_ipytree_node_id_to_neo_obj
+            for node in self.elephant_lab_entity.selected_neo_objects
+            if node._id in self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj
         ]
 
         if len(selected_objects_with_node_name) <= 1:
@@ -231,9 +231,9 @@ class Jupyphant_info:
         all_t_starts = [st.t_start for st in spiketrains]
         all_t_stops = [st.t_stop for st in spiketrains]
 
-        tree = self.jupyphant_entity.jupyphant_tree
+        tree = self.elephant_lab_entity.elephant_lab_tree
         for st in spiketrains:
-            hash_id = self.jupyphant_entity.get_neo_hash(st, hash_name='sha1')
+            hash_id = self.elephant_lab_entity.get_neo_hash(st, hash_name='sha1')
             tree.cache_stat(hash_id, 't_start', float(st.t_start.magnitude))
             tree.cache_stat(hash_id, 't_stop', float(st.t_stop.magnitude))
 
@@ -268,7 +268,7 @@ class Jupyphant_info:
                     
         # Firing rates
         firing_rates_per_st = {
-            self.jupyphant_entity.get_neo_hash(st, hash_name='sha1'):
+            self.elephant_lab_entity.get_neo_hash(st, hash_name='sha1'):
                 float(self.statistics.mean_firing_rate(st).magnitude)
             for st in spiketrains if st.t_stop > st.t_start
         }
@@ -291,7 +291,7 @@ class Jupyphant_info:
         cv_per_st = {}
         for st in spiketrains:
             if len(st) > 1:
-                hash_id = self.jupyphant_entity.get_neo_hash(st, hash_name='sha1')
+                hash_id = self.elephant_lab_entity.get_neo_hash(st, hash_name='sha1')
                 cv = float(self.statistics.cv(self.statistics.isi(st)))
                 cv_per_st[hash_id] = cv
                 tree.cache_stat(hash_id, 'cv', cv)

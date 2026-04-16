@@ -2,21 +2,21 @@ import { test, expect, Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 
-// Helper to reliably bring Jupyphant back to the front if the Debugger steals focus
-async function ensureJupyphantActive(page: Page) {
-  const jupyphantTab = page.getByRole('tab', { name: 'Jupyphant', exact: true });
-  const rightPanel = page.locator('#jupyphant-right-panel');
+// Helper to reliably bring Elephant Lab back to the front if the Debugger steals focus
+async function ensureElephantLabActive(page: Page) {
+  const elephantLabTab = page.getByRole('tab', { name: 'Elephant Lab', exact: true });
+  const rightPanel = page.locator('#elephant-lab-right-panel');
 
   await expect(async () => {
-    if (await jupyphantTab.getAttribute('aria-selected') !== 'true') {
-      await jupyphantTab.click();
+    if (await elephantLabTab.getAttribute('aria-selected') !== 'true') {
+      await elephantLabTab.click();
     }
-    await expect(jupyphantTab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 });
+    await expect(elephantLabTab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 });
     await expect(rightPanel).not.toHaveClass(/lm-mod-hidden/, { timeout: 1000 });
   }).toPass({ timeout: 10000 });
 }
 
-test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
+test.describe.serial('Elephant Lab: Upload and Load .nix File', () => {
   // Global timeout
   let page: Page;
   test.setTimeout(120000);
@@ -79,18 +79,18 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
     }
     await page.waitForSelector('.jp-Notebook-cell', { timeout: 20000 });
 
-    // Step 1: Activate Jupyphant Sidebar
+    // Step 1: Activate Elephant Lab Sidebar
     await page.evaluate(async () => {
       const commands = window.jupyterapp.commands.listCommands();
-      const cmdId = commands.find(id => id.toLowerCase().includes('jupyphant'));
+      const cmdId = commands.find(id => id.toLowerCase().includes('elephant-lab'));
       if (cmdId) await window.jupyterapp.commands.execute(cmdId);
     });
 
-    const jupyphantTab = page.locator('.lm-TabBar-tab').filter({ hasText: 'Jupyphant' });
-    if (await jupyphantTab.getAttribute('aria-selected') !== 'true') {
-      await jupyphantTab.click();
+    const elephantLabTab = page.locator('.lm-TabBar-tab').filter({ hasText: 'Elephant Lab' });
+    if (await elephantLabTab.getAttribute('aria-selected') !== 'true') {
+      await elephantLabTab.click();
     }
-    await expect(jupyphantTab).toHaveAttribute('aria-selected', 'true', { timeout: 15000 });
+    await expect(elephantLabTab).toHaveAttribute('aria-selected', 'true', { timeout: 15000 });
 
     // Step 2: Use Load Button & File Dialog
     await page.locator('button[title="Create a neoIO for given Path"]').click();
@@ -107,17 +107,17 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
     await ioDialog.locator('button', { hasText: 'Automatic' }).click();
     await ioDialog.waitFor({ state: 'hidden' });
 
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
 
     // Step 3: Ensure tree is populated before handing off to individual tests
-    const rightPanel = page.locator('#jupyphant-right-panel');
-    const jupyphantTabLabel = page.getByRole('tab', { name: 'Jupyphant', exact: true });
+    const rightPanel = page.locator('#elephant-lab-right-panel');
+    const elephantLabTabLabel = page.getByRole('tab', { name: 'Elephant Lab', exact: true });
     
     // Use an async retry loop to force the tab to stay open while waiting for the large file to process
     await expect(async () => {
       // Re-click the tab if JupyterLab switched to the Debugger
-      if (await jupyphantTabLabel.getAttribute('aria-selected') !== 'true') {
-        await jupyphantTabLabel.click();
+      if (await elephantLabTabLabel.getAttribute('aria-selected') !== 'true') {
+        await elephantLabTabLabel.click();
       }
       await expect(rightPanel).toContainText('TestBlock', { timeout: 5000 });
     }).toPass({ timeout: 120000 }); 
@@ -133,20 +133,20 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
 
   // --- TEST 1: Verify Tree ---
   test('should display TestBlock in the Neo Tree', async () => {
-    await ensureJupyphantActive(page);
-    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();    
+    await ensureElephantLabActive(page);
+    const treeNode = page.locator('#elephant-lab-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();    
     await expect(treeNode).toContainText('TestBlock');
     await treeNode.highlight();
   });
 
   // --- TEST 2: Insert into Notebook ---
   test('should insert selected Neo object into notebook and execute', async () => {
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
 
     // 1. Select the "TestBlock" node in the tree
-    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
+    const treeNode = page.locator('#elephant-lab-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
     await treeNode.click({ force: true });    
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
     // 2. Click the Insert button
     const insertButton = page.locator('button[title="Insert selected neo objects into current notebook"]');
     await insertButton.click();
@@ -174,18 +174,18 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
 
   // --- TEST 3: Verify Details Tab ---
   test('should display correct information in the Details tab for TestBlock', async () => {
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
 
     // 1. Select the "TestBlock" node in the tree
-    const treeNode = page.locator('#jupyphant-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
+    const treeNode = page.locator('#elephant-lab-right-panel [role="treeitem"]', { hasText: 'TestBlock' }).first();
     await treeNode.click(); 
 
     // 2. Switch to the Details tab
-    const detailsTabLabel = page.locator('#jupyphant-right-panel .lm-TabBar-tabLabel', { hasText: 'Details' }).first();
+    const detailsTabLabel = page.locator('#elephant-lab-right-panel .lm-TabBar-tabLabel', { hasText: 'Details' }).first();
     await detailsTabLabel.click();
 
     // 3. Verify the details text
-    const rightPanel = page.locator('#jupyphant-right-panel');
+    const rightPanel = page.locator('#elephant-lab-right-panel');
     
     // Wait for the panel to update with Block details
     await expect(rightPanel).toContainText('TestBlock (Block)', { timeout: 10000 });
@@ -199,7 +199,7 @@ test.describe.serial('Jupyphant: Upload and Load .nix File', () => {
   });
 
 test('should display correct information in the Details tab for SpikeTrain', async () => { 
-  await ensureJupyphantActive(page);
+  await ensureElephantLabActive(page);
 
   // Ensure page is still valid
   if (page.isClosed()) {
@@ -216,7 +216,7 @@ test('should display correct information in the Details tab for SpikeTrain', asy
   await page.waitForTimeout(500);
 
   // 1. Select the "SpikeTrain" node in the tree
-  const spikeTrainNode = page.locator('#jupyphant-right-panel')
+  const spikeTrainNode = page.locator('#elephant-lab-right-panel')
                              .locator('[role="treeitem"]', { hasText: 'my spiketrain' })
                              .first();
   
@@ -231,8 +231,8 @@ test('should display correct information in the Details tab for SpikeTrain', asy
   await page.waitForTimeout(500);
   
     // 2. Switch to the Details tab
-  const detailsTabLabel = page.locator('#jupyphant-right-panel .lm-TabBar-tabLabel', { hasText: 'Details' }).first();
-  const detailsPanel = page.locator('#jupyphant-right-panel');
+  const detailsTabLabel = page.locator('#elephant-lab-right-panel .lm-TabBar-tabLabel', { hasText: 'Details' }).first();
+  const detailsPanel = page.locator('#elephant-lab-right-panel');
   
   await expect(async () => {
     if (await detailsTabLabel.getAttribute('aria-selected') !== 'true') {
@@ -255,14 +255,14 @@ test('should display correct information in the Details tab for SpikeTrain', asy
 });
 
   test('should render correct plots in the Explore tab for SpikeTrain', async () => {
-  await ensureJupyphantActive(page);
+  await ensureElephantLabActive(page);
   // Ensure page is still valid
   if (page.isClosed()) {
     throw new Error('Page was closed unexpectedly');
   }
 
   // 1. Select the "SpikeTrain" node with retry logic
-  const spikeTrainNode = page.locator('#jupyphant-right-panel')
+  const spikeTrainNode = page.locator('#elephant-lab-right-panel')
                              .locator('[role="treeitem"]', { hasText: 'my spiketrain' })
                              .first();
   
@@ -274,7 +274,7 @@ test('should display correct information in the Details tab for SpikeTrain', asy
   await expect(spikeTrainNode).toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
 
   // 2. Switch to the Explore tab
-  const rightPanel = page.locator('#jupyphant-right-panel');
+  const rightPanel = page.locator('#elephant-lab-right-panel');
   const exploreTab = rightPanel.getByRole('tab', { name: 'Explore', exact: true });
 
   await expect(async () => {
@@ -362,7 +362,7 @@ test('should display correct information in the Details tab for SpikeTrain', asy
   });
 
   test('should update Switch Notebook button when active notebook changes', async () => {
-  await ensureJupyphantActive(page);
+  await ensureElephantLabActive(page);
 
   // 1. Find the Switch Notebook button (contains file extension '.ipynb')
   const switchNotebookButton = page.locator('[role="banner"] button', { hasText: /\.ipynb/ }).first();
@@ -375,7 +375,7 @@ test('should display correct information in the Details tab for SpikeTrain', asy
   const initialNotebookName = initialButtonText?.trim() || 'Unknown';
 
   // Verify that the SpikeTrain node from the first notebook is visible before switching
-  const spikeTrainNode = page.locator('#jupyphant-right-panel')
+  const spikeTrainNode = page.locator('#elephant-lab-right-panel')
                              .locator('[role="treeitem"]', { hasText: 'my spiketrain' })
                              .first();
   
@@ -409,7 +409,7 @@ test('should display correct information in the Details tab for SpikeTrain', asy
   await secondNotebookTab.click();
   await page.waitForTimeout(500);
 
-  // 3. Click the Switch Notebook button to update Jupyphant
+  // 3. Click the Switch Notebook button to update Elephant Lab
   await switchNotebookButton.click();
   await page.waitForTimeout(500);
 
@@ -427,10 +427,10 @@ test('should display correct information in the Details tab for SpikeTrain', asy
   // from the other notebooks kernel is not visible anymore
   expect(spikeTrainNode).not.toBeVisible( { timeout: 5000 });
 
-  // 5. Verify the Jupyphant panel switched to the new notebook's data
+  // 5. Verify the Elephant Lab panel switched to the new notebook's data
   // (Optional: you could verify the Neo Tree updated or notebook content changed)
-  const jupyphantPanel = page.locator('#jupyphant-right-panel');
-  await expect(jupyphantPanel).toBeVisible({ timeout: 5000 });
+  const elephantLabPanel = page.locator('#elephant-lab-right-panel');
+  await expect(elephantLabPanel).toBeVisible({ timeout: 5000 });
 
 });
 });

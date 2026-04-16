@@ -3,7 +3,7 @@ requires = ["hatchling>=1.3.1", "jupyterlab>=4.0.0,<5.0.0", "hatch-nodejs-versio
 build-backend = "hatchling.build"
 
 [project]
-name = "jupyphant"
+name = "elephant-lab"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.8"
@@ -68,7 +68,7 @@ fields = ["description", "authors", "urls"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "jupyphant",
+    "elephant_lab",
     "style",
     "src",
     "package.json",
@@ -81,19 +81,19 @@ include = [
 exclude = [".github"]
 
 [tool.hatch.build]
-artifacts = ["jupyphant/labextension"]
+artifacts = ["elephant_lab/labextension"]
 
 
 [tool.hatch.build.targets.wheel.shared-data]
-"jupyphant/labextension" = "share/jupyter/labextensions/jupyphant"
-"install.json" = "share/jupyter/labextensions/jupyphant/install.json"
+"elephant_lab/labextension" = "share/jupyter/labextensions/elephant-lab"
+"install.json" = "share/jupyter/labextensions/elephant-lab/install.json"
 
 [tool.hatch.build.hooks.jupyter-builder]
 dependencies = ["hatch-jupyter-builder>=0.5"]
 build-function = "hatch_jupyter_builder.npm_builder"
 ensured-targets = [
-    "jupyphant/labextension/static/style.js",
-    "jupyphant/labextension/package.json",
+    "elephant_lab/labextension/static/style.js",
+    "elephant_lab/labextension/package.json",
 ]
 
 

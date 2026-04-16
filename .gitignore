@@ -6,7 +6,7 @@ node_modules/
 *.egg-info/
 .ipynb_checkpoints
 *.tsbuildinfo
-jupyphant/labextension
+elephant_lab/labextension
 *.zip
 *.html
 *.png

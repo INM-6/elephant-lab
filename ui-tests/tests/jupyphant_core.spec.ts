@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Jupyphant: Core Initialization & API', () => {
+test.describe('Elephant Lab: Core Initialization & API', () => {
 
   // TEST 1: Check Activation Message
   test('should emit an activation console message on load', async ({ page, baseURL }) => {
     // Attach the listener BEFORE navigating
     const activationMessagePromise = page.waitForEvent('console', {
-      predicate: msg => msg.text().includes('Jupyphant is activated'), 
+      predicate: msg => msg.text().includes('Elephant Lab is activated'), 
       timeout: 15000
     });
 
@@ -15,12 +15,12 @@ test.describe('Jupyphant: Core Initialization & API', () => {
 
     // Await the listener resolving
     const msg = await activationMessagePromise;
-    expect(msg.text()).toContain('Jupyphant is activated');
+    expect(msg.text()).toContain('Elephant Lab is activated');
   });
 
 
   // TEST 2: Execute API Command
-  test('should execute Jupyphant directly via API', async ({ page, baseURL }) => {
+  test('should execute Elephant Lab directly via API', async ({ page, baseURL }) => {
     // Navigate again for a fresh state
     await page.goto(baseURL || 'http://localhost:8888/lab?reset');
     await page.waitForSelector('#jupyterlab-splash', { state: 'detached', timeout: 30000 });
@@ -37,17 +37,17 @@ test.describe('Jupyphant: Core Initialization & API', () => {
     await page.waitForSelector('.jp-Notebook-cell');
     await page.waitForTimeout(2000);
 
-    console.log('Executing Jupyphant command via internal API...');
+    console.log('Executing Elephant Lab command via internal API...');
     const result = await page.evaluate(async () => {
       // Access JupyterLab's internal API
       const commands = window.jupyterapp.commands.listCommands();
-      const cmdId = commands.find(id => id.toLowerCase().includes('jupyphant'));
+      const cmdId = commands.find(id => id.toLowerCase().includes('elephant-lab'));
 
       if (cmdId) {
         await window.jupyterapp.commands.execute(cmdId);
         return `Executed command: ${cmdId}`;
       } else {
-        throw new Error(`Jupyphant command not found! Available commands: ${commands.filter(c => !c.startsWith('jlab')).join(', ')}`);
+        throw new Error(`Elephant Lab command not found! Available commands: ${commands.filter(c => !c.startsWith('jlab')).join(', ')}`);
       }
     });
 
@@ -55,7 +55,7 @@ test.describe('Jupyphant: Core Initialization & API', () => {
     
     expect(result).toContain('Executed command');
     
-    await page.screenshot({ path: './outputs/jupyphant-api-execution.png' });
+    await page.screenshot({ path: './outputs/elephant-lab-api-execution.png' });
   });
 
 });

@@ -10,7 +10,7 @@ class SimpleNode:
     def __eq__(self, other):
         return isinstance(other, SimpleNode) and self._id == other._id
 
-class Jupyphant_tree:
+class ElephantLab_tree:
 
     from IPython.display import display
     from neo import Block, Segment, Group, ChannelView, IrregularlySampledSignal, AnalogSignal, SpikeTrain, Epoch, Event, ImageSequence, CircularRegionOfInterest, PolygonRegionOfInterest, RectangularRegionOfInterest
@@ -25,20 +25,20 @@ class Jupyphant_tree:
     from typing import TYPE_CHECKING
 
     if TYPE_CHECKING:
-        from .jupyphant import Jupyphant  # only for type hints
+        from .elephant_lab import ElephantLab  # only for type hints
         
     # Current workaround to keep compatibility
     @property
     def ipytree_of_neo_objects(self):
         return self._root_node
     
-    def __init__(self, jupyphant_entity: "Jupyphant_tree.Jupyphant"):
+    def __init__(self, elephant_lab_entity: "ElephantLab_tree.ElephantLab"):
         """
-        Class to outsource some jupyphant logic:
-            -all logic regarding the Neo tree structure of Jupyphant
+        Class to outsource some elephant lab logic:
+            -all logic regarding the Neo tree structure of Elephant Lab
         Is a Class to minimize the amount of name clutter in the notebook
-        """ 
-        self.jupyphant_entity: "Jupyphant_tree.Jupyphant" = jupyphant_entity
+        """
+        self.elephant_lab_entity: "ElephantLab_tree.ElephantLab" = elephant_lab_entity
         self._root_node = SimpleNode('root', name='root')
         
         # neo abbreviations and font-awesome icons
@@ -107,7 +107,7 @@ class Jupyphant_tree:
 
     def expand_neo_tree(self, opened):
         self.expand_all = opened
-        self.jupyphant_entity.filter_changed = True
+        self.elephant_lab_entity.filter_changed = True
         self.update_tree()
     
     def show_neo_obj(self, neo_obj_string):
@@ -120,7 +120,7 @@ class Jupyphant_tree:
             self.NEO_OBJS_TO_SHOW.remove(neo_obj_type)
         else:
             self.NEO_OBJS_TO_SHOW.append(neo_obj_type)
-        self.jupyphant_entity.filter_changed = True
+        self.elephant_lab_entity.filter_changed = True
         self.update_tree()
 
     def cache_stat(self, hash_id: str, stat_name: str, value: float):
@@ -129,19 +129,19 @@ class Jupyphant_tree:
         self._stat_cache[hash_id][stat_name] = value
 
     def update_tree(self):
-        self.jupyphant_entity.update()
+        self.elephant_lab_entity.update()
         self._stat_cache.clear()
-        if self._tree_widget is None or not self.jupyphant_entity.neo_objs_changed_after_update:
+        if self._tree_widget is None or not self.elephant_lab_entity.neo_objs_changed_after_update:
             return
 
         # Clear maps
-        self.jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.clear()
-        self.jupyphant_entity.map_ipytree_node_id_to_neo_obj.clear()
+        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.clear()
+        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.clear()
         self._node_registry.clear()
 
         nodes_html = []
         top_level_simple_nodes = []
-        for variable_name, neo_obj in self.jupyphant_entity.neo_objs_and_lists_of_neo_objs_with_var_name.items():
+        for variable_name, neo_obj in self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.items():
             if type(neo_obj) not in self.NEO_OBJS_TO_SHOW:
                 continue
             if hasattr(neo_obj, 'block') and neo_obj.block is not None:
@@ -171,10 +171,10 @@ class Jupyphant_tree:
         '''
 
     def _build_node_html(self, neo_obj, variable_name='', list_index=None):
-        hash_id = self.jupyphant_entity.get_neo_hash(neo_obj, hash_name='sha1')
-        self.jupyphant_entity.map_neo_obj_hash_to_neo_obj[hash_id] = neo_obj
-        self.jupyphant_entity.map_ipytree_node_id_to_neo_obj[hash_id] = neo_obj
-        self.jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[hash_id] = hash_id
+        hash_id = self.elephant_lab_entity.get_neo_hash(neo_obj, hash_name='sha1')
+        self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj[hash_id] = neo_obj
+        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[hash_id] = neo_obj
+        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash[hash_id] = hash_id
 
         class_name = neo_obj.__class__.__name__
         icon = self.NEO_ABBREVIATIONS.get(class_name, {}).get('icon', 'circle')
@@ -313,56 +313,56 @@ class Jupyphant_tree:
         clicked_node = self._node_registry[node_id]
 
         if not multi_select:
-            self.jupyphant_entity.selected_neo_objects.clear()
+            self.elephant_lab_entity.selected_neo_objects.clear()
 
-        if clicked_node in self.jupyphant_entity.selected_neo_objects:
-            self.jupyphant_entity.selected_neo_objects.discard(clicked_node)
+        if clicked_node in self.elephant_lab_entity.selected_neo_objects:
+            self.elephant_lab_entity.selected_neo_objects.discard(clicked_node)
             # deselect children too
             def deselect_children(node):
                 for child in node.nodes:
-                    self.jupyphant_entity.selected_neo_objects.discard(child)
+                    self.elephant_lab_entity.selected_neo_objects.discard(child)
                     deselect_children(child)
             deselect_children(clicked_node)
         else:
-            self.jupyphant_entity.selected_neo_objects.add(clicked_node)
+            self.elephant_lab_entity.selected_neo_objects.add(clicked_node)
             # select children too
             def select_children(node):
                 for child in node.nodes:
-                    self.jupyphant_entity.selected_neo_objects.add(child)
+                    self.elephant_lab_entity.selected_neo_objects.add(child)
                     select_children(child)
             select_children(clicked_node)
 
-        self.jupyphant_entity.on_selected_neo_objects_changed.fire()
+        self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
     
     # First collect all selected nodes, then fire the event only once
     # this prevents continous analyzing and plotting for multiple node selection
     # used when Shift+Clicking 
     def handle_selection_range(self, node_ids: list):
         """Selects a range of nodes and fires the event only once at the end."""
-        self.jupyphant_entity.selected_neo_objects.clear()
+        self.elephant_lab_entity.selected_neo_objects.clear()
         
         for node_id in node_ids:
             if node_id not in self._node_registry:
                 continue
             node = self._node_registry[node_id]
-            self.jupyphant_entity.selected_neo_objects.add(node)
+            self.elephant_lab_entity.selected_neo_objects.add(node)
             def select_children(n):
                 for child in n.nodes:
-                    self.jupyphant_entity.selected_neo_objects.add(child)
+                    self.elephant_lab_entity.selected_neo_objects.add(child)
                     select_children(child)
             select_children(node)
 
         # Fire only once after all nodes are selected
-        self.jupyphant_entity.on_selected_neo_objects_changed.fire()
+        self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
 
     def _get_candidates(self) -> dict:
-        selected = self.jupyphant_entity.selected_neo_objects
+        selected = self.elephant_lab_entity.selected_neo_objects
         source = selected if selected else self._node_registry.values()
         return {
-            node._id: self.jupyphant_entity.map_ipytree_node_id_to_neo_obj[node._id]
+            node._id: self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[node._id]
             for node in source
             if not node._id.startswith('folder-')
-            and node._id in self.jupyphant_entity.map_ipytree_node_id_to_neo_obj
+            and node._id in self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj
         }
 
     def select_by_stat(self, filter_type: str, filter_data: dict):
@@ -371,7 +371,7 @@ class Jupyphant_tree:
 
         candidates = self._get_candidates()
 
-        self.jupyphant_entity.selected_neo_objects.clear()
+        self.elephant_lab_entity.selected_neo_objects.clear()
         selected_ids = []
         tol = 1e-4
         value = filter_data['value']
@@ -421,11 +421,11 @@ class Jupyphant_tree:
             if match:
                 node = self._node_registry.get(hash_id)
                 if node:
-                    self.jupyphant_entity.selected_neo_objects.add(node)
+                    self.elephant_lab_entity.selected_neo_objects.add(node)
                     selected_ids.append(hash_id)
 
-        self.jupyphant_entity.on_selected_neo_objects_changed.fire()
-        print(f"JUPYPHANT_RESULT_KEY:{json.dumps(selected_ids)}")
+        self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
+        print(f"ELEPHANT_LAB_RESULT_KEY:{json.dumps(selected_ids)}")
     
     def select_by_annotation_filter(self, expression: str):
         def _eval_node(node, annotations, agg_values):
@@ -479,7 +479,7 @@ class Jupyphant_tree:
         try:
             tree = self.ast.parse(expression.strip(), mode='eval')
         except SyntaxError as e:
-            print(f"JUPYPHANT_FILTER_ERROR:Syntax error — {e}")
+            print(f"ELEPHANT_LAB_FILTER_ERROR:Syntax error — {e}")
             return
 
         # Collect all max/min aggregate calls present in the expression
@@ -520,7 +520,7 @@ class Jupyphant_tree:
             if values:
                 agg_values[(func, key)] = (max if func == 'max' else min)(values)
 
-        self.jupyphant_entity.selected_neo_objects.clear()
+        self.elephant_lab_entity.selected_neo_objects.clear()
         selected_ids = []
 
         for hash_id, (neo_obj, annotations) in base_candidates.items():
@@ -530,15 +530,15 @@ class Jupyphant_tree:
                     continue
                 node = self._node_registry.get(hash_id)
                 if node:
-                    self.jupyphant_entity.selected_neo_objects.add(node)
+                    self.elephant_lab_entity.selected_neo_objects.add(node)
                     selected_ids.append(hash_id)
             except Exception:
                 pass
 
-        self.jupyphant_entity.on_selected_neo_objects_changed.fire()
-        print(f"JUPYPHANT_RESULT_KEY:{self.json.dumps(selected_ids)}")
+        self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
+        print(f"ELEPHANT_LAB_RESULT_KEY:{self.json.dumps(selected_ids)}")
 
     def create_tree(self):
         self._tree_widget = self.widgets.HTML(value='')
         self._tree_widget.layout.width = '100%'
-        Jupyphant_tree.display(self._tree_widget)
+        ElephantLab_tree.display(self._tree_widget)

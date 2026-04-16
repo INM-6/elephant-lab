@@ -1,7 +1,7 @@
 {
-  "name": "jupyphant-ui-tests",
+  "name": "elephant-lab-ui-tests",
   "version": "1.0.0",
-  "description": "JupyterLab jupyphant Integration Tests",
+  "description": "JupyterLab elephant-lab Integration Tests",
   "private": true,
   "scripts": {
     "start": "jupyter lab --config jupyter_server_test_config.py",

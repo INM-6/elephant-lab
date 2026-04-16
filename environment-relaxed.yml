@@ -1,4 +1,4 @@
-name: jupyphant3
+name: elephant-lab
 dependencies:
   - ipykernel
   - ipympl

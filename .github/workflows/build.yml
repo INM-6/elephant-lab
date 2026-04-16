@@ -37,7 +37,7 @@ jobs:
         python -m pip install .[test]
 
         jupyter labextension list
-        jupyter labextension list 2>&1 | grep -ie "jupyphant.*OK"
+        jupyter labextension list 2>&1 | grep -ie "elephant-lab.*OK"
         python -m jupyterlab.browser_check
 
     - name: Package the extension
@@ -46,13 +46,13 @@ jobs:
 
         pip install build
         python -m build
-        pip uninstall -y "jupyphant" jupyterlab
+        pip uninstall -y "elephant-lab" jupyterlab
 
     - name: Upload extension packages
       uses: actions/upload-artifact@v4
       with:
         name: extension-artifacts
-        path: dist/jupyphant*
+        path: dist/elephant-lab*
         if-no-files-found: error
 
   test_isolated:
@@ -81,7 +81,7 @@ jobs:
 
 
         jupyter labextension list
-        jupyter labextension list 2>&1 | grep -ie "jupyphant.*OK"
+        jupyter labextension list 2>&1 | grep -ie "elephant-lab.*OK"
         python -m jupyterlab.browser_check --no-chrome-test
 
   integration-tests:
@@ -135,7 +135,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: jupyphant-playwright-tests
+        name: elephant-lab-playwright-tests
         path: |
           ui-tests/test-results
           ui-tests/playwright-report

@@ -69,7 +69,7 @@ export class KernelBridge {
 
         let codeToRun: string;
         if (executeCode) {
-            codeToRun = "import gc as jupyphant_gc; jupyphant_gc.collect()\n" + code;
+            codeToRun = "import gc as elephant_lab_gc; elephant_lab_gc.collect()\n" + code;
         }
         else {
             codeToRun = `print(${JSON.stringify(code)})`;
@@ -88,11 +88,11 @@ export class KernelBridge {
                     const lines = text.split('\n');
                     const lines_to_print: string[] = [];
                     for (const line of lines) {
-                        if (line.trim().startsWith("JUPYPHANT_RESULT_KEY:")) {
+                        if (line.trim().startsWith("ELEPHANT_LAB_RESULT_KEY:")) {
                             if (resultKey === null) {
                                 resultKey = "";
                             }
-                            resultKey += line.trim().substring("JUPYPHANT_RESULT_KEY:".length);
+                            resultKey += line.trim().substring("ELEPHANT_LAB_RESULT_KEY:".length);
                         } else {
                             lines_to_print.push(line);
                         }
