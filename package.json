@@ -7,21 +7,34 @@
     "jupyterlab",
     "jupyterlab-extension"
   ],
-  "homepage": "https://github.com/INM-6/jupyphant",
+  "homepage": "https://github.com/INM-6/elephant-lab",
   "bugs": {
-    "url": "https://github.com/INM-6/jupyphant/issues"
+    "url": "https://github.com/INM-6/elephant-lab/issues"
   },
   "license": "BSD-3-Clause",
-  "author": {
-    "name": "Maximilian Kramer",
-    "email": "m.kramer@fz-juelich.de"
-  },
+  "contributors": [
+    {
+      "name": "Tobias Michels"
+    },
+    {
+      "name": "Jan Nolten"
+    },
+    {
+      "name": "Maximilian Kramer"
+    },
+    {
+      "name": "Björn Müller"
+    },
+    {
+      "name": "Michael Denker"
+    }
+  ],
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "style": "style/index.css",
   "repository": {
     "type": "git",
-    "url": "https://github.com/INM-6/jupyphant.git"
+    "url": "https://github.com/INM-6/elephant-lab.git"
   },
   "scripts": {
     "build": "jlpm build:lib && jlpm build:labextension:dev",

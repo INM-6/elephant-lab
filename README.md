@@ -2,7 +2,7 @@
 
 # Elephant Lab
 
-[![Github Actions Status](https://github.com/INM-6/jupyphant/workflows/Build/badge.svg)](https://github.com/INM-6/jupyphant/actions/workflows/build.yml)
+[![Github Actions Status](https://github.com/INM-6/elephant-lab/workflows/Build/badge.svg)](https://github.com/INM-6/elephant-lab/actions/workflows/build.yml)
 
 ***Explore, Visualize, and Analyze Electrophysiology Data — Right in JupyterLab***
 
@@ -71,7 +71,7 @@ You will need [Node.js](https://nodejs.org/en/download) to build the extension.
 
 ```bash
 # 1. Clone the repository
-git clone git@github.com:INM-6/jupyphant.git
+git clone git@github.com:INM-6/elephant-lab.git
 cd elephant-lab
 
 # 2. Create and activate a virtual environment
@@ -125,9 +125,9 @@ End-to-end tests use [Playwright](https://playwright.dev/). See [ui-tests/README
 
 ## Contributing
 
-Do you have a question, suggestion, or found a bug? Please open an [issue](https://github.com/INM-6/jupyphant/issues).
+Do you have a question, suggestion, or found a bug? Please open an [issue](https://github.com/INM-6/elephant-lab/issues).
 
-Would you like to fix a problem or add a feature? Please open a [pull request](https://github.com/INM-6/jupyphant/pulls).
+Would you like to fix a problem or add a feature? Please open a [pull request](https://github.com/INM-6/elephant-lab/pulls).
 
 For packaging and release instructions, see [RELEASE.md](RELEASE.md).
 

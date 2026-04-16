@@ -488,7 +488,7 @@ class ElephantLabExtension {
 			const body = document.createElement('div');
 			body.style.textAlign = 'center';
 			body.innerHTML = `
-				<p>You are using <a href="https://github.com/INM-6/jupyphant">Elephant Lab</a> ${result?.outputs[0].text}<br>
+				<p>You are using <a href="https://github.com/INM-6/elephant-lab">Elephant Lab</a> ${result?.outputs[0].text}<br>
 				This version is a public preview version. <br>Further Analysis functions will be added in later releases.</p>
 
 				<p>Tobias Michels<br>Jan Nolten<br>Maximilian Kramer<br>Björn Müller<br>Michael Denker<br></p>
