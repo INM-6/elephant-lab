@@ -5,6 +5,8 @@ class ElephantLab:
     from .elephant_lab_tree import ElephantLab_tree
     from .elephant_lab_info import ElephantLab_info
     from .elephant_lab_plot import ElephantLab_plot
+    from .SimpleEvent import SimpleEvent
+    from .NeoData import NeoData
 
     # Dealing with the Python kernel's namespace, e.g.,
     # listing all defined variables
@@ -32,23 +34,6 @@ class ElephantLab:
     import json
 
     import hashlib as _hashlib
-
-    class SimpleEvent:
-        def __init__(self):
-            self._listeners = []
-
-        def add_listener(self, fn):
-            """Register a callback function."""
-            self._listeners.append(fn)
-
-        def remove_listener(self, fn):
-            """Unregister a callback function."""
-            self._listeners.remove(fn)
-
-        def fire(self):
-            """Call all registered callbacks."""
-            for fn in self._listeners:
-                fn()
 
     def __init__(self):
         """   # TODO: rewrite docstring
