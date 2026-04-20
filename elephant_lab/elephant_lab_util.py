@@ -1,15 +1,15 @@
-class Jupyphant_util:
+class ElephantLab_util:
 
     import json
     import __main__
     import neo
     import sys
-    from jupyphant import __version__
+    from elephant_lab import __version__
 
     def __init__(self):
         """
-        Class to outsource some jupyphant logic:
-            -all logic that does not work with the jupyphant_entity and just has to be executed
+        Class to outsource some elephant lab logic:
+            -all logic that does not work with the elephant_lab_entity and just has to be executed
         Is a Class to minimize the amount of name clutter in the notebook
         """
 

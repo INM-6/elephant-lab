@@ -64,9 +64,9 @@ import '../style/base.css'
 import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
 import { PlotlyFrontend } from './plot';
-import jupyphantLogo from '../doc/Jupyphant-Logo.png';
+import elephantLabLogo from '../doc/Elephant-Lab-Logo.png';
 
-class JupyphantExtension {
+class ElephantLabExtension {
 	// declaring members of the class
 	private app: JupyterFrontEnd;
 	private command_palette: ICommandPalette;
@@ -86,7 +86,7 @@ class JupyphantExtension {
 	private plotlyFrontend: PlotlyFrontend | null;
 	private _lastClickedNode: string | null = null;
 
-	// Construct a new JupyphantExtension
+	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
 		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry, docManager: IDocumentManager) {
 		// save all constructor arguments
@@ -115,35 +115,35 @@ class JupyphantExtension {
 	/******************************************************************************************************************/
 	// Create OutputAreas where Python-Code can be executed
 	private async initializeKernelState(session: ISessionContext) {
-		console.log("Jupyphant: Initializing kernel state...");
+		console.log("Elephant Lab: Initializing kernel state...");
 		this.kernelBridge = new KernelBridge(session);
 
 		await this.kernelBridge.executeCode(PythonCodeKey.SetupEnv);
 
-		console.log("Jupyphant: Environment setup complete.");
+		console.log("Elephant Lab: Environment setup complete.");
 		try {
-			// Execute Jupyphant Code to create Neo Tree / Information and Plots 
+			// Execute Elephant Lab code to create Neo Tree / Information and Plots
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
 			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
-			console.log("Jupyphant: Kernel state and UI plots initialized.");
+			console.log("Elephant Lab: Kernel state and UI plots initialized.");
 		} catch (error) {
-			console.error("Jupyphant: FAILED to initialize kernel state:", error);
+			console.error("Elephant Lab: FAILED to initialize kernel state:", error);
 		}
 	}
-	// Command on which to execute Jupyphant Extension
+	// Command on which to execute Elephant Lab
 	public createCommand(command: string) {
 		/**
 		  * Creates a hardcoded command to start this extension
 		  * And places it as a button in the CommandPalette on the left-hand side
 		  * of the JupyterLab interface.
-		  * Clicking 'Jupyphant' in the Commands tab on the left activates the Jupyphant extension
+		  * Clicking 'Elephant Lab' in the Commands tab on the left activates the Elephant Lab extension
 		  */
 		// Add the specified command to the commands known by JupyterLab
 		this.app.commands.addCommand(command, {
-			label: 'Jupyphant',
+			label: 'Elephant Lab',
 			execute: () => {
 				// The newTab function that contains the main code is called from the command
 				this.newTab();
@@ -154,47 +154,47 @@ class JupyphantExtension {
 	} // end of createCommand()
 
 
-	// Function to react on command 'Jupyphant'
+	// Function to react on command 'Elephant Lab'
 	// Called only after the command is clicked from CommandPalette
 	public async newTab(force: boolean = false) {
 		/**
 	  * This function actually starts the extension itself.
-	  * It creates a new Jupyphant tab that is connected to the notebook active when this function is executed
+	  * It creates a new Elephant Lab tab that is connected to the notebook active when this function is executed
 	  * and therefore displays data from this notebook and reacts to its cell executions.
-	  * This function is executed when the command 'Jupyphant' in the CommandPalette is clicked by the user.
-	  * Consequently, the notebook that should be visualized using Jupyphant needs to be opened and its tab
+	  * This function is executed when the command 'Elephant Lab' in the CommandPalette is clicked by the user.
+	  * Consequently, the notebook that should be visualized using Elephant Lab needs to be opened and its tab
 	  * needs to be in the foreground when the command is clicked.
 	  */
 		// Wait for all notebooks to be restored in case newTab is executed early
-		// This is probably important for restoring the Jupyphant tabs (not yet implemented)
+		// This is probably important for restoring the Elephant Lab tabs (not yet implemented)
 
-		console.log("Jupyphant: newTab() started.");
+		console.log("Elephant Lab: newTab() started.");
 		await this.notebook_tracker.restored;
-		console.log("Jupyphant: Notebook tracker restored.");
+		console.log("Elephant Lab: Notebook tracker restored.");
 
-		// Only execute Jupyphant Extension if a Notebook is currently open
+		// Only execute Elephant Lab if a Notebook is currently open
 		const newPanel = this.notebook_tracker.currentWidget;
 		if (!newPanel) {
-			console.error("Jupyphant: No active notebook found.");
+			console.error("Elephant Lab: No active notebook found.");
 			return;
 		}
 		this.notebook_tracker.forEach(notebookWidget => {
-			if (notebookWidget.title.className.includes('jupyphant-active-notebook')) {
+			if (notebookWidget.title.className.includes('elephant-lab-active-notebook')) {
 				notebookWidget.title.className = notebookWidget.title.className
-					.replace('jupyphant-active-notebook', '')
+					.replace('elephant-lab-active-notebook', '')
 					.trim();
 			}
 		});
 
-		newPanel.title.className += ' jupyphant-active-notebook';
+		newPanel.title.className += ' elephant-lab-active-notebook';
 
 		if (!force && this.widget.isAttached) {
-			console.log("Jupyphant: Existing widgets found, activating them.");
+			console.log("Elephant Lab: Existing widgets found, activating them.");
 			this.app.shell.activateById(this.widget.id);
 			return;
 		}
 
-		console.log("Jupyphant: Creating new Jupyphant instance.");
+		console.log("Elephant Lab: Creating new Elephant Lab instance.");
 
 		// Clear the panel before adding new widgets
 		const oldWidgets = Array.from(this.widget.widgets());
@@ -320,7 +320,7 @@ class JupyphantExtension {
 
 				const filterJson = filterDataRaw.replace(/&quot;/g, '"');
 
-				const code = `jupyphant_entity.jupyphant_tree.select_by_stat('${filterType}', ${filterJson})`;
+				const code = `elephant_lab_entity.elephant_lab_tree.select_by_stat('${filterType}', ${filterJson})`;
 				const result = await this.kernelBridge!.executeCode(code, null, false);
 				this._applyTreeSelection(result);
 			}
@@ -333,7 +333,7 @@ class JupyphantExtension {
 			if (exec_data.notebook !== newPanel.content) {
 				return;
 			}
-			console.log("Jupyphant: Cell executed, updating plots.");
+			console.log("Elephant Lab: Cell executed, updating plots.");
 
 			if (this._updateTimer) {
 				window.clearTimeout(this._updateTimer);
@@ -348,7 +348,7 @@ class JupyphantExtension {
 
 		// Listener for changed Kernel, waits for Kernel to be ready
 		newPanel.sessionContext.kernelChanged.connect(async (sender, args) => {
-			console.log("Jupyphant: Kernel has changed (restarted).");
+			console.log("Elephant Lab: Kernel has changed (restarted).");
 			const newKernel = args.newValue;
 			if (newKernel) {
 				const waitForIdle = new Promise<void>(resolve => {
@@ -365,11 +365,11 @@ class JupyphantExtension {
 					newKernel.statusChanged.connect(listener);
 				});
 				await waitForIdle;
-				console.log("Jupyphant: New kernel is idle and ready. Re-initializing state.");
+				console.log("Elephant Lab: New kernel is idle and ready. Re-initializing state.");
 			}
 		});
 
-		console.log("Jupyphant: Event listeners registered.");
+		console.log("Elephant Lab: Event listeners registered.");
 	}
 
 	private _applyTreeSelection(result: any) {
@@ -426,17 +426,17 @@ class JupyphantExtension {
 		  * Initialize a new tab for this extension.
 		  */
 
-		this.widget.addClass('my-jupyphantWidget');
+		this.widget.addClass('my-elephant-lab-widget');
 		// Set HTML/DOM id
-		this.widget.id = 'jupyphant-right-panel';
+		this.widget.id = 'elephant-lab-right-panel';
 		// Title of the tab
-		this.widget.title.label = 'Jupyphant';
+		this.widget.title.label = 'Elephant Lab';
 		this.widget.title.iconClass = 'elephant-trunk-icon';
 		// Adds the x to close the tab?
 		this.widget.title.closable = true;
 		const session = this.notebook_tracker.currentWidget?.sessionContext;
 		if (!session) {
-			console.error("Jupyphant: No notebook session found during UI initialization!");
+			console.error("Elephant Lab: No notebook session found during UI initialization!");
 			return;
 		}
 
@@ -445,14 +445,14 @@ class JupyphantExtension {
 	} // end of initializeTab()
 
 	private getFilterStates(): Record<string, boolean> {
-		const saved = sessionStorage.getItem('jupyphant-filter-states');
+		const saved = sessionStorage.getItem('elephant-lab-filter-states');
 		return saved ? JSON.parse(saved) : {};
 	}
 
 	private saveFilterState(key: string, isChecked: boolean) {
 		const states = this.getFilterStates();
 		states[key] = isChecked;
-		sessionStorage.setItem('jupyphant-filter-states', JSON.stringify(states));
+		sessionStorage.setItem('elephant-lab-filter-states', JSON.stringify(states));
 	}
 
 	public createTopBar(session: ISessionContext) {
@@ -464,7 +464,7 @@ class JupyphantExtension {
 
 		const switchNotebookButton = document.createElement('button');
 		switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${currentFilename}`;
-		switchNotebookButton.title = 'Switch Jupyphant to current active notebook';
+		switchNotebookButton.title = 'Switch Elephant Lab to current active notebook';
 		switchNotebookButton.className = 'workflow-button workflow-button-io';
 		switchNotebookButton.style.marginRight = '5px';
 		switchNotebookButton.onclick = () => {
@@ -479,8 +479,8 @@ class JupyphantExtension {
 		});
 
 		const infoButton = document.createElement('button');
-		infoButton.innerHTML = '<i class="fa fa-info-circle" aria-hidden="true"></i> Jupyphant';
-		infoButton.title = 'About Jupyphant';
+		infoButton.innerHTML = '<i class="fa fa-info-circle" aria-hidden="true"></i> Elephant Lab';
+		infoButton.title = 'About Elephant Lab';
 		infoButton.className = 'workflow-button workflow-button-io';
 		infoButton.onclick = async () => {
 			const result = await this.kernelBridge!.executeCode(PythonCodeKey.Version);
@@ -488,16 +488,16 @@ class JupyphantExtension {
 			const body = document.createElement('div');
 			body.style.textAlign = 'center';
 			body.innerHTML = `
-				<p>You are using <a href="https://github.com/INM-6/jupyphant">Jupyphant</a> ${result?.outputs[0].text}<br>
+				<p>You are using <a href="https://github.com/INM-6/elephant-lab">Elephant Lab</a> ${result?.outputs[0].text}<br>
 				This version is a public preview version. <br>Further Analysis functions will be added in later releases.</p>
 
 				<p>Tobias Michels<br>Jan Nolten<br>Maximilian Kramer<br>Björn Müller<br>Michael Denker<br></p>
 				<p><a href="https://www.fz-juelich.de/en/ias/ias-6">
 				Institute for Advanced Simulation (IAS-6), <br>
 				Computational and Systems Neuroscience, Forschungszentrum Jülich GmbH</a></p><br>
-				<img src="${jupyphantLogo}" alt="Jupyphant Logo" style="display: block; width: 500px; margin: 10px auto 0 auto;">`;
+				<img src="${elephantLabLogo}" alt="Elephant Lab Logo" style="display: block; width: 500px; margin: 10px auto 0 auto;">`;
 			showDialog({
-				title: 'About Jupyphant',
+				title: 'About Elephant Lab',
 				body: new Widget({ node: body }),
 				buttons: [Dialog.okButton()]
 			});
@@ -512,7 +512,7 @@ class JupyphantExtension {
 
 		this.topBar = new Widget();
 		this.topBar.node.appendChild(container);
-		this.topBar.id = 'jupyphant-top-bar';
+		this.topBar.id = 'elephant-lab-top-bar';
 		this.topBar.node.style.marginLeft = 'auto';
 
 		this.app.shell.add(this.topBar, 'top', { rank: 1000 });
@@ -593,9 +593,34 @@ class JupyphantExtension {
 		loadNeoFileButton.title = 'Create a neoIO for given Path';
 		loadNeoFileButton.className = 'workflow-button workflow-button-io';
 		loadNeoFileButton.onclick = () => {
-			FileDialog.getOpenFiles({
+			const dialogPromise = FileDialog.getOpenFiles({
 				manager: this.docManager
-			}).then(result => {
+			});
+
+			// Prevent double-click from triggering JupyterLab's file-open handler
+			let dialogNode: Element | null = null;
+			const stopDblClick = (e: Event) => {
+				const item = (e.target as Element).closest('.jp-DirListing-item');
+				// Allow double-click on folders so navigation still works
+				if (item?.getAttribute('data-isdir') === 'true') {
+					return;
+				}
+				e.stopImmediatePropagation();
+				e.stopPropagation();
+				const acceptBtn = dialogNode?.querySelector('.jp-Dialog-button.jp-mod-accept') as HTMLElement | null;
+				acceptBtn?.click();
+			};
+			setTimeout(() => {
+				dialogNode = document.querySelector('.jp-Dialog');
+				if (dialogNode) {
+					dialogNode.addEventListener('dblclick', stopDblClick, true);
+				}
+			}, 0);
+
+			dialogPromise.then(result => {
+				if (dialogNode) {
+					dialogNode.removeEventListener('dblclick', stopDblClick, true);
+				}
 				if (result.button.accept && result.value && result.value.length > 0) {
 					const selectedFile = result.value[0];
 					let filePath = selectedFile.path;
@@ -722,7 +747,7 @@ class JupyphantExtension {
 			if (!currentNotebook || currentNotebook.sessionContext.path !== session.path) {
 				showDialog({
 					title: 'Incorrect Notebook',
-					body: 'Jupyphant is not connected to this notebook. Please switch to the notebook Jupyphant is attached to.',
+					body: 'Elephant Lab is not connected to this notebook. Please switch to the notebook Elephant Lab is attached to.',
 					buttons: [Dialog.okButton()]
 				});
 				return;
@@ -736,7 +761,7 @@ class JupyphantExtension {
 					const data = JSON.parse(output.text);
 
 					if (data.error) {
-						console.error("Jupyphant: Error creating variables from selection:", data.error);
+						console.error("Elephant Lab: Error creating variables from selection:", data.error);
 						if (data.traceback) {
 							console.error(data.traceback);
 						}
@@ -749,9 +774,9 @@ class JupyphantExtension {
 							const activeCell = notebookPanel.content.activeCell;
 							if (activeCell && activeCell.editor) {
 								activeCell.editor.replaceSelection!(data.code_to_insert);
-								console.log(`Jupyphant: Inserted code at cursor.`);
+								console.log(`Elephant Lab: Inserted code at cursor.`);
 							} else {
-								console.log(`Jupyphant: No active cell or editor found. Could not insert code.`);
+								console.log(`Elephant Lab: No active cell or editor found. Could not insert code.`);
 							}
 						}
 					}
@@ -1062,10 +1087,10 @@ class JupyphantExtension {
 		}
 		return outarea;
 	}
-}; // end of JupyphantWidget class
+}; // end of ElephantLabExtension class
 
 /*
-* Activate the JupyphantWidget extension
+* Activate the ElephantLabExtension extension
 */
 function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
 	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer, docManager: IDocumentManager) {
@@ -1080,7 +1105,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	 */
 
 
-	console.log('JupyterLab extension Jupyphant is activated! (OOP)');
+	console.log('JupyterLab extension Elephant Lab is activated! (OOP)');
 
 	//Track and restore extension's tabs, needs to work together with restoration of main area
 	// When Main Area is restored, it needs to get all available Notebooks and Consoles
@@ -1088,29 +1113,29 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	// Tracker has a namespace where everything is saved;
 	// this namespace needs to have the same name as in the last session
 	// to restore the last session
-	let widget_tracker = new WidgetTracker<Widget>({ namespace: 'jupyphant_namespace' });
+	let widget_tracker = new WidgetTracker<Widget>({ namespace: 'elephant_lab_namespace' });
 
-	// create instance of JupyphantExtension
-	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager);
+	// create instance of ElephantLabExtension
+	const jupy_ext = new ElephantLabExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager);
 
 	// Add an application command: this is placed into CommandPalette and by clicking on the corresponding button
-	// this command will open the jupyphant tab
-	const command: string = 'jupyphant:open';
+	// this command will open the elephant lab tab
+	const command: string = 'elephant-lab:open';
 	jupy_ext.createCommand(command);
 
 	// Restore from corresponding namespace
 	restorer.restore(widget_tracker, {
 		command,
-		name: widget => 'jupyphant:' + widget.id
+		name: widget => 'elephant-lab:' + widget.id
 	});
 
 };
 
 /*
-* Initialization data for the Jupyphant extension
+* Initialization data for the Elephant Lab extension
 */
 const extension: JupyterFrontEndPlugin<void> = {
-	id: 'jupyphant:extension',
+	id: 'elephant-lab:extension',
 	autoStart: true,
 	// What to pass to the activate function
 	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager],

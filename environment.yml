@@ -1,4 +1,4 @@
-name: Jupyphant
+name: elephant-lab
 channels:
   - conda-forge
   - defaults

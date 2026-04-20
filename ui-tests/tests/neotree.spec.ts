@@ -1,20 +1,20 @@
 import { expect, test, Page } from '@playwright/test';
 
-async function ensureJupyphantActive(page: Page) {
-  const jupyphantTab = page.getByRole('tab', { name: 'Jupyphant', exact: true });
-  const rightPanel = page.locator('#jupyphant-right-panel');
+async function ensureElephantLabActive(page: Page) {
+  const elephantLabTab = page.getByRole('tab', { name: 'Elephant Lab', exact: true });
+  const rightPanel = page.locator('#elephant-lab-right-panel');
 
   await expect(async () => {
-    if (await jupyphantTab.getAttribute('aria-selected') !== 'true') {
-      await jupyphantTab.click();
+    if (await elephantLabTab.getAttribute('aria-selected') !== 'true') {
+      await elephantLabTab.click();
     }
-    await expect(jupyphantTab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 });
+    await expect(elephantLabTab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 });
     await expect(rightPanel).not.toHaveClass(/lm-mod-hidden/, { timeout: 1000 });
 
   }).toPass({ timeout: 10000 });
 }
 
-test.describe('Jupyphant: Additional Neo Tree & Data Tests', () => {
+test.describe('Elephant Lab: Additional Neo Tree & Data Tests', () => {
   test.setTimeout(120000);
 
     test.beforeEach(async ({ page }) => {
@@ -120,14 +120,14 @@ print("Created:", test_block.name)
         await expect(outputArea).toContainText('Created: TestBlock', { timeout: 2000 });
       }).toPass({ timeout: 30000 });
   
-      // 5. Activate Jupyphant Sidebar
+      // 5. Activate Elephant Lab Sidebar
       await page.evaluate(async () => {
         const commands = window.jupyterapp.commands.listCommands();
-        const cmdId = commands.find(id => id.toLowerCase().includes('jupyphant'));
+        const cmdId = commands.find(id => id.toLowerCase().includes('elephant-lab'));
         if (cmdId) await window.jupyterapp.commands.execute(cmdId);
       });
   
-      await ensureJupyphantActive(page);
+      await ensureElephantLabActive(page);
   
       // 6. Ensure tree is populated before handing off to the tests
       const treeWidget = page.getByRole('tree');
@@ -139,7 +139,7 @@ print("Created:", test_block.name)
 
   // --- TEST: Select multiple nodes and check Overview ---
   test('should display multi-selection SpikeTrain Overview in the Details tab', async ({ page }) => {
-  await ensureJupyphantActive(page);
+  await ensureElephantLabActive(page);
 
   // Expand all nodes to ensure the spiketrains are visible
   const expandButton = page.locator('[title="Expand all containers"]');
@@ -148,7 +148,7 @@ print("Created:", test_block.name)
     await page.waitForTimeout(500);
   }
 
-  const rightPanel = page.locator('#jupyphant-right-panel');
+  const rightPanel = page.locator('#elephant-lab-right-panel');
   const treeContainer = rightPanel.locator('div[role="tree"]');
   
   // match items with text "my_spiketrain" to get both spiketrains
@@ -172,8 +172,8 @@ print("Created:", test_block.name)
   await page.waitForTimeout(300);
   
   // Switch to Details tab
-  const detailsTabLabel = page.locator('#jupyphant-right-panel .lm-TabBar-tabLabel', { hasText: 'Details' }).first();
-  const tabpanel = page.locator('#jupyphant-right-panel');
+  const detailsTabLabel = page.locator('#elephant-lab-right-panel .lm-TabBar-tabLabel', { hasText: 'Details' }).first();
+  const tabpanel = page.locator('#elephant-lab-right-panel');
 
   if (await detailsTabLabel.getAttribute('aria-selected') !== 'true') {
       await detailsTabLabel.click();
@@ -235,7 +235,7 @@ print("Created 10 epochs")
     // Execute and measure tree update performance
     const startTime = Date.now();
     
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
     const treeWidget = page.getByRole('tree');
     const epochNodes = treeWidget.getByRole('treeitem').filter({ hasText: /epoch_\d+/ });
     
@@ -249,7 +249,7 @@ print("Created 10 epochs")
 
   // --- TEST: Refresh tree when data changes ---
   test('should update tree when notebook variables are modified', async ({ page }) => {
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
     
     const treeWidget = page.getByRole('tree');
     let blockNode = treeWidget.getByRole('treeitem').filter({ hasText: 'TestBlock' });
@@ -296,7 +296,7 @@ print("Created 10 epochs")
     await expect(lastCell.locator('.jp-OutputArea-output')).toContainText('Deleted: TestBlock', { timeout: 20000 });
 
     // 2. Verify Deletion in Sidebar
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
     const treeNode = page.getByRole('tree').getByRole('treeitem').filter({ hasText: 'TestBlock' });
     await expect(treeNode).toBeHidden({ timeout: 15000 });
     
@@ -322,12 +322,12 @@ print("Created 10 epochs")
         { name: 'Rectangularregionofinterest' }
     ]
 
-    await ensureJupyphantActive(page);
+    await ensureElephantLabActive(page);
 
     for (const filter of neoFilters) {
         await test.step(`Toggle ${filter.name} filter`, async () => {
             
-            await ensureJupyphantActive(page);
+            await ensureElephantLabActive(page);
             const filterLabel = page.locator(`label[title="Hide/Show ${filter.name}(s)"]`);
             await filterLabel.click();
             await expect(filterLabel).toHaveAttribute('data-checked', 'false');

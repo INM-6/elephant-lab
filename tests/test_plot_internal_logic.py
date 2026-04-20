@@ -4,10 +4,10 @@ import quantities as pq
 import neo
 import re
 from matplotlib.colors import to_rgb
-from jupyphant.PlotlyGraphFigure import *
-from jupyphant.PlotlyGraphContainer import *
-from jupyphant.PlotlyGraphDataTypes import SpikeTrainRasterPlot
-from jupyphant.PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
+from elephant_lab.PlotlyGraphFigure import *
+from elephant_lab.PlotlyGraphContainer import *
+from elephant_lab.PlotlyGraphDataTypes import SpikeTrainRasterPlot
+from elephant_lab.PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
 from ipywidgets import FloatRangeSlider
 
 def parse_plotly_color(color_str):
@@ -48,20 +48,15 @@ def test_plotlyUtils_convert_to_other_units():
     assert np.isclose(PlotlyUtils.convert_to_other_units(1000, pq.ms, pq.s), 1)
 
 def test_height(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
-    assert none_plotlyGraphFigure._get_height() == 600
-    assert three_spikeTrainRasterPlots._get_height() == 800
-    three_spikeTrainRasterPlots.overlap()
-    assert three_spikeTrainRasterPlots._get_height() == 600
-    three_spikeTrainRasterPlots.stack()
-    assert three_spikeTrainRasterPlots._get_height() == 800
+    assert none_plotlyGraphFigure.fig.layout.height == 600
+    assert three_spikeTrainRasterPlots.fig.layout.height == 800
+    spikeTrainRasterPlot1 = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
+    spikeTrainRasterPlot2 = SpikeTrainRasterPlot(neo.SpikeTrain([0.5,1.5,2.5,3.5,6.5] * pq.s, t_stop=10 * pq.s))
+    spikeTrainRasterPlot3 = SpikeTrainRasterPlot(neo.SpikeTrain([0.25,1.25,2.25,3.25,6.25] * pq.s, t_stop=10 * pq.s))
+    assert PlotlyGraphFigure([spikeTrainRasterPlot1, spikeTrainRasterPlot2, spikeTrainRasterPlot3], overlap_on_compress=False, overlapping=True).fig.layout.height == 600
 
 def test_None_data(none_plotlyGraphFigure):
     assert isinstance(none_plotlyGraphFigure.data, PlotlyGraphDataTypeList)
-    # test if any functionlaity raises an error if None was passed in as data
-    none_plotlyGraphFigure.overlap()
-    none_plotlyGraphFigure.overlap()
-    none_plotlyGraphFigure.stack()
-    none_plotlyGraphFigure.overlap()
     assert none_plotlyGraphFigure.fig is not None
     assert none_plotlyGraphFigure.data.common_units_y is None
     assert np.allclose(none_plotlyGraphFigure.getXRange(), [0,0], atol=1e-6, rtol=1e-3)
@@ -69,19 +64,9 @@ def test_None_data(none_plotlyGraphFigure):
 def test_is_not_Downscaled(none_plotlyGraphFigure):
     assert not none_plotlyGraphFigure.isDownscaled()
 
-def test_update_jupyterlab_theme(none_plotlyGraphFigure):
-    none_plotlyGraphFigure.update_jupyterlab_theme('dark_theme')
-    paper_color = parse_plotly_color(none_plotlyGraphFigure.fig.layout.template.layout.paper_bgcolor)
-    assert paper_color == (17, 17, 17)
-    none_plotlyGraphFigure.update_jupyterlab_theme('white_theme')
-    paper_color = parse_plotly_color(none_plotlyGraphFigure.fig.layout.template.layout.paper_bgcolor)
-    assert paper_color == (255, 255, 255)
-
 def test_legend_visibility(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
-    assert none_plotlyGraphFigure.fig.layout.showlegend == None
+    assert none_plotlyGraphFigure.fig.layout.showlegend == False
     assert three_spikeTrainRasterPlots.fig.layout.showlegend == False
-    three_spikeTrainRasterPlots.overlap()
-    assert three_spikeTrainRasterPlots.fig.layout.showlegend == True
 
 def test_ticklabels(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
     assert none_plotlyGraphFigure.fig.layout.xaxis.showticklabels == None
@@ -90,7 +75,6 @@ def test_ticklabels(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
 def test_sliders(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
     assert none_plotlyGraphFigure.fig.layout.xaxis.rangeslider != None
     assert three_spikeTrainRasterPlots.fig.layout.xaxis3.rangeslider != None
-    assert isinstance(none_plotlyGraphFigure.y_slider, FloatRangeSlider)
 
 def test_simple_spiketrain_coords():
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
@@ -165,26 +149,18 @@ def test_offset_traces_on_compress():
     assert np.allclose(plotlyGraphFigure1.fig.data[19].y, plotlyGraphFigure3.fig.data[19].y)
     assert not np.allclose(plotlyGraphFigure1.fig.data[19].y, plotlyGraphFigure2.fig.data[19].y)
 
-def test_overlap_and_stack(three_spikeTrainRasterPlots):
-    assert not np.allclose(three_spikeTrainRasterPlots.fig.layout.yaxis1.domain, three_spikeTrainRasterPlots.fig.layout.yaxis2.domain)
-    three_spikeTrainRasterPlots.overlap()
-    assert np.allclose(three_spikeTrainRasterPlots.fig.layout.yaxis1.domain, three_spikeTrainRasterPlots.fig.layout.yaxis2.domain)
-    three_spikeTrainRasterPlots.stack()
-    assert not np.allclose(three_spikeTrainRasterPlots.fig.layout.yaxis1.domain, three_spikeTrainRasterPlots.fig.layout.yaxis2.domain)
-
 def test_annotations():
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
-    plotlyGraphAnnotations = PlotlyGraphAnnotations(np.array([1,2,3]), np.array(["Test"] * 3), np.array([pq.s] * 3))
-    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_data=plotlyGraphAnnotations)
-    assert len(plotlyGraphFigure.fig.layout.shapes) == 3
-    assert len(plotlyGraphFigure.fig.layout.annotations) == 6
-
-def test_annotation_intervals():
-    spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
-    plotlyGraphAnnotationIntervals = PlotlyGraphAnnotationIntervals(np.array([1,2,3]),np.array([1.5,2.2,4]), np.array(["Test"] * 3), np.array([pq.s] * 3))
-    plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_interval_data=plotlyGraphAnnotationIntervals)
-    assert len(plotlyGraphFigure.fig.layout.shapes) == 3
-    assert len(plotlyGraphFigure.fig.layout.annotations) == 9
+    plotlyGraphAnnotations = PlotlyGraphAnnotations(np.array([1,2,3]), np.array(["Test"] * 3), np.array([0] * 3), [pq.s])
+    plotlyGraphAnnotationIntervals = PlotlyGraphAnnotationIntervals(np.array([1,2,3]),np.array([1.5,2.2,4]), np.array(["Test"] * 3), np.array([0] * 3), [pq.s])
+    plotlyGraphFigureNoAnnotations = PlotlyGraphFigure(spikeTrainRasterPlot)
+    assert len(plotlyGraphFigureNoAnnotations.fig.data) == 1
+    plotlyGraphFigureOnlyAnnotations = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_data=plotlyGraphAnnotations)
+    assert len(plotlyGraphFigureOnlyAnnotations.fig.data) == 2
+    plotlyGraphFigureOnlyAnnotationsInterval = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_interval_data=plotlyGraphAnnotationIntervals)
+    assert len(plotlyGraphFigureOnlyAnnotationsInterval.fig.data) == 2
+    plotlyGraphFigureBothAnnotations = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_data=plotlyGraphAnnotations, annotation_interval_data=plotlyGraphAnnotationIntervals)
+    assert len(plotlyGraphFigureBothAnnotations.fig.data) == 2
 
 def test_image_sequence():
     # Parameters
@@ -215,11 +191,10 @@ def test_image_sequence():
         description="Moving diagonal wave pattern"
     )
     plotly_fig = PlotlyImageSequenceFigure(image_sequence)
-    assert len(plotly_fig.figs) == 1
 
-    fig = plotly_fig.figs[0]
+    fig = plotly_fig.fig
 
     assert len(fig.frames) == num_frames
     assert fig.data[0].z.shape == (height, width)
-    assert fig.frames[0].name == "0"
-    assert fig.frames[-1].name == str(num_frames - 1)
+    assert fig.frames[0].name == "0_0"
+    assert fig.frames[-1].name == f"0_{num_frames - 1}"

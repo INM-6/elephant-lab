@@ -1,5 +1,5 @@
 {
-  "name": "jupyphant",
+  "name": "elephant-lab",
   "version": "0.1.0",
   "description": "A JupyterLab extension for interactive exploration, analysis and visualization of electrophysiological data.",
   "keywords": [
@@ -7,21 +7,24 @@
     "jupyterlab",
     "jupyterlab-extension"
   ],
-  "homepage": "https://github.com/INM-6/jupyphant",
+  "homepage": "https://github.com/INM-6/elephant-lab",
   "bugs": {
-    "url": "https://github.com/INM-6/jupyphant/issues"
+    "url": "https://github.com/INM-6/elephant-lab/issues"
   },
   "license": "BSD-3-Clause",
-  "author": {
-    "name": "Maximilian Kramer",
-    "email": "m.kramer@fz-juelich.de"
-  },
+  "contributors": [
+    {"name": "Tobias Michels"},
+    {"name": "Jan Nolten"},
+    {"name": "Maximilian Kramer"},
+    {"name": "Björn Müller"},
+    {"name": "Michael Denker"}
+  ],
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "style": "style/index.css",
   "repository": {
     "type": "git",
-    "url": "https://github.com/INM-6/jupyphant.git"
+    "url": "https://github.com/INM-6/elephant-lab.git"
   },
   "scripts": {
     "build": "jlpm build:lib && jlpm build:labextension:dev",
@@ -32,7 +35,7 @@
     "clean": "jlpm clean:lib",
     "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
     "clean:lintcache": "rimraf .eslintcache .stylelintcache",
-    "clean:labextension": "rimraf jupyphant/labextension",
+    "clean:labextension": "rimraf elephant_lab/labextension",
     "clean:all": "jlpm clean:lib && jlpm clean:labextension && jlpm clean:lintcache",
     "eslint": "jlpm eslint:check --fix",
     "eslint:check": "eslint . --cache --ext .ts,.tsx",
@@ -85,7 +88,7 @@
   },
   "jupyterlab": {
     "extension": true,
-    "outputDir": "jupyphant/labextension",
+    "outputDir": "elephant_lab/labextension",
     "sharedPackages": {
       "@jupyterlab/application": {
         "bundled": false,

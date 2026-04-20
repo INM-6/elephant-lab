@@ -22,8 +22,8 @@ export const COLOR_MAP: Record<string, string> = {
 };
 
 export const COLORS: Record<string, string> = {
-    "jupyphant_base": COLOR_MAP["Orange"],
-    "jupyphant_error": COLOR_MAP["Raspberry"],
-    "jupyphant_success": COLOR_MAP["Sage Green"],
-    "jupyphant_info": COLOR_MAP["Bright Blue"],
+    "elephant_lab_base": COLOR_MAP["Orange"],
+    "elephant_lab_error": COLOR_MAP["Raspberry"],
+    "elephant_lab_success": COLOR_MAP["Sage Green"],
+    "elephant_lab_info": COLOR_MAP["Bright Blue"],
 };

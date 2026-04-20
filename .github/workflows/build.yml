@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: main
+    branches: master
   pull_request:
     branches: '*'
 
@@ -12,13 +12,13 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Base Setup
       uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
 
     - name: Install dependencies
-      run: python -m pip install -U jupyterlab~=3.1
+      run: python -m pip install -U jupyterlab~=4.1
 
     - name: Lint the extension
       run: |
@@ -37,7 +37,7 @@ jobs:
         python -m pip install .[test]
 
         jupyter labextension list
-        jupyter labextension list 2>&1 | grep -ie "jupyphant.*OK"
+        jupyter labextension list 2>&1 | grep -ie "elephant-lab.*OK"
         python -m jupyterlab.browser_check
 
     - name: Package the extension
@@ -46,13 +46,13 @@ jobs:
 
         pip install build
         python -m build
-        pip uninstall -y "jupyphant" jupyterlab
+        pip uninstall -y "elephant-lab" jupyterlab
 
     - name: Upload extension packages
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: extension-artifacts
-        path: dist/jupyphant*
+        path: dist/elephant-lab*
         if-no-files-found: error
 
   test_isolated:
@@ -61,13 +61,13 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: Install Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.12'
         architecture: 'x64'
-    - uses: actions/download-artifact@v2
+    - uses: actions/download-artifact@v4
       with:
         name: extension-artifacts
     - name: Install and Test
@@ -77,11 +77,11 @@ jobs:
         sudo rm -rf $(which node)
         sudo rm -rf $(which node)
 
-        pip install "jupyterlab~=3.1" jupyphant*.whl
+        pip install "jupyterlab~=4.1" elephant-lab*.whl
 
 
         jupyter labextension list
-        jupyter labextension list 2>&1 | grep -ie "jupyphant.*OK"
+        jupyter labextension list 2>&1 | grep -ie "elephant-lab.*OK"
         python -m jupyterlab.browser_check --no-chrome-test
 
   integration-tests:
@@ -94,20 +94,20 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Base Setup
       uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
 
     - name: Download extension package
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v4
       with:
         name: extension-artifacts
         
     - name: Install the extension
       run: |
         set -eux
-        python -m pip install "jupyterlab~=3.1" jupyphant*.whl
+        python -m pip install "jupyterlab~=4.1" elephant-lab*.whl
 
     - name: Install dependencies
       working-directory: ui-tests
@@ -116,7 +116,7 @@ jobs:
       run: jlpm install
 
     - name: Set up browser cache
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       with:
         path: |
           ${{ github.workspace }}/pw-browsers
@@ -133,9 +133,9 @@ jobs:
 
     - name: Upload Playwright Test report
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
-        name: jupyphant-playwright-tests
+        name: elephant-lab-playwright-tests
         path: |
           ui-tests/test-results
           ui-tests/playwright-report
