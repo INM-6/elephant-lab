@@ -63,6 +63,13 @@ class ElephantLab_info:
         if not self.elephant_lab_entity.selected_neo_objects:
             return
 
+        # When exactly one folder node is selected, show a summary of its children
+        if len(self.elephant_lab_entity.selected_neo_objects) == 1:
+            node = next(iter(self.elephant_lab_entity.selected_neo_objects))
+            if node._id.startswith('folder-'):
+                self._display(self._html_folder_node(node))
+                return
+
         selected_objects_with_node_name = [
             {
                 'obj': self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.get(node._id),
@@ -376,6 +383,23 @@ class ElephantLab_info:
             self._kv('Count', count),
         ]
         return self._section(*parts) + self._html_annotations_overview(all_annotations, count)
+
+    def _html_folder_node(self, folder_node) -> str:
+        children = [
+            self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[child._id]
+            for child in folder_node.nodes
+            if child._id in self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj
+        ]
+
+        count = len(children)
+        obj_type_name = type(children[0]).__name__ if children else '—'
+        parts = [
+            self._h3(folder_node.name),
+            self._kv('Type', obj_type_name),
+            self._kv('Items', count),
+            f'<div class="dim" style="margin-top:6px;">Double-click to inspect all {count} items</div>',
+        ]
+        return self._section(*parts)
 
     # Single object detail view
     def _html_neo_object(self, neo_obj, node_name: str) -> str:
