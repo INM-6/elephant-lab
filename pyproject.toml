@@ -22,26 +22,15 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
-"ipympl",
-"joblib",
 "ipywidgets",
-"jsonschema",
-"jupyter-packaging",
-"jupyter-client",
-"jupyter-core",
+"ipykernel",
 "jupyter-server",
 "jupyterlab",
-"jupyterlab-pygments",
-"jupyterlab-server",
-"jupyterlab-widgets",
-"nodejs",
 "numpy",
-"pip",
 "neo",
 "nixio",
 "elephant",
 "quantities",
-"traitlets",
 "plotly",
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
