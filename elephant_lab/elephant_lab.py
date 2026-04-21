@@ -74,6 +74,10 @@ class ElephantLab:
         self.elephant_lab_info: ElephantLab.ElephantLab_info = self.ElephantLab_info(self)
         self.elephant_lab_plot: ElephantLab.ElephantLab_plot = self.ElephantLab_plot(self)
 
+    def set_panel_visibility(self, explore_active: bool, details_active: bool):
+        self.elephant_lab_plot.set_explore_panel_active(explore_active)
+        self.elephant_lab_info.set_details_panel_active(details_active)
+
     def get_selected_neo_ids(self):
         selected_ids = [
             self.map_ipytree_node_id_to_neo_obj_hash[node._id]

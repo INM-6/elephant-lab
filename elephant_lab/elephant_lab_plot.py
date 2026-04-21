@@ -74,6 +74,7 @@ class ElephantLab_plot:
         ] = {}
         self.update_counter = 0
         self.comm: "ElephantLab_plot.Comm" = None
+        self._is_panel_active = False
 
         #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
         for key in self.RawPlotKey:
@@ -137,6 +138,8 @@ class ElephantLab_plot:
         ]
 
     def _raw_plot(self):
+        if not self._is_panel_active:
+            return
         neo_object_dict = None
         selection_changed = not any(v["changed"] for v in self.plots.values())
         if selection_changed:
@@ -266,6 +269,11 @@ class ElephantLab_plot:
         except Exception as e:
             if self.comm:
                 self.comm.send({"type": "error", "message": str(e)})
+
+    def set_explore_panel_active(self, is_active: bool):
+        self._is_panel_active = is_active
+        if is_active:
+            self.on_selection_changed()
 
     def create_explorer_raw_plot(self):
         self.comm = self.Comm(target_name="plot_channel")
