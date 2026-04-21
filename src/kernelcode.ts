@@ -81,8 +81,8 @@ function expandNeoTree(checked: boolean): string {
 	return `elephant_lab_entity.elephant_lab_tree.expand_neo_tree(${convert_bool_to_python_bool(checked)})`
 }
 
-function handleTreeSelection(nodeId: string, multiSelectPy: boolean) {
-	return `elephant_lab_entity.elephant_lab_tree.handle_selection('${nodeId}', ${multiSelectPy})`;
+function handleTreeSelection(nodeId: string, multiSelectPy: string, selectChildrenPy: string = 'True'): string {
+	return `elephant_lab_entity.elephant_lab_tree.handle_selection('${nodeId}', ${multiSelectPy}, ${selectChildrenPy})`;
 }
 
 function handleSelectionRange(idsJson: string) {
@@ -140,7 +140,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.ToggleNeoTreeFilter]: (...args: any[]) => toggleNeoTreeFilter(args[0]),
 	[PythonCodeKey.ExpandNeoTree]: (...args: any[]) => expandNeoTree(args[0]),
 	[PythonCodeKey.GetIOClass]: (...args: any[]) => getNeoIOClass(args[0]),
-	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1]),
+	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1], args[2]),
 	[PythonCodeKey.HandleSelectionRange]: (...args: any[]) => handleSelectionRange(args[0]),
 	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
 	[PythonCodeKey.NormalizeYValuesToggle]: (...args: any[]) => normalizeYValuesToggle(args[0]),

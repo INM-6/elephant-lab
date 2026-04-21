@@ -76,6 +76,7 @@ class ElephantLabExtension {
 	private myVisTabs: Widget[];
 	private widget: DockPanel;
 	private _updateTimer: number | null = null;
+	private _clickTimer: number | null = null;
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
 	private outarea_neo_tree: OutputArea | null;
@@ -289,23 +290,63 @@ class ElephantLabExtension {
 						}
 					}
 				} else {
-					this.outarea_neo_tree!.node
-						.querySelectorAll('.jup-row.jup-selected')
-						.forEach(el => el.classList.remove('jup-selected'));
-					row.classList.add('jup-selected');
-					const childContainer = row.nextElementSibling as HTMLElement;
-					if (childContainer?.classList.contains('jup-children')) {
-						childContainer.querySelectorAll('.jup-row[data-node-id]')
-							.forEach(el => el.classList.add('jup-selected'));
+					// Single click
+					if (this._clickTimer) {
+						window.clearTimeout(this._clickTimer);
+						this._clickTimer = null;
 					}
+					this._clickTimer = window.setTimeout(() => {
+						this._clickTimer = null;
+						this.outarea_neo_tree!.node
+							.querySelectorAll('.jup-row.jup-selected')
+							.forEach(el => el.classList.remove('jup-selected'));
+						row.classList.add('jup-selected');
+						const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'False');
+						this.kernelBridge!.executeCode(code, null, false);
+						this._lastClickedNode = nodeId;
+					}, 250);
 				}
 
-				// Notify Python
-				const multiSelectPy = isCtrl ? 'True' : 'False';
-				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, multiSelectPy);
-				this.kernelBridge!.executeCode(code, null, false);
-				this._lastClickedNode = nodeId;
+				// Notify Python for Ctrl+Click immediately
+				if (isCtrl) {
+					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True');
+					this.kernelBridge!.executeCode(code, null, false);
+					this._lastClickedNode = nodeId;
+				}
 			}
+		});
+
+		// Double-click: select parent + all children recursively
+		this.outarea_neo_tree!.node.addEventListener('dblclick', (e) => {
+			const target = e.target as HTMLElement;
+
+			if (target.closest('.jup-toggle')) return;
+
+			const row = target.closest('.jup-row[data-node-id]') as HTMLElement;
+			if (!row) return;
+
+			const nodeId = row.getAttribute('data-node-id')!;
+
+			// Cancel pending single-click action
+			if (this._clickTimer) {
+				window.clearTimeout(this._clickTimer);
+				this._clickTimer = null;
+			}
+
+			// Select parent + all children recursively
+			this.outarea_neo_tree!.node
+				.querySelectorAll('.jup-row.jup-selected')
+				.forEach(el => el.classList.remove('jup-selected'));
+			row.classList.add('jup-selected');
+			const childContainer = row.nextElementSibling as HTMLElement;
+			if (childContainer?.classList.contains('jup-children')) {
+				childContainer.querySelectorAll('.jup-row[data-node-id]')
+					.forEach(el => el.classList.add('jup-selected'));
+			}
+
+			const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'True');
+			this.kernelBridge!.executeCode(code, null, false);
+			this._lastClickedNode = nodeId;
 		});
 
 		// Click listener on the Details panel

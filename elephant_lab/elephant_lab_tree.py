@@ -305,7 +305,7 @@ class ElephantLab_tree:
 
         return html, folder_node, child_nodes
             
-    def handle_selection(self, node_id, multi_select=False):
+    def handle_selection(self, node_id, multi_select=False, select_children=True):
         """Called from TypeScript when user clicks a node."""
         if node_id not in self._node_registry:
             return
@@ -317,20 +317,20 @@ class ElephantLab_tree:
 
         if clicked_node in self.elephant_lab_entity.selected_neo_objects:
             self.elephant_lab_entity.selected_neo_objects.discard(clicked_node)
-            # deselect children too
-            def deselect_children(node):
-                for child in node.nodes:
-                    self.elephant_lab_entity.selected_neo_objects.discard(child)
-                    deselect_children(child)
-            deselect_children(clicked_node)
+            if select_children:
+                def deselect_recurse(node):
+                    for child in node.nodes:
+                        self.elephant_lab_entity.selected_neo_objects.discard(child)
+                        deselect_recurse(child)
+                deselect_recurse(clicked_node)
         else:
             self.elephant_lab_entity.selected_neo_objects.add(clicked_node)
-            # select children too
-            def select_children(node):
-                for child in node.nodes:
-                    self.elephant_lab_entity.selected_neo_objects.add(child)
-                    select_children(child)
-            select_children(clicked_node)
+            if select_children:
+                def select_recurse(node):
+                    for child in node.nodes:
+                        self.elephant_lab_entity.selected_neo_objects.add(child)
+                        select_recurse(child)
+                select_recurse(clicked_node)
 
         self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
     
