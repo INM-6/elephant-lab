@@ -771,7 +771,23 @@ class ElephantLabExtension {
 					if (data.code_to_insert) {
 						const notebookPanel = this.notebook_tracker.currentWidget;
 						if (notebookPanel) {
-							const activeCell = notebookPanel.content.activeCell;
+							const notebook = notebookPanel.content;
+
+							if (data.list_creation_code) {
+								// Insert a new code cell above the current cell containing
+								// the list creation code, so the list can be recreated
+								// after kernel restart by simply re-running that cell.
+								const originalCellIndex = notebook.activeCellIndex;
+								NotebookActions.insertAbove(notebook);
+								const newCell = notebook.activeCell;
+								if (newCell) {
+									newCell.model.sharedModel.setSource(data.list_creation_code);
+								}
+								// Move focus back to the original cell (shifted down by 1)
+								notebook.activeCellIndex = originalCellIndex + 1;
+							}
+
+							const activeCell = notebook.activeCell;
 							if (activeCell && activeCell.editor) {
 								activeCell.editor.replaceSelection!(data.code_to_insert);
 								console.log(`Elephant Lab: Inserted code at cursor.`);
