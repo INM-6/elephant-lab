@@ -268,6 +268,12 @@ class ElephantLab_plot:
                 self.comm.send({"type": "error", "message": str(e)})
 
     def create_explorer_raw_plot(self):
+        if self.comm is not None:
+            try:
+                self.comm.close()
+            except Exception:
+                pass
+            self.elephant_lab_entity.on_selected_neo_objects_changed.remove_listener(self.on_selection_changed)
         self.comm = self.Comm(target_name="plot_channel")
         self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
 
