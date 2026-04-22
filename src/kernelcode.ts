@@ -31,11 +31,13 @@ const getVars = `elephant_lab_entity.elephant_lab_util.getVars()`;
 
 const insertCode = `elephant_lab_entity.insert_selected_neo_objects()`;
 
-function setVarName(ioClass: string, filePath: string, varName: string): string {
+function setVarName(ioClass: string, filePath: string, varName: string, splitChannels: boolean = false, extraKwargs: string = ''): string {
+	const splitArg = convert_bool_to_python_bool(splitChannels);
 	if (ioClass) {
-		return `elephant_lab_entity.elephant_lab_util.setVarNameIOClass('${ioClass}','${filePath}', '${varName}')`;
+		const kwargsArg = extraKwargs ? JSON.stringify(extraKwargs) : 'None';
+		return `elephant_lab_entity.elephant_lab_util.setVarNameIOClass('${ioClass}','${filePath}', '${varName}', extra_kwargs=${kwargsArg}, split_channels=${splitArg})`;
 	} else {
-		return `elephant_lab_entity.elephant_lab_util.setVarNameNotIOClass('${filePath}', '${varName}')`;
+		return `elephant_lab_entity.elephant_lab_util.setVarNameNotIOClass('${filePath}', '${varName}', split_channels=${splitArg})`;
 	}
 }
 
@@ -130,7 +132,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.Version]: version,
 	[PythonCodeKey.GetVars]: getVars,
 	[PythonCodeKey.InsertCode]: insertCode,
-	[PythonCodeKey.SetVarName]: (...args: any[]) => setVarName(args[0], args[1], args[2]),
+	[PythonCodeKey.SetVarName]: (...args: any[]) => setVarName(args[0], args[1], args[2], args[3], args[4]),
 	[PythonCodeKey.SaveSelectedNeoObjects]: (...args: any[]) => saveSelectedNeoObjects(args[0]),
 	[PythonCodeKey.OverlapToggle]: (...args: any[]) => overlapToggle(args[0]),
 	[PythonCodeKey.ZeroBasedToggle]: (...args: any[]) => zeroBasedToggle(args[0]),

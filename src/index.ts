@@ -723,6 +723,62 @@ class ElephantLabExtension {
 						}
 
 						if (ioClass !== null) {
+							const optionsBody = document.createElement('div');
+							optionsBody.style.display = 'flex';
+							optionsBody.style.flexDirection = 'column';
+							optionsBody.style.gap = '10px';
+
+							const splitLabel = document.createElement('label');
+							splitLabel.style.display = 'flex';
+							splitLabel.style.alignItems = 'center';
+							splitLabel.style.gap = '6px';
+							const splitCheckbox = document.createElement('input');
+							splitCheckbox.type = 'checkbox';
+							splitLabel.appendChild(splitCheckbox);
+							splitLabel.appendChild(document.createTextNode('Split analog signal channels'));
+							optionsBody.appendChild(splitLabel);
+
+							if (ioClass) {
+								const kwargsLabel = document.createElement('label');
+								kwargsLabel.textContent = 'Extra IO kwargs (JSON):';
+								kwargsLabel.style.display = 'block';
+								const kwargsInput = document.createElement('input');
+								kwargsInput.className = 'jp-input';
+								kwargsInput.placeholder = 'e.g. {"nsx_override": "ns6"}';
+								kwargsInput.style.width = '100%';
+								kwargsInput.dataset.role = 'extra-kwargs';
+								optionsBody.appendChild(kwargsLabel);
+								optionsBody.appendChild(kwargsInput);
+							}
+
+							const optionsResult = await showDialog({
+								title: 'Loading options',
+								body: new Widget({ node: optionsBody }),
+								buttons: [Dialog.cancelButton(), Dialog.okButton({ label: 'Load' })],
+								hasClose: true
+							});
+
+							if (!optionsResult.button.accept) {
+								return;
+							}
+
+							const splitChannels = splitCheckbox.checked;
+							const kwargsEl = optionsBody.querySelector('[data-role="extra-kwargs"]') as HTMLInputElement | null;
+							const extraKwargs = kwargsEl?.value.trim() ?? '';
+
+							if (extraKwargs) {
+								try {
+									JSON.parse(extraKwargs);
+								} catch (_) {
+									showDialog({
+										title: 'Invalid JSON',
+										body: 'Extra IO kwargs must be valid JSON, e.g. {"nsx_override": "ns6"}.',
+										buttons: [Dialog.okButton()]
+									});
+									return;
+								}
+							}
+
 							const varsResult = await this.kernelBridge!.executeCode(PythonCodeKey.GetVars, this.outarea_neo_tree!, false);
 							let allVars: string[] = [];
 							if (varsResult && varsResult.outputs.length > 0) {
@@ -743,7 +799,7 @@ class ElephantLabExtension {
 								varName = `loaded_data_${counter}`;
 							}
 
-							let code = getPythonCode(PythonCodeKey.SetVarName, ioClass, filePath, varName);
+							let code = getPythonCode(PythonCodeKey.SetVarName, ioClass, filePath, varName, splitChannels, extraKwargs);
 							await this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 							await this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 						} else if (dialogResult.button.label === 'Automatic') {
