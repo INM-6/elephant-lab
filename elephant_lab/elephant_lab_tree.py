@@ -337,7 +337,7 @@ class ElephantLab_tree:
     # First collect all selected nodes, then fire the event only once
     # this prevents continous analyzing and plotting for multiple node selection
     # used when Shift+Clicking 
-    def handle_selection_range(self, node_ids: list):
+    def handle_selection_range(self, node_ids: list, with_children: bool = False):
         """Selects a range of nodes and fires the event only once at the end."""
         self.elephant_lab_entity.selected_neo_objects.clear()
         
@@ -346,11 +346,12 @@ class ElephantLab_tree:
                 continue
             node = self._node_registry[node_id]
             self.elephant_lab_entity.selected_neo_objects.add(node)
-            def select_children(n):
-                for child in n.nodes:
-                    self.elephant_lab_entity.selected_neo_objects.add(child)
-                    select_children(child)
-            select_children(node)
+            if with_children:
+                def select_recurse(n):
+                    for child in n.nodes:
+                        self.elephant_lab_entity.selected_neo_objects.add(child)
+                        select_recurse(child)
+                select_recurse(node)
 
         # Fire only once after all nodes are selected
         self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
