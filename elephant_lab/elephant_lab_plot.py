@@ -137,11 +137,10 @@ class ElephantLab_plot:
             self.NeoKey.irregularsignal,
         ]
 
-    def _raw_plot(self):
+    def _raw_plot(self, selection_changed=False):
         if not self._is_panel_active:
             return
         neo_object_dict = None
-        selection_changed = not any(v["changed"] for v in self.plots.values())
         if selection_changed:
             neo_object_dict = {
                 self.NeoKey.spiketrain: self.SpikeTrain,
@@ -265,7 +264,7 @@ class ElephantLab_plot:
 
     def on_selection_changed(self):
         try:
-            self._raw_plot()
+            self._raw_plot(selection_changed=True)
         except Exception as e:
             if self.comm:
                 self.comm.send({"type": "error", "message": str(e)})
@@ -273,9 +272,6 @@ class ElephantLab_plot:
     def set_explore_panel_active(self, is_active: bool):
         self._is_panel_active = is_active
         if is_active:
-            for plot_dict in self.plots.values():
-                plot_dict['changed'] = False
-            self.previous_neo_object_dict = {key: [] for key in self.NeoKey}
             self.on_selection_changed()
 
     def create_explorer_raw_plot(self):
