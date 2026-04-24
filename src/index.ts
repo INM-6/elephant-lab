@@ -76,6 +76,7 @@ class ElephantLabExtension {
 	private myVisTabs: Widget[];
 	private widget: DockPanel;
 	private _updateTimer: number | null = null;
+	private _clickTimer: number | null = null;
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
 	private outarea_neo_tree: OutputArea | null;
@@ -217,11 +218,11 @@ class ElephantLabExtension {
 
 
 		// Handle HTML tree interactions (expand/collapse + selection)
-		// Also handles Shift+Click multi selection in neo tree
+		// All clicks go through a 250ms timer so dblclick can cancel before any Python call fires.
 		this.outarea_neo_tree!.node.addEventListener('click', (e) => {
 			const target = e.target as HTMLElement;
 
-			// Expand/collapse -> pure JS 
+			// Expand/collapse -> pure JS
 			const toggle = target.closest('.jup-toggle') as HTMLElement;
 			if (toggle) {
 				const row = toggle.closest('.jup-row') as HTMLElement;
@@ -240,69 +241,137 @@ class ElephantLabExtension {
 			const nodeId = row.getAttribute('data-node-id')!;
 			const isShift = (e as MouseEvent).shiftKey;
 			const isCtrl = (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey;
+			const anchorId = this._lastClickedNode; // capture anchor before timer fires
 
-			if (isShift && this._lastClickedNode) {
-				// Collect all visible node rows in DOM order
-				const allRows = Array.from(
-					this.outarea_neo_tree!.node.querySelectorAll('.jup-row[data-node-id]')
-				) as HTMLElement[];
+			if (this._clickTimer) {
+				window.clearTimeout(this._clickTimer);
+				this._clickTimer = null;
+			}
 
-				const ids = allRows.map(r => r.getAttribute('data-node-id')!);
-				const fromIdx = ids.indexOf(this._lastClickedNode);
-				const toIdx = ids.indexOf(nodeId);
+			this._clickTimer = window.setTimeout(() => {
+				this._clickTimer = null;
 
-				if (fromIdx !== -1 && toIdx !== -1) {
-					const [start, end] = fromIdx < toIdx
-						? [fromIdx, toIdx]
-						: [toIdx, fromIdx];
+				if (isShift && anchorId) {
+					// Shift+Click: select range of parents only
+					const allRows = Array.from(
+						this.outarea_neo_tree!.node.querySelectorAll('.jup-row[data-node-id]')
+					) as HTMLElement[];
+					const ids = allRows.map(r => r.getAttribute('data-node-id')!);
+					const fromIdx = ids.indexOf(anchorId);
+					const toIdx = ids.indexOf(nodeId);
 
-					// Clear previous selection visually
-					this.outarea_neo_tree!.node
-						.querySelectorAll('.jup-row.jup-selected')
-						.forEach(el => el.classList.remove('jup-selected'));
+					if (fromIdx !== -1 && toIdx !== -1) {
+						const [start, end] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
 
-					// Select the range visually
-					const rangeIds: string[] = [];
-					for (let i = start; i <= end; i++) {
-						allRows[i].classList.add('jup-selected');
-						rangeIds.push(ids[i]);
-					}
+						this.outarea_neo_tree!.node
+							.querySelectorAll('.jup-row.jup-selected')
+							.forEach(el => el.classList.remove('jup-selected'));
 
-					// Call Python method with the whole range
-					const idsJson = JSON.stringify(rangeIds);
-					const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson);
-					this.kernelBridge!.executeCode(code, null, false);
-				}
-			} else {
-				if (isCtrl) {
-					row.classList.toggle('jup-selected');
-					const childContainer = row.nextElementSibling as HTMLElement;
-					if (childContainer?.classList.contains('jup-children')) {
-						if (!row.classList.contains('jup-selected')) {
-							// just deselected — remove children too
-							childContainer.querySelectorAll('.jup-row[data-node-id]')
-								.forEach(el => el.classList.remove('jup-selected'));
-						} else {
-							// just selected — add children too
-							childContainer.querySelectorAll('.jup-row[data-node-id]')
-								.forEach(el => el.classList.add('jup-selected'));
+						const rangeIds: string[] = [];
+						for (let i = start; i <= end; i++) {
+							allRows[i].classList.add('jup-selected');
+							rangeIds.push(ids[i]);
 						}
+
+						const idsJson = JSON.stringify(rangeIds);
+						const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson);
+						this.kernelBridge!.executeCode(code, null, false);
 					}
+				} else if (isCtrl) {
+					// Ctrl+Click: toggle parent only
+					row.classList.toggle('jup-selected');
+					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True', 'False');
+					this.kernelBridge!.executeCode(code, null, false);
+					this._lastClickedNode = nodeId;
 				} else {
+					// Single click: select parent only
 					this.outarea_neo_tree!.node
 						.querySelectorAll('.jup-row.jup-selected')
 						.forEach(el => el.classList.remove('jup-selected'));
 					row.classList.add('jup-selected');
-					const childContainer = row.nextElementSibling as HTMLElement;
-					if (childContainer?.classList.contains('jup-children')) {
-						childContainer.querySelectorAll('.jup-row[data-node-id]')
-							.forEach(el => el.classList.add('jup-selected'));
-					}
+					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'False');
+					this.kernelBridge!.executeCode(code, null, false);
+					this._lastClickedNode = nodeId;
 				}
+			}, 250);
+		});
 
-				// Notify Python
-				const multiSelectPy = isCtrl ? 'True' : 'False';
-				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, multiSelectPy);
+		// Double-click: cancel the pending timer then select with children
+		this.outarea_neo_tree!.node.addEventListener('dblclick', (e) => {
+			const target = e.target as HTMLElement;
+
+			if (target.closest('.jup-toggle')) return;
+
+			const row = target.closest('.jup-row[data-node-id]') as HTMLElement;
+			if (!row) return;
+
+			const nodeId = row.getAttribute('data-node-id')!;
+			const isShift = (e as MouseEvent).shiftKey;
+			const isCtrl = (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey;
+			const anchorId = this._lastClickedNode;
+
+			if (this._clickTimer) {
+				window.clearTimeout(this._clickTimer);
+				this._clickTimer = null;
+			}
+
+			if (isShift && anchorId) {
+				// Shift+Double-Click: select range + all children recursively
+				const allRows = Array.from(
+					this.outarea_neo_tree!.node.querySelectorAll('.jup-row[data-node-id]')
+				) as HTMLElement[];
+				const ids = allRows.map(r => r.getAttribute('data-node-id')!);
+				const fromIdx = ids.indexOf(anchorId);
+				const toIdx = ids.indexOf(nodeId);
+
+				if (fromIdx !== -1 && toIdx !== -1) {
+					const [start, end] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+
+					this.outarea_neo_tree!.node
+						.querySelectorAll('.jup-row.jup-selected')
+						.forEach(el => el.classList.remove('jup-selected'));
+
+					const rangeIds: string[] = [];
+					for (let i = start; i <= end; i++) {
+						allRows[i].classList.add('jup-selected');
+						rangeIds.push(ids[i]);
+						const childContainer = allRows[i].nextElementSibling as HTMLElement;
+						if (childContainer?.classList.contains('jup-children')) {
+							childContainer.querySelectorAll('.jup-row[data-node-id]')
+								.forEach(el => el.classList.add('jup-selected'));
+						}
+					}
+
+					const idsJson = JSON.stringify(rangeIds);
+					const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson, true);
+					this.kernelBridge!.executeCode(code, null, false);
+				}
+			} else if (isCtrl) {
+				// Ctrl+Double-Click: toggle parent + all children recursively
+				row.classList.toggle('jup-selected');
+				const isNowSelected = row.classList.contains('jup-selected');
+				const childContainer = row.nextElementSibling as HTMLElement;
+				if (childContainer?.classList.contains('jup-children')) {
+					childContainer.querySelectorAll('.jup-row[data-node-id]')
+						.forEach(el => isNowSelected
+							? el.classList.add('jup-selected')
+							: el.classList.remove('jup-selected'));
+				}
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True', 'True');
+				this.kernelBridge!.executeCode(code, null, false);
+				this._lastClickedNode = nodeId;
+			} else {
+				// Regular double-click: clear selection, select parent + all children
+				this.outarea_neo_tree!.node
+					.querySelectorAll('.jup-row.jup-selected')
+					.forEach(el => el.classList.remove('jup-selected'));
+				row.classList.add('jup-selected');
+				const childContainer = row.nextElementSibling as HTMLElement;
+				if (childContainer?.classList.contains('jup-children')) {
+					childContainer.querySelectorAll('.jup-row[data-node-id]')
+						.forEach(el => el.classList.add('jup-selected'));
+				}
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'True');
 				this.kernelBridge!.executeCode(code, null, false);
 				this._lastClickedNode = nodeId;
 			}
