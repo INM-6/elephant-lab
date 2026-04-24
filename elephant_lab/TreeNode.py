@@ -1,12 +1,40 @@
-class NeoData:
+class TreeNode:
+
+    def __init__(self):
+        self.children = []
+        self.is_root = False
+
+    def add_child(self, child):
+        self.children.append(child)
+
+    def __hash__(self):
+        raise NotImplementedError("Subclasses must implement __hash__ method.")
+    
+class RootNode(TreeNode):
+
+    def __hash__(self):
+        return hash("RootNode")
+
+class FolderNode(TreeNode):
+
+    __slots__ = ("name",)
+
+    def __init__(self, name):
+        super().__init__()
+        self.name = name
+
+    def __hash__(self):
+        return hash(self.name)
+
+class NeoNode(TreeNode):
 
     __slots__ = ("reference_name", "neo_object", "_hash", "tree_node", "primary_name")
 
     def __init__(self, reference_name, neo_object):
+        super().__init__()
         self.reference_name = reference_name
         self.neo_object = neo_object
         self._hash = hash((self.reference_name, id(self.neo_object)))
-        self.tree_node = None
         self.primary_name = self.get_primary_name()
 
     def get_primary_name(self):
@@ -15,7 +43,7 @@ class NeoData:
 
 
     def __eq__(self, other):
-        if not isinstance(other, NeoData):
+        if not isinstance(other, NeoNode):
             return False
         return (
             self.reference_name == other.reference_name and

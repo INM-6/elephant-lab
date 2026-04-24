@@ -136,3 +136,4 @@ yarn.lock
 .vscode/
 
 uv.lock
+i140703-001_no_raw.nix

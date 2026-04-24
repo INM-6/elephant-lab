@@ -60,7 +60,7 @@ class ElephantLab_info:
         ElephantLab_info.display(output_node_info)
 
     def pretty_print_of_selected_neo_objects(self):
-        if not self.elephant_lab_entity.selected_neo_objects:
+        if not self.elephant_lab_entity.selected_tree_nodes:
             return
 
         selected_objects_with_node_name = [
@@ -69,7 +69,7 @@ class ElephantLab_info:
                 'node_name': node.name,
                 'variable_name': node.metadata.get('variable_name', '')
             }
-            for node in self.elephant_lab_entity.selected_neo_objects
+            for node in self.elephant_lab_entity.selected_tree_nodes
             if node._id in self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj
         ]
 
