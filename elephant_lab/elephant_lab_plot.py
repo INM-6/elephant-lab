@@ -142,7 +142,8 @@ class ElephantLab_plot:
         if not self._is_panel_active or (not self._selection_changed and not any(v["changed"] for v in self.plots.values())):
             return
         neo_object_dict = None
-        if self._selection_changed:
+        selection_changed = self._selection_changed
+        if selection_changed:
             self._selection_changed = False
             neo_object_dict = {
                 self.NeoKey.spiketrain: self.SpikeTrain,
