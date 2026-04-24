@@ -273,6 +273,9 @@ class ElephantLab_plot:
     def set_explore_panel_active(self, is_active: bool):
         self._is_panel_active = is_active
         if is_active:
+            for plot_dict in self.plots.values():
+                plot_dict['changed'] = False
+            self.previous_neo_object_dict = {key: [] for key in self.NeoKey}
             self.on_selection_changed()
 
     def create_explorer_raw_plot(self):

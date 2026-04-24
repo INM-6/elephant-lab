@@ -217,11 +217,8 @@ class ElephantLabExtension {
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
 
-		// Notify backend of initial panel active state
-		this.kernelBridge!.executeCode(
-			getPythonCode(PythonCodeKey.SetPanelVisibility, this._explorerWidget?.isVisible ?? false, this._detailsWidget?.isVisible ?? false),
-			null, false
-		);
+		// Explore is always the active tab on first load
+		this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.SetPanelVisibility, true, false), null, false);
 
 		// Keep backend in sync when the user switches between Details and Explore tabs
 		for (const tabBar of this.widget.tabBars()) {
