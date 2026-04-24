@@ -217,9 +217,6 @@ class ElephantLabExtension {
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
 
-		// Explore is always the active tab on first load
-		this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.SetPanelVisibility, true, false), null, false);
-
 		// Keep backend in sync when the user switches between Details and Explore tabs
 		for (const tabBar of this.widget.tabBars()) {
 			const hasOurPanels = Array.from(tabBar.titles).some(
