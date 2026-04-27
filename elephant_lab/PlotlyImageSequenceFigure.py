@@ -1,5 +1,6 @@
 class PlotlyImageSequenceFigure:
 
+    from .utils import PlotlyUtils
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     import numpy as np
@@ -142,6 +143,13 @@ class PlotlyImageSequenceFigure:
             # Lock aspect ratio
             self.fig.update_xaxes(scaleanchor=f'y{idx+1}', row=row, col=col)
             self.fig.update_yaxes(scaleratio=1, row=row, col=col)
+
+            # Add spatial scale to axes
+            if hasattr(seq, 'spatial_scale') and seq.spatial_scale is not None:
+                spatial_scale = seq.spatial_scale
+                spatial_label = self.PlotlyUtils.convert_unit_to_label(spatial_scale.units)
+                self.fig.update_xaxes(title_text=spatial_label, row=row, col=col)
+                self.fig.update_yaxes(title_text=spatial_label, row=row, col=col)
 
         # Final layout
         self.fig.frames = self.frames

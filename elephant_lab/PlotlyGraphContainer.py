@@ -1,220 +1,6 @@
-class PlotlyUtils:
-    import quantities as pq
-    import numpy as np
-    import sys
-
-    @staticmethod
-    def can_convert_units(unit, convert_unit):
-        """
-        Returns 0 if no conversion is needed
-        Returns -1 if it is not possible to convert
-        Returns 1 if it can be converted
-        """
-        if unit == convert_unit:
-            return 0
-        if unit.simplified.dimensionality != convert_unit.simplified.dimensionality:
-            return -1
-        return 1
-        
-    @staticmethod
-    def convert_to_other_units(val, unit, convert_unit):
-        q = PlotlyUtils.pq.Quantity(val, unit)
-        return q.rescale(convert_unit).magnitude
-    
-    @staticmethod
-    def convert_unit_to_label(unit):
-        if unit is None:
-            return ""
-        pq = PlotlyUtils.pq
-
-        def simplify(unit):
-            return unit.simplified.dimensionality
-
-        unit_to_label = {
-            simplify(pq.s): "Time",
-            simplify(pq.m): "Length",
-            simplify(pq.kg): "Mass",
-            simplify(pq.A): "Electric Current",
-            simplify(pq.K): "Temperature",
-            simplify(pq.mol): "Amount of Substance",
-            simplify(pq.cd): "Luminous Intensity",
-
-            simplify(pq.Hz): "Frequency",
-            simplify((pq.m / pq.s)): "Velocity",
-            simplify((pq.m / pq.s**2)): "Acceleration",
-            simplify(pq.N): "Force",
-            simplify(pq.J): "Energy",
-            simplify(pq.Pa): "Pressure",
-            simplify(pq.W): "Power",
-            simplify(pq.C): "Electric Charge",
-            simplify(pq.V): "Voltage",
-            simplify(pq.Ohm): "Resistance",
-            simplify(pq.F): "Capacitance",
-            simplify(pq.H): "Inductance",
-            simplify(pq.T): "Magnetic Flux Density",
-            simplify(pq.Wb): "Magnetic Flux",
-            simplify(pq.sr): "Solid Angle",
-            simplify(pq.B): "Bel",
-            simplify(pq.kg * pq.m / pq.s): "Momentum",
-            simplify(pq.N * pq.m): "Torque",
-            simplify(pq.W / pq.m**2): "Irradiance",
-            simplify(pq.J / pq.K): "Entropy",
-        }
-
-        unit_key = simplify(unit)
-        if unit_key in unit_to_label:
-            return f"{unit_to_label[unit_key]}({unit.dimensionality})"
-        return f"({unit.dimensionality})"
-    
-    @staticmethod
-    def format_with_auto_digits(values):
-        """
-        Fully vectorized formatting of values with automatic per-value decimal digits.
-        Handles zeros, NaN, and inf without warnings.
-        """
-        np = PlotlyUtils.np
-        abs_xs = np.abs(values)
-
-        # Replace zeros, NaN, and inf with 1 for log10
-        safe_xs = np.where(np.isfinite(abs_xs) & (abs_xs != 0), abs_xs, 1.0)
-
-        # Compute digits, clip to [0,6]
-        digits = np.clip(2 - np.floor(np.log10(safe_xs)), 0, 6).astype(int)
-
-        # NaN/inf get 0 digits
-        digits[~np.isfinite(abs_xs)] = 0
-
-        # Cast digits and values to Python types for np.char.mod
-        digits_py = digits.astype(int).tolist()
-        values_py = values.astype(float).tolist()
-
-        # Use np.char.mod with Python ints
-        formatted = np.array([
-            f"{v:.{d}f}" if np.isfinite(v) else ("nan" if np.isnan(v) else "inf")
-            for v, d in zip(values_py, digits_py)
-        ])
-
-        return formatted
-    
-    @staticmethod
-    def print_warning(message):
-        pass
-        #print(f"WARNING: {message}", file=PlotlyUtils.sys.stderr)
-
-    @staticmethod
-    def normalize(values, method="minmax", do_normalize=True):
-        np = PlotlyUtils.np
-        values = np.asarray(values, dtype=float)
-        
-        eps = np.finfo(values.dtype).eps
-
-        # Fast exit: all values are near zero
-        if np.all(np.abs(values) <= eps):
-            # Return values unchanged; they are considered already normalized
-            return values, True
-
-        method = method.lower()
-        if method == "minmax":
-            vmin = values.min()
-            vmax = values.max()
-            denom = vmax - vmin
-
-            # Stricter check: already normalized to [0,1]
-            if denom > eps and np.isclose(vmin, 0, atol=eps) and np.isclose(vmax, 1, atol=eps):
-                return values, True
-
-            if do_normalize:
-                # Only normalize if requested
-                return (values - vmin) / denom if denom > eps else np.zeros_like(values), False
-            else:
-                # Skip normalization; just indicate it's not normalized
-                return values, False
-
-        elif method == "zscore":
-            mean = values.mean()
-            std = values.std()
-
-            # Already standardized (mean≈0, std≈1)
-            if std > eps and np.isclose(mean, 0, atol=eps) and np.isclose(std, 1, atol=eps):
-                return values, True
-
-            if do_normalize:
-                return (values - mean) / std if std > eps else np.zeros_like(values), False
-            else:
-                return values, False
-
-        elif method == "l2":
-            norm = np.linalg.norm(values)
-
-            # Already unit norm
-            if norm > eps and np.isclose(norm, 1, atol=eps):
-                return values, True
-
-            if do_normalize:
-                return values / norm if norm > eps else np.zeros_like(values), False
-            else:
-                return values, False
-
-        else:
-            raise ValueError(f"Unknown normalization method: {method}")
-        
-    @staticmethod
-    def lttb_downsample(x, y, threshold):
-        threshold = int(threshold)
-        n = len(x)
-        if threshold >= n or threshold == 0:
-            return x, y
-        np = PlotlyUtils.np
-
-        sampled_x = np.empty(threshold)
-        sampled_y = np.empty(threshold)
-
-        # always keep first point
-        sampled_x[0] = x[0]
-        sampled_y[0] = y[0]
-
-        bucket_size = (n - 2) / (threshold - 2)
-
-        a = 0  # index of previously selected point
-
-        for i in range(1, threshold - 1):
-
-            start = int(np.floor((i - 1) * bucket_size)) + 1
-            end   = int(np.floor(i * bucket_size)) + 1
-
-            next_start = end
-            next_end   = int(np.floor((i + 1) * bucket_size)) + 1
-            next_end   = min(next_end, n)
-
-            # average point of next bucket
-            avg_x = np.mean(x[next_start:next_end])
-            avg_y = np.mean(y[next_start:next_end])
-
-            bx = x[start:end]
-            by = y[start:end]
-
-            ax = x[a]
-            ay = y[a]
-
-            # triangle area calculation (vectorized)
-            area = np.abs(
-                (ax - avg_x) * (by - ay) -
-                (ax - bx)    * (avg_y - ay)
-            )
-
-            idx = np.argmax(area)
-            a = start + idx
-
-            sampled_x[i] = x[a]
-            sampled_y[i] = y[a]
-
-        # keep last point
-        sampled_x[-1] = x[-1]
-        sampled_y[-1] = y[-1]
-
-        return sampled_x, sampled_y
-
 class PlotlyGraphDataType:
+
+    from .utils import PlotlyUtils
 
     def __init__(self, data, name_fallback='Trace', **kwargs):
         if data is None:
@@ -285,11 +71,12 @@ class PlotlyGraphDataType:
                 self.y = list(self.y)
 
         except Exception as e:
-            PlotlyUtils.print_warning(f"Error extracting data for trace '{self.name}': {e}")
+            self.PlotlyUtils.print_warning(f"Error extracting data for trace '{self.name}': {e}")
             self.x, self.y = None, None
 
 class PlotlyGraphDataTypeList():
     import numpy as np
+    from .utils import PlotlyUtils
 
     def __init__(self, data, name_fallback='Trace'):
         self.data_list = []
@@ -307,14 +94,14 @@ class PlotlyGraphDataTypeList():
                         d = PlotlyGraphDataType(d, name_fallback)
                     self.data_list.append(d)
                 except Exception as e:
-                    PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
+                    self.PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
         else:
             try:
                 if not isinstance(data, PlotlyGraphDataType):
                     data = PlotlyGraphDataType(data, name_fallback)
                 self.data_list = [data]
             except Exception as e:
-                PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
+                self.PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
 
     def is_trace_list(self,data_list):
         """
@@ -383,7 +170,7 @@ class PlotlyGraphDataTypeList():
             x_length = len(x_values)
             y_length = len(y_values)
             if data.x is None or data.y is None or x_length == 0 or y_length == 0 or x_length != y_length:
-                PlotlyUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
+                self.PlotlyUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
                 continue
 
             if first:
@@ -398,11 +185,11 @@ class PlotlyGraphDataTypeList():
                 #Try to convert to common_units
                 if common_units_x is not None and hasattr(data, "units_x"):
                     units_x = data.units_x
-                    can_convert = PlotlyUtils.can_convert_units(units_x, common_units_x)
+                    can_convert = self.PlotlyUtils.can_convert_units(units_x, common_units_x)
                     if can_convert == -1:
                         common_units_x = None
                     elif can_convert == 1:
-                        x_values= PlotlyUtils.convert_to_other_units(x_values, units_x, common_units_x)
+                        x_values= self.PlotlyUtils.convert_to_other_units(x_values, units_x, common_units_x)
                         units_x = common_units_x
                 else:
                     common_units_x = None
@@ -424,7 +211,7 @@ class PlotlyGraphDataTypeList():
 
             x_length = len(x_values)
             if x_length == 0:
-                PlotlyUtils.print_warning(f"Skipping trace '{data.name}' because there is no data after filtering by x_range.")
+                self.PlotlyUtils.print_warning(f"Skipping trace '{data.name}' because there is no data after filtering by x_range.")
                 continue
             filtered.append(data)
 
@@ -437,7 +224,7 @@ class PlotlyGraphDataTypeList():
 
         self.is_default_zero_based = is_default_zero_based
         if len(filtered) == 0:
-            PlotlyUtils.print_warning("No valid data to display after normalization and filtering.")
+            self.PlotlyUtils.print_warning("No valid data to display after normalization and filtering.")
             self.data_list = [PlotlyGraphDataType(None)]
             return
         self.is_empty = False
@@ -464,7 +251,7 @@ class PlotlyGraphDataTypeList():
             y_values = data.y
 
             if self.is_downscaled:
-                x_values, y_values = PlotlyUtils.lttb_downsample(x_values, y_values, max_points_per_graph)
+                x_values, y_values = self.PlotlyUtils.lttb_downsample(x_values, y_values, max_points_per_graph)
 
             if index == 0:
                 if hasattr(data, "units_y"):
@@ -475,17 +262,17 @@ class PlotlyGraphDataTypeList():
             else:
                 if common_units_y is not None and hasattr(data, "units_y"):
                     units_y = data.units_y
-                    can_convert = PlotlyUtils.can_convert_units(units_y, common_units_y)
+                    can_convert = self.PlotlyUtils.can_convert_units(units_y, common_units_y)
                     if can_convert == -1:
                         common_units_y = None
                     elif can_convert == 1:
-                        y_values= PlotlyUtils.convert_to_other_units(y_values, units_y, common_units_y)
+                        y_values= self.PlotlyUtils.convert_to_other_units(y_values, units_y, common_units_y)
                         units_y = common_units_y
                 else:
                     common_units_y = None
 
             # Only normalize if requested
-            y_values, is_data_default_normalized_y = PlotlyUtils.normalize(
+            y_values, is_data_default_normalized_y = self.PlotlyUtils.normalize(
                 y_values, method=normalization_method, do_normalize=normalize_y_values
             )
 

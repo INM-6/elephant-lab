@@ -1,5 +1,6 @@
 class PlotlyGraphFigure:
-    from .PlotlyGraphContainer import PlotlyUtils, PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
+    from .utils import PlotlyUtils
+    from .PlotlyGraphContainer import PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
 
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots

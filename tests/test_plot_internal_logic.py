@@ -8,6 +8,7 @@ from elephant_lab.PlotlyGraphFigure import *
 from elephant_lab.PlotlyGraphContainer import *
 from elephant_lab.PlotlyGraphDataTypes import SpikeTrainRasterPlot
 from elephant_lab.PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
+from elephant_lab.utils import PlotlyUtils
 from ipywidgets import FloatRangeSlider
 
 def parse_plotly_color(color_str):
