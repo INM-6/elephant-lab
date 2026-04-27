@@ -373,11 +373,29 @@ class PlotlyGraphDataTypeList():
         common_units_x = None
         filtered = []
         is_default_zero_based = True
-        for data in self.data_list:
+        i = 0
+        data_list_length = len(self.data_list)
+        while i < data_list_length:
+            data = self.data_list[i]
             units_x = None
             units_y = None
             x_values = self.np.asarray(data.x)
             y_values = self.np.asarray(data.y)
+
+            if self.np.iscomplexobj(x_values):
+                data.x = self.np.abs(x_values)
+            if self.np.iscomplexobj(y_values):
+                name = data.name
+                data.y = self.np.imag(y_values)
+                data.name = f"{name} (imag)"
+                self.data_list.insert(i+1, PlotlyGraphDataType(data))
+                data_list_length += 1
+                y_values = self.np.real(y_values)
+                data.y = y_values
+                data.name = f"{name} (real)"
+            i+=1
+            x_values[self.np.isinf(x_values)] = self.np.nan
+            y_values[self.np.isinf(y_values)] = self.np.nan
 
             # Check if x and y are valid
             x_length = len(x_values)
