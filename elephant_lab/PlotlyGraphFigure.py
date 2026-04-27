@@ -247,8 +247,8 @@ class PlotlyGraphFigure:
             widths = widths[mask]
 
         if xs.size > 0:
-            self.total_minX = min(self.total_minX, xs.min())
-            self.total_maxX = max(self.total_maxX, xs.max())
+            self.total_minX = min(self.total_minX, self.np.nanmin(xs))
+            self.total_maxX = max(self.total_maxX, self.np.nanmax(xs))
 
             min_bar_width = (self.total_maxX - self.total_minX) / 500
 
