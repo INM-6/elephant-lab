@@ -49,7 +49,11 @@ class PlotlyGraphFigure:
             title=getattr(data, 'name', None)
 
 
-        self.layout_options["title"] = title
+        self.layout_options["title"] = {
+            'text': f"{title}{'' if not self.isDownscaled() else ' (downsampled)'}",
+            'x': 0.5,
+            'xanchor': 'center'
+        }
         self.layout_options["dragmode"] = "pan"
         self.layout_options["height"] = self.height
         self.layout_options["autosize"] = True

@@ -410,7 +410,7 @@ class ElephantLab_plot:
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_ST]
         kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
+        fig = self.PlotlyGraphFigure(data, title=f"Rasterplots", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
@@ -428,7 +428,7 @@ class ElephantLab_plot:
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
         kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, **kwargs_plot_dict)
+        fig = self.PlotlyGraphFigure(data, title=f"LFP-Plots", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, **kwargs_plot_dict)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
     
@@ -437,7 +437,7 @@ class ElephantLab_plot:
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
         kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
+        fig = self.PlotlyGraphFigure(None, title=f"Plotted Events and Epochs", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
