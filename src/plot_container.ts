@@ -123,6 +123,7 @@ export class PlotContainer {
             }
 
             this.setTheme(is_plot_theme_dark)
+            this.resize();
         }).catch((err) => {
             console.error('Plotly render error:', err);
         }).finally(() => {
