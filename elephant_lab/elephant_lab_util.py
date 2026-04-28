@@ -46,6 +46,7 @@ class ElephantLab_util:
                 if sig.shape[1] > 1:
                     for i in range(sig.shape[1]):
                         ch_sig = sig[:, i:i+1]
+                        ch_sig.segment = seg
                         ann = getattr(ch_sig, 'array_annotations', {})
                         if 'channel_names' in ann:
                             ch_sig.name = str(ann['channel_names'][0])
