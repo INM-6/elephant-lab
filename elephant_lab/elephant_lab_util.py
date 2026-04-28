@@ -23,21 +23,34 @@ class ElephantLab_util:
         io_class = getattr(self.neo.io, ioClass)
         kwargs = self.json.loads(extra_kwargs) if extra_kwargs else {}
         reader = io_class(filename=filePath, **kwargs)
-        block = reader.read_block()
-        if split_channels:
-            self._split_analog_signal_channels(block)
+        block = self._read_block_with_optional_split(reader, split_channels)
         self.__main__.__dict__[varName] = block
 
     def setVarNameNotIOClass(self, filePath, varName, split_channels=False):
-        var = self.neo.get_io(filePath).read()
-        if (isinstance(var, list)):
-            var = var[0]
-        elif (isinstance(var, dict)):
-            var = var['blocks'][0]
-        if split_channels:
-            self._split_analog_signal_channels(var)
+        reader = self.neo.get_io(filePath)
+        if hasattr(reader, 'read_block'):
+            var = self._read_block_with_optional_split(reader, split_channels)
+        else:
+            var = reader.read()
+            if isinstance(var, list):
+                var = var[0]
+            elif isinstance(var, dict):
+                var = var['blocks'][0]
+            if split_channels:
+                self._split_analog_signal_channels(var)
         self.__main__.__dict__[varName] = var
         print(var, type(var))
+
+    def _read_block_with_optional_split(self, reader, split_channels):
+        if split_channels:
+            try:
+                return reader.read_block(signal_group_mode='split-all')
+            except TypeError:
+                pass
+        block = reader.read_block()
+        if split_channels:
+            self._split_analog_signal_channels(block)
+        return block
 
     def _split_analog_signal_channels(self, block):
         for seg in block.segments:
