@@ -1080,7 +1080,7 @@ class ElephantLabExtension {
 		const colorGrade = createLabeledSelect({
 			label: "Color Grade",
 			icon: "fa-palette",
-			selectOptions: ["Viridis", "Plasma", "Inferno", "Magma", "Cividis", "Turbo"],
+			selectOptions: ["Viridis", "Plasma", "Inferno", "Magma", "Cividis", "Turbo", "hsv", "phase", "twilight"],
 			defaultValue: "Viridis",
 			title: "Color grade for the image sequence plot",
 			onChange: (value) => {
