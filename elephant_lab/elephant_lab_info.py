@@ -48,16 +48,32 @@ class ElephantLab_info:
         Is a Class to minimize the amount of name clutter in the notebook
         """
         self.elephant_lab_entity: "ElephantLab_info.ElephantLab" = elephant_lab_entity
+        self._is_panel_active = True
+        self._pending_info_update = False
+        self._output_node_info = None
 
     def create_details_panel(self):
         def on_selected_change_info():
-            with output_node_info:
-                ElephantLab_info.clear_output()
-                self.pretty_print_of_selected_neo_objects()
+            if not self._is_panel_active:
+                self._pending_info_update = True
+                return
+            self._render_info()
 
         output_node_info = self.Output()
+        self._output_node_info = output_node_info
         self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
         ElephantLab_info.display(output_node_info)
+
+    def _render_info(self):
+        with self._output_node_info:
+            ElephantLab_info.clear_output()
+            self.pretty_print_of_selected_neo_objects()
+
+    def set_details_panel_active(self, is_active: bool):
+        self._is_panel_active = is_active
+        if is_active and self._pending_info_update:
+            self._pending_info_update = False
+            self._render_info()
 
     def pretty_print_of_selected_neo_objects(self):
         if not self.elephant_lab_entity.selected_neo_objects:

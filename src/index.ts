@@ -86,6 +86,8 @@ class ElephantLabExtension {
 	private topBar: Widget | null = null;
 	private plotlyFrontend: PlotlyFrontend | null;
 	private _lastClickedNode: string | null = null;
+	private _explorerWidget: Panel | null = null;
+	private _detailsWidget: Panel | null = null;
 
 	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -216,6 +218,24 @@ class ElephantLabExtension {
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
 
+		// Keep backend in sync when the user switches between Details and Explore tabs
+		for (const tabBar of this.widget.tabBars()) {
+			const hasOurPanels = Array.from(tabBar.titles).some(
+				t => t.owner === this._detailsWidget || t.owner === this._explorerWidget
+			);
+			if (hasOurPanels) {
+				tabBar.currentChanged.connect((_sender, args) => {
+					const curr = args.currentTitle?.owner;
+					if (this.kernelBridge) {
+						this.kernelBridge.executeCode(
+							getPythonCode(PythonCodeKey.SetPanelVisibility, curr === this._explorerWidget, curr === this._detailsWidget),
+							null, false
+						);
+					}
+				});
+				break;
+			}
+		}
 
 		// Handle HTML tree interactions (expand/collapse + selection)
 		// All clicks go through a 250ms timer so dblclick can cancel before any Python call fires.
@@ -1126,12 +1146,14 @@ class ElephantLabExtension {
 		explorer_widget_info.title.label = 'Details';
 		explorer_widget_info.node.style.cssText = explorer_widget_info.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_info = this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1', session);
+		this._detailsWidget = explorer_widget_info;
 
 		// RAW
 		let explorer_widget_raw_plot = new Panel();
 		explorer_widget_raw_plot.title.label = 'Explore';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
+		this._explorerWidget = explorer_widget_raw_plot;
 
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
