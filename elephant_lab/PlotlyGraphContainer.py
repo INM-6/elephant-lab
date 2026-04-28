@@ -115,8 +115,8 @@ class PlotlyUtils:
 
         method = method.lower()
         if method == "minmax":
-            vmin = values.min()
-            vmax = values.max()
+            vmin = np.nanmin(values)
+            vmax = np.nanmax(values)
             denom = vmax - vmin
 
             # Stricter check: already normalized to [0,1]
@@ -131,8 +131,8 @@ class PlotlyUtils:
                 return values, False
 
         elif method == "zscore":
-            mean = values.mean()
-            std = values.std()
+            mean = np.nanmean(values)
+            std = np.nanstd(values)
 
             # Already standardized (mean≈0, std≈1)
             if std > eps and np.isclose(mean, 0, atol=eps) and np.isclose(std, 1, atol=eps):
@@ -187,8 +187,8 @@ class PlotlyUtils:
             next_end   = min(next_end, n)
 
             # average point of next bucket
-            avg_x = np.mean(x[next_start:next_end])
-            avg_y = np.mean(y[next_start:next_end])
+            avg_x = np.nanmean(x[next_start:next_end])
+            avg_y = np.nanmean(y[next_start:next_end])
 
             bx = x[start:end]
             by = y[start:end]
@@ -373,11 +373,29 @@ class PlotlyGraphDataTypeList():
         common_units_x = None
         filtered = []
         is_default_zero_based = True
-        for data in self.data_list:
+        i = 0
+        data_list_length = len(self.data_list)
+        while i < data_list_length:
+            data = self.data_list[i]
             units_x = None
             units_y = None
             x_values = self.np.asarray(data.x)
             y_values = self.np.asarray(data.y)
+
+            if self.np.iscomplexobj(x_values):
+                data.x = self.np.abs(x_values)
+            if self.np.iscomplexobj(y_values):
+                name = data.name
+                data.y = self.np.imag(y_values)
+                data.name = f"{name} (imag)"
+                self.data_list.insert(i+1, PlotlyGraphDataType(data))
+                data_list_length += 1
+                y_values = self.np.real(y_values)
+                data.y = y_values
+                data.name = f"{name} (real)"
+            i+=1
+            x_values[self.np.isinf(x_values)] = self.np.nan
+            y_values[self.np.isinf(y_values)] = self.np.nan
 
             # Check if x and y are valid
             x_length = len(x_values)
@@ -407,7 +425,7 @@ class PlotlyGraphDataTypeList():
                 else:
                     common_units_x = None
 
-            minX = x_values.min()
+            minX = self.np.nanmin(x_values)
             if minX > 1e-9 or minX < -1e-9:
                 is_default_zero_based = False
                 if shift_to_0:
@@ -495,22 +513,22 @@ class PlotlyGraphDataTypeList():
             should_find_new_minX = x_range is not None
             if index == 0:
                 if should_find_new_minX:
-                    minX = x_values.min()
+                    minX = self.np.nanmin(x_values)
                 else:
                     minX = data.minX
-                minY = y_values.min()
-                maxX = x_values.max()
-                maxY = y_values.max()
+                minY = self.np.nanmin(y_values)
+                maxX = self.np.nanmax(x_values)
+                maxY = self.np.nanmax(y_values)
                 data.minX = minX
                 data.minY = minY
                 data.maxX = maxX
                 data.maxY = maxY
                 previous_maxY = maxY
             else:
-                temp_minX = x_values.min() if should_find_new_minX else data.minX
-                temp_minY = y_values.min()
-                temp_maxX = x_values.max()
-                temp_maxY = y_values.max()
+                temp_minX = self.np.nanmin(x_values) if should_find_new_minX else data.minX
+                temp_minY = self.np.nanmin(y_values)
+                temp_maxX = self.np.nanmax(x_values)
+                temp_maxY = self.np.nanmax(y_values)
 
                 if self.compress and offset_traces_on_compress:
                     offset = previous_maxY - temp_minY
