@@ -700,115 +700,103 @@ class ElephantLabExtension {
 					}
 
 					const body = document.createElement('div');
-					const input = document.createElement('input');
-					input.className = 'jp-input';
-					input.placeholder = 'e.g. Spike2IO';
-					body.appendChild(input);
+					body.style.display = 'flex';
+					body.style.flexDirection = 'column';
+					body.style.gap = '10px';
+
+					const ioLabel = document.createElement('label');
+					ioLabel.textContent = 'Neo IO class (leave empty to auto-detect):';
+					ioLabel.style.display = 'block';
+					const ioInput = document.createElement('input');
+					ioInput.className = 'jp-input';
+					ioInput.placeholder = 'e.g. Spike2IO';
+					ioInput.style.width = '100%';
+					body.appendChild(ioLabel);
+					body.appendChild(ioInput);
+
+					const splitLabel = document.createElement('label');
+					splitLabel.style.display = 'flex';
+					splitLabel.style.alignItems = 'center';
+					splitLabel.style.gap = '6px';
+					const splitCheckbox = document.createElement('input');
+					splitCheckbox.type = 'checkbox';
+					splitLabel.appendChild(splitCheckbox);
+					splitLabel.appendChild(document.createTextNode('Split analog signal channels'));
+					body.appendChild(splitLabel);
+
+					const kwargsLabel = document.createElement('label');
+					kwargsLabel.textContent = 'Extra IO kwargs (JSON, only used with explicit IO class):';
+					kwargsLabel.style.display = 'block';
+					const kwargsInput = document.createElement('input');
+					kwargsInput.className = 'jp-input';
+					kwargsInput.placeholder = 'e.g. {"nsx_override": "ns6"}';
+					kwargsInput.style.width = '100%';
+					body.appendChild(kwargsLabel);
+					body.appendChild(kwargsInput);
 
 					showDialog({
-						title: 'Enter neo IO class',
+						title: 'Load neo data',
 						body: new Widget({ node: body }),
-						buttons: [
-							Dialog.cancelButton(),
-							Dialog.okButton({ label: 'OK' }),
-							Dialog.createButton({ label: 'Automatic' })
-						],
+						buttons: [Dialog.cancelButton(), Dialog.okButton({ label: 'Load' })],
 						hasClose: true
 					}).then(async dialogResult => {
-						let ioClass: string | null = null;
-						if (dialogResult.button.label === 'OK') {
-							ioClass = input.value;
-						} else if (dialogResult.button.label === 'Automatic') {
-							ioClass = await this.kernelBridge!.getNeoIOClass(filePath);
+						if (!dialogResult.button.accept) {
+							return;
 						}
 
-						if (ioClass !== null) {
-							const optionsBody = document.createElement('div');
-							optionsBody.style.display = 'flex';
-							optionsBody.style.flexDirection = 'column';
-							optionsBody.style.gap = '10px';
-
-							const splitLabel = document.createElement('label');
-							splitLabel.style.display = 'flex';
-							splitLabel.style.alignItems = 'center';
-							splitLabel.style.gap = '6px';
-							const splitCheckbox = document.createElement('input');
-							splitCheckbox.type = 'checkbox';
-							splitLabel.appendChild(splitCheckbox);
-							splitLabel.appendChild(document.createTextNode('Split analog signal channels'));
-							optionsBody.appendChild(splitLabel);
-
-							if (ioClass) {
-								const kwargsLabel = document.createElement('label');
-								kwargsLabel.textContent = 'Extra IO kwargs (JSON):';
-								kwargsLabel.style.display = 'block';
-								const kwargsInput = document.createElement('input');
-								kwargsInput.className = 'jp-input';
-								kwargsInput.placeholder = 'e.g. {"nsx_override": "ns6"}';
-								kwargsInput.style.width = '100%';
-								kwargsInput.dataset.role = 'extra-kwargs';
-								optionsBody.appendChild(kwargsLabel);
-								optionsBody.appendChild(kwargsInput);
-							}
-
-							const optionsResult = await showDialog({
-								title: 'Loading options',
-								body: new Widget({ node: optionsBody }),
-								buttons: [Dialog.cancelButton(), Dialog.okButton({ label: 'Load' })],
-								hasClose: true
-							});
-
-							if (!optionsResult.button.accept) {
+						const ioClassInput = ioInput.value.trim();
+						let ioClass: string | null = ioClassInput;
+						if (!ioClassInput) {
+							ioClass = await this.kernelBridge!.getNeoIOClass(filePath);
+							if (ioClass === null) {
+								showDialog({
+									title: 'Error',
+									body: 'Could not automatically determine IO class.',
+									buttons: [Dialog.okButton()]
+								});
 								return;
 							}
-
-							const splitChannels = splitCheckbox.checked;
-							const kwargsEl = optionsBody.querySelector('[data-role="extra-kwargs"]') as HTMLInputElement | null;
-							const extraKwargs = kwargsEl?.value.trim() ?? '';
-
-							if (extraKwargs) {
-								try {
-									JSON.parse(extraKwargs);
-								} catch (_) {
-									showDialog({
-										title: 'Invalid JSON',
-										body: 'Extra IO kwargs must be valid JSON, e.g. {"nsx_override": "ns6"}.',
-										buttons: [Dialog.okButton()]
-									});
-									return;
-								}
-							}
-
-							const varsResult = await this.kernelBridge!.executeCode(PythonCodeKey.GetVars, this.outarea_neo_tree!, false);
-							let allVars: string[] = [];
-							if (varsResult && varsResult.outputs.length > 0) {
-								const output = varsResult.outputs[0];
-								if (output.output_type === 'stream' && output.name === 'stdout') {
-									try {
-										allVars = JSON.parse(output.text);
-									} catch (e) {
-										console.error("Failed to parse kernel variables", e);
-									}
-								}
-							}
-
-							let counter = 0;
-							let varName = `loaded_data_${counter}`;
-							while (allVars.includes(varName)) {
-								counter++;
-								varName = `loaded_data_${counter}`;
-							}
-
-							let code = getPythonCode(PythonCodeKey.SetVarName, ioClass, filePath, varName, splitChannels, extraKwargs);
-							await this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
-							await this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
-						} else if (dialogResult.button.label === 'Automatic') {
-							showDialog({
-								title: 'Error',
-								body: 'Could not automatically determine IO class.',
-								buttons: [Dialog.okButton()]
-							});
 						}
+
+						const splitChannels = splitCheckbox.checked;
+						const extraKwargs = ioClassInput ? kwargsInput.value.trim() : '';
+
+						if (extraKwargs) {
+							try {
+								JSON.parse(extraKwargs);
+							} catch (_) {
+								showDialog({
+									title: 'Invalid JSON',
+									body: 'Extra IO kwargs must be valid JSON, e.g. {"nsx_override": "ns6"}.',
+									buttons: [Dialog.okButton()]
+								});
+								return;
+							}
+						}
+
+						const varsResult = await this.kernelBridge!.executeCode(PythonCodeKey.GetVars, this.outarea_neo_tree!, false);
+						let allVars: string[] = [];
+						if (varsResult && varsResult.outputs.length > 0) {
+							const output = varsResult.outputs[0];
+							if (output.output_type === 'stream' && output.name === 'stdout') {
+								try {
+									allVars = JSON.parse(output.text);
+								} catch (e) {
+									console.error("Failed to parse kernel variables", e);
+								}
+							}
+						}
+
+						let counter = 0;
+						let varName = `loaded_data_${counter}`;
+						while (allVars.includes(varName)) {
+							counter++;
+							varName = `loaded_data_${counter}`;
+						}
+
+						let code = getPythonCode(PythonCodeKey.SetVarName, ioClass, filePath, varName, splitChannels, extraKwargs);
+						await this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
+						await this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 					});
 				}
 			});
