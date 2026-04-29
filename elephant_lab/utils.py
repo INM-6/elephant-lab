@@ -115,8 +115,8 @@ class PlotlyUtils:
 
         method = method.lower()
         if method == "minmax":
-            vmin = values.min()
-            vmax = values.max()
+            vmin = np.nanmin(values)
+            vmax = np.nanmax(values)
             denom = vmax - vmin
 
             # Stricter check: already normalized to [0,1]
@@ -131,8 +131,8 @@ class PlotlyUtils:
                 return values, False
 
         elif method == "zscore":
-            mean = values.mean()
-            std = values.std()
+            mean = np.nanmean(values)
+            std = np.nanstd(values)
 
             # Already standardized (mean≈0, std≈1)
             if std > eps and np.isclose(mean, 0, atol=eps) and np.isclose(std, 1, atol=eps):
@@ -187,8 +187,8 @@ class PlotlyUtils:
             next_end   = min(next_end, n)
 
             # average point of next bucket
-            avg_x = np.mean(x[next_start:next_end])
-            avg_y = np.mean(y[next_start:next_end])
+            avg_x = np.nanmean(x[next_start:next_end])
+            avg_y = np.nanmean(y[next_start:next_end])
 
             bx = x[start:end]
             by = y[start:end]
