@@ -80,11 +80,12 @@ class PlotlyImageSequenceFigure:
 
             data = self.np.where(self.np.isinf(data), self.np.nan, data)
 
+            unit_str = self.PlotlyUtils.convert_unit_to_label(seq.units, short=True)
             if self.np.iscomplexobj(data):
                 data = self.np.abs(data)
-                unit_str = f"|{seq.units}|"
-            else:
-                unit_str = str(seq.units)
+                unit_str = f"|{unit_str}|"
+
+            unit_str = self.PlotlyUtils.center_text_for_length(unit_str, 5)
             
             zmin, zmax = self.np.nanmin(data), self.np.nanmax(data)
             if not self.np.isfinite(zmin) or not self.np.isfinite(zmax):

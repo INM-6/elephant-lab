@@ -22,49 +22,66 @@ class PlotlyUtils:
         return q.rescale(convert_unit).magnitude
     
     @staticmethod
-    def convert_unit_to_label(unit):
+    def convert_unit_to_label(unit, short=False):
         if unit is None:
             return ""
         pq = PlotlyUtils.pq
 
-        def simplify(unit):
-            return unit.simplified.dimensionality
+        if short:
+            return str(unit.dimensionality) if unit != pq.dimensionless else ""
+        else:
+            def simplify(unit):
+                if unit == pq.dimensionless:
+                    return pq.dimensionless
+                return unit.simplified.dimensionality
 
-        unit_to_label = {
-            simplify(pq.s): "Time",
-            simplify(pq.m): "Length",
-            simplify(pq.kg): "Mass",
-            simplify(pq.A): "Electric Current",
-            simplify(pq.K): "Temperature",
-            simplify(pq.mol): "Amount of Substance",
-            simplify(pq.cd): "Luminous Intensity",
+            unit_to_label = {
+                simplify(pq.dimensionless): "",
 
-            simplify(pq.Hz): "Frequency",
-            simplify((pq.m / pq.s)): "Velocity",
-            simplify((pq.m / pq.s**2)): "Acceleration",
-            simplify(pq.N): "Force",
-            simplify(pq.J): "Energy",
-            simplify(pq.Pa): "Pressure",
-            simplify(pq.W): "Power",
-            simplify(pq.C): "Electric Charge",
-            simplify(pq.V): "Voltage",
-            simplify(pq.Ohm): "Resistance",
-            simplify(pq.F): "Capacitance",
-            simplify(pq.H): "Inductance",
-            simplify(pq.T): "Magnetic Flux Density",
-            simplify(pq.Wb): "Magnetic Flux",
-            simplify(pq.sr): "Solid Angle",
-            simplify(pq.B): "Bel",
-            simplify(pq.kg * pq.m / pq.s): "Momentum",
-            simplify(pq.N * pq.m): "Torque",
-            simplify(pq.W / pq.m**2): "Irradiance",
-            simplify(pq.J / pq.K): "Entropy",
-        }
+                simplify(pq.s): "Time",
+                simplify(pq.m): "Length",
+                simplify(pq.kg): "Mass",
+                simplify(pq.A): "Current",
+                simplify(pq.K): "Temperature",
+                simplify(pq.mol): "Substance",
+                simplify(pq.cd): "Luminous Intensity",
 
-        unit_key = simplify(unit)
-        if unit_key in unit_to_label:
-            return f"{unit_to_label[unit_key]}({unit.dimensionality})"
-        return f"({unit.dimensionality})"
+                simplify(pq.Hz): "Frequency",
+                simplify((pq.m / pq.s)): "Velocity",
+                simplify((pq.m / pq.s**2)): "Acceleration",
+                simplify(pq.N): "Force",
+                simplify(pq.J): "Energy",
+                simplify(pq.Pa): "Pressure",
+                simplify(pq.W): "Power",
+                simplify(pq.C): "Electric Charge",
+                simplify(pq.V): "Voltage",
+                simplify(pq.Ohm): "Resistance",
+                simplify(pq.F): "Capacitance",
+                simplify(pq.H): "Inductance",
+                simplify(pq.T): "Magnetic Flux Density",
+                simplify(pq.Wb): "Magnetic Flux",
+                # overrides dimensionless wich is more commonly used than using a solid angle and there is no simple way to find out what excactly the user wanted
+                #simplify(pq.sr): "Solid Angle",
+                simplify(pq.B): "Bel",
+                simplify(pq.kg * pq.m / pq.s): "Momentum",
+                simplify(pq.N * pq.m): "Torque",
+                simplify(pq.W / pq.m**2): "Irradiance",
+                simplify(pq.J / pq.K): "Entropy",
+            }
+
+            unit_key = simplify(unit)
+
+            if unit_key in unit_to_label:
+                return f"{unit_to_label[unit_key]}({unit.dimensionality})"
+            return f"({unit.dimensionality})"
+
+    @staticmethod
+    def center_text_for_length(text, length):
+        text = str(text)
+        if len(text) >= length:
+            return text
+        padding = (length - len(text)) // 2
+        return "\u2060" + " " * padding + text
     
     @staticmethod
     def format_with_auto_digits(values):
