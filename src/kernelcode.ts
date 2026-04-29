@@ -73,6 +73,10 @@ function normalizeYValuesToggle(state: boolean): string {
 	return `elephant_lab_entity.elephant_lab_plot.set_normalize_y_values(${convert_bool_to_python_bool(state)})`;
 }
 
+function setPanelVisibility(exploreActive: boolean, detailsActive: boolean): string {
+	return `elephant_lab_entity.set_panel_visibility(${convert_bool_to_python_bool(exploreActive)}, ${convert_bool_to_python_bool(detailsActive)})`;
+}
+
 function toggleNeoTreeFilter(checkbox_id: string): string {
 	return `elephant_lab_entity.elephant_lab_tree.show_neo_obj("${checkbox_id}")`
 }
@@ -119,6 +123,7 @@ export enum PythonCodeKey {
 	SelectByAnnotationFilter = 'selectByAnnotationFilter',
 	NormalizeYValuesToggle = 'normalizeYValuesToggle',
 	SetNormalizationMethod = 'setNormalizationMethod',
+	SetPanelVisibility = 'setPanelVisibility',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -145,6 +150,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
 	[PythonCodeKey.NormalizeYValuesToggle]: (...args: any[]) => normalizeYValuesToggle(args[0]),
 	[PythonCodeKey.SetNormalizationMethod]: (...args: any[]) => setNormalizationMethod(args[0]),
+	[PythonCodeKey.SetPanelVisibility]: (...args: any[]) => setPanelVisibility(args[0], args[1]),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {

@@ -16,6 +16,7 @@ class PlotlyGraphFigure:
         """
         self.vertical_spacing = 0.075
         self.layout_options = dict()
+        self.has_custom_ticklabels = False
 
         self.overlapping = overlapping
         self.overlap_on_compress = overlap_on_compress
@@ -31,8 +32,10 @@ class PlotlyGraphFigure:
         self.total_minY = data.minY
         self.total_maxY = data.maxY
 
-
-        self.height = 800 if (self.nGraphs > 2 and not self._should_overlap()) else 600
+        if self._same_y() and (self.nGraphs < 2 or self._should_overlap()):
+            self.height = 200
+        else:
+            self.height = 800 if (self.nGraphs > 2 and not self._should_overlap()) else 600
         if self._is_single_plot():
             self.fig = self.go.Figure()
             if self.compress:
@@ -50,7 +53,11 @@ class PlotlyGraphFigure:
             title=getattr(data, 'name', None)
 
 
-        self.layout_options["title"] = title
+        self.layout_options["title"] = {
+            'text': f"{title}{'' if not self.isDownscaled() else ' (downsampled)'}",
+            'x': 0.5,
+            'xanchor': 'center'
+        }
         self.layout_options["dragmode"] = "pan"
         self.layout_options["height"] = self.height
         self.layout_options["autosize"] = True
@@ -128,6 +135,7 @@ class PlotlyGraphFigure:
                             if self.compress:
                                 self.ticktext.append(d.name)
                             else:
+                                self.has_custom_ticklabels = True
                                 self._update_layout_options_dict(f"yaxis",dict(
                                     tickvals=[0],
                                     ticktext=[d.name]
@@ -149,6 +157,7 @@ class PlotlyGraphFigure:
                         ))
                     if self._can_have_custom_ticklabels() and hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
+                            self.has_custom_ticklabels = True
                             self._update_layout_options_dict(f"yaxis{row}",dict(
                                 tickvals=[0],
                                 ticktext=[d.name]
@@ -248,8 +257,8 @@ class PlotlyGraphFigure:
             widths = widths[mask]
 
         if xs.size > 0:
-            self.total_minX = min(self.total_minX, xs.min())
-            self.total_maxX = max(self.total_maxX, xs.max())
+            self.total_minX = min(self.total_minX, self.np.nanmin(xs))
+            self.total_maxX = max(self.total_maxX, self.np.nanmax(xs))
 
             min_bar_width = (self.total_maxX - self.total_minX) / 500
 
@@ -333,20 +342,33 @@ class PlotlyGraphFigure:
 
     def _manage_ticklabels(self):
         if self.compress:
-            has_custom_ticklabels = False
             if self._can_have_custom_ticklabels():
                 if len(self.ticktext)==self.nGraphs:
-                    has_custom_ticklabels = True
+                    self.has_custom_ticklabels = True
                     yaxis_options = dict(
                         showticklabels=False,
                         tickvals=list(range(self.nGraphs)),
                         ticktext=self.ticktext,
                     )
                     self._update_layout_options_dict("yaxis", yaxis_options)
-            if not has_custom_ticklabels and not self._should_overlap():
+            if not self.has_custom_ticklabels and not self._should_overlap():
                 self._update_layout_options_dict('yaxis',dict(
-                    showticklabels = False
+                    visible = False
                 ))
+        if self._is_single_plot():
+            if self._same_y() and not self.has_custom_ticklabels:
+                self._update_layout_options_dict('yaxis',dict(
+                    visible = False
+                ))
+        else:
+            for i in range(1, self.nGraphs + 1):
+                graph_trace_data = self.data.data_list[i-1]
+                ymin = graph_trace_data.minY
+                ymax = graph_trace_data.maxY
+                if ymax - ymin < 1e-9 and (not self._can_have_custom_ticklabels() or not getattr(graph_trace_data, 'use_name_as_ticklabels', False)):
+                    self._update_layout_options_dict(f'yaxis{i}',dict(
+                        visible = False
+                    ))
 
     def to_dict(self):
         """Displays the Plotly figure in a Jupyter notebook."""
@@ -377,7 +399,10 @@ class PlotlyGraphFigure:
         return self.overlapping and self.changesOnOverlap()
     
     def _should_have_y_slider(self):
-        return (self.overlapping or self.compress or self.nGraphs==1) and self.data.maxY - self.data.minY > 1e-9
+        return (self.overlapping or self.compress or self.nGraphs==1) and not self._same_y()
+    
+    def _same_y(self):
+        return self.data.maxY - self.data.minY < 1e-9
     
     def _is_single_plot(self):
         return self.overlapping or self.compress or self.nGraphs==1
