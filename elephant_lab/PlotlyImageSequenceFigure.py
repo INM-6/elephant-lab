@@ -17,9 +17,9 @@ class PlotlyImageSequenceFigure:
         rows = self.math.ceil(num_sequences / cols)
 
         fig_height = 500 * rows
-        pixel_spacing = 80
+        pixel_spacing = 110
 
-        horizontal_spacing = 0.1
+        horizontal_spacing = 0.24
         vertical_spacing = pixel_spacing / fig_height
 
         # Create subplots
