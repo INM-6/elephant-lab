@@ -76,16 +76,17 @@ class PlotlyImageSequenceFigure:
             duration_ms = (seq.t_stop - seq.t_start).rescale(self.pq.ms).magnitude
 
             data = seq.magnitude
+
+            data = self.np.where(self.np.isinf(data), self.np.nan, data)
+
             if self.np.iscomplexobj(data):
                 data = self.np.abs(data)
                 unit_str = f"|{seq.units}|"
             else:
                 unit_str = str(seq.units)
-            mask = self.np.isfinite(data)
-            if self.np.any(mask):
-                zmin = self.np.min(data[mask])
-                zmax = self.np.max(data[mask])
-            else:
+            
+            zmin, zmax = self.np.nanmin(data), self.np.nanmax(data)
+            if not self.np.isfinite(zmin) or not self.np.isfinite(zmax):
                 zmin, zmax = 0, 1  # fallback
 
             # Colorbar
