@@ -75,20 +75,31 @@ class PlotlyImageSequenceFigure:
             num_frames, height, width = seq.shape
             duration_ms = (seq.t_stop - seq.t_start).rescale(self.pq.ms).magnitude
 
-            zmin = self.np.min(seq.magnitude)
-            zmax = self.np.max(seq.magnitude)
+            data = seq.magnitude
+
+            data = self.np.where(self.np.isinf(data), self.np.nan, data)
+
+            if self.np.iscomplexobj(data):
+                data = self.np.abs(data)
+                unit_str = f"|{seq.units}|"
+            else:
+                unit_str = str(seq.units)
+            
+            zmin, zmax = self.np.nanmin(data), self.np.nanmax(data)
+            if not self.np.isfinite(zmin) or not self.np.isfinite(zmax):
+                zmin, zmax = 0, 1  # fallback
 
             # Colorbar
             colorbar_x = get_colorbar_x(col)
             colorbar_y = get_colorbar_y(row)
             heatmap = self.go.Heatmap(
-                z=seq[0].magnitude,
+                z=data[0],
                 colorscale=color_scale,
                 zmin=zmin,
                 zmax=zmax,
                 showscale=True,
                 colorbar=dict(
-                    title=str(seq.units),
+                    title=unit_str,
                     x=colorbar_x,
                     y=colorbar_y,
                     len=get_subplot_free_y_space()
@@ -99,7 +110,7 @@ class PlotlyImageSequenceFigure:
             # Animation frames
             for k in range(num_frames):
                 frame_data = [self.go.Heatmap(
-                    z=seq[k].magnitude,
+                    z=data[k],
                     colorscale=color_scale,
                     zmin=zmin,
                     zmax=zmax
