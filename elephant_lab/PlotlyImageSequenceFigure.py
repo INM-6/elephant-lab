@@ -1,6 +1,6 @@
 class PlotlyImageSequenceFigure:
 
-    from .utils import PlotlyUtils
+    from .utils import OutputUtils
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     import numpy as np
@@ -80,12 +80,12 @@ class PlotlyImageSequenceFigure:
 
             data = self.np.where(self.np.isinf(data), self.np.nan, data)
 
-            unit_str = self.PlotlyUtils.convert_unit_to_label(seq.units, short=True)
+            unit_str = self.OutputUtils.convert_unit_to_label(seq.units, short=True)
             if self.np.iscomplexobj(data):
                 data = self.np.abs(data)
                 unit_str = f"|{unit_str}|"
 
-            unit_str = self.PlotlyUtils.center_text_for_length(unit_str, 5)
+            unit_str = self.OutputUtils.center_text_for_length(unit_str, 5)
             
             zmin, zmax = self.np.nanmin(data), self.np.nanmax(data)
             if not self.np.isfinite(zmin) or not self.np.isfinite(zmax):
@@ -159,7 +159,7 @@ class PlotlyImageSequenceFigure:
             # Add spatial scale to axes
             if hasattr(seq, 'spatial_scale') and seq.spatial_scale is not None:
                 spatial_scale = seq.spatial_scale
-                spatial_label = self.PlotlyUtils.convert_unit_to_label(spatial_scale.units)
+                spatial_label = self.OutputUtils.convert_unit_to_label(spatial_scale.units)
                 self.fig.update_xaxes(title_text=spatial_label, row=row, col=col)
                 self.fig.update_yaxes(title_text=spatial_label, row=row, col=col)
 

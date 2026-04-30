@@ -8,7 +8,7 @@ from elephant_lab.PlotlyGraphFigure import *
 from elephant_lab.PlotlyGraphContainer import *
 from elephant_lab.PlotlyGraphDataTypes import SpikeTrainRasterPlot
 from elephant_lab.PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
-from elephant_lab.utils import PlotlyUtils
+from elephant_lab.utils import OutputUtils
 from ipywidgets import FloatRangeSlider
 
 def parse_plotly_color(color_str):
@@ -39,14 +39,14 @@ def three_spikeTrainRasterPlots() -> PlotlyGraphFigure:
     return PlotlyGraphFigure([spikeTrainRasterPlot1, spikeTrainRasterPlot2, spikeTrainRasterPlot3], overlap_on_compress=False)
 
 def test_plotlyUtils_can_convert_units():
-    assert PlotlyUtils.can_convert_units(pq.s, pq.ms)==1
-    assert PlotlyUtils.can_convert_units(pq.ms, pq.s)==1
-    assert PlotlyUtils.can_convert_units(pq.s, pq.V)==-1
-    assert PlotlyUtils.can_convert_units(pq.s, pq.s)==0
+    assert OutputUtils.can_convert_units(pq.s, pq.ms)==1
+    assert OutputUtils.can_convert_units(pq.ms, pq.s)==1
+    assert OutputUtils.can_convert_units(pq.s, pq.V)==-1
+    assert OutputUtils.can_convert_units(pq.s, pq.s)==0
 
 def test_plotlyUtils_convert_to_other_units():
-    assert np.isclose(PlotlyUtils.convert_to_other_units(1, pq.s, pq.ms), 1000)
-    assert np.isclose(PlotlyUtils.convert_to_other_units(1000, pq.ms, pq.s), 1)
+    assert np.isclose(OutputUtils.convert_to_other_units(1, pq.s, pq.ms), 1000)
+    assert np.isclose(OutputUtils.convert_to_other_units(1000, pq.ms, pq.s), 1)
 
 def test_height(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
     assert none_plotlyGraphFigure.fig.layout.height == 600

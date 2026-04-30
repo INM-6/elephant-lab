@@ -1,4 +1,4 @@
-class PlotlyUtils:
+class OutputUtils:
     import quantities as pq
     import numpy as np
     import sys
@@ -18,14 +18,14 @@ class PlotlyUtils:
         
     @staticmethod
     def convert_to_other_units(val, unit, convert_unit):
-        q = PlotlyUtils.pq.Quantity(val, unit)
+        q = OutputUtils.pq.Quantity(val, unit)
         return q.rescale(convert_unit).magnitude
     
     @staticmethod
     def convert_unit_to_label(unit, short=False):
         if unit is None:
             return ""
-        pq = PlotlyUtils.pq
+        pq = OutputUtils.pq
 
         if short:
             return str(unit.dimensionality) if unit != pq.dimensionless else ""
@@ -89,7 +89,7 @@ class PlotlyUtils:
         Fully vectorized formatting of values with automatic per-value decimal digits.
         Handles zeros, NaN, and inf without warnings.
         """
-        np = PlotlyUtils.np
+        np = OutputUtils.np
         abs_xs = np.abs(values)
 
         # Replace zeros, NaN, and inf with 1 for log10
@@ -120,7 +120,7 @@ class PlotlyUtils:
 
     @staticmethod
     def normalize(values, method="minmax", do_normalize=True):
-        np = PlotlyUtils.np
+        np = OutputUtils.np
         values = np.asarray(values, dtype=float)
         
         eps = np.finfo(values.dtype).eps
@@ -181,7 +181,7 @@ class PlotlyUtils:
         n = len(x)
         if threshold >= n or threshold == 0:
             return x, y
-        np = PlotlyUtils.np
+        np = OutputUtils.np
 
         sampled_x = np.empty(threshold)
         sampled_y = np.empty(threshold)

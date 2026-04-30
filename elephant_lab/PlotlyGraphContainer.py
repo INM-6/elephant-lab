@@ -1,6 +1,6 @@
 class PlotlyGraphDataType:
 
-    from .utils import PlotlyUtils
+    from .utils import OutputUtils
 
     def __init__(self, data, name_fallback='Trace', **kwargs):
         if data is None:
@@ -71,12 +71,12 @@ class PlotlyGraphDataType:
                 self.y = list(self.y)
 
         except Exception as e:
-            self.PlotlyUtils.print_warning(f"Error extracting data for trace '{self.name}': {e}")
+            self.OutputUtils.print_warning(f"Error extracting data for trace '{self.name}': {e}")
             self.x, self.y = None, None
 
 class PlotlyGraphDataTypeList():
     import numpy as np
-    from .utils import PlotlyUtils
+    from .utils import OutputUtils
 
     def __init__(self, data, name_fallback='Trace'):
         self.data_list = []
@@ -94,14 +94,14 @@ class PlotlyGraphDataTypeList():
                         d = PlotlyGraphDataType(d, name_fallback)
                     self.data_list.append(d)
                 except Exception as e:
-                    self.PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
+                    self.OutputUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
         else:
             try:
                 if not isinstance(data, PlotlyGraphDataType):
                     data = PlotlyGraphDataType(data, name_fallback)
                 self.data_list = [data]
             except Exception as e:
-                self.PlotlyUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
+                self.OutputUtils.print_warning(f"Failed to convert data to PlotlyGraphDataType: {e}")
 
     def is_trace_list(self,data_list):
         """
@@ -188,7 +188,7 @@ class PlotlyGraphDataTypeList():
             x_length = len(x_values)
             y_length = len(y_values)
             if data.x is None or data.y is None or x_length == 0 or y_length == 0 or x_length != y_length:
-                self.PlotlyUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
+                self.OutputUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
                 continue
 
             if first:
@@ -203,11 +203,11 @@ class PlotlyGraphDataTypeList():
                 #Try to convert to common_units
                 if common_units_x is not None and hasattr(data, "units_x"):
                     units_x = data.units_x
-                    can_convert = self.PlotlyUtils.can_convert_units(units_x, common_units_x)
+                    can_convert = self.OutputUtils.can_convert_units(units_x, common_units_x)
                     if can_convert == -1:
                         common_units_x = None
                     elif can_convert == 1:
-                        x_values= self.PlotlyUtils.convert_to_other_units(x_values, units_x, common_units_x)
+                        x_values= self.OutputUtils.convert_to_other_units(x_values, units_x, common_units_x)
                         units_x = common_units_x
                 else:
                     common_units_x = None
@@ -229,7 +229,7 @@ class PlotlyGraphDataTypeList():
 
             x_length = len(x_values)
             if x_length == 0:
-                self.PlotlyUtils.print_warning(f"Skipping trace '{data.name}' because there is no data after filtering by x_range.")
+                self.OutputUtils.print_warning(f"Skipping trace '{data.name}' because there is no data after filtering by x_range.")
                 continue
             filtered.append(data)
 
@@ -242,7 +242,7 @@ class PlotlyGraphDataTypeList():
 
         self.is_default_zero_based = is_default_zero_based
         if len(filtered) == 0:
-            self.PlotlyUtils.print_warning("No valid data to display after normalization and filtering.")
+            self.OutputUtils.print_warning("No valid data to display after normalization and filtering.")
             self.data_list = [PlotlyGraphDataType(None)]
             return
         self.is_empty = False
@@ -269,7 +269,7 @@ class PlotlyGraphDataTypeList():
             y_values = data.y
 
             if self.is_downscaled:
-                x_values, y_values = self.PlotlyUtils.lttb_downsample(x_values, y_values, max_points_per_graph)
+                x_values, y_values = self.OutputUtils.lttb_downsample(x_values, y_values, max_points_per_graph)
 
             if index == 0:
                 if hasattr(data, "units_y"):
@@ -280,17 +280,17 @@ class PlotlyGraphDataTypeList():
             else:
                 if common_units_y is not None and hasattr(data, "units_y"):
                     units_y = data.units_y
-                    can_convert = self.PlotlyUtils.can_convert_units(units_y, common_units_y)
+                    can_convert = self.OutputUtils.can_convert_units(units_y, common_units_y)
                     if can_convert == -1:
                         common_units_y = None
                     elif can_convert == 1:
-                        y_values= self.PlotlyUtils.convert_to_other_units(y_values, units_y, common_units_y)
+                        y_values= self.OutputUtils.convert_to_other_units(y_values, units_y, common_units_y)
                         units_y = common_units_y
                 else:
                     common_units_y = None
 
             # Only normalize if requested
-            y_values, is_data_default_normalized_y = self.PlotlyUtils.normalize(
+            y_values, is_data_default_normalized_y = self.OutputUtils.normalize(
                 y_values, method=normalization_method, do_normalize=normalize_y_values
             )
 

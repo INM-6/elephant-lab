@@ -1,5 +1,5 @@
 class PlotlyGraphFigure:
-    from .utils import PlotlyUtils
+    from .utils import OutputUtils
     from .PlotlyGraphContainer import PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
 
     import plotly.graph_objects as go
@@ -149,11 +149,11 @@ class PlotlyGraphFigure:
                         )
                     if d.units_x is not None:
                         self._update_layout_options_dict(f"xaxis{row}",dict(
-                            title=self.PlotlyUtils.convert_unit_to_label(d.units_x)
+                            title=self.OutputUtils.convert_unit_to_label(d.units_x)
                         ))
                     if d.units_y is not None:
                         self._update_layout_options_dict(f"yaxis{row}",dict(
-                            title=self.PlotlyUtils.convert_unit_to_label(d.units_y)
+                            title=self.OutputUtils.convert_unit_to_label(d.units_y)
                         ))
                     if self._can_have_custom_ticklabels() and hasattr(d, 'use_name_as_ticklabels'):
                         if d.use_name_as_ticklabels:
@@ -169,7 +169,7 @@ class PlotlyGraphFigure:
                             else:
                                 self.hide_legend = d.use_name_as_ticklabels
             except Exception as e:
-                self.PlotlyUtils.print_warning(f"Failed to add trace '{d.name}': {e}")
+                self.OutputUtils.print_warning(f"Failed to add trace '{d.name}': {e}")
 
     def _create_slider(self):
         """Updates the range slider to the last x-axis"""
@@ -229,7 +229,7 @@ class PlotlyGraphFigure:
         if self.data.common_units_x is not None:
             for i, (x, unit_index) in enumerate(zip(xs, unit_indice)):
                 unit = units[unit_index]
-                can_convert = self.PlotlyUtils.can_convert_units(
+                can_convert = self.OutputUtils.can_convert_units(
                     unit=unit,
                     convert_unit=self.data.common_units_x
                 )
@@ -237,11 +237,11 @@ class PlotlyGraphFigure:
                     self.data.common_units_x = None
                     break
                 elif can_convert == 1:  # needs conversion
-                    xs[i] = self.PlotlyUtils.convert_to_other_units(
+                    xs[i] = self.OutputUtils.convert_to_other_units(
                         x, unit=unit, convert_unit=self.data.common_units_x
                     )
                     if i >= number_of_events:
-                        widths[i] = self.PlotlyUtils.convert_to_other_units(
+                        widths[i] = self.OutputUtils.convert_to_other_units(
                             widths[i], unit=unit, convert_unit=self.data.common_units_x
                         )
                 else:  # already compatible
@@ -263,9 +263,9 @@ class PlotlyGraphFigure:
             min_bar_width = (self.total_maxX - self.total_minX) / 500
 
             # Format values
-            xs_str = self.PlotlyUtils.format_with_auto_digits(xs)
-            start_str = self.PlotlyUtils.format_with_auto_digits(xs - widths/2)
-            end_str = self.PlotlyUtils.format_with_auto_digits(xs + widths/2)
+            xs_str = self.OutputUtils.format_with_auto_digits(xs)
+            start_str = self.OutputUtils.format_with_auto_digits(xs - widths/2)
+            end_str = self.OutputUtils.format_with_auto_digits(xs + widths/2)
 
             # Build hover text
             hover_texts = self.np.where(
@@ -328,11 +328,11 @@ class PlotlyGraphFigure:
         if self._is_single_plot():
             if self.data.common_units_x is not None:
                 self._update_layout_options_dict("xaxis", dict(
-                    title=self.PlotlyUtils.convert_unit_to_label(self.data.common_units_x)
+                    title=self.OutputUtils.convert_unit_to_label(self.data.common_units_x)
                 ))
             if self.data.common_units_y is not None:
                 self._update_layout_options_dict("yaxis", dict(
-                    title=self.PlotlyUtils.convert_unit_to_label(self.data.common_units_y)
+                    title=self.OutputUtils.convert_unit_to_label(self.data.common_units_y)
                 ))
         else:
             if self.data.common_units_x is not None:
