@@ -1,4 +1,9 @@
-from ._version import __version__ as __version__
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("elephant-lab")
+except PackageNotFoundError:
+    __version__ = "unknown"
 
 
 
