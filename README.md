@@ -110,17 +110,6 @@ You will also need to remove the symlink created by `jupyter labextension develo
 
 ## Testing
 
-### Frontend tests
-
-Elephant Lab uses [Jest](https://jestjs.io/) for JavaScript unit tests:
-
-```bash
-jlpm
-jlpm test
-```
-
-### Integration tests
-
 End-to-end tests use [Playwright](https://playwright.dev/). See [ui-tests/README.md](./ui-tests/README.md) for details.
 
 ## Contributing
