@@ -542,7 +542,7 @@ class ElephantLab_info:
             self._kv('Sampling Rate', neo_obj.sampling_rate),
             self._kv('t_start', neo_obj.t_start),
             self._kv('t_stop', neo_obj.t_stop),
-            self._kv('Duration', neo_obj.duration),
+            self._kv('Duration', neo_obj.duration.simplified),
             self._kv('Description', neo_obj.description) if neo_obj.description else '',
             self._kv('File Origin', neo_obj.file_origin) if getattr(neo_obj, 'file_origin', None) else '',
         )]
