@@ -5,7 +5,7 @@ class ElephantLab_info:
     import numpy as np
     from elephant import statistics
     from neo.core.regionofinterest import CircularRegionOfInterest, RectangularRegionOfInterest, PolygonRegionOfInterest
-    from neo import SpikeTrain, AnalogSignal, Event, Epoch, ImageSequence, IrregularlySampledSignal
+    from neo import SpikeTrain, AnalogSignal, Event, Epoch, ImageSequence, IrregularlySampledSignal, Segment
     from neo.core.baseneo import BaseNeo
     from neo.core.container import Container
     from neo.core.spiketrainlist import SpikeTrainList
@@ -461,10 +461,15 @@ class ElephantLab_info:
             for n in neo_obj._child_containers
             if getattr(neo_obj, n)
         )
+        t_start = neo_obj.t_start if isinstance(neo_obj, self.Segment) else None
+        t_stop = neo_obj.t_stop if isinstance(neo_obj, self.Segment) else None
         parts.append(self._section(
             self._kv('Type', neo_obj.__class__.__name__),
             self._kv('Contents', container_info) if container_info else '',
             self._kv('Name', neo_obj.name) if neo_obj.name else '',
+            self._kv('t_start', t_start) if t_start is not None else '',
+            self._kv('t_stop', t_stop) if t_stop is not None else '',
+            self._kv('Duration', t_stop - t_start) if t_start is not None and t_stop is not None else '',
             self._kv('Description', neo_obj.description) if neo_obj.description else '',
         ))
         if neo_obj.annotations:
