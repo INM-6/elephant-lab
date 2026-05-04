@@ -2,7 +2,6 @@
 
 # Elephant Lab
 
-[![Github Actions Status](https://github.com/INM-6/elephant-lab/workflows/Build/badge.svg)](https://github.com/INM-6/elephant-lab/actions/workflows/build.yml)
 
 ***Explore, Visualize, and Analyze Electrophysiology Data — Right in JupyterLab***
 
@@ -118,11 +117,10 @@ Do you have a question, suggestion, or found a bug? Please open an [issue](https
 
 Would you like to fix a problem or add a feature? Please open a [pull request](https://github.com/INM-6/elephant-lab/pulls).
 
-For packaging and release instructions, see [RELEASE.md](RELEASE.md).
 
 ## Authors and Contributors
 
-**Main authors:** [Tobias Michels](https://github.com/tomichels), [Jan Nolten](https://github.com/JanNolten), [Maximilian Kramer](https://github.com/maxkramer), [Björn Müller](https://github.com/muellerbjoern)
+**Main authors:** [Tobias Michels](https://github.com/tomichels), [Jan Nolten](https://github.com/JanNolten), [Maximilian Kramer](https://github.com/ojoenlanuca), [Björn Müller](https://github.com/muellerbjoern)
 
 **Contributors:** [Moritz Kern](https://github.com/Moritz-Alexander-Kern), [Michael Denker](https://github.com/mdenker)
 
@@ -130,4 +128,4 @@ For packaging and release instructions, see [RELEASE.md](RELEASE.md).
 
 Elephant Lab builds on the [Neo](https://neo-python.readthedocs.io/) electrophysiology data framework and the [Elephant](https://elephant.readthedocs.io/) analysis library.
 
-This project was developed at the [Institute of Neuroscience and Medicine (IAS-6)](https://www.fz-juelich.de/en/inm/inm-6), Forschungszentrum Jülich.
+This project was developed at the [Institute for Advanced Simulation, Computational and Systems Neuroscience (IAS-6)](https://www.fz-juelich.de/en/inm/inm-6), Forschungszentrum Jülich.
