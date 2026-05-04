@@ -67,7 +67,8 @@ class ElephantLab_info:
     def _render_info(self):
         with self._output_node_info:
             ElephantLab_info.clear_output()
-            self.pretty_print_of_selected_neo_objects()
+            with self.np.errstate(invalid='ignore', divide='ignore'):
+                self.pretty_print_of_selected_neo_objects()
 
     def set_details_panel_active(self, is_active: bool):
         self._is_panel_active = is_active
@@ -236,6 +237,19 @@ class ElephantLab_info:
             return f'{value.ndim}D array of shape {value.shape}'
         return str(value)
 
+    def _fmt(self, v, decimals=4) -> str:
+        try:
+            if self.np.iscomplexobj(v):
+                r, im = float(v.real), float(v.imag)
+                if self.np.isnan(r) and self.np.isnan(im):
+                    return 'nan'
+                if self.np.isinf(r) and self.np.isinf(im):
+                    return f'{"+" if r > 0 else "-"}inf{"+" if im > 0 else "-"}infj'
+                return f'{r:.{decimals}f}{im:+.{decimals}f}j'
+            return f'{float(v):.{decimals}f}'
+        except (TypeError, ValueError):
+            return str(v)
+
     # Overview panels (multiple selected)
     def _html_mixed_overview(self, items: list) -> str:
         type_counts = self.Counter(type(item['obj']).__name__ for item in items)
@@ -278,8 +292,8 @@ class ElephantLab_info:
             all_mag = self.np.concatenate([q.magnitude for q in all_times_list])
             unit_str = target_units.dimensionality
             parts += [
-                self._kv('Spike Time Min', f'{self.np.min(all_mag):.4f} {unit_str}'),
-                self._kv('Spike Time Max', f'{self.np.max(all_mag):.4f} {unit_str}'),
+                self._kv('Spike Time Min', f'{self._fmt(self.np.min(all_mag))} {unit_str}'),
+                self._kv('Spike Time Max', f'{self._fmt(self.np.max(all_mag))} {unit_str}'),
             ]
             parts += [
             self._h3('Time Range'),
@@ -303,11 +317,11 @@ class ElephantLab_info:
             rate_units = self.statistics.mean_firing_rate(spiketrains[0]).units.dimensionality
             parts += [
                 self._h3(f'Firing Rates ({rate_units})'),
-                self._kv_selectable('Min', f'{min(mags):.4f}', 'firing_rate',
+                self._kv_selectable('Min', self._fmt(min(mags)), 'firing_rate',
                     {'value': float(min(mags))}),
-                self._kv_selectable('Max', f'{max(mags):.4f}', 'firing_rate',
+                self._kv_selectable('Max', self._fmt(max(mags)), 'firing_rate',
                     {'value': float(max(mags))}),
-                self._kv('Average', f'{self.np.mean(mags):.4f}'),
+                self._kv('Average', self._fmt(self.np.mean(mags))),
             ]
 
         # CV
@@ -323,11 +337,11 @@ class ElephantLab_info:
             cvs = list(cv_per_st.values())
             parts += [
                 self._h3('Coefficient of Variation (CV)'),
-                self._kv_selectable('Min', f'{min(cvs):.4f}', 'cv',
+                self._kv_selectable('Min', self._fmt(min(cvs)), 'cv',
                     {'value': float(min(cvs))}),
-                self._kv_selectable('Max', f'{max(cvs):.4f}', 'cv',
+                self._kv_selectable('Max', self._fmt(max(cvs)), 'cv',
                     {'value': float(max(cvs))}),
-                self._kv('Average', f'{self.np.mean(cvs):.4f}'),
+                self._kv('Average', self._fmt(self.np.mean(cvs))),
             ]
 
 
@@ -382,9 +396,9 @@ class ElephantLab_info:
             self._kv('Duration Max', max(durations)),
             self._kv('t_start Min', min(all_t_starts)),
             self._kv('t_stop Max', max(all_t_stops)),
-            self._kv(f'Sampling Interval Min ({interval_unit})', f'{self.np.min(all_intervals):.4f}'),
-            self._kv(f'Sampling Interval Max ({interval_unit})', f'{self.np.max(all_intervals):.4f}'),
-            self._kv(f'Sampling Interval Mean ({interval_unit})', f'{self.np.mean(all_intervals):.4f}'),
+            self._kv(f'Sampling Interval Min ({interval_unit})', self._fmt(self.np.min(all_intervals))),
+            self._kv(f'Sampling Interval Max ({interval_unit})', self._fmt(self.np.max(all_intervals))),
+            self._kv(f'Sampling Interval Mean ({interval_unit})', self._fmt(self.np.mean(all_intervals))),
         ]
 
         all_annotations = [s.annotations for s in signals]
@@ -518,7 +532,7 @@ class ElephantLab_info:
         table_data[0] += aa_keys
 
         def make_row(i):
-            row = [i, f'{times[i].magnitude:.4f}']
+            row = [i, self._fmt(times[i].magnitude)]
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')
@@ -563,7 +577,7 @@ class ElephantLab_info:
         times = neo_obj.times
 
         def make_row(i):
-            return [i, f'{times[i].magnitude:.3f}'] + [f'{neo_obj[i, ch].item():.3f}' for ch in channel_indices]
+            return [i, self._fmt(times[i].magnitude, 3)] + [self._fmt(neo_obj[i, ch].item(), 3) for ch in channel_indices]
 
         if len(times) > 20:
             for i in range(10): table_data.append(make_row(i))
@@ -602,7 +616,7 @@ class ElephantLab_info:
         table_data = [header]
 
         def make_row(i):
-            row = [i, f'{times[i].magnitude:.4f}', f'{durations[i].magnitude:.4f}', labels[i]]
+            row = [i, self._fmt(times[i].magnitude), self._fmt(durations[i].magnitude), labels[i]]
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')
@@ -642,7 +656,7 @@ class ElephantLab_info:
         table_data = [header]
 
         def make_row(i):
-            return [i, f'{times[i].magnitude:.4f}', f'{self.np.mean(neo_obj[i].magnitude):.4f}']
+            return [i, self._fmt(times[i].magnitude), self._fmt(self.np.mean(neo_obj[i].magnitude))]
 
         if n_frames > 20:
             for i in range(10): table_data.append(make_row(i))
@@ -682,7 +696,7 @@ class ElephantLab_info:
         table_data = [header]
 
         def make_row(i):
-            return [i, f'{times[i].magnitude:.4f}'] + [f'{neo_obj[i, ch].item():.4f}' for ch in channel_indices]
+            return [i, self._fmt(times[i].magnitude)] + [self._fmt(neo_obj[i, ch].item()) for ch in channel_indices]
 
         if n_samples > 20:
             for i in range(10): table_data.append(make_row(i))
@@ -719,7 +733,7 @@ class ElephantLab_info:
         table_data = [header]
 
         def make_row(i):
-            row = [i, f'{times[i].magnitude:.4f}', labels[i]]
+            row = [i, self._fmt(times[i].magnitude), labels[i]]
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')
