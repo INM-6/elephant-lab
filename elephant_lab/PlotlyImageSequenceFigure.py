@@ -17,7 +17,7 @@ class PlotlyImageSequenceFigure:
         rows = self.math.ceil(num_sequences / cols)
 
         fig_height = 500 * rows
-        pixel_spacing = 110
+        pixel_spacing = 140
 
         horizontal_spacing = 0.24
         vertical_spacing = pixel_spacing / fig_height
@@ -159,9 +159,11 @@ class PlotlyImageSequenceFigure:
             # Add spatial scale to axes
             if hasattr(seq, 'spatial_scale') and seq.spatial_scale is not None:
                 spatial_scale = seq.spatial_scale
-                spatial_label = self.OutputUtils.convert_unit_to_label(spatial_scale.units)
+                spatial_label = (
+                    f"{spatial_scale} X {spatial_scale}<br>"
+                    f"({self.OutputUtils.get_text_label(spatial_scale.units)})"
+                )
                 self.fig.update_xaxes(title_text=spatial_label, row=row, col=col)
-                self.fig.update_yaxes(title_text=spatial_label, row=row, col=col)
 
         # Final layout
         self.fig.frames = self.frames
