@@ -292,8 +292,8 @@ class ElephantLab_info:
             all_mag = self.np.concatenate([q.magnitude for q in all_times_list])
             unit_str = target_units.dimensionality
             parts += [
-                self._kv('Spike Time Min', f'{self._fmt(self.np.nanmin(all_mag))} {unit_str}'),
-                self._kv('Spike Time Max', f'{self._fmt(self.np.nanmax(all_mag))} {unit_str}'),
+                self._kv('Spike Time Min', f'{self._fmt(self.np.min(all_mag))} {unit_str}'),
+                self._kv('Spike Time Max', f'{self._fmt(self.np.max(all_mag))} {unit_str}'),
             ]
             parts += [
             self._h3('Time Range'),
@@ -321,7 +321,7 @@ class ElephantLab_info:
                     {'value': float(min(mags))}),
                 self._kv_selectable('Max', self._fmt(max(mags)), 'firing_rate',
                     {'value': float(max(mags))}),
-                self._kv('Average', self._fmt(self.np.nanmean(mags))),
+                self._kv('Average', self._fmt(self.np.mean(mags))),
             ]
 
         # CV
@@ -341,7 +341,7 @@ class ElephantLab_info:
                     {'value': float(min(cvs))}),
                 self._kv_selectable('Max', self._fmt(max(cvs)), 'cv',
                     {'value': float(max(cvs))}),
-                self._kv('Average', self._fmt(self.np.nanmean(cvs))),
+                self._kv('Average', self._fmt(self.np.mean(cvs))),
             ]
 
 
@@ -396,9 +396,9 @@ class ElephantLab_info:
             self._kv('Duration Max', max(durations)),
             self._kv('t_start Min', min(all_t_starts)),
             self._kv('t_stop Max', max(all_t_stops)),
-            self._kv(f'Sampling Interval Min ({interval_unit})', self._fmt(self.np.nanmin(all_intervals))),
-            self._kv(f'Sampling Interval Max ({interval_unit})', self._fmt(self.np.nanmax(all_intervals))),
-            self._kv(f'Sampling Interval Mean ({interval_unit})', self._fmt(self.np.nanmean(all_intervals))),
+            self._kv(f'Sampling Interval Min ({interval_unit})', self._fmt(self.np.min(all_intervals))),
+            self._kv(f'Sampling Interval Max ({interval_unit})', self._fmt(self.np.max(all_intervals))),
+            self._kv(f'Sampling Interval Mean ({interval_unit})', self._fmt(self.np.mean(all_intervals))),
         ]
 
         all_annotations = [s.annotations for s in signals]
@@ -656,7 +656,7 @@ class ElephantLab_info:
         table_data = [header]
 
         def make_row(i):
-            return [i, self._fmt(times[i].magnitude), self._fmt(self.np.nanmean(neo_obj[i].magnitude))]
+            return [i, self._fmt(times[i].magnitude), self._fmt(self.np.mean(neo_obj[i].magnitude))]
 
         if n_frames > 20:
             for i in range(10): table_data.append(make_row(i))
