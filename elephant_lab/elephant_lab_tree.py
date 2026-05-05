@@ -478,9 +478,9 @@ class ElephantLab_tree:
                 return node.value
             raise ValueError(f'Unsupported expression node: {type(node).__name__}')
 
-        normalized = self.re.sub(r'\bAND\b', 'and', expression.strip())
-        normalized = self.re.sub(r'\bOR\b', 'or', normalized)
-        normalized = self.re.sub(r'\bNOT\b', 'not', normalized)
+        normalized = self.re.sub(r'\band\b', 'and', expression.strip(), flags=self.re.IGNORECASE)
+        normalized = self.re.sub(r'\bor\b', 'or', normalized, flags=self.re.IGNORECASE)
+        normalized = self.re.sub(r'\bnot\b', 'not', normalized, flags=self.re.IGNORECASE)
         try:
             tree = self.ast.parse(normalized, mode='eval')
         except SyntaxError as e:
