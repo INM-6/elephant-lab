@@ -76,6 +76,7 @@ class ElephantLabExtension {
 	private myVisTabs: Widget[];
 	private widget: DockPanel;
 	private _updateTimer: number | null = null;
+	private _clickTimer: number | null = null;
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
 	private outarea_neo_tree: OutputArea | null;
@@ -85,6 +86,8 @@ class ElephantLabExtension {
 	private topBar: Widget | null = null;
 	private plotlyFrontend: PlotlyFrontend | null;
 	private _lastClickedNode: string | null = null;
+	private _explorerWidget: Panel | null = null;
+	private _detailsWidget: Panel | null = null;
 
 	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -215,13 +218,31 @@ class ElephantLabExtension {
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
 
+		// Keep backend in sync when the user switches between Details and Explore tabs
+		for (const tabBar of this.widget.tabBars()) {
+			const hasOurPanels = Array.from(tabBar.titles).some(
+				t => t.owner === this._detailsWidget || t.owner === this._explorerWidget
+			);
+			if (hasOurPanels) {
+				tabBar.currentChanged.connect((_sender, args) => {
+					const curr = args.currentTitle?.owner;
+					if (this.kernelBridge) {
+						this.kernelBridge.executeCode(
+							getPythonCode(PythonCodeKey.SetPanelVisibility, curr === this._explorerWidget, curr === this._detailsWidget),
+							null, false
+						);
+					}
+				});
+				break;
+			}
+		}
 
 		// Handle HTML tree interactions (expand/collapse + selection)
-		// Also handles Shift+Click multi selection in neo tree
+		// All clicks go through a 250ms timer so dblclick can cancel before any Python call fires.
 		this.outarea_neo_tree!.node.addEventListener('click', (e) => {
 			const target = e.target as HTMLElement;
 
-			// Expand/collapse -> pure JS 
+			// Expand/collapse -> pure JS
 			const toggle = target.closest('.jup-toggle') as HTMLElement;
 			if (toggle) {
 				const row = toggle.closest('.jup-row') as HTMLElement;
@@ -240,69 +261,137 @@ class ElephantLabExtension {
 			const nodeId = row.getAttribute('data-node-id')!;
 			const isShift = (e as MouseEvent).shiftKey;
 			const isCtrl = (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey;
+			const anchorId = this._lastClickedNode; // capture anchor before timer fires
 
-			if (isShift && this._lastClickedNode) {
-				// Collect all visible node rows in DOM order
-				const allRows = Array.from(
-					this.outarea_neo_tree!.node.querySelectorAll('.jup-row[data-node-id]')
-				) as HTMLElement[];
+			if (this._clickTimer) {
+				window.clearTimeout(this._clickTimer);
+				this._clickTimer = null;
+			}
 
-				const ids = allRows.map(r => r.getAttribute('data-node-id')!);
-				const fromIdx = ids.indexOf(this._lastClickedNode);
-				const toIdx = ids.indexOf(nodeId);
+			this._clickTimer = window.setTimeout(() => {
+				this._clickTimer = null;
 
-				if (fromIdx !== -1 && toIdx !== -1) {
-					const [start, end] = fromIdx < toIdx
-						? [fromIdx, toIdx]
-						: [toIdx, fromIdx];
+				if (isShift && anchorId) {
+					// Shift+Click: select range of parents only
+					const allRows = Array.from(
+						this.outarea_neo_tree!.node.querySelectorAll('.jup-row[data-node-id]')
+					) as HTMLElement[];
+					const ids = allRows.map(r => r.getAttribute('data-node-id')!);
+					const fromIdx = ids.indexOf(anchorId);
+					const toIdx = ids.indexOf(nodeId);
 
-					// Clear previous selection visually
-					this.outarea_neo_tree!.node
-						.querySelectorAll('.jup-row.jup-selected')
-						.forEach(el => el.classList.remove('jup-selected'));
+					if (fromIdx !== -1 && toIdx !== -1) {
+						const [start, end] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
 
-					// Select the range visually
-					const rangeIds: string[] = [];
-					for (let i = start; i <= end; i++) {
-						allRows[i].classList.add('jup-selected');
-						rangeIds.push(ids[i]);
-					}
+						this.outarea_neo_tree!.node
+							.querySelectorAll('.jup-row.jup-selected')
+							.forEach(el => el.classList.remove('jup-selected'));
 
-					// Call Python method with the whole range
-					const idsJson = JSON.stringify(rangeIds);
-					const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson);
-					this.kernelBridge!.executeCode(code, null, false);
-				}
-			} else {
-				if (isCtrl) {
-					row.classList.toggle('jup-selected');
-					const childContainer = row.nextElementSibling as HTMLElement;
-					if (childContainer?.classList.contains('jup-children')) {
-						if (!row.classList.contains('jup-selected')) {
-							// just deselected — remove children too
-							childContainer.querySelectorAll('.jup-row[data-node-id]')
-								.forEach(el => el.classList.remove('jup-selected'));
-						} else {
-							// just selected — add children too
-							childContainer.querySelectorAll('.jup-row[data-node-id]')
-								.forEach(el => el.classList.add('jup-selected'));
+						const rangeIds: string[] = [];
+						for (let i = start; i <= end; i++) {
+							allRows[i].classList.add('jup-selected');
+							rangeIds.push(ids[i]);
 						}
+
+						const idsJson = JSON.stringify(rangeIds);
+						const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson);
+						this.kernelBridge!.executeCode(code, null, false);
 					}
+				} else if (isCtrl) {
+					// Ctrl+Click: toggle parent only
+					row.classList.toggle('jup-selected');
+					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True', 'False');
+					this.kernelBridge!.executeCode(code, null, false);
+					this._lastClickedNode = nodeId;
 				} else {
+					// Single click: select parent only
 					this.outarea_neo_tree!.node
 						.querySelectorAll('.jup-row.jup-selected')
 						.forEach(el => el.classList.remove('jup-selected'));
 					row.classList.add('jup-selected');
-					const childContainer = row.nextElementSibling as HTMLElement;
-					if (childContainer?.classList.contains('jup-children')) {
-						childContainer.querySelectorAll('.jup-row[data-node-id]')
-							.forEach(el => el.classList.add('jup-selected'));
-					}
+					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'False');
+					this.kernelBridge!.executeCode(code, null, false);
+					this._lastClickedNode = nodeId;
 				}
+			}, 250);
+		});
 
-				// Notify Python
-				const multiSelectPy = isCtrl ? 'True' : 'False';
-				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, multiSelectPy);
+		// Double-click: cancel the pending timer then select with children
+		this.outarea_neo_tree!.node.addEventListener('dblclick', (e) => {
+			const target = e.target as HTMLElement;
+
+			if (target.closest('.jup-toggle')) return;
+
+			const row = target.closest('.jup-row[data-node-id]') as HTMLElement;
+			if (!row) return;
+
+			const nodeId = row.getAttribute('data-node-id')!;
+			const isShift = (e as MouseEvent).shiftKey;
+			const isCtrl = (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey;
+			const anchorId = this._lastClickedNode;
+
+			if (this._clickTimer) {
+				window.clearTimeout(this._clickTimer);
+				this._clickTimer = null;
+			}
+
+			if (isShift && anchorId) {
+				// Shift+Double-Click: select range + all children recursively
+				const allRows = Array.from(
+					this.outarea_neo_tree!.node.querySelectorAll('.jup-row[data-node-id]')
+				) as HTMLElement[];
+				const ids = allRows.map(r => r.getAttribute('data-node-id')!);
+				const fromIdx = ids.indexOf(anchorId);
+				const toIdx = ids.indexOf(nodeId);
+
+				if (fromIdx !== -1 && toIdx !== -1) {
+					const [start, end] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+
+					this.outarea_neo_tree!.node
+						.querySelectorAll('.jup-row.jup-selected')
+						.forEach(el => el.classList.remove('jup-selected'));
+
+					const rangeIds: string[] = [];
+					for (let i = start; i <= end; i++) {
+						allRows[i].classList.add('jup-selected');
+						rangeIds.push(ids[i]);
+						const childContainer = allRows[i].nextElementSibling as HTMLElement;
+						if (childContainer?.classList.contains('jup-children')) {
+							childContainer.querySelectorAll('.jup-row[data-node-id]')
+								.forEach(el => el.classList.add('jup-selected'));
+						}
+					}
+
+					const idsJson = JSON.stringify(rangeIds);
+					const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson, true);
+					this.kernelBridge!.executeCode(code, null, false);
+				}
+			} else if (isCtrl) {
+				// Ctrl+Double-Click: toggle parent + all children recursively
+				row.classList.toggle('jup-selected');
+				const isNowSelected = row.classList.contains('jup-selected');
+				const childContainer = row.nextElementSibling as HTMLElement;
+				if (childContainer?.classList.contains('jup-children')) {
+					childContainer.querySelectorAll('.jup-row[data-node-id]')
+						.forEach(el => isNowSelected
+							? el.classList.add('jup-selected')
+							: el.classList.remove('jup-selected'));
+				}
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True', 'True');
+				this.kernelBridge!.executeCode(code, null, false);
+				this._lastClickedNode = nodeId;
+			} else {
+				// Regular double-click: clear selection, select parent + all children
+				this.outarea_neo_tree!.node
+					.querySelectorAll('.jup-row.jup-selected')
+					.forEach(el => el.classList.remove('jup-selected'));
+				row.classList.add('jup-selected');
+				const childContainer = row.nextElementSibling as HTMLElement;
+				if (childContainer?.classList.contains('jup-children')) {
+					childContainer.querySelectorAll('.jup-row[data-node-id]')
+						.forEach(el => el.classList.add('jup-selected'));
+				}
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'True');
 				this.kernelBridge!.executeCode(code, null, false);
 				this._lastClickedNode = nodeId;
 			}
@@ -771,7 +860,23 @@ class ElephantLabExtension {
 					if (data.code_to_insert) {
 						const notebookPanel = this.notebook_tracker.currentWidget;
 						if (notebookPanel) {
-							const activeCell = notebookPanel.content.activeCell;
+							const notebook = notebookPanel.content;
+
+							if (data.list_creation_code) {
+								// Insert a new code cell above the current cell containing
+								// the list creation code, so the list can be recreated
+								// after kernel restart by simply re-running that cell.
+								const originalCellIndex = notebook.activeCellIndex;
+								NotebookActions.insertAbove(notebook);
+								const newCell = notebook.activeCell;
+								if (newCell) {
+									newCell.model.sharedModel.setSource(data.list_creation_code);
+								}
+								// Move focus back to the original cell (shifted down by 1)
+								notebook.activeCellIndex = originalCellIndex + 1;
+							}
+
+							const activeCell = notebook.activeCell;
 							if (activeCell && activeCell.editor) {
 								activeCell.editor.replaceSelection!(data.code_to_insert);
 								console.log(`Elephant Lab: Inserted code at cursor.`);
@@ -995,7 +1100,7 @@ class ElephantLabExtension {
 		const colorGrade = createLabeledSelect({
 			label: "Color Grade",
 			icon: "fa-palette",
-			selectOptions: ["Viridis", "Plasma", "Inferno", "Magma", "Cividis", "Turbo"],
+			selectOptions: ["Viridis", "Plasma", "Inferno", "Magma", "Cividis", "Turbo", "hsv", "phase", "twilight"],
 			defaultValue: "Viridis",
 			title: "Color grade for the image sequence plot",
 			onChange: (value) => {
@@ -1041,12 +1146,14 @@ class ElephantLabExtension {
 		explorer_widget_info.title.label = 'Details';
 		explorer_widget_info.node.style.cssText = explorer_widget_info.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_info = this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1', session);
+		this._detailsWidget = explorer_widget_info;
 
 		// RAW
 		let explorer_widget_raw_plot = new Panel();
 		explorer_widget_raw_plot.title.label = 'Explore';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
+		this._explorerWidget = explorer_widget_raw_plot;
 
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });

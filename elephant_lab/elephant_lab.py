@@ -54,6 +54,10 @@ class ElephantLab:
         self.elephant_lab_info: ElephantLab.ElephantLab_info = self.ElephantLab_info(self)
         self.elephant_lab_plot: ElephantLab.ElephantLab_plot = self.ElephantLab_plot(self)
 
+    def set_panel_visibility(self, explore_active: bool, details_active: bool):
+        self.elephant_lab_plot.set_explore_panel_active(explore_active)
+        self.elephant_lab_info.set_details_panel_active(details_active)
+    
     def _get_obj_path(self, neo_node):
         path = []
         curr = neo_node.neo_object
@@ -208,6 +212,7 @@ class ElephantLab:
                         objects_for_list.append(neo_obj)
 
                 code_to_insert = ""
+                list_creation_code = ""
                 if len(paths) > 1:
                     all_vars = list(self.__main__.__dict__.keys())
                     list_base_name = "elephant_lab_list"
@@ -216,14 +221,15 @@ class ElephantLab:
                     while list_var_name in all_vars:
                         counter += 1
                         list_var_name = f"{list_base_name}_{counter}"
-                    
+
                     self.__main__.__dict__[list_var_name] = objects_for_list
-                    
+
                     code_to_insert = list_var_name
+                    list_creation_code = f"{list_var_name} = [{', '.join(paths)}]"
                 elif len(paths) == 1:
                     code_to_insert = paths[0]
 
-                print(self.json.dumps({"code_to_insert": code_to_insert}))
+                print(self.json.dumps({"code_to_insert": code_to_insert, "list_creation_code": list_creation_code}))
 
         except Exception as e:
             print(self.json.dumps({"code_to_insert": "", "error": str(e), "traceback": self.traceback.format_exc()}), file=self.sys.stdout)

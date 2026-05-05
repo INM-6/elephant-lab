@@ -19,7 +19,8 @@ class ElephantLab_tree:
     from neo.core.spiketrainlist import SpikeTrainList
     import ipywidgets as widgets
     import json
-    import ast 
+    import ast
+    import re
 
 
     from typing import TYPE_CHECKING
@@ -305,7 +306,7 @@ class ElephantLab_tree:
 
         return html, folder_node, child_nodes
             
-    def handle_selection(self, node_id, multi_select=False):
+    def handle_selection(self, node_id, multi_select=False, select_children=True):
         """Called from TypeScript when user clicks a node."""
         if node_id not in self._node_registry:
             return
@@ -315,29 +316,29 @@ class ElephantLab_tree:
         if not multi_select:
             self.elephant_lab_entity.selected_tree_nodes.clear()
 
-        if clicked_node in self.elephant_lab_entity.selected_tree_nodes:
-            self.elephant_lab_entity.selected_tree_nodes.discard(clicked_node)
-            # deselect children too
-            def deselect_children(node):
-                for child in node.nodes:
-                    self.elephant_lab_entity.selected_tree_nodes.discard(child)
-                    deselect_children(child)
-            deselect_children(clicked_node)
+        if clicked_node in self.elephant_lab_entity.selected_neo_objects:
+            self.elephant_lab_entity.selected_neo_objects.discard(clicked_node)
+            if select_children:
+                def deselect_recurse(node):
+                    for child in node.nodes:
+                        self.elephant_lab_entity.selected_neo_objects.discard(child)
+                        deselect_recurse(child)
+                deselect_recurse(clicked_node)
         else:
-            self.elephant_lab_entity.selected_tree_nodes.add(clicked_node)
-            # select children too
-            def select_children(node):
-                for child in node.nodes:
-                    self.elephant_lab_entity.selected_tree_nodes.add(child)
-                    select_children(child)
-            select_children(clicked_node)
+            self.elephant_lab_entity.selected_neo_objects.add(clicked_node)
+            if select_children:
+                def select_recurse(node):
+                    for child in node.nodes:
+                        self.elephant_lab_entity.selected_neo_objects.add(child)
+                        select_recurse(child)
+                select_recurse(clicked_node)
 
         self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
     
     # First collect all selected nodes, then fire the event only once
     # this prevents continous analyzing and plotting for multiple node selection
     # used when Shift+Clicking 
-    def handle_selection_range(self, node_ids: list):
+    def handle_selection_range(self, node_ids: list, with_children: bool = False):
         """Selects a range of nodes and fires the event only once at the end."""
         self.elephant_lab_entity.selected_tree_nodes.clear()
         
@@ -345,12 +346,13 @@ class ElephantLab_tree:
             if node_id not in self._node_registry:
                 continue
             node = self._node_registry[node_id]
-            self.elephant_lab_entity.selected_tree_nodes.add(node)
-            def select_children(n):
-                for child in n.nodes:
-                    self.elephant_lab_entity.selected_tree_nodes.add(child)
-                    select_children(child)
-            select_children(node)
+            self.elephant_lab_entity.selected_neo_objects.add(node)
+            if with_children:
+                def select_recurse(n):
+                    for child in n.nodes:
+                        self.elephant_lab_entity.selected_neo_objects.add(child)
+                        select_recurse(child)
+                select_recurse(node)
 
         # Fire only once after all nodes are selected
         self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
@@ -476,8 +478,11 @@ class ElephantLab_tree:
                 return node.value
             raise ValueError(f'Unsupported expression node: {type(node).__name__}')
 
+        normalized = self.re.sub(r'\bAND\b', 'and', expression.strip())
+        normalized = self.re.sub(r'\bOR\b', 'or', normalized)
+        normalized = self.re.sub(r'\bNOT\b', 'not', normalized)
         try:
-            tree = self.ast.parse(expression.strip(), mode='eval')
+            tree = self.ast.parse(normalized, mode='eval')
         except SyntaxError as e:
             print(f"ELEPHANT_LAB_FILTER_ERROR:Syntax error — {e}")
             return

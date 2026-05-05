@@ -73,6 +73,10 @@ function normalizeYValuesToggle(state: boolean): string {
 	return `elephant_lab_entity.elephant_lab_plot.set_normalize_y_values(${convert_bool_to_python_bool(state)})`;
 }
 
+function setPanelVisibility(exploreActive: boolean, detailsActive: boolean): string {
+	return `elephant_lab_entity.set_panel_visibility(${convert_bool_to_python_bool(exploreActive)}, ${convert_bool_to_python_bool(detailsActive)})`;
+}
+
 function toggleNeoTreeFilter(checkbox_id: string): string {
 	return `elephant_lab_entity.elephant_lab_tree.show_neo_obj("${checkbox_id}")`
 }
@@ -81,12 +85,12 @@ function expandNeoTree(checked: boolean): string {
 	return `elephant_lab_entity.elephant_lab_tree.expand_neo_tree(${convert_bool_to_python_bool(checked)})`
 }
 
-function handleTreeSelection(nodeId: string, multiSelectPy: boolean) {
-	return `elephant_lab_entity.elephant_lab_tree.handle_selection('${nodeId}', ${multiSelectPy})`;
+function handleTreeSelection(nodeId: string, multiSelectPy: string, selectChildrenPy: string = 'True'): string {
+	return `elephant_lab_entity.elephant_lab_tree.handle_selection('${nodeId}', ${multiSelectPy}, ${selectChildrenPy})`;
 }
 
-function handleSelectionRange(idsJson: string) {
-	return `elephant_lab_entity.elephant_lab_tree.handle_selection_range(${idsJson})`;
+function handleSelectionRange(idsJson: string, withChildren: boolean = false): string {
+	return `elephant_lab_entity.elephant_lab_tree.handle_selection_range(${idsJson}, ${withChildren ? 'True' : 'False'})`;
 }
 
 function selectByAnnotationFilter(expression: string): string {
@@ -119,6 +123,7 @@ export enum PythonCodeKey {
 	SelectByAnnotationFilter = 'selectByAnnotationFilter',
 	NormalizeYValuesToggle = 'normalizeYValuesToggle',
 	SetNormalizationMethod = 'setNormalizationMethod',
+	SetPanelVisibility = 'setPanelVisibility',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -140,11 +145,12 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.ToggleNeoTreeFilter]: (...args: any[]) => toggleNeoTreeFilter(args[0]),
 	[PythonCodeKey.ExpandNeoTree]: (...args: any[]) => expandNeoTree(args[0]),
 	[PythonCodeKey.GetIOClass]: (...args: any[]) => getNeoIOClass(args[0]),
-	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1]),
-	[PythonCodeKey.HandleSelectionRange]: (...args: any[]) => handleSelectionRange(args[0]),
+	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1], args[2]),
+	[PythonCodeKey.HandleSelectionRange]: (...args: any[]) => handleSelectionRange(args[0], args[1]),
 	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
 	[PythonCodeKey.NormalizeYValuesToggle]: (...args: any[]) => normalizeYValuesToggle(args[0]),
 	[PythonCodeKey.SetNormalizationMethod]: (...args: any[]) => setNormalizationMethod(args[0]),
+	[PythonCodeKey.SetPanelVisibility]: (...args: any[]) => setPanelVisibility(args[0], args[1]),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {

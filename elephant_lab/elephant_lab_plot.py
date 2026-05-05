@@ -74,6 +74,8 @@ class ElephantLab_plot:
         ] = {}
         self.update_counter = 0
         self.comm: "ElephantLab_plot.Comm" = None
+        self._is_panel_active = False
+        self._selection_changed = False
 
         #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
         for key in self.RawPlotKey:
@@ -137,9 +139,12 @@ class ElephantLab_plot:
         ]
 
     def _raw_plot(self):
+        if not self._is_panel_active or (not self._selection_changed and not any(v["changed"] for v in self.plots.values())):
+            return
         neo_object_dict = None
-        selection_changed = not any(v["changed"] for v in self.plots.values())
+        selection_changed = self._selection_changed
         if selection_changed:
+            self._selection_changed = False
             neo_object_dict = {
                 self.NeoKey.spiketrain: self.SpikeTrain,
                 self.NeoKey.analogsignal: self.AnalogSignal,
@@ -261,11 +266,17 @@ class ElephantLab_plot:
         self.update_counter += 1
 
     def on_selection_changed(self):
+        self._selection_changed = True
         try:
             self._raw_plot()
         except Exception as e:
             if self.comm:
                 self.comm.send({"type": "error", "message": str(e)})
+
+    def set_explore_panel_active(self, is_active: bool):
+        self._is_panel_active = is_active
+        if is_active:
+            self._raw_plot()
 
     def create_explorer_raw_plot(self):
         self.comm = self.Comm(target_name="plot_channel")
@@ -410,7 +421,7 @@ class ElephantLab_plot:
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_ST]
         kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(data, title=f"Rasterplot for selected SpikeTrains", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
+        fig = self.PlotlyGraphFigure(data, title="Rasterplots", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 
@@ -428,7 +439,7 @@ class ElephantLab_plot:
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
         kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(data, title=f"Normalized LFP-Plots for selected AnalogSignals and IrregularlySampledSignals", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, **kwargs_plot_dict)
+        fig = self.PlotlyGraphFigure(data, title="LFP-Plots", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, **kwargs_plot_dict)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
     
@@ -437,7 +448,7 @@ class ElephantLab_plot:
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
         kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(None, title=f"Plot for selected Events and Epochs", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
+        fig = self.PlotlyGraphFigure(None, title="Plotted Events and Epochs", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
         self._set_plot_dict_for_raw_plot(plot_dict, fig)
         return fig
 

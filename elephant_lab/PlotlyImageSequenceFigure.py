@@ -1,5 +1,6 @@
 class PlotlyImageSequenceFigure:
 
+    from .utils import OutputUtils
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     import numpy as np
@@ -16,9 +17,9 @@ class PlotlyImageSequenceFigure:
         rows = self.math.ceil(num_sequences / cols)
 
         fig_height = 500 * rows
-        pixel_spacing = 80
+        pixel_spacing = 140
 
-        horizontal_spacing = 0.1
+        horizontal_spacing = 0.24
         vertical_spacing = pixel_spacing / fig_height
 
         # Create subplots
@@ -75,20 +76,32 @@ class PlotlyImageSequenceFigure:
             num_frames, height, width = seq.shape
             duration_ms = (seq.t_stop - seq.t_start).rescale(self.pq.ms).magnitude
 
-            zmin = self.np.min(seq.magnitude)
-            zmax = self.np.max(seq.magnitude)
+            data = seq.magnitude
+
+            data = self.np.where(self.np.isinf(data), self.np.nan, data)
+
+            unit_str = self.OutputUtils.convert_unit_to_label(seq.units, short=True)
+            if self.np.iscomplexobj(data):
+                data = self.np.abs(data)
+                unit_str = f"|{unit_str}|"
+
+            unit_str = self.OutputUtils.center_text_for_length(unit_str, 5)
+            
+            zmin, zmax = self.np.nanmin(data), self.np.nanmax(data)
+            if not self.np.isfinite(zmin) or not self.np.isfinite(zmax):
+                zmin, zmax = 0, 1  # fallback
 
             # Colorbar
             colorbar_x = get_colorbar_x(col)
             colorbar_y = get_colorbar_y(row)
             heatmap = self.go.Heatmap(
-                z=seq[0].magnitude,
+                z=data[0],
                 colorscale=color_scale,
                 zmin=zmin,
                 zmax=zmax,
                 showscale=True,
                 colorbar=dict(
-                    title=str(seq.units),
+                    title=unit_str,
                     x=colorbar_x,
                     y=colorbar_y,
                     len=get_subplot_free_y_space()
@@ -99,7 +112,7 @@ class PlotlyImageSequenceFigure:
             # Animation frames
             for k in range(num_frames):
                 frame_data = [self.go.Heatmap(
-                    z=seq[k].magnitude,
+                    z=data[k],
                     colorscale=color_scale,
                     zmin=zmin,
                     zmax=zmax
@@ -142,6 +155,15 @@ class PlotlyImageSequenceFigure:
             # Lock aspect ratio
             self.fig.update_xaxes(scaleanchor=f'y{idx+1}', row=row, col=col)
             self.fig.update_yaxes(scaleratio=1, row=row, col=col)
+
+            # Add spatial scale to axes
+            if hasattr(seq, 'spatial_scale') and seq.spatial_scale is not None:
+                spatial_scale = seq.spatial_scale
+                spatial_label = (
+                    f"{spatial_scale} X {spatial_scale}<br>"
+                    f"({self.OutputUtils.get_text_label(spatial_scale.units)})"
+                )
+                self.fig.update_xaxes(title_text=spatial_label, row=row, col=col)
 
         # Final layout
         self.fig.frames = self.frames
