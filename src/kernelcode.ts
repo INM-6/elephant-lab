@@ -29,7 +29,7 @@ const version = `elephant_lab_entity.elephant_lab_util.version()`;
 
 const getVars = `elephant_lab_entity.elephant_lab_util.getVars()`;
 
-const insertCode = `elephant_lab_entity.insert_selected_neo_objects()`;
+const insertCode = `elephant_lab_entity.insert_selected_tree_nodes()`;
 
 function setVarName(ioClass: string, filePath: string, varName: string): string {
 	if (ioClass) {
@@ -44,7 +44,7 @@ function getNeoIOClass(filename: string): string {
 }
 
 function saveSelectedNeoObjects(filePath: string): string {
-	return `elephant_lab_entity.save_selected_neo_objects('${filePath}')`;
+	return `elephant_lab_entity.save_selected_tree_nodes('${filePath}')`;
 }
 
 function overlapToggle(state: boolean): string {

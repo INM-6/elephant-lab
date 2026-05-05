@@ -61,14 +61,14 @@ class ElephantLab_info:
 
         output_node_info = self.Output()
         self._output_node_info = output_node_info
-        self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
+        self.elephant_lab_entity.on_selected_tree_nodes_changed.add_listener(on_selected_change_info)
         ElephantLab_info.display(output_node_info)
 
     def _render_info(self):
         with self._output_node_info:
             ElephantLab_info.clear_output()
             with self.np.errstate(invalid='ignore', divide='ignore'):
-                self.pretty_print_of_selected_neo_objects()
+                self.pretty_print_of_selected_tree_nodes()
 
     def set_details_panel_active(self, is_active: bool):
         self._is_panel_active = is_active
@@ -76,13 +76,13 @@ class ElephantLab_info:
             self._pending_info_update = False
             self._render_info()
 
-    def pretty_print_of_selected_neo_objects(self):
+    def pretty_print_of_selected_tree_nodes(self):
         if not self.elephant_lab_entity.selected_tree_nodes:
             return
 
         # When exactly one folder node is selected, show a summary of its children
-        if len(self.elephant_lab_entity.selected_neo_objects) == 1:
-            node = next(iter(self.elephant_lab_entity.selected_neo_objects))
+        if len(self.elephant_lab_entity.selected_tree_nodes) == 1:
+            node = next(iter(self.elephant_lab_entity.selected_tree_nodes))
             if node._id.startswith('folder-'):
                 self._display(self._html_folder_node(node))
                 return

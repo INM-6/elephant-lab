@@ -153,7 +153,7 @@ class ElephantLab_plot:
                 self.NeoKey.epoch: self.Epoch,
                 self.NeoKey.imagesequence: self.ImageSequence
             }
-            neo_object_dict = self.elephant_lab_entity._get_selected_neo_objects_by_class(neo_object_dict)
+            neo_object_dict = self.elephant_lab_entity._get_selected_tree_nodes_by_class(neo_object_dict)
             change_dict = {}
             for key, current_list in neo_object_dict.items():
                 previous_list = self.previous_neo_object_dict[key]
@@ -280,7 +280,7 @@ class ElephantLab_plot:
 
     def create_explorer_raw_plot(self):
         self.comm = self.Comm(target_name="plot_channel")
-        self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
+        self.elephant_lab_entity.on_selected_tree_nodes_changed.add_listener(self.on_selection_changed)
 
     def set_raw_plot_overlap(self, overlap):
         reload = False

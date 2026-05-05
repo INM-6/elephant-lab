@@ -47,7 +47,7 @@ class ElephantLab:
         self.changed_neo_nodes: set[ElephantLab.NeoNode] = set()
         self.added_neo_nodes: set[ElephantLab.NeoNode] = set()
         self.selected_tree_nodes: set[ElephantLab.TreeNode] = set()
-        self.on_selected_neo_objects_changed: ElephantLab.SimpleEvent = self.SimpleEvent()
+        self.on_selected_tree_nodes_changed: ElephantLab.SimpleEvent = self.SimpleEvent()
         self.filter_changed = False
         self.elephant_lab_util: ElephantLab.ElephantLab_util = self.ElephantLab_util()
         self.elephant_lab_tree: ElephantLab.ElephantLab_tree = self.ElephantLab_tree(self)
@@ -164,7 +164,7 @@ class ElephantLab:
                         self.changed_neo_nodes.add(existing_neo_node)
         self.filter_changed = False
         
-    def save_selected_neo_objects(self, filepath="output_file.nix"):
+    def save_selected_tree_nodes(self, filepath="output_file.nix"):
         if not filepath.endswith('.nix'):
             filepath += '.nix'
         
@@ -197,7 +197,7 @@ class ElephantLab:
         with self.NixIO(filename=filepath, mode='ow') as nix_io:
             nix_io.write_all_blocks(blocks_to_write)
     
-    def insert_selected_neo_objects(self):
+    def insert_selected_tree_nodes(self):
         try:
             if not self.selected_tree_nodes:
                 print(self.json.dumps({"code_to_insert": "", "error": "No nodes selected in the Neo tree." }))
@@ -234,7 +234,7 @@ class ElephantLab:
         except Exception as e:
             print(self.json.dumps({"code_to_insert": "", "error": str(e), "traceback": self.traceback.format_exc()}), file=self.sys.stdout)
     
-    def _get_selected_neo_objects_by_class(self, neo_class_dict):
+    def _get_selected_tree_nodes_by_class(self, neo_class_dict):
         """
         neo_class_dict: {NeoKey: neo.class (eg. neo.SpikeTrain)}
         Returns: {NeoKey: [selected neo objects in tree order]}

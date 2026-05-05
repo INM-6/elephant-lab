@@ -316,24 +316,24 @@ class ElephantLab_tree:
         if not multi_select:
             self.elephant_lab_entity.selected_tree_nodes.clear()
 
-        if clicked_node in self.elephant_lab_entity.selected_neo_objects:
-            self.elephant_lab_entity.selected_neo_objects.discard(clicked_node)
+        if clicked_node in self.elephant_lab_entity.selected_tree_nodes:
+            self.elephant_lab_entity.selected_tree_nodes.discard(clicked_node)
             if select_children:
                 def deselect_recurse(node):
                     for child in node.nodes:
-                        self.elephant_lab_entity.selected_neo_objects.discard(child)
+                        self.elephant_lab_entity.selected_tree_nodes.discard(child)
                         deselect_recurse(child)
                 deselect_recurse(clicked_node)
         else:
-            self.elephant_lab_entity.selected_neo_objects.add(clicked_node)
+            self.elephant_lab_entity.selected_tree_nodes.add(clicked_node)
             if select_children:
                 def select_recurse(node):
                     for child in node.nodes:
-                        self.elephant_lab_entity.selected_neo_objects.add(child)
+                        self.elephant_lab_entity.selected_tree_nodes.add(child)
                         select_recurse(child)
                 select_recurse(clicked_node)
 
-        self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
+        self.elephant_lab_entity.on_selected_tree_nodes_changed.fire()
     
     # First collect all selected nodes, then fire the event only once
     # this prevents continous analyzing and plotting for multiple node selection
@@ -346,16 +346,16 @@ class ElephantLab_tree:
             if node_id not in self._node_registry:
                 continue
             node = self._node_registry[node_id]
-            self.elephant_lab_entity.selected_neo_objects.add(node)
+            self.elephant_lab_entity.selected_tree_nodes.add(node)
             if with_children:
                 def select_recurse(n):
                     for child in n.nodes:
-                        self.elephant_lab_entity.selected_neo_objects.add(child)
+                        self.elephant_lab_entity.selected_tree_nodes.add(child)
                         select_recurse(child)
                 select_recurse(node)
 
         # Fire only once after all nodes are selected
-        self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
+        self.elephant_lab_entity.on_selected_tree_nodes_changed.fire()
 
     def _get_candidates(self) -> dict:
         selected = self.elephant_lab_entity.selected_tree_nodes
@@ -426,7 +426,7 @@ class ElephantLab_tree:
                     self.elephant_lab_entity.selected_tree_nodes.add(node)
                     selected_ids.append(hash_id)
 
-        self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
+        self.elephant_lab_entity.on_selected_tree_nodes_changed.fire()
         print(f"ELEPHANT_LAB_RESULT_KEY:{json.dumps(selected_ids)}")
     
     def select_by_annotation_filter(self, expression: str):
@@ -540,7 +540,7 @@ class ElephantLab_tree:
             except Exception:
                 pass
 
-        self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
+        self.elephant_lab_entity.on_selected_tree_nodes_changed.fire()
         print(f"ELEPHANT_LAB_RESULT_KEY:{self.json.dumps(selected_ids)}")
 
     def create_tree(self):
