@@ -19,7 +19,8 @@ class ElephantLab_tree:
     from neo.core.spiketrainlist import SpikeTrainList
     import ipywidgets as widgets
     import json
-    import ast 
+    import ast
+    import re
 
 
     from typing import TYPE_CHECKING
@@ -477,8 +478,11 @@ class ElephantLab_tree:
                 return node.value
             raise ValueError(f'Unsupported expression node: {type(node).__name__}')
 
+        normalized = self.re.sub(r'\bAND\b', 'and', expression.strip())
+        normalized = self.re.sub(r'\bOR\b', 'or', normalized)
+        normalized = self.re.sub(r'\bNOT\b', 'not', normalized)
         try:
-            tree = self.ast.parse(expression.strip(), mode='eval')
+            tree = self.ast.parse(normalized, mode='eval')
         except SyntaxError as e:
             print(f"ELEPHANT_LAB_FILTER_ERROR:Syntax error — {e}")
             return
