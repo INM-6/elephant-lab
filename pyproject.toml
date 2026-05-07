@@ -4,7 +4,6 @@ build-backend = "hatchling.build"
 
 [project]
 name = "elephant-lab"
-version = "0.1.0"
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
@@ -34,7 +33,7 @@ dependencies = [
 "quantities",
 "plotly",
 ]
-dynamic = ["description", "authors", "urls", "keywords"]
+dynamic = ["version", "description", "authors", "urls", "keywords"]
 
 [project.optional-dependencies]
 test = [
@@ -49,7 +48,7 @@ test = [
 allow-direct-references = true
 
 [tool.hatch.metadata.hooks.nodejs]
-fields = ["description", "authors", "urls"]
+fields = ["version", "description", "authors", "urls", "keywords"]
 
 
 [tool.hatch.build.targets.sdist]
