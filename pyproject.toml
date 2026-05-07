@@ -44,6 +44,9 @@ test = [
     "matplotlib"
 ]
 
+[tool.hatch.version]
+source = "nodejs"
+
 [tool.hatch.metadata]
 allow-direct-references = true
 
