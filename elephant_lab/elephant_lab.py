@@ -6,7 +6,7 @@ class ElephantLab:
     from .elephant_lab_info import ElephantLab_info
     from .elephant_lab_plot import ElephantLab_plot
     from .SimpleEvent import SimpleEvent
-    from .TreeNode import TreeNode, RootNode, NeoNode
+    from .TreeNode import TreeNode, NeoNode
 
     # Dealing with the Python kernel's namespace, e.g.,
     # listing all defined variables
@@ -42,10 +42,11 @@ class ElephantLab:
         They are used to check for changes in neo objects and to display the current structure.
         """
 
-        self.root_node: ElephantLab.RootNode = self.RootNode()
-        self.neo_nodes: dict[ElephantLab.NeoNode, ElephantLab.NeoNode] = {}
-        self.changed_neo_nodes: set[ElephantLab.NeoNode] = set()
-        self.added_neo_nodes: set[ElephantLab.NeoNode] = set()
+        # t_neo_nodes: top level neo nodes, i.e., neo objects that are directly accessible via a variable in the kernel namespace
+        self.t_neo_nodes: dict[str, ElephantLab.NeoNode] = {}
+        self.changed_t_neo_nodes: set[ElephantLab.NeoNode] = set()
+        self.added_t_neo_nodes: set[ElephantLab.NeoNode] = set()
+        self.removed_t_neo_nodes: set[ElephantLab.NeoNode] = set()
         self.selected_tree_nodes: set[ElephantLab.TreeNode] = set()
         self.on_selected_tree_nodes_changed: ElephantLab.SimpleEvent = self.SimpleEvent()
         self.filter_changed = False
@@ -54,6 +55,17 @@ class ElephantLab:
         self.elephant_lab_info: ElephantLab.ElephantLab_info = self.ElephantLab_info(self)
         self.elephant_lab_plot: ElephantLab.ElephantLab_plot = self.ElephantLab_plot(self)
 
+    @property
+    def all_neo_nodes(self):
+        def recursive_collect(node: ElephantLab.TreeNode):
+            nodes = set()
+            if isinstance(node, self.NeoNode):
+                nodes.add(node)
+            for child in node.children:
+                nodes.update(recursive_collect(child))
+            return nodes
+        return recursive_collect(self.elephant_lab_tree.root_node)
+
     def set_panel_visibility(self, explore_active: bool, details_active: bool):
         self.elephant_lab_plot.set_explore_panel_active(explore_active)
         self.elephant_lab_info.set_details_panel_active(details_active)
@@ -61,7 +73,7 @@ class ElephantLab:
     def _get_obj_path(self, neo_node):
         path = []
         curr = neo_node.neo_object
-        variable_name = neo_node.reference_name
+        variable_name = neo_node.variable_name
 
         if hasattr(curr, 'segment') and curr.segment is not None:
             segment = curr.segment
@@ -104,9 +116,9 @@ class ElephantLab:
                 path.insert(0, 'unnamed_root')
             return '.'.join(path)
 
-        for n_d in self.neo_nodes.values():
+        for n_d in self.all_neo_nodes:
             l = n_d.neo_object
-            name = n_d.reference_name
+            name = n_d.variable_name
             if isinstance(l, (list, self.SpikeTrainList)) or l.__class__.__name__ == 'ObjectList':
                 for i, item in enumerate(l):
                     if item is curr:
@@ -124,8 +136,11 @@ class ElephantLab:
         Called before updating plots, thus, usually at every cell execution.
         """
         # Get ALL variables in current kernel namespace
-        self.changed_neo_nodes.clear()
-        self.added_neo_nodes.clear()
+        self.changed_t_neo_nodes.clear()
+        self.added_t_neo_nodes.clear()
+        self.removed_t_neo_nodes.clear()
+        past_neo_nodes = set(self.t_neo_nodes.values())
+        new_neo_nodes = set()
         all_variable_names_in_current_kernel_namespace = self.nsm.who_ls()
         for variable_name in all_variable_names_in_current_kernel_namespace:
             if variable_name.startswith("elephant_lab"):
@@ -152,16 +167,18 @@ class ElephantLab:
                 )
             )
             if is_neo:
-                neo_node = self.NeoNode(variable_name, obj_from_kernel_ns)
-
-                existing_neo_node = self.neo_nodes.get(neo_node)
-
-                if existing_neo_node is None:
-                    self.neo_nodes[neo_node] = neo_node
-                    self.added_neo_nodes.add(neo_node)
+                if variable_name in self.t_neo_nodes:
+                    neo_node = self.t_neo_nodes[variable_name]
+                    if neo_node.update(obj_from_kernel_ns):
+                        self.changed_t_neo_nodes.add(neo_node)
                 else:
-                    if existing_neo_node.update():
-                        self.changed_neo_nodes.add(existing_neo_node)
+                    neo_node = self.NeoNode(variable_name, obj_from_kernel_ns)
+                    self.t_neo_nodes[variable_name] = neo_node
+                    self.added_t_neo_nodes.add(neo_node)
+                new_neo_nodes.add(neo_node)
+        self.removed_t_neo_nodes = past_neo_nodes - new_neo_nodes
+        for removed_node in self.removed_t_neo_nodes:
+            removed_node.free_memory()
         self.filter_changed = False
         
     def save_selected_tree_nodes(self, filepath="output_file.nix"):
@@ -245,12 +262,10 @@ class ElephantLab:
         # Prepare result dict
         result = {key: [] for key in neo_class_dict}
 
-        selected_neo_nodes = self.selected_tree_nodes
-
-        def walk(node):
+        def walk(node: ElephantLab.TreeNode):
             # If node maps to a neo object and is selected
-            if node in selected_neo_nodes and node._id in self.map_ipytree_node_id_to_neo_obj:
-                obj = self.map_ipytree_node_id_to_neo_obj[node._id]
+            if node in self.selected_tree_nodes and isinstance(node, self.NeoNode):
+                obj = node.neo_object
 
                 # Classify
                 for key, cls in neo_class_dict.items():
@@ -259,9 +274,9 @@ class ElephantLab:
                         break  # one class only
 
             # Recurse
-            for child in getattr(node, "nodes", []):
+            for child in node.children:
                 walk(child)
 
-        walk(self.elephant_lab_tree.ipytree_of_neo_objects)
+        walk(self.elephant_lab_tree.root_node)
 
         return result

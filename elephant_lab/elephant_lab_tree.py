@@ -12,6 +12,8 @@ class SimpleNode:
 
 class ElephantLab_tree:
 
+    from .TreeNode import TreeNode, NeoNode, FolderNode
+
     from IPython.display import display
     from neo import Block, Segment, Group, ChannelView, IrregularlySampledSignal, AnalogSignal, SpikeTrain, Epoch, Event, ImageSequence, CircularRegionOfInterest, PolygonRegionOfInterest, RectangularRegionOfInterest
     from neo.core.baseneo import BaseNeo
@@ -40,6 +42,7 @@ class ElephantLab_tree:
         Is a Class to minimize the amount of name clutter in the notebook
         """
         self.elephant_lab_entity: "ElephantLab_tree.ElephantLab" = elephant_lab_entity
+        self.root_node: ElephantLab_tree.TreeNode = self.TreeNode()
         self._root_node = SimpleNode('root', name='root')
         
         # neo abbreviations and font-awesome icons
@@ -99,7 +102,6 @@ class ElephantLab_tree:
             text-overflow:ellipsis;white-space:nowrap;"
         self.SECOND_STYLE = "color:var(--jp-ui-font-color2);"
         self.CS = "color:var(--jp-brand-color1);"
-        
         
         self._tree_widget = None  # ipywidgets.HTML
         self._node_registry: dict = {}  # hash_id -> SimpleNode, for selection
