@@ -1097,13 +1097,230 @@ class ElephantLabExtension {
 			}
 		});
 
-		const colorGrade = createLabeledSelect({
+		type SelectOptionGroup = {
+			group: string;
+			options: string[];
+			collapsed?: boolean;
+		};
+
+		function createCollapsibleSelect(options: {
+			label: string;
+			icon?: string;
+			selectOptions: SelectOptionGroup[];
+			defaultValue?: string;
+			title?: string;
+			onChange: (value: string) => void;
+		}): HTMLDivElement {
+
+			let currentValue = options.defaultValue ?? "";
+
+			// Main container
+			const container = document.createElement("div");
+			container.classList.add("jp-rawplot-row");
+
+			if (options.title) {
+				container.title = options.title;
+			}
+
+			// Label
+			const labelEl = document.createElement("label");
+			labelEl.classList.add("jp-rawplot-label");
+
+			labelEl.innerHTML = options.icon
+				? `<i class="fa ${options.icon}"></i> ${options.label}`
+				: options.label;
+
+			// Dropdown wrapper
+			const wrapper = document.createElement("div");
+			wrapper.classList.add("jp-collapsible-select");
+
+			// Current value button
+			const button = document.createElement("button");
+			button.type = "button";
+			button.classList.add("jp-collapsible-select-button");
+			button.textContent = currentValue || "Select...";
+
+			// Dropdown panel
+			const panel = document.createElement("div");
+			panel.classList.add("jp-collapsible-select-panel");
+			panel.style.display = "none";
+
+			button.onclick = () => {
+				panel.style.display =
+					panel.style.display === "none"
+						? "block"
+						: "none";
+			};
+
+			// Groups
+			options.selectOptions.forEach(group => {
+
+				const details = document.createElement("details");
+
+				if (!group.collapsed) {
+					details.open = true;
+				}
+
+				const summary = document.createElement("summary");
+				summary.textContent = group.group;
+
+				details.appendChild(summary);
+
+				group.options.forEach(value => {
+
+					const item = document.createElement("div");
+					item.classList.add("jp-collapsible-select-item");
+
+					item.textContent = value;
+
+					item.onclick = () => {
+
+						currentValue = value;
+
+						button.textContent = value;
+
+						panel.style.display = "none";
+
+						options.onChange(value);
+					};
+
+					details.appendChild(item);
+				});
+
+				panel.appendChild(details);
+			});
+
+			wrapper.appendChild(button);
+			wrapper.appendChild(panel);
+
+			container.appendChild(labelEl);
+			container.appendChild(wrapper);
+
+			return container;
+		}
+
+		const colorGrade = createCollapsibleSelect({
 			label: "Color Grade",
 			icon: "fa-palette",
-			selectOptions: ["Viridis", "Plasma", "Inferno", "Magma", "Cividis", "Turbo", "hsv", "phase", "twilight"],
-			defaultValue: "Viridis",
-			title: "Color grade for the image sequence plot",
-			onChange: (value) => {
+
+			selectOptions: [
+				{
+					group: "Sequential (Recommended)",
+					options: [
+						"viridis",
+						"plasma",
+						"inferno",
+						"magma",
+						"cividis",
+						"turbo",
+						"blues",
+						"greens",
+						"greys",
+						"gray",
+						"hot",
+						"electric",
+						"matter",
+						"solar",
+						"thermal",
+						"turbid",
+						"dense"
+					],
+					collapsed: false
+				},
+
+				{
+					group: "Diverging",
+					options: [
+						"balance",
+						"brbg",
+						"piyg",
+						"prgn",
+						"puor",
+						"rdbu",
+						"rdgy",
+						"rdpu",
+						"rdylbu",
+						"rdylgn",
+						"spectral",
+						"delta"
+					],
+					collapsed: true
+				},
+
+				{
+					group: "Cyclic",
+					options: [
+						"hsv",
+						"phase",
+						"twilight",
+						"speed",
+						"edge"
+					],
+					collapsed: true
+				},
+
+				{
+					group: "Qualitative / Styled",
+					options: [
+						"aggrnyl",
+						"agsunset",
+						"algae",
+						"amp",
+						"armyrose",
+						"blugrn",
+						"bluyl",
+						"burg",
+						"burgyl",
+						"deep",
+						"earth",
+						"emrld",
+						"fall",
+						"geyser",
+						"magenta",
+						"mint",
+						"mrybm",
+						"mygbm",
+						"oranges",
+						"orrd",
+						"oryel",
+						"peach",
+						"picnic",
+						"pinkyl",
+						"purp",
+						"purpor",
+						"reds",
+						"teal",
+						"tealgrn",
+						"tealrose",
+						"tempo",
+						"temps",
+						"tropic",
+						"sunset",
+						"sunsetdark",
+						"portland",
+						"plotly3"
+					],
+					collapsed: true
+				},
+
+				{
+					group: "Other / Experimental",
+					options: [
+						"blackbody",
+						"bluered",
+						"curl",
+						"ice",
+						"icefire",
+						"haline",
+						"oxy"
+					],
+					collapsed: true
+				}
+			],
+
+			defaultValue: "viridis",
+
+			onChange: value => {
 				const code = getPythonCode(PythonCodeKey.SetColorGrade, value);
 				this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 			}

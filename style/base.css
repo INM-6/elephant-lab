@@ -187,11 +187,30 @@
 }
 
 @keyframes anno-filter-shake {
-  0%   { border-color: var(--jp-error-color1); box-shadow: 0 0 0 1px var(--jp-error-color1); }
-  25%  { border-color: transparent;            box-shadow: none; }
-  50%  { border-color: var(--jp-error-color1); box-shadow: 0 0 0 1px var(--jp-error-color1); }
-  75%  { border-color: transparent;            box-shadow: none; }
-  100% { border-color: var(--jp-error-color1); box-shadow: 0 0 0 1px var(--jp-error-color1); }
+  0% {
+    border-color: var(--jp-error-color1);
+    box-shadow: 0 0 0 1px var(--jp-error-color1);
+  }
+
+  25% {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  50% {
+    border-color: var(--jp-error-color1);
+    box-shadow: 0 0 0 1px var(--jp-error-color1);
+  }
+
+  75% {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  100% {
+    border-color: var(--jp-error-color1);
+    box-shadow: 0 0 0 1px var(--jp-error-color1);
+  }
 }
 
 .anno-filter-no-match {
@@ -240,4 +259,38 @@
 .my-slider .noUi-handle {
   background: #ffffff;
   border: none;
+}
+
+.jp-collapsible-select {
+  position: relative;
+  width: 220px;
+}
+
+.jp-collapsible-select-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+
+  width: 100%;
+
+  background: var(--jp-layout-color1);
+
+  border: 1px solid var(--jp-border-color2);
+
+  z-index: 1000;
+
+  max-height: 300px;
+  overflow-y: auto;
+
+  padding: 4px;
+}
+
+.jp-collapsible-select-item {
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.jp-collapsible-select-item:hover {
+  background: var(--jp-layout-color2);
 }
