@@ -1,18 +1,8 @@
-# Node class which represents a node in the neo tree
-class SimpleNode:
-    def __init__(self, node_id, name='', metadata=None):
-        self._id = node_id
-        self.name = name
-        self.metadata = metadata or {}
-        self.nodes = []
-    def __hash__(self):
-        return hash(self._id)
-    def __eq__(self, other):
-        return isinstance(other, SimpleNode) and self._id == other._id
-
 class ElephantLab_tree:
 
     from .TreeNode import TreeNode, NeoNode, FolderNode
+    from .Event import Event as ElephantLab_Event
+    from .EventArgs import TNeoNodesChangedEventArgs, SelectedTreeNodesChangedEventArgs
 
     from IPython.display import display
     from neo import Block, Segment, Group, ChannelView, IrregularlySampledSignal, AnalogSignal, SpikeTrain, Epoch, Event, ImageSequence, CircularRegionOfInterest, PolygonRegionOfInterest, RectangularRegionOfInterest
@@ -29,11 +19,6 @@ class ElephantLab_tree:
 
     if TYPE_CHECKING:
         from .elephant_lab import ElephantLab  # only for type hints
-        
-    # Current workaround to keep compatibility
-    @property
-    def ipytree_of_neo_objects(self):
-        return self._root_node
     
     def __init__(self, elephant_lab_entity: "ElephantLab_tree.ElephantLab"):
         """
@@ -43,7 +28,8 @@ class ElephantLab_tree:
         """
         self.elephant_lab_entity: "ElephantLab_tree.ElephantLab" = elephant_lab_entity
         self.root_node: ElephantLab_tree.TreeNode = self.TreeNode()
-        self._root_node = SimpleNode('root', name='root')
+        self.selected_tree_nodes: set[ElephantLab_tree.TreeNode] = set()
+        self.on_selected_tree_nodes_changed: ElephantLab_tree.ElephantLab_Event[ElephantLab_tree.SelectedTreeNodesChangedEventArgs] = self.ElephantLab_Event[ElephantLab_tree.SelectedTreeNodesChangedEventArgs]()
         
         # neo abbreviations and font-awesome icons
         # TODO: maybe create own icons or use more accurate ones from newer fontawesome version (see suggestions in comments)
@@ -104,13 +90,13 @@ class ElephantLab_tree:
         self.CS = "color:var(--jp-brand-color1);"
         
         self._tree_widget = None  # ipywidgets.HTML
-        self._node_registry: dict = {}  # hash_id -> SimpleNode, for selection
         self._stat_cache: dict = {}
+        self.filter_changed = False
         self.expand_all = False
 
     def expand_neo_tree(self, opened):
         self.expand_all = opened
-        self.elephant_lab_entity.filter_changed = True
+        self.filter_changed = True
         self.update_tree()
     
     def show_neo_obj(self, neo_obj_string):
@@ -123,7 +109,7 @@ class ElephantLab_tree:
             self.NEO_OBJS_TO_SHOW.remove(neo_obj_type)
         else:
             self.NEO_OBJS_TO_SHOW.append(neo_obj_type)
-        self.elephant_lab_entity.filter_changed = True
+        self.filter_changed = True
         self.update_tree()
 
     def cache_stat(self, hash_id: str, stat_name: str, value: float):
@@ -131,16 +117,10 @@ class ElephantLab_tree:
             self._stat_cache[hash_id] = {}
         self._stat_cache[hash_id][stat_name] = value
 
-    def update_tree(self):
-        self.elephant_lab_entity.update()
+    def update_tree(self, args: ElephantLab_tree.TNeoNodesChangedEventArgs):
         self._stat_cache.clear()
-        if self._tree_widget is None or not self.elephant_lab_entity.neo_objs_changed_after_update:
+        if self._tree_widget is None:
             return
-
-        # Clear maps
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.clear()
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.clear()
-        self._node_registry.clear()
 
         nodes_html = []
         top_level_simple_nodes = []
@@ -316,51 +296,51 @@ class ElephantLab_tree:
         clicked_node = self._node_registry[node_id]
 
         if not multi_select:
-            self.elephant_lab_entity.selected_tree_nodes.clear()
+            self.selected_tree_nodes.clear()
 
-        if clicked_node in self.elephant_lab_entity.selected_tree_nodes:
-            self.elephant_lab_entity.selected_tree_nodes.discard(clicked_node)
+        if clicked_node in self.selected_tree_nodes:
+            self.selected_tree_nodes.discard(clicked_node)
             if select_children:
                 def deselect_recurse(node):
                     for child in node.nodes:
-                        self.elephant_lab_entity.selected_tree_nodes.discard(child)
+                        self.selected_tree_nodes.discard(child)
                         deselect_recurse(child)
                 deselect_recurse(clicked_node)
         else:
-            self.elephant_lab_entity.selected_tree_nodes.add(clicked_node)
+            self.selected_tree_nodes.add(clicked_node)
             if select_children:
                 def select_recurse(node):
                     for child in node.nodes:
-                        self.elephant_lab_entity.selected_tree_nodes.add(child)
+                        self.selected_tree_nodes.add(child)
                         select_recurse(child)
                 select_recurse(clicked_node)
 
-        self.elephant_lab_entity.on_selected_tree_nodes_changed.fire()
+        self.on_selected_tree_nodes_changed.fire()
     
     # First collect all selected nodes, then fire the event only once
     # this prevents continous analyzing and plotting for multiple node selection
     # used when Shift+Clicking 
     def handle_selection_range(self, node_ids: list, with_children: bool = False):
         """Selects a range of nodes and fires the event only once at the end."""
-        self.elephant_lab_entity.selected_tree_nodes.clear()
+        self.selected_tree_nodes.clear()
         
         for node_id in node_ids:
             if node_id not in self._node_registry:
                 continue
             node = self._node_registry[node_id]
-            self.elephant_lab_entity.selected_tree_nodes.add(node)
+            self.selected_tree_nodes.add(node)
             if with_children:
                 def select_recurse(n):
                     for child in n.nodes:
-                        self.elephant_lab_entity.selected_tree_nodes.add(child)
+                        self.selected_tree_nodes.add(child)
                         select_recurse(child)
                 select_recurse(node)
 
         # Fire only once after all nodes are selected
-        self.elephant_lab_entity.on_selected_tree_nodes_changed.fire()
+        self.on_selected_tree_nodes_changed.fire()
 
     def _get_candidates(self) -> dict:
-        selected = self.elephant_lab_entity.selected_tree_nodes
+        selected = self.selected_tree_nodes
         source = selected if selected else self._node_registry.values()
         return {
             node._id: self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[node._id]
@@ -375,7 +355,7 @@ class ElephantLab_tree:
 
         candidates = self._get_candidates()
 
-        self.elephant_lab_entity.selected_tree_nodes.clear()
+        self.selected_tree_nodes.clear()
         selected_ids = []
         tol = 1e-4
         value = filter_data['value']
@@ -425,10 +405,10 @@ class ElephantLab_tree:
             if match:
                 node = self._node_registry.get(hash_id)
                 if node:
-                    self.elephant_lab_entity.selected_tree_nodes.add(node)
+                    self.selected_tree_nodes.add(node)
                     selected_ids.append(hash_id)
 
-        self.elephant_lab_entity.on_selected_tree_nodes_changed.fire()
+        self.on_selected_tree_nodes_changed.fire()
         print(f"ELEPHANT_LAB_RESULT_KEY:{json.dumps(selected_ids)}")
     
     def select_by_annotation_filter(self, expression: str):
@@ -527,7 +507,7 @@ class ElephantLab_tree:
             if values:
                 agg_values[(func, key)] = (max if func == 'max' else min)(values)
 
-        self.elephant_lab_entity.selected_tree_nodes.clear()
+        self.selected_tree_nodes.clear()
         selected_ids = []
 
         for hash_id, (neo_obj, annotations) in base_candidates.items():
@@ -537,15 +517,16 @@ class ElephantLab_tree:
                     continue
                 node = self._node_registry.get(hash_id)
                 if node:
-                    self.elephant_lab_entity.selected_tree_nodes.add(node)
+                    self.selected_tree_nodes.add(node)
                     selected_ids.append(hash_id)
             except Exception:
                 pass
 
-        self.elephant_lab_entity.on_selected_tree_nodes_changed.fire()
+        self.on_selected_tree_nodes_changed.fire()
         print(f"ELEPHANT_LAB_RESULT_KEY:{self.json.dumps(selected_ids)}")
 
     def create_tree(self):
         self._tree_widget = self.widgets.HTML(value='')
         self._tree_widget.layout.width = '100%'
         ElephantLab_tree.display(self._tree_widget)
+        self.elephant_lab_entity.on_t_neo_nodes_changed(lambda args: self.update_tree(args))

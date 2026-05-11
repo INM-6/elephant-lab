@@ -5,7 +5,8 @@ class ElephantLab:
     from .elephant_lab_tree import ElephantLab_tree
     from .elephant_lab_info import ElephantLab_info
     from .elephant_lab_plot import ElephantLab_plot
-    from .SimpleEvent import SimpleEvent
+    from .Event import Event as ElephantLab_Event
+    from .EventArgs import TNeoNodesChangedEventArgs
     from .TreeNode import TreeNode, NeoNode
 
     # Dealing with the Python kernel's namespace, e.g.,
@@ -44,16 +45,19 @@ class ElephantLab:
 
         # t_neo_nodes: top level neo nodes, i.e., neo objects that are directly accessible via a variable in the kernel namespace
         self.t_neo_nodes: dict[str, ElephantLab.NeoNode] = {}
-        self.changed_t_neo_nodes: set[ElephantLab.NeoNode] = set()
-        self.added_t_neo_nodes: set[ElephantLab.NeoNode] = set()
-        self.removed_t_neo_nodes: set[ElephantLab.NeoNode] = set()
-        self.selected_tree_nodes: set[ElephantLab.TreeNode] = set()
-        self.on_selected_tree_nodes_changed: ElephantLab.SimpleEvent = self.SimpleEvent()
-        self.filter_changed = False
+        self.on_t_neo_nodes_changed: ElephantLab.ElephantLab_Event[ElephantLab.TNeoNodesChangedEventArgs] = self.ElephantLab_Event[ElephantLab.TNeoNodesChangedEventArgs]()
         self.elephant_lab_util: ElephantLab.ElephantLab_util = self.ElephantLab_util()
         self.elephant_lab_tree: ElephantLab.ElephantLab_tree = self.ElephantLab_tree(self)
         self.elephant_lab_info: ElephantLab.ElephantLab_info = self.ElephantLab_info(self)
         self.elephant_lab_plot: ElephantLab.ElephantLab_plot = self.ElephantLab_plot(self)
+
+    @property
+    def selected_tree_nodes(self):
+        return self.elephant_lab_tree.selected_tree_nodes
+    
+    @property
+    def on_selected_tree_nodes_changed(self):
+        return self.elephant_lab_tree.on_selected_tree_nodes_changed
 
     @property
     def all_neo_nodes(self):
@@ -136,11 +140,9 @@ class ElephantLab:
         Called before updating plots, thus, usually at every cell execution.
         """
         # Get ALL variables in current kernel namespace
-        self.changed_t_neo_nodes.clear()
-        self.added_t_neo_nodes.clear()
-        self.removed_t_neo_nodes.clear()
-        past_neo_nodes = set(self.t_neo_nodes.values())
-        new_neo_nodes = set()
+        changed_t_neo_nodes = set()
+        added_t_neo_nodes = set()
+        removed_t_neo_nodes = set(self.t_neo_nodes.values())
         all_variable_names_in_current_kernel_namespace = self.nsm.who_ls()
         for variable_name in all_variable_names_in_current_kernel_namespace:
             if variable_name.startswith("elephant_lab"):
@@ -170,16 +172,19 @@ class ElephantLab:
                 if variable_name in self.t_neo_nodes:
                     neo_node = self.t_neo_nodes[variable_name]
                     if neo_node.update(obj_from_kernel_ns):
-                        self.changed_t_neo_nodes.add(neo_node)
+                        changed_t_neo_nodes.add(neo_node)
+                    removed_t_neo_nodes.remove(neo_node)
                 else:
                     neo_node = self.NeoNode(variable_name, obj_from_kernel_ns)
                     self.t_neo_nodes[variable_name] = neo_node
-                    self.added_t_neo_nodes.add(neo_node)
-                new_neo_nodes.add(neo_node)
-        self.removed_t_neo_nodes = past_neo_nodes - new_neo_nodes
-        for removed_node in self.removed_t_neo_nodes:
-            removed_node.free_memory()
-        self.filter_changed = False
+                    added_t_neo_nodes.add(neo_node)
+        for removed_t_neo_node in removed_t_neo_nodes:
+            del self.t_neo_nodes[removed_t_neo_node.variable_name]
+
+        if changed_t_neo_nodes or added_t_neo_nodes or removed_t_neo_nodes:
+            self.on_t_neo_nodes_changed.fire(self.TNeoNodesChangedEventArgs(changed_t_neo_nodes, added_t_neo_nodes, removed_t_neo_nodes))
+
+        self.elephant_lab_tree.filter_changed = False
         
     def save_selected_tree_nodes(self, filepath="output_file.nix"):
         if not filepath.endswith('.nix'):

@@ -52,6 +52,10 @@ class ElephantLab_info:
         self._pending_info_update = False
         self._output_node_info = None
 
+    @property
+    def selected_tree_nodes(self):
+        return self.elephant_lab_entity.selected_tree_nodes
+
     def create_details_panel(self):
         def on_selected_change_info():
             if not self._is_panel_active:
@@ -77,12 +81,12 @@ class ElephantLab_info:
             self._render_info()
 
     def pretty_print_of_selected_tree_nodes(self):
-        if not self.elephant_lab_entity.selected_tree_nodes:
+        if not self.selected_tree_nodes:
             return
 
         # When exactly one folder node is selected, show a summary of its children
-        if len(self.elephant_lab_entity.selected_tree_nodes) == 1:
-            node = next(iter(self.elephant_lab_entity.selected_tree_nodes))
+        if len(self.selected_tree_nodes) == 1:
+            node = next(iter(self.selected_tree_nodes))
             if node._id.startswith('folder-'):
                 self._display(self._html_folder_node(node))
                 return
@@ -93,7 +97,7 @@ class ElephantLab_info:
                 'node_name': node.name,
                 'variable_name': node.metadata.get('variable_name', '')
             }
-            for node in self.elephant_lab_entity.selected_tree_nodes
+            for node in self.selected_tree_nodes
             if node._id in self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj
         ]
 

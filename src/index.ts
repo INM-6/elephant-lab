@@ -127,7 +127,7 @@ class ElephantLabExtension {
 		try {
 			// Execute Elephant Lab code to create Neo Tree / Information and Plots
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
-			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
+			await this.kernelBridge.executeCode(PythonCodeKey.Update, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
 			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
@@ -430,7 +430,7 @@ class ElephantLabExtension {
 
 			this._updateTimer = window.setTimeout(async () => {
 				await Promise.all([
-					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, initialSession),
+					this.kernelBridge!.executeCode(PythonCodeKey.Update, this.outarea_neo_tree!, false, true, initialSession),
 				]);
 			}, 500);
 		});
@@ -765,7 +765,7 @@ class ElephantLabExtension {
 
 							let code = getPythonCode(PythonCodeKey.SetVarName, ioClass, filePath, varName);
 							await this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
-							await this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
+							await this.kernelBridge!.executeCode(PythonCodeKey.Update, this.outarea_neo_tree!, false);
 						} else if (dialogResult.button.label === 'Automatic') {
 							showDialog({
 								title: 'Error',

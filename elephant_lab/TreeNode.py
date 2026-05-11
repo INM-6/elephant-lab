@@ -58,6 +58,3 @@ class NeoNode(TreeNode):
             #elif self.tree_node.is_selected() and deephashChanged:
             #   changed = True
         return changed
-    
-    def free_memory(self):
-        self.neo_object = None

@@ -21,7 +21,7 @@ const create_tree = `elephant_lab_entity.elephant_lab_tree.create_tree()`;
 const create_details_panel = `elephant_lab_entity.elephant_lab_info.create_details_panel()`;
 
 // Call to the function that updates the ipytree tree view of the neo hierarchy
-const update_tree = `elephant_lab_entity.elephant_lab_tree.update_tree()`;
+const update = `elephant_lab_entity.update()`;
 
 const createExplorerRawPlot = 'elephant_lab_entity.elephant_lab_plot.create_explorer_raw_plot()'
 
@@ -103,7 +103,7 @@ export enum PythonCodeKey {
 	SetupEnv = 'setupEnv',
 	CreateTree = 'createTree',
 	CreateDetailsPanel = 'create_details_panel',
-	UpdateTree = 'updateTree',
+	Update = 'update',
 	CreateExplorerRaw = 'createExplorerRaw',
 	Version = 'version',
 	GetVars = 'getVars',
@@ -130,7 +130,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.SetupEnv]: setup_env,
 	[PythonCodeKey.CreateTree]: create_tree,
 	[PythonCodeKey.CreateDetailsPanel]: create_details_panel,
-	[PythonCodeKey.UpdateTree]: update_tree,
+	[PythonCodeKey.Update]: update,
 	[PythonCodeKey.CreateExplorerRaw]: createExplorerRawPlot,
 	[PythonCodeKey.Version]: version,
 	[PythonCodeKey.GetVars]: getVars,
