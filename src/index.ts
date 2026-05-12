@@ -1014,14 +1014,14 @@ class ElephantLabExtension {
 			optionsModal.classList.toggle("jp-visible", state);
 		});
 
-		// Hide options when clicked elsewhere
-		raw_plot_widget.node.addEventListener("click", (e) => {
+		// Hide options when clicked elsewhere (currently disabled because it seems to annoy more than help)
+		/*raw_plot_widget.node.addEventListener("click", (e) => {
 			const temp: Node = e.target as Node
 			if (!optionsModal.contains(temp) && !optionsToggle.contains(temp)) {
 				optionsModal.classList.remove("jp-visible");
 				optionsToggle.setAttribute("aria-pressed", "false");
 			}
-		});
+		});*/
 
 		// --- MAX POINTS INPUT ---
 		const numberLabel = document.createElement('label');
@@ -1145,13 +1145,6 @@ class ElephantLabExtension {
 			panel.classList.add("jp-collapsible-select-panel");
 			panel.style.display = "none";
 
-			button.onclick = () => {
-				panel.style.display =
-					panel.style.display === "none"
-						? "block"
-						: "none";
-			};
-
 			// Groups
 			options.selectOptions.forEach(group => {
 
@@ -1190,6 +1183,36 @@ class ElephantLabExtension {
 				panel.appendChild(details);
 			});
 
+			// Toggle dropdown
+			button.onclick = (event) => {
+
+				panel.style.display =
+					panel.style.display === "none"
+						? "block"
+						: "none";
+			};
+
+			document.addEventListener("click", (event) => {
+
+				const target = event.target as Node;
+
+				const clickedInsideButton = button.contains(target);
+				const clickedInsidePanel = panel.contains(target);
+
+				if (!clickedInsideButton && !clickedInsidePanel) {
+					panel.style.display = "none";
+				}
+			});
+
+			document.addEventListener("keydown", (event) => {
+
+				if (event.key === "Escape") {
+
+					panel.style.display = "none";
+
+				}
+			});
+
 			wrapper.appendChild(button);
 			wrapper.appendChild(panel);
 
@@ -1205,7 +1228,7 @@ class ElephantLabExtension {
 
 			selectOptions: [
 				{
-					group: "Sequential (Recommended)",
+					group: "Sequential",
 					options: [
 						"viridis",
 						"plasma",
@@ -1260,7 +1283,7 @@ class ElephantLabExtension {
 				},
 
 				{
-					group: "Qualitative / Styled",
+					group: "Qualitative",
 					options: [
 						"aggrnyl",
 						"agsunset",
@@ -1304,7 +1327,7 @@ class ElephantLabExtension {
 				},
 
 				{
-					group: "Other / Experimental",
+					group: "Other",
 					options: [
 						"blackbody",
 						"bluered",
