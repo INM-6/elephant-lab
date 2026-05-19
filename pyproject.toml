@@ -47,8 +47,6 @@ test = [
 [tool.hatch.version]
 source = "nodejs"
 
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.metadata.hooks.nodejs]
 fields = ["version", "description", "authors", "urls", "keywords"]
