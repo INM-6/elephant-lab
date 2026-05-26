@@ -1230,23 +1230,19 @@ class ElephantLabExtension {
 				{
 					group: "Sequential",
 					options: [
-						"viridis",
-						"plasma",
-						"inferno",
-						"magma",
-						"cividis",
-						"turbo",
-						"blues",
-						"greens",
-						"greys",
-						"gray",
-						"hot",
-						"electric",
-						"matter",
-						"solar",
-						"thermal",
-						"turbid",
-						"dense"
+						"Viridis",
+						"Cividis",
+						"Inferno",
+						"Magma",
+						"Plasma",
+						"Turbo",
+						"Blackbody",
+						"Bluered",
+						"Electric",
+						"Hot",
+						"Jet",
+						"Rainbow",
+						"Plotly3"
 					],
 					collapsed: false
 				},
@@ -1254,18 +1250,13 @@ class ElephantLabExtension {
 				{
 					group: "Diverging",
 					options: [
-						"balance",
-						"brbg",
-						"piyg",
-						"prgn",
-						"puor",
-						"rdbu",
-						"rdgy",
-						"rdpu",
-						"rdylbu",
-						"rdylgn",
-						"spectral",
-						"delta"
+						"BrBG",
+						"RdGy",
+						"oxy",
+						"Fall",
+						"Earth",
+						"Picnic",
+						"Portland"
 					],
 					collapsed: true
 				},
@@ -1273,75 +1264,19 @@ class ElephantLabExtension {
 				{
 					group: "Cyclic",
 					options: [
-						"hsv",
-						"phase",
-						"twilight",
-						"speed",
-						"edge"
-					],
-					collapsed: true
-				},
-
-				{
-					group: "Qualitative",
-					options: [
-						"aggrnyl",
-						"agsunset",
-						"algae",
-						"amp",
-						"armyrose",
-						"blugrn",
-						"bluyl",
-						"burg",
-						"burgyl",
-						"deep",
-						"earth",
-						"emrld",
-						"fall",
-						"geyser",
-						"magenta",
-						"mint",
+						"Twilight",
+						"IceFire",
+						"Edge",
+						"Phase",
+						"HSV",
 						"mrybm",
-						"mygbm",
-						"oranges",
-						"orrd",
-						"oryel",
-						"peach",
-						"picnic",
-						"pinkyl",
-						"purp",
-						"purpor",
-						"reds",
-						"teal",
-						"tealgrn",
-						"tealrose",
-						"tempo",
-						"temps",
-						"tropic",
-						"sunset",
-						"sunsetdark",
-						"portland",
-						"plotly3"
+						"mygbm"
 					],
 					collapsed: true
 				},
-
-				{
-					group: "Other",
-					options: [
-						"blackbody",
-						"bluered",
-						"curl",
-						"ice",
-						"icefire",
-						"haline",
-						"oxy"
-					],
-					collapsed: true
-				}
 			],
 
-			defaultValue: "viridis",
+			defaultValue: "Viridis",
 
 			onChange: value => {
 				const code = getPythonCode(PythonCodeKey.SetColorGrade, value);
