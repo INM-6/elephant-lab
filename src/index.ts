@@ -131,6 +131,11 @@ class ElephantLabExtension {
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
 			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
+			// Notify backend of initial panel active state
+			await this.kernelBridge.executeCode(
+				getPythonCode(PythonCodeKey.SetPanelVisibility, this._explorerWidget?.isVisible ?? false, this._detailsWidget?.isVisible ?? false),
+				null, false
+			);
 			console.log("Elephant Lab: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Elephant Lab: FAILED to initialize kernel state:", error);
