@@ -132,7 +132,7 @@ class ElephantLabExtension {
 			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
 			// Notify backend of initial panel active state
-			this.kernelBridge!.executeCode(
+			await this.kernelBridge.executeCode(
 				getPythonCode(PythonCodeKey.SetPanelVisibility, this._explorerWidget?.isVisible ?? false, this._detailsWidget?.isVisible ?? false),
 				null, false
 			);
