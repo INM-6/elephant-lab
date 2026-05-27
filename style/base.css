@@ -187,11 +187,30 @@
 }
 
 @keyframes anno-filter-shake {
-  0%   { border-color: var(--jp-error-color1); box-shadow: 0 0 0 1px var(--jp-error-color1); }
-  25%  { border-color: transparent;            box-shadow: none; }
-  50%  { border-color: var(--jp-error-color1); box-shadow: 0 0 0 1px var(--jp-error-color1); }
-  75%  { border-color: transparent;            box-shadow: none; }
-  100% { border-color: var(--jp-error-color1); box-shadow: 0 0 0 1px var(--jp-error-color1); }
+  0% {
+    border-color: var(--jp-error-color1);
+    box-shadow: 0 0 0 1px var(--jp-error-color1);
+  }
+
+  25% {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  50% {
+    border-color: var(--jp-error-color1);
+    box-shadow: 0 0 0 1px var(--jp-error-color1);
+  }
+
+  75% {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  100% {
+    border-color: var(--jp-error-color1);
+    box-shadow: 0 0 0 1px var(--jp-error-color1);
+  }
 }
 
 .anno-filter-no-match {
@@ -208,6 +227,18 @@
   background: var(--jp-layout-color1);
   color: var(--jp-ui-font-color1);
   cursor: pointer;
+}
+
+/* Focus / active (JupyterLab-style highlight) */
+.jp-rawplot-select:focus {
+  outline: none;
+  border-color: var(--jp-brand-color1);
+  box-shadow: 0 0 0 1px var(--jp-brand-color1);
+}
+
+/* Optional: hover consistency with your custom dropdown */
+.jp-rawplot-select:hover {
+  background: var(--jp-layout-color2);
 }
 
 .jp-rawplot-toolbar {
@@ -240,4 +271,169 @@
 .my-slider .noUi-handle {
   background: #ffffff;
   border: none;
+}
+
+.jp-collapsible-select {
+  position: relative;
+
+  /* don't stretch */
+  width: auto;
+
+  /* behaves more like native select */
+  display: inline-block;
+}
+
+/* Main button */
+.jp-collapsible-select-button {
+
+  /* no forced full width */
+  min-width: 120px;
+  max-width: 180px;
+
+  padding: 2px 20px 2px 6px;
+
+  border-radius: 4px;
+  border: 1px solid var(--jp-border-color2);
+
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+
+  font: inherit;
+  text-align: left;
+
+  cursor: pointer;
+
+  position: relative;
+
+  min-height: 24px;
+}
+
+/* Dropdown arrow */
+.jp-collapsible-select-button::after {
+  content: "\2304";
+
+  position: absolute;
+
+  right: 6px;
+  top: 50%;
+
+  transform: translateY(-90%);
+
+  font-size: 22px;
+
+  pointer-events: none;
+}
+
+/* Hover */
+.jp-collapsible-select-button:hover {
+  background: var(--jp-layout-color2);
+}
+
+/* Focus */
+.jp-collapsible-select-button:focus {
+  outline: none;
+
+  border-color: var(--jp-brand-color1);
+
+  box-shadow: 0 0 0 1px var(--jp-brand-color1);
+}
+
+/* Dropdown panel */
+.jp-collapsible-select-panel {
+  position: absolute;
+
+  top: calc(100% + 2px);
+  left: 0;
+
+  min-width: 100%;
+
+  background: var(--jp-layout-color1);
+
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 4px;
+
+  z-index: 1000;
+
+  max-height: 320px;
+  overflow-y: auto;
+
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+  padding: 4px;
+}
+
+/* Groups */
+.jp-collapsible-select-panel details {
+  margin-bottom: 2px;
+}
+
+/* Group header */
+.jp-collapsible-select-panel summary {
+
+  cursor: pointer;
+
+  padding: 4px 6px;
+
+  border-radius: 4px;
+
+  color: var(--jp-ui-font-color1);
+
+  user-select: none;
+
+  list-style: none;
+}
+
+/* Remove native marker */
+.jp-collapsible-select-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Hollow expand arrow */
+.jp-collapsible-select-panel summary::before {
+
+  content: "▶";
+
+  display: inline-block;
+
+  width: 10px;
+
+  margin-right: 4px;
+
+  font-size: 11px;
+
+  transition: transform 0.15s ease;
+}
+
+/* Rotate when open */
+.jp-collapsible-select-panel details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+/* Hover */
+.jp-collapsible-select-panel summary:hover {
+  background: var(--jp-layout-color2);
+}
+
+/* Items */
+.jp-collapsible-select-item {
+
+  padding: 4px 8px 4px 20px;
+
+  cursor: pointer;
+
+  border-radius: 4px;
+
+  color: var(--jp-ui-font-color1);
+
+  user-select: none;
+}
+
+/* Hover */
+.jp-collapsible-select-item:hover {
+  background: var(--jp-layout-color2);
+}
+
+/* Active */
+.jp-collapsible-select-item:active {
+  background: var(--jp-layout-color3);
 }

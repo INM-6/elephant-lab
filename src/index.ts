@@ -1014,14 +1014,14 @@ class ElephantLabExtension {
 			optionsModal.classList.toggle("jp-visible", state);
 		});
 
-		// Hide options when clicked elsewhere
-		raw_plot_widget.node.addEventListener("click", (e) => {
+		// Hide options when clicked elsewhere (currently disabled because it seems to annoy more than help)
+		/*raw_plot_widget.node.addEventListener("click", (e) => {
 			const temp: Node = e.target as Node
 			if (!optionsModal.contains(temp) && !optionsToggle.contains(temp)) {
 				optionsModal.classList.remove("jp-visible");
 				optionsToggle.setAttribute("aria-pressed", "false");
 			}
-		});
+		});*/
 
 		// --- MAX POINTS INPUT ---
 		const numberLabel = document.createElement('label');
@@ -1097,13 +1097,188 @@ class ElephantLabExtension {
 			}
 		});
 
-		const colorGrade = createLabeledSelect({
+		type SelectOptionGroup = {
+			group: string;
+			options: string[];
+			collapsed?: boolean;
+		};
+
+		function createCollapsibleSelect(options: {
+			label: string;
+			icon?: string;
+			selectOptions: SelectOptionGroup[];
+			defaultValue?: string;
+			title?: string;
+			onChange: (value: string) => void;
+		}): HTMLDivElement {
+
+			let currentValue = options.defaultValue ?? "";
+
+			// Main container
+			const container = document.createElement("div");
+			container.classList.add("jp-rawplot-row");
+
+			if (options.title) {
+				container.title = options.title;
+			}
+
+			// Label
+			const labelEl = document.createElement("label");
+			labelEl.classList.add("jp-rawplot-label");
+
+			labelEl.innerHTML = options.icon
+				? `<i class="fa ${options.icon}"></i> ${options.label}`
+				: options.label;
+
+			// Dropdown wrapper
+			const wrapper = document.createElement("div");
+			wrapper.classList.add("jp-collapsible-select");
+
+			// Current value button
+			const button = document.createElement("button");
+			button.type = "button";
+			button.classList.add("jp-collapsible-select-button");
+			button.textContent = currentValue || "Select...";
+
+			// Dropdown panel
+			const panel = document.createElement("div");
+			panel.classList.add("jp-collapsible-select-panel");
+			panel.style.display = "none";
+
+			// Groups
+			options.selectOptions.forEach(group => {
+
+				const details = document.createElement("details");
+
+				if (!group.collapsed) {
+					details.open = true;
+				}
+
+				const summary = document.createElement("summary");
+				summary.textContent = group.group;
+
+				details.appendChild(summary);
+
+				group.options.forEach(value => {
+
+					const item = document.createElement("div");
+					item.classList.add("jp-collapsible-select-item");
+
+					item.textContent = value;
+
+					item.onclick = () => {
+
+						currentValue = value;
+
+						button.textContent = value;
+
+						panel.style.display = "none";
+
+						options.onChange(value);
+					};
+
+					details.appendChild(item);
+				});
+
+				panel.appendChild(details);
+			});
+
+			// Toggle dropdown
+			button.onclick = (event) => {
+
+				panel.style.display =
+					panel.style.display === "none"
+						? "block"
+						: "none";
+			};
+
+			document.addEventListener("click", (event) => {
+
+				const target = event.target as Node;
+
+				const clickedInsideButton = button.contains(target);
+				const clickedInsidePanel = panel.contains(target);
+
+				if (!clickedInsideButton && !clickedInsidePanel) {
+					panel.style.display = "none";
+				}
+			});
+
+			document.addEventListener("keydown", (event) => {
+
+				if (event.key === "Escape") {
+
+					panel.style.display = "none";
+
+				}
+			});
+
+			wrapper.appendChild(button);
+			wrapper.appendChild(panel);
+
+			container.appendChild(labelEl);
+			container.appendChild(wrapper);
+
+			return container;
+		}
+
+		const colorGrade = createCollapsibleSelect({
 			label: "Color Grade",
 			icon: "fa-palette",
-			selectOptions: ["Viridis", "Plasma", "Inferno", "Magma", "Cividis", "Turbo", "hsv", "phase", "twilight"],
+
+			selectOptions: [
+				{
+					group: "Sequential",
+					options: [
+						"Viridis",
+						"Cividis",
+						"Inferno",
+						"Magma",
+						"Plasma",
+						"Turbo",
+						"Blackbody",
+						"Bluered",
+						"Electric",
+						"Hot",
+						"Jet",
+						"Rainbow",
+						"Plotly3"
+					],
+					collapsed: false
+				},
+
+				{
+					group: "Diverging",
+					options: [
+						"BrBG",
+						"RdGy",
+						"oxy",
+						"Fall",
+						"Earth",
+						"Picnic",
+						"Portland"
+					],
+					collapsed: true
+				},
+
+				{
+					group: "Cyclic",
+					options: [
+						"Twilight",
+						"IceFire",
+						"Edge",
+						"Phase",
+						"HSV",
+						"mrybm",
+						"mygbm"
+					],
+					collapsed: true
+				},
+			],
+
 			defaultValue: "Viridis",
-			title: "Color grade for the image sequence plot",
-			onChange: (value) => {
+
+			onChange: value => {
 				const code = getPythonCode(PythonCodeKey.SetColorGrade, value);
 				this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 			}
