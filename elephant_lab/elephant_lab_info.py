@@ -48,7 +48,7 @@ class ElephantLab_info:
         Is a Class to minimize the amount of name clutter in the notebook
         """
         self.elephant_lab_entity: "ElephantLab_info.ElephantLab" = elephant_lab_entity
-        self._is_panel_active = True
+        self._is_panel_active = False
         self._pending_info_update = False
         self._output_node_info = None
 
