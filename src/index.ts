@@ -1013,13 +1013,22 @@ class ElephantLabExtension {
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const upscaleButton = createToggle('', 'fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', () => {
-			let max_points = Number(numberInput.value);
-			if (max_points < min_max_points) {
-				max_points = min_max_points;
-				numberInput.value = max_points.toString();
+		const getMaxPoints = () => {
+			if (useAllCheckbox.checked) {
+				return -1; // convention: all points
 			}
-			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, max_points, this.plotlyFrontend?.getXRanges());
+
+			const max_points = Number(numberInput.value);
+			if (max_points < min_max_points) {
+				numberInput.value = min_max_points.toString();
+				return min_max_points;
+			} else {
+				return max_points;
+			}
+		}
+
+		const upscaleButton = createToggle('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', false, false, () => {
+			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, getMaxPoints(), this.plotlyFrontend?.getXRanges());
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
@@ -1051,6 +1060,21 @@ class ElephantLabExtension {
 		});*/
 
 		// --- MAX POINTS INPUT ---
+
+		const applyMaxPoints = () => {
+
+			const code = getPythonCode(
+				PythonCodeKey.UpdateMaxPoints,
+				getMaxPoints()
+			);
+
+			this.kernelBridge!.executeCode(
+				code,
+				this.outarea_nodeexplorer_raw!,
+				false
+			);
+		};
+
 		const numberLabel = document.createElement('label');
 		numberLabel.innerHTML = `<i class="fa fa-chart-line"></i> Max Points`;
 		numberLabel.classList.add("jp-rawplot-label");
@@ -1068,8 +1092,36 @@ class ElephantLabExtension {
 		maxNumberInput.classList.add("jp-rawplot-row");
 		maxNumberInput.title = "Maximum number of points to be plotted. Increasing this number can increase the detail of the plot, but also increases loading times.";
 
+		const useAllCheckbox = document.createElement("input");
+		useAllCheckbox.type = "checkbox";
+
+		const useAllLabel = document.createElement("label");
+		useAllLabel.textContent = "Use all";
+		useAllLabel.classList.add("jp-rawplot-label");
+
+		numberInput.addEventListener("keydown", e => {
+			if (e.key === "Enter") {
+				applyMaxPoints();
+			}
+		});
+
+		numberInput.addEventListener("blur", () => {
+			applyMaxPoints();
+		});
+
+		numberInput.addEventListener("change", () => {
+			applyMaxPoints();
+		});
+
+		useAllCheckbox.addEventListener("change", () => {
+			numberInput.disabled = useAllCheckbox.checked;
+			applyMaxPoints();
+		});
+
 		maxNumberInput.appendChild(numberLabel);
 		maxNumberInput.appendChild(numberInput);
+		maxNumberInput.appendChild(useAllLabel);
+		maxNumberInput.appendChild(useAllCheckbox);
 
 		function createLabeledSelect(options: {
 			label: string;

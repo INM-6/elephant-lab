@@ -59,6 +59,10 @@ function upscaleRawPlot(max_points: number, x_ranges: string): string {
 	return `elephant_lab_entity.elephant_lab_plot.upscale_raw_plot(${max_points}, ${x_ranges})`
 }
 
+function updateMaxPoints(max_points: number): string {
+	return `elephant_lab_entity.elephant_lab_plot.update_max_points(${max_points})`
+}
+
 const resetScale = `elephant_lab_entity.elephant_lab_plot.reset_scale()`;
 
 function setNormalizationMethod(method: string): string {
@@ -124,6 +128,7 @@ export enum PythonCodeKey {
 	NormalizeYValuesToggle = 'normalizeYValuesToggle',
 	SetNormalizationMethod = 'setNormalizationMethod',
 	SetPanelVisibility = 'setPanelVisibility',
+	UpdateMaxPoints = 'updateMaxPoints'
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -151,6 +156,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.NormalizeYValuesToggle]: (...args: any[]) => normalizeYValuesToggle(args[0]),
 	[PythonCodeKey.SetNormalizationMethod]: (...args: any[]) => setNormalizationMethod(args[0]),
 	[PythonCodeKey.SetPanelVisibility]: (...args: any[]) => setPanelVisibility(args[0], args[1]),
+	[PythonCodeKey.UpdateMaxPoints]: (...args: any[]) => updateMaxPoints(args[0])
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {
