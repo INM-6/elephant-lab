@@ -44,6 +44,8 @@ import {
 	IRenderMimeRegistry,
 }
 	from '@jupyterlab/rendermime';
+
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
 // Lumino imports for dealing with the tabs within JupyterLab
 // These are called Panels
 import {
@@ -82,6 +84,7 @@ class ElephantLabExtension {
 	private outarea_neo_tree: OutputArea | null;
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
+	private settingRegistry: ISettingRegistry;
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
 	private plotlyFrontend: PlotlyFrontend | null;
@@ -91,13 +94,14 @@ class ElephantLabExtension {
 
 	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry, docManager: IDocumentManager) {
+		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry, docManager: IDocumentManager, settingRegistry: ISettingRegistry) {
 		// save all constructor arguments
 		this.app = app;
 		this.command_palette = command_palette;
 		this.notebook_tracker = notebook_tracker;
 		this.widget_tracker = widget_tracker;
 		this.docManager = docManager;
+		this.settingRegistry = settingRegistry;
 		// Store references to all tabs containing notebooks
 		this.myPanels = [];
 		// Store references to all tabs created by this extension
@@ -136,6 +140,14 @@ class ElephantLabExtension {
 				getPythonCode(PythonCodeKey.SetPanelVisibility, this._explorerWidget?.isVisible ?? false, this._detailsWidget?.isVisible ?? false),
 				null, false
 			);
+
+			// The options are created here and not where all other widgets are created
+			// because nothing else depends on them, but they need the kernelBridge in
+			// order to notify the kernel of the saved user settings.
+			// TODO: It would be cleaner, if creation of the UI and notifying the
+			// settings would be split, but it should be done in a way where the id
+			// only gets inputed once and not two times
+			this.create_raw_plot_options(session, this._explorerWidget!);
 			console.log("Elephant Lab: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Elephant Lab: FAILED to initialize kernel state:", error);
@@ -950,20 +962,27 @@ class ElephantLabExtension {
 		tree_widget.node.prepend(filterContainer);
 	}
 
-	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+	public async create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+		const settings = await this.settingRegistry.load('elephant-lab:plugin');
+
 		const buttonContainer = document.createElement("div");
 		buttonContainer.classList.add("jp-rawplot-button-container");
 
-		const createToggle = (icon: string, label: string, description: string, initial: boolean, is_toggle: boolean, callback: (state: boolean) => void) => {
+		const createToggle = (id: string, icon: string, label: string, description: string, callback: (state: boolean) => void, toggle_without_id: boolean = false) => {
 			const toggle = document.createElement("button");
 			toggle.type = "button";
 			toggle.classList.add("jp-rawplot-toggle");
+			let initial = false;
+			if (id) {
+				initial = settings.get(id).composite as boolean;
+				callback(initial);
+			}
 			toggle.setAttribute("aria-pressed", String(initial));
 			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
 			toggle.title = description;
 
-			toggle.addEventListener("click", () => {
-				if (!is_toggle) {
+			toggle.addEventListener("click", async () => {
+				if (!id && !toggle_without_id) {
 					callback(false);
 					return;
 				}
@@ -971,27 +990,30 @@ class ElephantLabExtension {
 				const checked = toggle.getAttribute("aria-pressed") === "true";
 				const newState = !checked;
 				toggle.setAttribute("aria-pressed", String(newState));
+				if (id) {
+					await settings.set(id, newState);
+				}
 				callback(newState);
 			});
 
 			return toggle;
 		};
 
-		const darkmodeToggle = createToggle('fa-moon', 'Dark', 'Switch between dark and light mode', true, true, (state) => {
+		const darkmodeToggle = createToggle('dark', 'fa-moon', 'Dark', 'Switch between dark and light mode', (state) => {
 			this.plotlyFrontend?.setThemes(state);
 		});
 
-		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
+		const overlapToggle = createToggle('overlap', 'fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', (state) => {
 			const code = getPythonCode(PythonCodeKey.OverlapToggle, state);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', false, true, (state) => {
+		const zeroBasedToggle = createToggle('zero_based', 'fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', (state) => {
 			const code = getPythonCode(PythonCodeKey.ZeroBasedToggle, state);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const upscaleButton = createToggle('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', false, false, () => {
+		const upscaleButton = createToggle('', 'fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', () => {
 			let max_points = Number(numberInput.value);
 			if (max_points < min_max_points) {
 				max_points = min_max_points;
@@ -1001,12 +1023,12 @@ class ElephantLabExtension {
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const resetScaleButton = createToggle('fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', false, false, () => {
+		const resetScaleButton = createToggle('', 'fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', () => {
 			const code = getPythonCode(PythonCodeKey.ResetScale);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const normalizeYValuesToggle = createToggle('fa-compress', 'Normalize Y', 'Normalize the y-values of the plots', false, true, (state) => {
+		const normalizeYValuesToggle = createToggle('normalize_y', 'fa-compress', 'Normalize Y', 'Normalize the y-values of the plots', (state) => {
 			const code = getPythonCode(PythonCodeKey.NormalizeYValuesToggle, state);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
@@ -1015,9 +1037,9 @@ class ElephantLabExtension {
 		optionsModal.classList.add("jp-rawplot-options-modal");
 
 		// --- OPTIONS MODAL BUTTON ---
-		const optionsToggle = createToggle('fa-cogs', 'Options', '', false, true, (state) => {
+		const optionsToggle = createToggle('', 'fa-cogs', 'Options', '', (state) => {
 			optionsModal.classList.toggle("jp-visible", state);
-		});
+		}, true);
 
 		// Hide options when clicked elsewhere (currently disabled because it seems to annoy more than help)
 		/*raw_plot_widget.node.addEventListener("click", (e) => {
@@ -1036,8 +1058,9 @@ class ElephantLabExtension {
 		const min_max_points = 10000;
 		const numberInput = document.createElement('input');
 		numberInput.type = "number";
-		numberInput.value = "10000";
-		numberInput.min = `${min_max_points}`;
+		const savedMaxPoints = settings.get('max_points').composite as number;
+		numberInput.value = savedMaxPoints.toString();
+		numberInput.min = min_max_points.toString();
 		numberInput.step = "10000";
 		numberInput.classList.add("jp-rawplot-input");
 
@@ -1090,11 +1113,12 @@ class ElephantLabExtension {
 			return container;
 		}
 
+		const savedNormalizationMethod = settings.get('normalization_method').composite as string;
 		const normalizationMethod = createLabeledSelect({
 			label: "Normalization Method",
 			icon: "fa-compress",
 			selectOptions: ['minmax', 'zscore', 'l2'],
-			defaultValue: 'zscore',
+			defaultValue: savedNormalizationMethod,
 			title: "Method used to normalize the y-values when 'Normalize Y' is enabled",
 			onChange: (value) => {
 				const code = getPythonCode(PythonCodeKey.SetNormalizationMethod, value);
@@ -1227,6 +1251,7 @@ class ElephantLabExtension {
 			return container;
 		}
 
+		const savedColorGrade = settings.get('color_scale').composite as string;
 		const colorGrade = createCollapsibleSelect({
 			label: "Color Grade",
 			icon: "fa-palette",
@@ -1281,7 +1306,7 @@ class ElephantLabExtension {
 				},
 			],
 
-			defaultValue: "Viridis",
+			defaultValue: savedColorGrade,
 
 			onChange: value => {
 				const code = getPythonCode(PythonCodeKey.SetColorGrade, value);
@@ -1338,7 +1363,6 @@ class ElephantLabExtension {
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
-		this.create_raw_plot_options(session, explorer_widget_raw_plot);
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
@@ -1380,7 +1404,7 @@ class ElephantLabExtension {
 * Activate the ElephantLabExtension extension
 */
 function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer, docManager: IDocumentManager) {
+	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer, docManager: IDocumentManager, settingRegistry: ISettingRegistry) {
 	/**
 	 * Performs the initialization of the extension
 	 * Parameters:
@@ -1403,7 +1427,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	let widget_tracker = new WidgetTracker<Widget>({ namespace: 'elephant_lab_namespace' });
 
 	// create instance of ElephantLabExtension
-	const jupy_ext = new ElephantLabExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager);
+	const jupy_ext = new ElephantLabExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager, settingRegistry);
 
 	// Add an application command: this is placed into CommandPalette and by clicking on the corresponding button
 	// this command will open the elephant lab tab
@@ -1425,7 +1449,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 	id: 'elephant-lab:extension',
 	autoStart: true,
 	// What to pass to the activate function
-	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager],
+	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager, ISettingRegistry],
 	// activate: Function that is called upon startup of the extension
 	// Parameters are passed by the extension framework as specified in 'requires'
 	activate: activate
