@@ -994,8 +994,9 @@ class ElephantLabExtension {
 				}
 				callback(newState);
 			});
-
-			callback(initial);
+			if (id) {
+				callback(initial);
+			}
 
 			return toggle;
 		};
@@ -1015,17 +1016,18 @@ class ElephantLabExtension {
 		});
 
 		const getMaxPoints = () => {
-			if (useAllCheckbox.checked) {
-				return -1; // convention: all points
-			}
 
-			const max_points = Number(numberInput.value);
+			let max_points = Number(numberInput.value);
 			if (max_points < min_max_points) {
 				numberInput.value = min_max_points.toString();
-				return min_max_points;
-			} else {
-				return max_points;
+				max_points = min_max_points;
 			}
+
+			if (useAllCheckbox.checked) {
+				max_points = -1; // convention: all points
+			}
+
+			return max_points;
 		}
 
 		const upscaleButton = createToggle('', 'fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', () => {
@@ -1069,7 +1071,7 @@ class ElephantLabExtension {
 
 			const max_points = getMaxPoints();
 
-			await settings.set(max_points_id, max_points);
+			await settings.set(max_points_id, Number(numberInput.value));
 			await settings.set(use_all_points_id, useAllCheckbox.checked);
 
 			const code = getPythonCode(
@@ -1105,6 +1107,7 @@ class ElephantLabExtension {
 		const useAllCheckbox = document.createElement("input");
 		useAllCheckbox.type = "checkbox";
 		useAllCheckbox.checked = savedUseAllPoints;
+		numberInput.disabled = useAllCheckbox.checked;
 
 		const useAllLabel = document.createElement("label");
 		useAllLabel.textContent = "Use all";
