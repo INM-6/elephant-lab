@@ -975,7 +975,6 @@ class ElephantLabExtension {
 			let initial = false;
 			if (id) {
 				initial = settings.get(id).composite as boolean;
-				callback(initial);
 			}
 			toggle.setAttribute("aria-pressed", String(initial));
 			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
@@ -995,6 +994,8 @@ class ElephantLabExtension {
 				}
 				callback(newState);
 			});
+
+			callback(initial);
 
 			return toggle;
 		};
@@ -1027,7 +1028,7 @@ class ElephantLabExtension {
 			}
 		}
 
-		const upscaleButton = createToggle('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', false, false, () => {
+		const upscaleButton = createToggle('', 'fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', () => {
 			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, getMaxPoints(), this.plotlyFrontend?.getXRanges());
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
@@ -1061,11 +1062,19 @@ class ElephantLabExtension {
 
 		// --- MAX POINTS INPUT ---
 
-		const applyMaxPoints = () => {
+		const max_points_id = 'max_points';
+		const use_all_points_id = 'use_all_points';
+
+		const applyMaxPoints = async () => {
+
+			const max_points = getMaxPoints();
+
+			await settings.set(max_points_id, max_points);
+			await settings.set(use_all_points_id, useAllCheckbox.checked);
 
 			const code = getPythonCode(
 				PythonCodeKey.UpdateMaxPoints,
-				getMaxPoints()
+				max_points
 			);
 
 			this.kernelBridge!.executeCode(
@@ -1082,7 +1091,7 @@ class ElephantLabExtension {
 		const min_max_points = 10000;
 		const numberInput = document.createElement('input');
 		numberInput.type = "number";
-		const savedMaxPoints = settings.get('max_points').composite as number;
+		const savedMaxPoints = settings.get(max_points_id).composite as number;
 		numberInput.value = savedMaxPoints.toString();
 		numberInput.min = min_max_points.toString();
 		numberInput.step = "10000";
@@ -1092,8 +1101,10 @@ class ElephantLabExtension {
 		maxNumberInput.classList.add("jp-rawplot-row");
 		maxNumberInput.title = "Maximum number of points to be plotted. Increasing this number can increase the detail of the plot, but also increases loading times.";
 
+		const savedUseAllPoints = settings.get(use_all_points_id).composite as boolean;
 		const useAllCheckbox = document.createElement("input");
 		useAllCheckbox.type = "checkbox";
+		useAllCheckbox.checked = savedUseAllPoints;
 
 		const useAllLabel = document.createElement("label");
 		useAllLabel.textContent = "Use all";
@@ -1113,7 +1124,7 @@ class ElephantLabExtension {
 			applyMaxPoints();
 		});
 
-		useAllCheckbox.addEventListener("change", () => {
+		useAllCheckbox.addEventListener("change", async () => {
 			numberInput.disabled = useAllCheckbox.checked;
 			applyMaxPoints();
 		});
@@ -1123,11 +1134,13 @@ class ElephantLabExtension {
 		maxNumberInput.appendChild(useAllLabel);
 		maxNumberInput.appendChild(useAllCheckbox);
 
+		applyMaxPoints();
+
 		function createLabeledSelect(options: {
+			id: string;
 			label: string;
 			icon?: string;
 			selectOptions: string[];
-			defaultValue?: string;
 			title?: string;
 			onChange: (value: string) => void;
 		}): HTMLDivElement {
@@ -1147,11 +1160,14 @@ class ElephantLabExtension {
 				selectEl.appendChild(opt);
 			});
 
-			if (options.defaultValue) {
-				selectEl.value = options.defaultValue;
+			if (options.id) {
+				selectEl.value = settings.get(options.id).composite as string;
 			}
 
-			selectEl.onchange = () => {
+			selectEl.onchange = async () => {
+				if (options.id) {
+					await settings.set(options.id, selectEl.value);
+				}
 				options.onChange(selectEl.value);
 			};
 
@@ -1162,15 +1178,16 @@ class ElephantLabExtension {
 			container.appendChild(labelEl);
 			container.appendChild(selectEl);
 
+			options.onChange(selectEl.value);
+
 			return container;
 		}
 
-		const savedNormalizationMethod = settings.get('normalization_method').composite as string;
 		const normalizationMethod = createLabeledSelect({
+			id: "normalization_method",
 			label: "Normalization Method",
 			icon: "fa-compress",
 			selectOptions: ['minmax', 'zscore', 'l2'],
-			defaultValue: savedNormalizationMethod,
 			title: "Method used to normalize the y-values when 'Normalize Y' is enabled",
 			onChange: (value) => {
 				const code = getPythonCode(PythonCodeKey.SetNormalizationMethod, value);
@@ -1185,15 +1202,18 @@ class ElephantLabExtension {
 		};
 
 		function createCollapsibleSelect(options: {
+			id: string;
 			label: string;
 			icon?: string;
 			selectOptions: SelectOptionGroup[];
-			defaultValue?: string;
 			title?: string;
 			onChange: (value: string) => void;
 		}): HTMLDivElement {
 
-			let currentValue = options.defaultValue ?? "";
+			let currentValue = "";
+			if (options.id) {
+				currentValue = settings.get(options.id).composite as string;
+			}
 
 			// Main container
 			const container = document.createElement("div");
@@ -1247,13 +1267,17 @@ class ElephantLabExtension {
 
 					item.textContent = value;
 
-					item.onclick = () => {
+					item.onclick = async () => {
 
 						currentValue = value;
 
 						button.textContent = value;
 
 						panel.style.display = "none";
+
+						if (options.id) {
+							await settings.set(options.id, currentValue);
+						}
 
 						options.onChange(value);
 					};
@@ -1300,11 +1324,13 @@ class ElephantLabExtension {
 			container.appendChild(labelEl);
 			container.appendChild(wrapper);
 
+			options.onChange(currentValue);
+
 			return container;
 		}
 
-		const savedColorGrade = settings.get('color_scale').composite as string;
 		const colorGrade = createCollapsibleSelect({
+			id: "color_scale",
 			label: "Color Grade",
 			icon: "fa-palette",
 
@@ -1357,8 +1383,6 @@ class ElephantLabExtension {
 					collapsed: true
 				},
 			],
-
-			defaultValue: savedColorGrade,
 
 			onChange: value => {
 				const code = getPythonCode(PythonCodeKey.SetColorGrade, value);
