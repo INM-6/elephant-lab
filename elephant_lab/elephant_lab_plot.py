@@ -328,14 +328,11 @@ class ElephantLab_plot:
         if reload:
             self._raw_plot()
 
-    def upscale_raw_plot(self, max_points, x_ranges):
+    def upscale_raw_plot(self, x_ranges):
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
             temp_reload = False
-            if(max_points != plot_dict['max_points']):
-                plot_dict['max_points']=max_points
-                temp_reload = True
             is_plotted = plot_dict['is_plotted']
             if not is_plotted or not plot_dict['is_downscaled']:
                 continue

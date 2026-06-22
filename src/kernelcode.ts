@@ -55,8 +55,8 @@ function zeroBasedToggle(state: boolean): string {
 	return `elephant_lab_entity.elephant_lab_plot.set_zero_based(${convert_bool_to_python_bool(state)})`
 }
 
-function upscaleRawPlot(max_points: number, x_ranges: string): string {
-	return `elephant_lab_entity.elephant_lab_plot.upscale_raw_plot(${max_points}, ${x_ranges})`
+function upscaleRawPlot(x_ranges: string): string {
+	return `elephant_lab_entity.elephant_lab_plot.upscale_raw_plot(${x_ranges})`
 }
 
 function updateMaxPoints(max_points: number): string {
@@ -144,7 +144,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.SaveSelectedNeoObjects]: (...args: any[]) => saveSelectedNeoObjects(args[0]),
 	[PythonCodeKey.OverlapToggle]: (...args: any[]) => overlapToggle(args[0]),
 	[PythonCodeKey.ZeroBasedToggle]: (...args: any[]) => zeroBasedToggle(args[0]),
-	[PythonCodeKey.UpscaleRawPlot]: (...args: any[]) => upscaleRawPlot(args[0], args[1]),
+	[PythonCodeKey.UpscaleRawPlot]: (...args: any[]) => upscaleRawPlot(args[0]),
 	[PythonCodeKey.ResetScale]: resetScale,
 	[PythonCodeKey.SetColorGrade]: (...args: any[]) => setColorGrade(args[0]),
 	[PythonCodeKey.ToggleNeoTreeFilter]: (...args: any[]) => toggleNeoTreeFilter(args[0]),

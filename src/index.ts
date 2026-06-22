@@ -91,6 +91,7 @@ class ElephantLabExtension {
 	private _lastClickedNode: string | null = null;
 	private _explorerWidget: Panel | null = null;
 	private _detailsWidget: Panel | null = null;
+	private updateSettingsCallbacks: ((fromSettings: boolean) => Promise<void>)[] = [];
 
 	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -141,13 +142,9 @@ class ElephantLabExtension {
 				null, false
 			);
 
-			// The options are created here and not where all other widgets are created
-			// because nothing else depends on them, but they need the kernelBridge in
-			// order to notify the kernel of the saved user settings.
-			// TODO: It would be cleaner, if creation of the UI and notifying the
-			// settings would be split, but it should be done in a way where the id
-			// only gets inputed once and not two times
-			this.create_raw_plot_options(session, this._explorerWidget!);
+			await Promise.all(
+				this.updateSettingsCallbacks.map(callback => callback(true))
+			);
 			console.log("Elephant Lab: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Elephant Lab: FAILED to initialize kernel state:", error);
@@ -972,30 +969,34 @@ class ElephantLabExtension {
 			const toggle = document.createElement("button");
 			toggle.type = "button";
 			toggle.classList.add("jp-rawplot-toggle");
-			let initial = false;
-			if (id) {
-				initial = settings.get(id).composite as boolean;
-			}
-			toggle.setAttribute("aria-pressed", String(initial));
 			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
 			toggle.title = description;
 
-			toggle.addEventListener("click", async () => {
+			const update = async (fromSettings: boolean = false) => {
 				if (!id && !toggle_without_id) {
 					callback(false);
 					return;
 				}
 
-				const checked = toggle.getAttribute("aria-pressed") === "true";
-				const newState = !checked;
-				toggle.setAttribute("aria-pressed", String(newState));
-				if (id) {
-					await settings.set(id, newState);
+				let checked = false;
+				if (fromSettings && id) {
+					checked = settings.get(id).composite as boolean;
+				} else {
+					checked = toggle.getAttribute("aria-pressed") === "false";
+					if (id) {
+						await settings.set(id, checked);
+					}
 				}
-				callback(newState);
+				toggle.setAttribute("aria-pressed", String(checked));
+				callback(checked);
+			}
+
+			toggle.addEventListener("click", async () => {
+				await update();
 			});
+
 			if (id) {
-				callback(initial);
+				this.updateSettingsCallbacks.push(update);
 			}
 
 			return toggle;
@@ -1015,23 +1016,8 @@ class ElephantLabExtension {
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const getMaxPoints = () => {
-
-			let max_points = Number(numberInput.value);
-			if (max_points < min_max_points) {
-				numberInput.value = min_max_points.toString();
-				max_points = min_max_points;
-			}
-
-			if (useAllCheckbox.checked) {
-				max_points = -1; // convention: all points
-			}
-
-			return max_points;
-		}
-
-		const upscaleButton = createToggle('', 'fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', () => {
-			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, getMaxPoints(), this.plotlyFrontend?.getXRanges());
+		const upscaleButton = createToggle('', 'fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range to increase detail', () => {
+			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, this.plotlyFrontend?.getXRanges());
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
@@ -1067,12 +1053,27 @@ class ElephantLabExtension {
 		const max_points_id = 'max_points';
 		const use_all_points_id = 'use_all_points';
 
-		const applyMaxPoints = async () => {
+		const applyMaxPoints = async (fromSettings: boolean = false) => {
 
-			const max_points = getMaxPoints();
+			let max_points = 0;
+			if (fromSettings) {
+				max_points = settings.get(max_points_id).composite as number;
+				numberInput.value = max_points.toString();
+				useAllCheckbox.checked = settings.get(use_all_points_id).composite as boolean;
+				numberInput.disabled = useAllCheckbox.checked;
+			} else {
+				max_points = Number(numberInput.value);
+				if (max_points < min_max_points) {
+					numberInput.value = min_max_points.toString();
+					max_points = min_max_points;
+				}
+				await settings.set(max_points_id, max_points);
+				await settings.set(use_all_points_id, useAllCheckbox.checked);
+			}
 
-			await settings.set(max_points_id, Number(numberInput.value));
-			await settings.set(use_all_points_id, useAllCheckbox.checked);
+			if (useAllCheckbox.checked) {
+				max_points = -1; // convention: all points
+			}
 
 			const code = getPythonCode(
 				PythonCodeKey.UpdateMaxPoints,
@@ -1093,7 +1094,7 @@ class ElephantLabExtension {
 		const min_max_points = 10000;
 		const numberInput = document.createElement('input');
 		numberInput.type = "number";
-		const savedMaxPoints = settings.get(max_points_id).composite as number;
+		const savedMaxPoints = min_max_points;
 		numberInput.value = savedMaxPoints.toString();
 		numberInput.min = min_max_points.toString();
 		numberInput.step = "10000";
@@ -1103,33 +1104,33 @@ class ElephantLabExtension {
 		maxNumberInput.classList.add("jp-rawplot-row");
 		maxNumberInput.title = "Maximum number of points to be plotted. Increasing this number can increase the detail of the plot, but also increases loading times.";
 
-		const savedUseAllPoints = settings.get(use_all_points_id).composite as boolean;
+		const savedUseAllPoints = false;
 		const useAllCheckbox = document.createElement("input");
 		useAllCheckbox.type = "checkbox";
 		useAllCheckbox.checked = savedUseAllPoints;
 		numberInput.disabled = useAllCheckbox.checked;
 
 		const useAllLabel = document.createElement("label");
-		useAllLabel.textContent = "Use all";
+		useAllLabel.textContent = "No limit";
 		useAllLabel.classList.add("jp-rawplot-label");
 
-		numberInput.addEventListener("keydown", e => {
+		numberInput.addEventListener("keydown", async e => {
 			if (e.key === "Enter") {
-				applyMaxPoints();
+				await applyMaxPoints();
 			}
 		});
 
-		numberInput.addEventListener("blur", () => {
-			applyMaxPoints();
+		numberInput.addEventListener("blur", async () => {
+			await applyMaxPoints();
 		});
 
-		numberInput.addEventListener("change", () => {
-			applyMaxPoints();
+		numberInput.addEventListener("change", async () => {
+			await applyMaxPoints();
 		});
 
 		useAllCheckbox.addEventListener("change", async () => {
 			numberInput.disabled = useAllCheckbox.checked;
-			applyMaxPoints();
+			await applyMaxPoints();
 		});
 
 		maxNumberInput.appendChild(numberLabel);
@@ -1137,16 +1138,16 @@ class ElephantLabExtension {
 		maxNumberInput.appendChild(useAllLabel);
 		maxNumberInput.appendChild(useAllCheckbox);
 
-		applyMaxPoints();
+		this.updateSettingsCallbacks.push(applyMaxPoints);
 
-		function createLabeledSelect(options: {
+		const createLabeledSelect = (options: {
 			id: string;
 			label: string;
 			icon?: string;
 			selectOptions: string[];
 			title?: string;
 			onChange: (value: string) => void;
-		}): HTMLDivElement {
+		}): HTMLDivElement => {
 			// Create label
 			const labelEl = document.createElement('label');
 			labelEl.classList.add("jp-rawplot-label");
@@ -1163,15 +1164,19 @@ class ElephantLabExtension {
 				selectEl.appendChild(opt);
 			});
 
-			if (options.id) {
-				selectEl.value = settings.get(options.id).composite as string;
-			}
-
-			selectEl.onchange = async () => {
+			const update = async (fromSettings: boolean = false) => {
 				if (options.id) {
-					await settings.set(options.id, selectEl.value);
+					if (fromSettings) {
+						selectEl.value = settings.get(options.id!).composite as string;
+					} else {
+						await settings.set(options.id, selectEl.value);
+					}
 				}
 				options.onChange(selectEl.value);
+			};
+
+			selectEl.onchange = async () => {
+				await update();
 			};
 
 			// Create container
@@ -1181,7 +1186,7 @@ class ElephantLabExtension {
 			container.appendChild(labelEl);
 			container.appendChild(selectEl);
 
-			options.onChange(selectEl.value);
+			this.updateSettingsCallbacks.push(update);
 
 			return container;
 		}
@@ -1204,19 +1209,16 @@ class ElephantLabExtension {
 			collapsed?: boolean;
 		};
 
-		function createCollapsibleSelect(options: {
+		const createCollapsibleSelect = (options: {
 			id: string;
 			label: string;
 			icon?: string;
 			selectOptions: SelectOptionGroup[];
 			title?: string;
 			onChange: (value: string) => void;
-		}): HTMLDivElement {
+		}): HTMLDivElement => {
 
 			let currentValue = "";
-			if (options.id) {
-				currentValue = settings.get(options.id).composite as string;
-			}
 
 			// Main container
 			const container = document.createElement("div");
@@ -1249,6 +1251,22 @@ class ElephantLabExtension {
 			panel.classList.add("jp-collapsible-select-panel");
 			panel.style.display = "none";
 
+			const update = async (fromSettings: boolean = false) => {
+				if (options.id) {
+					if (fromSettings) {
+						currentValue = settings.get(options.id!).composite as string;
+					} else {
+						await settings.set(options.id, currentValue);
+					}
+				}
+
+				button.textContent = currentValue;
+
+				panel.style.display = "none";
+
+				options.onChange(currentValue);
+			}
+
 			// Groups
 			options.selectOptions.forEach(group => {
 
@@ -1274,15 +1292,7 @@ class ElephantLabExtension {
 
 						currentValue = value;
 
-						button.textContent = value;
-
-						panel.style.display = "none";
-
-						if (options.id) {
-							await settings.set(options.id, currentValue);
-						}
-
-						options.onChange(value);
+						await update();
 					};
 
 					details.appendChild(item);
@@ -1327,7 +1337,7 @@ class ElephantLabExtension {
 			container.appendChild(labelEl);
 			container.appendChild(wrapper);
 
-			options.onChange(currentValue);
+			this.updateSettingsCallbacks.push(update);
 
 			return container;
 		}
@@ -1393,17 +1403,29 @@ class ElephantLabExtension {
 			}
 		});
 
+		const resetOptionsButton = createToggle('', 'fa-undo-alt', 'Reset Options', 'Reset all options to their default values', async () => {
+			const userSettings = settings.user;
+
+			for (const key of Object.keys(userSettings)) {
+				await settings.remove(key);
+			}
+			await Promise.all(
+				this.updateSettingsCallbacks.map(callback => callback(true))
+			);
+		});
+
 		optionsModal.appendChild(maxNumberInput);
 		optionsModal.appendChild(normalizationMethod);
 		optionsModal.appendChild(colorGrade);
+		optionsModal.appendChild(resetOptionsButton);
 
 		buttonContainer.append(
 			darkmodeToggle,
 			overlapToggle,
 			zeroBasedToggle,
+			normalizeYValuesToggle,
 			upscaleButton,
 			resetScaleButton,
-			normalizeYValuesToggle,
 			optionsToggle
 		);
 
@@ -1437,6 +1459,7 @@ class ElephantLabExtension {
 		explorer_widget_raw_plot.title.label = 'Explore';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
+		this.create_raw_plot_options(session, explorer_widget_raw_plot);
 		this._explorerWidget = explorer_widget_raw_plot;
 
 		this.widget.addWidget(tree_widget);
