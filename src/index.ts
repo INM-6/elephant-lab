@@ -1071,8 +1071,12 @@ class ElephantLabExtension {
 				await settings.set(use_all_points_id, useAllCheckbox.checked);
 			}
 
-			if (useAllCheckbox.checked) {
-				max_points = -1; // convention: all points
+			const temporary_hard_cap = 10000000;
+			if (useAllCheckbox.checked || max_points > temporary_hard_cap) {
+				// It currently breaks for large datasets when trying to plot all points,
+				// so we set an upper limit to prevent that. This can be removed in the future when that issue is resolved,
+				// by replacing it with -1 which is a conventional value for "no limit".
+				max_points = temporary_hard_cap;
 			}
 
 			const code = getPythonCode(
