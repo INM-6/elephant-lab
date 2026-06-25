@@ -18,7 +18,7 @@
             "title": "Zero Based",
             "default": false
         },
-        "normalize_y": {
+        "normalize_y_values": {
             "type": "boolean",
             "title": "Normalize Y",
             "default": false
@@ -43,7 +43,7 @@
             ],
             "default": "zscore"
         },
-        "color_scale": {
+        "color_grade": {
             "type": "string",
             "title": "Color Scale",
             "default": "Viridis",

@@ -66,7 +66,14 @@ import '../style/base.css'
 import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
 import { PlotlyFrontend } from './plot';
+import { PlotSettings } from './plot_settings';
 import elephantLabLogo from '../doc/Elephant-Lab-Logo.png';
+
+type PlotSettingsKey = keyof PlotSettings;
+interface UpdateSettingsCallback {
+	ids: PlotSettingsKey[];
+	callback: (plotSettings: PlotSettings) => Promise<void>;
+}
 
 class ElephantLabExtension {
 	// declaring members of the class
@@ -91,7 +98,7 @@ class ElephantLabExtension {
 	private _lastClickedNode: string | null = null;
 	private _explorerWidget: Panel | null = null;
 	private _detailsWidget: Panel | null = null;
-	private updateSettingsCallbacks: ((fromSettings: boolean) => Promise<void>)[] = [];
+	private updateSettingsCallbacks: UpdateSettingsCallback[] = [];
 
 	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -116,6 +123,23 @@ class ElephantLabExtension {
 		this.kernelBridge = null;
 		this.plotlyFrontend = null;
 	}; // end of constructor()
+
+	private async loadPlotSettings(settings: ISettingRegistry.ISettings) {
+		const plotSettings: PlotSettings = {};
+
+		for (const { ids, callback } of this.updateSettingsCallbacks) {
+
+			for (const id of ids) {
+				const value = settings.get(id).composite;
+
+				(plotSettings as Record<PlotSettingsKey, unknown>)[id] = value;
+			}
+
+			await callback(plotSettings);
+		}
+
+		await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings));
+	}
 
 
 	/******************************************************************************************************************/
@@ -142,9 +166,10 @@ class ElephantLabExtension {
 				null, false
 			);
 
-			await Promise.all(
-				this.updateSettingsCallbacks.map(callback => callback(true))
-			);
+			const settings = await this.settingRegistry.load('elephant-lab:plugin');
+
+			await this.loadPlotSettings(settings);
+
 			console.log("Elephant Lab: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Elephant Lab: FAILED to initialize kernel state:", error);
@@ -965,22 +990,22 @@ class ElephantLabExtension {
 		const buttonContainer = document.createElement("div");
 		buttonContainer.classList.add("jp-rawplot-button-container");
 
-		const createToggle = (id: string, icon: string, label: string, description: string, callback: (state: boolean) => void, toggle_without_id: boolean = false) => {
+		const createToggle = (id: PlotSettingsKey | undefined, icon: string, label: string, description: string, callback: (state: boolean) => void, toggle_without_id: boolean = false) => {
 			const toggle = document.createElement("button");
 			toggle.type = "button";
 			toggle.classList.add("jp-rawplot-toggle");
 			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
 			toggle.title = description;
 
-			const update = async (fromSettings: boolean = false) => {
+			const update = async (plotSettings: PlotSettings | undefined = undefined) => {
 				if (!id && !toggle_without_id) {
 					callback(false);
 					return;
 				}
 
 				let checked = false;
-				if (fromSettings && id) {
-					checked = settings.get(id).composite as boolean;
+				if (plotSettings && id) {
+					checked = plotSettings[id] as boolean;
 				} else {
 					checked = toggle.getAttribute("aria-pressed") === "false";
 					if (id) {
@@ -988,7 +1013,9 @@ class ElephantLabExtension {
 					}
 				}
 				toggle.setAttribute("aria-pressed", String(checked));
-				callback(checked);
+				if (!plotSettings) {
+					callback(checked);
+				}
 			}
 
 			toggle.addEventListener("click", async () => {
@@ -996,7 +1023,7 @@ class ElephantLabExtension {
 			});
 
 			if (id) {
-				this.updateSettingsCallbacks.push(update);
+				this.updateSettingsCallbacks.push({ ids: [id], callback: update });
 			}
 
 			return toggle;
@@ -1007,27 +1034,30 @@ class ElephantLabExtension {
 		});
 
 		const overlapToggle = createToggle('overlap', 'fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', (state) => {
-			const code = getPythonCode(PythonCodeKey.OverlapToggle, state);
+			const plotSettings: PlotSettings = { overlap: state };
+			const code = getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
 		const zeroBasedToggle = createToggle('zero_based', 'fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', (state) => {
-			const code = getPythonCode(PythonCodeKey.ZeroBasedToggle, state);
+			const plotSettings: PlotSettings = { zero_based: state };
+			const code = getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const upscaleButton = createToggle('', 'fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range to increase detail', () => {
+		const upscaleButton = createToggle(undefined, 'fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range to increase detail', () => {
 			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, this.plotlyFrontend?.getXRanges());
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const resetScaleButton = createToggle('', 'fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', () => {
+		const resetScaleButton = createToggle(undefined, 'fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', () => {
 			const code = getPythonCode(PythonCodeKey.ResetScale);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const normalizeYValuesToggle = createToggle('normalize_y', 'fa-compress', 'Normalize Y', 'Normalize the y-values of the plots', (state) => {
-			const code = getPythonCode(PythonCodeKey.NormalizeYValuesToggle, state);
+		const normalizeYValuesToggle = createToggle('normalize_y_values', 'fa-compress', 'Normalize Y', 'Normalize the y-values of the plots', (state) => {
+			const plotSettings: PlotSettings = { normalize_y_values: state };
+			const code = getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
@@ -1035,7 +1065,7 @@ class ElephantLabExtension {
 		optionsModal.classList.add("jp-rawplot-options-modal");
 
 		// --- OPTIONS MODAL BUTTON ---
-		const optionsToggle = createToggle('', 'fa-cogs', 'Options', '', (state) => {
+		const optionsToggle = createToggle(undefined, 'fa-cogs', 'Options', '', (state) => {
 			optionsModal.classList.toggle("jp-visible", state);
 		}, true);
 
@@ -1053,13 +1083,13 @@ class ElephantLabExtension {
 		const max_points_id = 'max_points';
 		const use_all_points_id = 'use_all_points';
 
-		const applyMaxPoints = async (fromSettings: boolean = false) => {
+		const applyMaxPoints = async (plotSettings: PlotSettings | undefined = undefined) => {
 
 			let max_points = 0;
-			if (fromSettings) {
-				max_points = settings.get(max_points_id).composite as number;
+			if (plotSettings) {
+				max_points = plotSettings.max_points as number;
 				numberInput.value = max_points.toString();
-				useAllCheckbox.checked = settings.get(use_all_points_id).composite as boolean;
+				useAllCheckbox.checked = plotSettings.use_all_points as boolean;
 				numberInput.disabled = useAllCheckbox.checked;
 			} else {
 				max_points = Number(numberInput.value);
@@ -1079,16 +1109,19 @@ class ElephantLabExtension {
 				max_points = temporary_hard_cap;
 			}
 
-			const code = getPythonCode(
-				PythonCodeKey.UpdateMaxPoints,
-				max_points
-			);
+			if (!plotSettings) {
 
-			this.kernelBridge!.executeCode(
-				code,
-				this.outarea_nodeexplorer_raw!,
-				false
-			);
+				const code = getPythonCode(
+					PythonCodeKey.UpdatePlotSettings,
+					{ max_points_id: max_points }
+				);
+
+				this.kernelBridge!.executeCode(
+					code,
+					this.outarea_nodeexplorer_raw!,
+					false
+				);
+			}
 		};
 
 		const numberLabel = document.createElement('label');
@@ -1142,10 +1175,10 @@ class ElephantLabExtension {
 		maxNumberInput.appendChild(useAllLabel);
 		maxNumberInput.appendChild(useAllCheckbox);
 
-		this.updateSettingsCallbacks.push(applyMaxPoints);
+		this.updateSettingsCallbacks.push({ ids: [max_points_id, use_all_points_id], callback: applyMaxPoints });
 
 		const createLabeledSelect = (options: {
-			id: string;
+			id: PlotSettingsKey;
 			label: string;
 			icon?: string;
 			selectOptions: string[];
@@ -1168,15 +1201,17 @@ class ElephantLabExtension {
 				selectEl.appendChild(opt);
 			});
 
-			const update = async (fromSettings: boolean = false) => {
+			const update = async (plotSettings: PlotSettings | undefined = undefined) => {
 				if (options.id) {
-					if (fromSettings) {
-						selectEl.value = settings.get(options.id!).composite as string;
+					if (plotSettings) {
+						selectEl.value = plotSettings[options.id] as string;
 					} else {
 						await settings.set(options.id, selectEl.value);
 					}
 				}
-				options.onChange(selectEl.value);
+				if (!plotSettings) {
+					options.onChange(selectEl.value);
+				}
 			};
 
 			selectEl.onchange = async () => {
@@ -1190,7 +1225,7 @@ class ElephantLabExtension {
 			container.appendChild(labelEl);
 			container.appendChild(selectEl);
 
-			this.updateSettingsCallbacks.push(update);
+			this.updateSettingsCallbacks.push({ ids: [options.id], callback: update });
 
 			return container;
 		}
@@ -1202,7 +1237,8 @@ class ElephantLabExtension {
 			selectOptions: ['minmax', 'zscore', 'l2'],
 			title: "Method used to normalize the y-values when 'Normalize Y' is enabled",
 			onChange: (value) => {
-				const code = getPythonCode(PythonCodeKey.SetNormalizationMethod, value);
+				const plotSettings: PlotSettings = { normalization_method: value };
+				const code = getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings);
 				this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 			}
 		});
@@ -1214,7 +1250,7 @@ class ElephantLabExtension {
 		};
 
 		const createCollapsibleSelect = (options: {
-			id: string;
+			id: PlotSettingsKey;
 			label: string;
 			icon?: string;
 			selectOptions: SelectOptionGroup[];
@@ -1255,10 +1291,10 @@ class ElephantLabExtension {
 			panel.classList.add("jp-collapsible-select-panel");
 			panel.style.display = "none";
 
-			const update = async (fromSettings: boolean = false) => {
+			const update = async (plotSettings: PlotSettings | undefined = undefined) => {
 				if (options.id) {
-					if (fromSettings) {
-						currentValue = settings.get(options.id!).composite as string;
+					if (plotSettings) {
+						currentValue = plotSettings[options.id] as string;
 					} else {
 						await settings.set(options.id, currentValue);
 					}
@@ -1268,7 +1304,9 @@ class ElephantLabExtension {
 
 				panel.style.display = "none";
 
-				options.onChange(currentValue);
+				if (!plotSettings) {
+					options.onChange(currentValue);
+				}
 			}
 
 			// Groups
@@ -1341,13 +1379,13 @@ class ElephantLabExtension {
 			container.appendChild(labelEl);
 			container.appendChild(wrapper);
 
-			this.updateSettingsCallbacks.push(update);
+			this.updateSettingsCallbacks.push({ ids: [options.id], callback: update });
 
 			return container;
 		}
 
 		const colorGrade = createCollapsibleSelect({
-			id: "color_scale",
+			id: "color_grade",
 			label: "Color Grade",
 			icon: "fa-palette",
 
@@ -1402,20 +1440,19 @@ class ElephantLabExtension {
 			],
 
 			onChange: value => {
-				const code = getPythonCode(PythonCodeKey.SetColorGrade, value);
+				const plotSettings: PlotSettings = { color_grade: value };
+				const code = getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings);
 				this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 			}
 		});
 
-		const resetOptionsButton = createToggle('', 'fa-undo-alt', 'Reset Options', 'Reset all options to their default values', async () => {
+		const resetOptionsButton = createToggle(undefined, 'fa-undo-alt', 'Reset Options', 'Reset all options to their default values', async () => {
 			const userSettings = settings.user;
 
 			for (const key of Object.keys(userSettings)) {
 				await settings.remove(key);
 			}
-			await Promise.all(
-				this.updateSettingsCallbacks.map(callback => callback(true))
-			);
+			this.loadPlotSettings(settings);
 		});
 
 		optionsModal.appendChild(maxNumberInput);
