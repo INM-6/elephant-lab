@@ -1076,16 +1076,6 @@ class ElephantLabExtension {
 		useAllLabel.textContent = "Use all";
 		useAllLabel.classList.add("jp-rawplot-label");
 
-		numberInput.addEventListener("keydown", e => {
-			if (e.key === "Enter") {
-				applyMaxPoints();
-			}
-		});
-
-		numberInput.addEventListener("blur", () => {
-			applyMaxPoints();
-		});
-
 		numberInput.addEventListener("change", () => {
 			applyMaxPoints();
 		});
