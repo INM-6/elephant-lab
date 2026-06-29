@@ -990,7 +990,7 @@ class ElephantLabExtension {
 		const buttonContainer = document.createElement("div");
 		buttonContainer.classList.add("jp-rawplot-button-container");
 
-		const createToggle = (id: PlotSettingsKey | undefined, icon: string, label: string, description: string, callback: (state: boolean) => void, toggle_without_id: boolean = false) => {
+		const createToggle = (id: PlotSettingsKey | undefined, icon: string, label: string, description: string, callback: (state: boolean) => void, toggle_without_id: boolean = false, is_backend_updating_callback: boolean = true) => {
 			const toggle = document.createElement("button");
 			toggle.type = "button";
 			toggle.classList.add("jp-rawplot-toggle");
@@ -1013,7 +1013,7 @@ class ElephantLabExtension {
 					}
 				}
 				toggle.setAttribute("aria-pressed", String(checked));
-				if (!plotSettings) {
+				if (!plotSettings || !is_backend_updating_callback) {
 					callback(checked);
 				}
 			}
@@ -1031,7 +1031,7 @@ class ElephantLabExtension {
 
 		const darkmodeToggle = createToggle('dark', 'fa-moon', 'Dark', 'Switch between dark and light mode', (state) => {
 			this.plotlyFrontend?.setThemes(state);
-		});
+		}, false, false);
 
 		const overlapToggle = createToggle('overlap', 'fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', (state) => {
 			const plotSettings: PlotSettings = { overlap: state };
