@@ -129,3 +129,5 @@ Would you like to fix a problem or add a feature? Please open a [pull request](h
 Elephant Lab builds on the [Neo](https://neo-python.readthedocs.io/) electrophysiology data framework and the [Elephant](https://elephant.readthedocs.io/) analysis library.
 
 This project was developed at the [Institute for Advanced Simulation, Computational and Systems Neuroscience (IAS-6)](https://www.fz-juelich.de/en/inm/inm-6), Forschungszentrum Jülich.
+
+This project was funded by the Ministry of Culture and Science of the State of North Rhine-Westphalia, Germany (NRW-network 'iBehave', grant number: NW21-049) and by the European Union's Horizon Europe Programme under the Specific Grant Agreement No. 101147319 (EBRAINS 2.0 Project).
