@@ -1078,7 +1078,7 @@ class ElephantLabExtension {
 		// --- MAX POINTS INPUT ---
 
 		const max_points_id = 'max_points';
-		const use_all_points_id = 'use_all_points';
+		const full_resolution_id = 'full_resolution';
 
 		const applyMaxPoints = async () => {
 
@@ -1089,17 +1089,17 @@ class ElephantLabExtension {
 				max_points = min_max_points;
 			}
 
-			const useAllChanged =
-				(settings.get(use_all_points_id).composite as boolean) !== useAllCheckbox.checked;
-			this.suppressSettingsChanged = useAllChanged;
+			const fullResolutionChanged =
+				(settings.get(full_resolution_id).composite as boolean) !== fullResolutionCheckbox.checked;
+			this.suppressSettingsChanged = fullResolutionChanged;
 			try {
 				await settings.set(max_points_id, max_points);
 
-				if (useAllChanged) {
+				if (fullResolutionChanged) {
 					// Enable the listener before the final change.
 					this.suppressSettingsChanged = false;
 
-					await settings.set(use_all_points_id, useAllCheckbox.checked);
+					await settings.set(full_resolution_id, fullResolutionCheckbox.checked);
 				}
 			} finally {
 				this.suppressSettingsChanged = false;
@@ -1123,36 +1123,36 @@ class ElephantLabExtension {
 		maxNumberInput.classList.add("jp-rawplot-row");
 		maxNumberInput.title = "Maximum number of points to be plotted. Increasing this number can increase the detail of the plot, but also increases loading times.";
 
-		const savedUseAllPoints = false;
-		const useAllCheckbox = document.createElement("input");
-		useAllCheckbox.type = "checkbox";
-		useAllCheckbox.checked = savedUseAllPoints;
-		numberInput.disabled = useAllCheckbox.checked;
+		const savedFullResolution = false;
+		const fullResolutionCheckbox = document.createElement("input");
+		fullResolutionCheckbox.type = "checkbox";
+		fullResolutionCheckbox.checked = savedFullResolution;
+		numberInput.disabled = fullResolutionCheckbox.checked;
 
-		const useAllLabel = document.createElement("label");
-		useAllLabel.textContent = "No limit";
-		useAllLabel.classList.add("jp-rawplot-label");
+		const fullResolutionLabel = document.createElement("label");
+		fullResolutionLabel.textContent = "Full Resolution";
+		fullResolutionLabel.classList.add("jp-rawplot-label");
 
 		numberInput.addEventListener("change", async () => {
 			await applyMaxPoints();
 		});
 
-		useAllCheckbox.addEventListener("change", async () => {
-			numberInput.disabled = useAllCheckbox.checked;
+		fullResolutionCheckbox.addEventListener("change", async () => {
+			numberInput.disabled = fullResolutionCheckbox.checked;
 			await applyMaxPoints();
 		});
 
 		maxNumberInput.appendChild(numberLabel);
 		maxNumberInput.appendChild(numberInput);
-		maxNumberInput.appendChild(useAllLabel);
-		maxNumberInput.appendChild(useAllCheckbox);
+		maxNumberInput.appendChild(fullResolutionLabel);
+		maxNumberInput.appendChild(fullResolutionCheckbox);
 
 		this.updateSettingsCallbacks.push({
-			ids: [max_points_id, use_all_points_id],
+			ids: [max_points_id, full_resolution_id],
 			callback: (newSettings: PlotSettings) => {
 				numberInput.value = (newSettings.max_points as number).toString();
-				useAllCheckbox.checked = newSettings.use_all_points as boolean;
-				numberInput.disabled = useAllCheckbox.checked;
+				fullResolutionCheckbox.checked = newSettings.full_resolution as boolean;
+				numberInput.disabled = fullResolutionCheckbox.checked;
 			}
 		});
 

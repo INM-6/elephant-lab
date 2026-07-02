@@ -6,5 +6,5 @@ export interface PlotSettings {
     max_points?: number;
     normalize_y_values?: boolean;
     normalization_method?: string;
-    use_all_points?: boolean;
+    full_resolution?: boolean;
 }

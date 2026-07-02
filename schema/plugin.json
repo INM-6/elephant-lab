@@ -28,9 +28,9 @@
             "title": "Max Points",
             "default": 10000
         },
-        "use_all_points": {
+        "full_resolution": {
             "type": "boolean",
-            "title": "Use All Points",
+            "title": "Full Resolution",
             "default": false
         },
         "normalization_method": {
