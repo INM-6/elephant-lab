@@ -72,7 +72,7 @@ import elephantLabLogo from '../doc/Elephant-Lab-Logo.png';
 type PlotSettingsKey = keyof PlotSettings;
 interface UpdateSettingsCallback {
 	ids: PlotSettingsKey[];
-	callback: (plotSettings: PlotSettings) => Promise<void>;
+	callback: (plotSettings: PlotSettings) => void;
 }
 
 class ElephantLabExtension {
@@ -98,6 +98,7 @@ class ElephantLabExtension {
 	private _lastClickedNode: string | null = null;
 	private _explorerWidget: Panel | null = null;
 	private _detailsWidget: Panel | null = null;
+	private suppressSettingsChanged: boolean = false;
 	private updateSettingsCallbacks: UpdateSettingsCallback[] = [];
 
 	// Construct a new ElephantLabExtension
@@ -124,21 +125,34 @@ class ElephantLabExtension {
 		this.plotlyFrontend = null;
 	}; // end of constructor()
 
-	private async loadPlotSettings(settings: ISettingRegistry.ISettings) {
-		const plotSettings: PlotSettings = {};
+	private async initializeSettings() {
+		const settings = await this.settingRegistry.load('elephant-lab:plugin');
 
-		for (const { ids, callback } of this.updateSettingsCallbacks) {
+		const applySettings = async () => {
 
-			for (const id of ids) {
-				const value = settings.get(id).composite;
+			const plotSettings: PlotSettings = {};
 
-				(plotSettings as Record<PlotSettingsKey, unknown>)[id] = value;
+			for (const { ids, callback } of this.updateSettingsCallbacks) {
+
+				for (const id of ids) {
+					const value = settings.get(id).composite;
+
+					(plotSettings as Record<PlotSettingsKey, unknown>)[id] = value;
+				}
+
+				callback(plotSettings);
 			}
 
-			await callback(plotSettings);
+			await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings));
 		}
 
-		await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings));
+		// Listen for changes
+		settings.changed.connect(async () => {
+			if (!this.suppressSettingsChanged) {
+				await applySettings();
+			}
+		});
+		await applySettings();
 	}
 
 
@@ -166,9 +180,7 @@ class ElephantLabExtension {
 				null, false
 			);
 
-			const settings = await this.settingRegistry.load('elephant-lab:plugin');
-
-			await this.loadPlotSettings(settings);
+			await this.initializeSettings();
 
 			console.log("Elephant Lab: Kernel state and UI plots initialized.");
 		} catch (error) {
@@ -990,84 +1002,69 @@ class ElephantLabExtension {
 		const buttonContainer = document.createElement("div");
 		buttonContainer.classList.add("jp-rawplot-button-container");
 
-		const createToggle = (id: PlotSettingsKey | undefined, icon: string, label: string, description: string, callback: (state: boolean) => void, toggle_without_id: boolean = false, is_backend_updating_callback: boolean = true) => {
-			const toggle = document.createElement("button");
-			toggle.type = "button";
-			toggle.classList.add("jp-rawplot-toggle");
-			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
-			toggle.title = description;
-
-			const update = async (plotSettings: PlotSettings | undefined = undefined) => {
-				if (!id && !toggle_without_id) {
-					callback(false);
-					return;
-				}
-
-				let checked = false;
-				if (plotSettings && id) {
-					checked = plotSettings[id] as boolean;
-				} else {
-					checked = toggle.getAttribute("aria-pressed") === "false";
-					if (id) {
-						await settings.set(id, checked);
-					}
-				}
-				toggle.setAttribute("aria-pressed", String(checked));
-				if (!plotSettings || !is_backend_updating_callback) {
-					callback(checked);
-				}
-			}
-
-			toggle.addEventListener("click", async () => {
-				await update();
+		const createButton = (icon: string, label: string, description: string, callback: (button: HTMLButtonElement) => void) => {
+			const button = document.createElement("button");
+			button.type = "button";
+			button.classList.add("jp-rawplot-toggle");
+			button.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
+			button.title = description;
+			button.addEventListener("click", () => {
+				callback(button);
 			});
-
-			if (id) {
-				this.updateSettingsCallbacks.push({ ids: [id], callback: update });
-			}
-
+			buttonContainer.appendChild(button);
+			return button;
+		}
+		const createToggle = (default_value: boolean, icon: string, label: string, description: string, callback: (state: boolean) => void) => {
+			const toggle = createButton(icon, label, description, (button: HTMLButtonElement) => {
+				let checked = button.getAttribute("aria-pressed") === "false";
+				button.setAttribute("aria-pressed", String(checked));
+				callback(checked);
+			});
+			toggle.setAttribute("aria-pressed", String(default_value));
 			return toggle;
 		};
+		const createSavedToggle = (id: PlotSettingsKey, icon: string, label: string, description: string, callback: (state: boolean) => void = (state: boolean) => { }) => {
+			const savedToggle = createToggle(false, icon, label, description, async (state: boolean) => {
+				await settings.set(id, state);
+			});
+			this.updateSettingsCallbacks.push({
+				ids: [id],
+				callback: (newSettings: PlotSettings) => {
+					const newValue = newSettings[id] as boolean;
+					savedToggle.setAttribute("aria-pressed", String(newValue));
+					callback(newValue);
+				}
+			});
+			return savedToggle;
+		}
 
-		const darkmodeToggle = createToggle('dark', 'fa-moon', 'Dark', 'Switch between dark and light mode', (state) => {
+		const darkmodeToggle = createSavedToggle('dark', 'fa-moon', 'Dark', 'Switch between dark and light mode', (state: boolean) => {
 			this.plotlyFrontend?.setThemes(state);
-		}, false, false);
-
-		const overlapToggle = createToggle('overlap', 'fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', (state) => {
-			const plotSettings: PlotSettings = { overlap: state };
-			const code = getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const zeroBasedToggle = createToggle('zero_based', 'fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', (state) => {
-			const plotSettings: PlotSettings = { zero_based: state };
-			const code = getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-		});
+		const overlapToggle = createSavedToggle('overlap', 'fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them');
 
-		const upscaleButton = createToggle(undefined, 'fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range to increase detail', () => {
+		const zeroBasedToggle = createSavedToggle('zero_based', 'fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0');
+
+		const upscaleButton = createButton('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range to increase detail', (button: HTMLButtonElement) => {
 			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, this.plotlyFrontend?.getXRanges());
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const resetScaleButton = createToggle(undefined, 'fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', () => {
+		const resetScaleButton = createButton('fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', (button: HTMLButtonElement) => {
 			const code = getPythonCode(PythonCodeKey.ResetScale);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const normalizeYValuesToggle = createToggle('normalize_y_values', 'fa-compress', 'Normalize Y', 'Normalize the y-values of the plots', (state) => {
-			const plotSettings: PlotSettings = { normalize_y_values: state };
-			const code = getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-		});
+		const normalizeYValuesToggle = createSavedToggle('normalize_y_values', 'fa-compress', 'Normalize Y', 'Normalize the y-values of the plots');
 
 		const optionsModal = document.createElement("div");
 		optionsModal.classList.add("jp-rawplot-options-modal");
 
 		// --- OPTIONS MODAL BUTTON ---
-		const optionsToggle = createToggle(undefined, 'fa-cogs', 'Options', '', (state) => {
+		const optionsToggle = createToggle(false, 'fa-cogs', 'Options', '', (state) => {
 			optionsModal.classList.toggle("jp-visible", state);
-		}, true);
+		});
 
 		// Hide options when clicked elsewhere (currently disabled because it seems to annoy more than help)
 		/*raw_plot_widget.node.addEventListener("click", (e) => {
@@ -1083,44 +1080,29 @@ class ElephantLabExtension {
 		const max_points_id = 'max_points';
 		const use_all_points_id = 'use_all_points';
 
-		const applyMaxPoints = async (plotSettings: PlotSettings | undefined = undefined) => {
+		const applyMaxPoints = async () => {
 
 			let max_points = 0;
-			if (plotSettings) {
-				max_points = plotSettings.max_points as number;
-				numberInput.value = max_points.toString();
-				useAllCheckbox.checked = plotSettings.use_all_points as boolean;
-				numberInput.disabled = useAllCheckbox.checked;
-			} else {
-				max_points = Number(numberInput.value);
-				if (max_points < min_max_points) {
-					numberInput.value = min_max_points.toString();
-					max_points = min_max_points;
-				}
+			max_points = Number(numberInput.value);
+			if (max_points < min_max_points) {
+				numberInput.value = min_max_points.toString();
+				max_points = min_max_points;
+			}
+
+			const useAllChanged =
+				(settings.get(use_all_points_id).composite as boolean) !== useAllCheckbox.checked;
+			this.suppressSettingsChanged = useAllChanged;
+			try {
 				await settings.set(max_points_id, max_points);
-				await settings.set(use_all_points_id, useAllCheckbox.checked);
-			}
 
-			const temporary_hard_cap = 10000000;
-			if (useAllCheckbox.checked || max_points > temporary_hard_cap) {
-				// It currently breaks for large datasets when trying to plot all points,
-				// so we set an upper limit to prevent that. This can be removed in the future when that issue is resolved,
-				// by replacing it with -1 which is a conventional value for "no limit".
-				max_points = temporary_hard_cap;
-			}
+				if (useAllChanged) {
+					// Enable the listener before the final change.
+					this.suppressSettingsChanged = false;
 
-			if (!plotSettings) {
-
-				const code = getPythonCode(
-					PythonCodeKey.UpdatePlotSettings,
-					{ max_points_id: max_points }
-				);
-
-				this.kernelBridge!.executeCode(
-					code,
-					this.outarea_nodeexplorer_raw!,
-					false
-				);
+					await settings.set(use_all_points_id, useAllCheckbox.checked);
+				}
+			} finally {
+				this.suppressSettingsChanged = false;
 			}
 		};
 
@@ -1151,16 +1133,6 @@ class ElephantLabExtension {
 		useAllLabel.textContent = "No limit";
 		useAllLabel.classList.add("jp-rawplot-label");
 
-		numberInput.addEventListener("keydown", async e => {
-			if (e.key === "Enter") {
-				await applyMaxPoints();
-			}
-		});
-
-		numberInput.addEventListener("blur", async () => {
-			await applyMaxPoints();
-		});
-
 		numberInput.addEventListener("change", async () => {
 			await applyMaxPoints();
 		});
@@ -1175,7 +1147,14 @@ class ElephantLabExtension {
 		maxNumberInput.appendChild(useAllLabel);
 		maxNumberInput.appendChild(useAllCheckbox);
 
-		this.updateSettingsCallbacks.push({ ids: [max_points_id, use_all_points_id], callback: applyMaxPoints });
+		this.updateSettingsCallbacks.push({
+			ids: [max_points_id, use_all_points_id],
+			callback: (newSettings: PlotSettings) => {
+				numberInput.value = (newSettings.max_points as number).toString();
+				useAllCheckbox.checked = newSettings.use_all_points as boolean;
+				numberInput.disabled = useAllCheckbox.checked;
+			}
+		});
 
 		const createLabeledSelect = (options: {
 			id: PlotSettingsKey;
@@ -1183,7 +1162,6 @@ class ElephantLabExtension {
 			icon?: string;
 			selectOptions: string[];
 			title?: string;
-			onChange: (value: string) => void;
 		}): HTMLDivElement => {
 			// Create label
 			const labelEl = document.createElement('label');
@@ -1201,21 +1179,8 @@ class ElephantLabExtension {
 				selectEl.appendChild(opt);
 			});
 
-			const update = async (plotSettings: PlotSettings | undefined = undefined) => {
-				if (options.id) {
-					if (plotSettings) {
-						selectEl.value = plotSettings[options.id] as string;
-					} else {
-						await settings.set(options.id, selectEl.value);
-					}
-				}
-				if (!plotSettings) {
-					options.onChange(selectEl.value);
-				}
-			};
-
 			selectEl.onchange = async () => {
-				await update();
+				await settings.set(options.id, selectEl.value);
 			};
 
 			// Create container
@@ -1225,7 +1190,12 @@ class ElephantLabExtension {
 			container.appendChild(labelEl);
 			container.appendChild(selectEl);
 
-			this.updateSettingsCallbacks.push({ ids: [options.id], callback: update });
+			this.updateSettingsCallbacks.push({
+				ids: [options.id],
+				callback: (newSettings: PlotSettings) => {
+					selectEl.value = newSettings[options.id] as string;
+				}
+			});
 
 			return container;
 		}
@@ -1235,12 +1205,7 @@ class ElephantLabExtension {
 			label: "Normalization Method",
 			icon: "fa-compress",
 			selectOptions: ['minmax', 'zscore', 'l2'],
-			title: "Method used to normalize the y-values when 'Normalize Y' is enabled",
-			onChange: (value) => {
-				const plotSettings: PlotSettings = { normalization_method: value };
-				const code = getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings);
-				this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-			}
+			title: "Method used to normalize the y-values when 'Normalize Y' is enabled"
 		});
 
 		type SelectOptionGroup = {
@@ -1255,7 +1220,6 @@ class ElephantLabExtension {
 			icon?: string;
 			selectOptions: SelectOptionGroup[];
 			title?: string;
-			onChange: (value: string) => void;
 		}): HTMLDivElement => {
 
 			let currentValue = "";
@@ -1291,24 +1255,6 @@ class ElephantLabExtension {
 			panel.classList.add("jp-collapsible-select-panel");
 			panel.style.display = "none";
 
-			const update = async (plotSettings: PlotSettings | undefined = undefined) => {
-				if (options.id) {
-					if (plotSettings) {
-						currentValue = plotSettings[options.id] as string;
-					} else {
-						await settings.set(options.id, currentValue);
-					}
-				}
-
-				button.textContent = currentValue;
-
-				panel.style.display = "none";
-
-				if (!plotSettings) {
-					options.onChange(currentValue);
-				}
-			}
-
 			// Groups
 			options.selectOptions.forEach(group => {
 
@@ -1331,10 +1277,7 @@ class ElephantLabExtension {
 					item.textContent = value;
 
 					item.onclick = async () => {
-
-						currentValue = value;
-
-						await update();
+						await settings.set(options.id, value);
 					};
 
 					details.appendChild(item);
@@ -1379,7 +1322,14 @@ class ElephantLabExtension {
 			container.appendChild(labelEl);
 			container.appendChild(wrapper);
 
-			this.updateSettingsCallbacks.push({ ids: [options.id], callback: update });
+			this.updateSettingsCallbacks.push({
+				ids: [options.id],
+				callback: (newSettings: PlotSettings) => {
+					currentValue = newSettings[options.id] as string;
+					button.textContent = currentValue;
+					panel.style.display = "none";
+				}
+			});
 
 			return container;
 		}
@@ -1437,22 +1387,27 @@ class ElephantLabExtension {
 					],
 					collapsed: true
 				},
-			],
-
-			onChange: value => {
-				const plotSettings: PlotSettings = { color_grade: value };
-				const code = getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings);
-				this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-			}
+			]
 		});
 
-		const resetOptionsButton = createToggle(undefined, 'fa-undo-alt', 'Reset Options', 'Reset all options to their default values', async () => {
+		const resetOptionsButton = createButton('fa-undo-alt', 'Reset Options', 'Reset all options to their default values', async (button: HTMLButtonElement) => {
 			const userSettings = settings.user;
+			const keys = Object.keys(userSettings);
 
-			for (const key of Object.keys(userSettings)) {
-				await settings.remove(key);
+			this.suppressSettingsChanged = true;
+
+			try {
+				for (let i = 0; i < keys.length; i++) {
+					// Allow the last remove() to trigger the listener
+					if (i === keys.length - 1) {
+						this.suppressSettingsChanged = false;
+					}
+
+					await settings.remove(keys[i]);
+				}
+			} finally {
+				this.suppressSettingsChanged = false;
 			}
-			this.loadPlotSettings(settings);
 		});
 
 		optionsModal.appendChild(maxNumberInput);

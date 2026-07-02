@@ -287,6 +287,7 @@ class ElephantLab_plot:
         zero_based = settings.get("zero_based")
         color_grade = settings.get("color_grade")
         max_points = settings.get("max_points")
+        use_all_points = settings.get("use_all_points")
         normalize_y_values = settings.get("normalize_y_values")
         normalization_method = settings.get("normalization_method")
         
@@ -320,6 +321,13 @@ class ElephantLab_plot:
                     reload = True
 
             # max_points
+            max_points = -1 if use_all_points else max_points # -1 is convention for "use all points" in the backend
+
+            # Temporary hard cap beacause Jupyterlab crashes with extremly big datasets
+            hard_cap = 10000000
+            if hard_cap == -1 or max_points > hard_cap:
+                max_points = hard_cap
+            
             if max_points is not None and max_points != plot_dict['max_points']:
                 plot_dict['max_points'] = max_points
 
