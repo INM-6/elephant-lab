@@ -1,5 +1,5 @@
 {
-    "title": "Plot Settings",
+    "title": "Elephant Lab Plot Settings",
     "description": "Settings for the plotting widget",
     "type": "object",
     "properties": {
