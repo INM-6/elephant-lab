@@ -207,19 +207,20 @@ class PlotlyGraphFigure:
         """Updates the graph annotations."""
         if annotation_data is None and annotation_interval_data is None:
             return
+        np = self.np
         if annotation_data is None:
-            annotation_data = self.PlotlyGraphAnnotations(self.np.array([]), self.np.array([]), self.np.array([]), [])
+            annotation_data = self.PlotlyGraphAnnotations(np.array([]), np.array([]), np.array([]), [])
         if annotation_interval_data is None:
-            annotation_interval_data = self.PlotlyGraphAnnotationIntervals(self.np.array([]), self.np.array([]), self.np.array([]), self.np.array([]), [])
+            annotation_interval_data = self.PlotlyGraphAnnotationIntervals(np.array([]), np.array([]), np.array([]), np.array([]), [])
 
         number_of_events = len(annotation_data.x)
         
-        xs = self.np.concatenate((annotation_data.x, (annotation_interval_data.x0 + annotation_interval_data.x1) / 2))
-        texts = self.np.concatenate((annotation_data.text, annotation_interval_data.text))
-        unit_indice = self.np.concatenate((annotation_data.unit_indice, annotation_interval_data.unit_indice + len(annotation_data.units)))
+        xs = np.concatenate((annotation_data.x, (annotation_interval_data.x0 + annotation_interval_data.x1) / 2))
+        texts = np.concatenate((annotation_data.text, annotation_interval_data.text))
+        unit_indice = np.concatenate((annotation_data.unit_indice, annotation_interval_data.unit_indice + len(annotation_data.units)))
         unit_indice = unit_indice.astype(int)
         units = annotation_data.units + annotation_interval_data.units
-        widths = self.np.concatenate((self.np.zeros(annotation_data.x.size), (annotation_interval_data.x1 - annotation_interval_data.x0)))
+        widths = np.concatenate((np.zeros(annotation_data.x.size), (annotation_interval_data.x1 - annotation_interval_data.x0)))
 
         if self.data.is_empty and xs.size > 0 and len(units)>0:
             self.data.is_empty = False
@@ -247,20 +248,90 @@ class PlotlyGraphFigure:
                 else:  # already compatible
                     pass
 
-        #Filter out of x_range
+        # From this point unit_indice are not needed anymore, so they are not maintained
+
+        # Filter out of x_range
         if x_range is not None:
             x0, x1 = x_range
             mask = (xs >= x0) & (xs <= x1)
             xs = xs[mask]
             texts = texts[mask]
-            unit_indice = unit_indice[mask]
             widths = widths[mask]
 
-        if xs.size > 0:
-            self.total_minX = min(self.total_minX, self.np.nanmin(xs))
-            self.total_maxX = max(self.total_maxX, self.np.nanmax(xs))
+        max_events = 1000
 
-            min_bar_width = (self.total_maxX - self.total_minX) / 500
+        n = len(xs)
+        if n > max_events:
+            order = np.argsort(xs)
+
+            xs = xs[order]
+            texts = texts[order]
+            widths = widths[order]
+
+            gaps = np.diff(xs)
+
+            # max_events - 1 largest gaps get used
+            keep_separators = np.argpartition(
+                gaps,
+                -(max_events - 1)
+            )[-(max_events - 1):]
+
+            keep_separators.sort()
+
+            new_xs = []
+            new_texts = []
+            new_widths = []
+
+            def add_group(start, e):
+                gxs = xs[start:e]
+                ghalfwidths = widths[start:e] / 2
+
+                left = np.min(gxs - ghalfwidths)
+                right = np.max(gxs + ghalfwidths)
+
+                new_xs.append((left + right) / 2)
+                new_widths.append(right - left)
+
+                max_texts_joined = 5
+
+                gn = e - start
+
+                if gn > max_texts_joined:
+                    shown = texts[start:start + max_texts_joined]
+                    hidden = gn - max_texts_joined
+
+                    new_texts.append(
+                        "<br>".join(shown)
+                        + f"<br>...<br>(+{hidden} more)"
+                    )
+                else:
+                    new_texts.append("<br>".join(texts[start:e]))
+
+            start = 0
+
+            for sep in keep_separators:
+                e = sep + 1
+
+                add_group(start, e)
+
+                start = e
+
+            # final group
+            add_group(start, n)
+
+            xs = np.asarray(new_xs)
+            texts = np.asarray(new_texts, dtype=object)
+            widths = np.asarray(new_widths)
+            n = max_events
+
+        if n > 0:
+            self.total_minX = min(self.total_minX, np.nanmin(xs))
+            self.total_maxX = max(self.total_maxX, np.nanmax(xs))
+
+            dynamic_divider = 4 * n
+            min_divider = 500
+            max_divider = 4000
+            min_bar_width = (self.total_maxX - self.total_minX) / min(max_divider, max(min_divider, dynamic_divider))
 
             # Format values
             xs_str = self.OutputUtils.format_with_auto_digits(xs)
@@ -270,16 +341,16 @@ class PlotlyGraphFigure:
             # Build hover text
             hover_texts = self.np.where(
                 widths == 0,
-                self.np.char.add(
-                    self.np.char.add(texts, "<br>Time: "),
+                np.char.add(
+                    np.char.add(texts, "<br>Time: "),
                     xs_str
                 ),
-                self.np.char.add(
-                    self.np.char.add(
-                        self.np.char.add(texts, "<br>Start: "),
+                np.char.add(
+                    np.char.add(
+                        np.char.add(texts, "<br>Start: "),
                         start_str
                     ),
-                    self.np.char.add("<br>End: ", end_str)
+                    np.char.add("<br>End: ", end_str)
                 )
             )
 
@@ -294,8 +365,8 @@ class PlotlyGraphFigure:
             def create_trace(ymin, ymax):
                 return self.go.Bar(
                     x=xs,
-                    width= self.np.where(widths==0, min_bar_width, widths),
-                    y=self.np.full(xs.shape, ymax - ymin),
+                    width= np.where(widths==0, min_bar_width, widths),
+                    y=np.full(xs.shape, ymax - ymin),
                     base=ymin,
                     hovertext=hover_texts,
                     hoverinfo='text',
