@@ -282,60 +282,106 @@ class ElephantLab_plot:
         self.comm = self.Comm(target_name="plot_channel")
         self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
 
-    def set_raw_plot_overlap(self, overlap):
+    def update_settings(self, **settings):
+        overlap = settings.get("overlap")
+        zero_based = settings.get("zero_based")
+        color_grade = settings.get("color_grade")
+        max_points = settings.get("max_points")
+        full_resolution = settings.get("full_resolution")
+        normalize_y_values = settings.get("normalize_y_values")
+        normalization_method = settings.get("normalization_method")
+        
         reload = False
+
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
-            if overlap == plot_dict['overlapping']:
-                continue
-            plot_dict['overlapping']=overlap
-            is_plotted = plot_dict['is_plotted']
-            if not is_plotted or not plot_dict['changes_on_overlap']:
-                continue
-            plot_dict['changed']=True
-            reload = True
-        if reload:
-            self._raw_plot()
-    
-    def set_zero_based(self, zero_based):
-        reload = False
-        for key in self.RawPlotKey:
-            plot_dict = self.plots[key]
-            if zero_based == plot_dict['zero_based']:
-                continue
-            plot_dict['zero_based']=zero_based
-            is_plotted = plot_dict['is_plotted']
-            if not is_plotted or plot_dict['is_default_zero_based']:
-                continue
-            plot_dict['og_x_range']=None
-            plot_dict['x_range']=None
-            plot_dict['changed']=True
-            reload = True
+
+            # overlap
+            if overlap is not None and overlap != plot_dict['overlapping']:
+                plot_dict['overlapping'] = overlap
+
+                if (
+                    plot_dict['is_plotted']
+                    and plot_dict['changes_on_overlap']
+                ):
+                    plot_dict['changed'] = True
+                    reload = True
+
+            # zero_based
+            if zero_based is not None and zero_based != plot_dict['zero_based']:
+                plot_dict['zero_based'] = zero_based
+
+                if (
+                    plot_dict['is_plotted']
+                    and not plot_dict['is_default_zero_based']
+                ):
+                    plot_dict['og_x_range'] = None
+                    plot_dict['x_range'] = None
+                    plot_dict['changed'] = True
+                    reload = True
+
+            # max_points
+            max_points = -1 if full_resolution else max_points # -1 is convention for "full_resolution" in the backend
+
+            # Temporary hard cap beacause Jupyterlab crashes with extremly big datasets
+            hard_cap = 10000000
+            if not max_points or max_points == -1 or max_points > hard_cap:
+                max_points = hard_cap
+            
+            if max_points is not None and max_points != plot_dict['max_points']:
+                plot_dict['max_points'] = max_points
+
+                if (
+                    plot_dict['is_plotted']
+                    and plot_dict['is_downscaled']
+                ):
+                    plot_dict['changed'] = True
+                    reload = True
+
+            # normalize_y_values
+            if (
+                normalize_y_values is not None
+                and normalize_y_values != plot_dict['normalize_y_values']
+            ):
+                plot_dict['normalize_y_values'] = normalize_y_values
+
+                if (
+                    plot_dict['is_plotted']
+                    and not plot_dict['is_default_normalized_y']
+                ):
+                    plot_dict['changed'] = True
+                    reload = True
+
+            # normalization_method
+            if (
+                normalization_method is not None
+                and normalization_method != plot_dict['normalization_method']
+            ):
+                plot_dict['normalization_method'] = normalization_method
+
+                if plot_dict['is_plotted']:
+                    plot_dict['changed'] = True
+                    reload = True
+
+        # special case: image sequence plot
+        if color_grade is not None:
+            plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
+
+            if color_grade != plot_dict['color_grade']:
+                plot_dict['color_grade'] = color_grade
+
+                if plot_dict['is_plotted']:
+                    plot_dict['changed'] = True
+                    reload = True
+
         if reload:
             self._raw_plot()
 
-    def set_color_grade(self, color_grade):
-        reload = False
-        plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
-        if color_grade == plot_dict['color_grade']:
-            return
-        plot_dict['color_grade']=color_grade
-        is_plotted = plot_dict['is_plotted']
-        if not is_plotted:
-            return
-        plot_dict['changed']=True
-        reload = True
-        if reload:
-            self._raw_plot()
-
-    def upscale_raw_plot(self, max_points, x_ranges):
+    def upscale_raw_plot(self, x_ranges):
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
             temp_reload = False
-            if(max_points != plot_dict['max_points']):
-                plot_dict['max_points']=max_points
-                temp_reload = True
             is_plotted = plot_dict['is_plotted']
             if not is_plotted or not plot_dict['is_downscaled']:
                 continue
@@ -346,22 +392,6 @@ class ElephantLab_plot:
             if not self.np.allclose(x_range, previous_x_range, atol=1e-6, rtol=1e-3):
                 plot_dict['x_range']=x_range
                 temp_reload = True
-            plot_dict['changed']=temp_reload
-            reload = reload or temp_reload
-        if reload:
-            self._raw_plot()
-
-    def update_max_points(self, max_points):
-        reload = False
-        for key in self.RawPlotKey:
-            plot_dict = self.plots[key]
-            temp_reload = False
-            if(max_points != plot_dict['max_points']):
-                plot_dict['max_points']=max_points
-                temp_reload = True
-            is_plotted = plot_dict['is_plotted']
-            if not is_plotted or not plot_dict['is_downscaled']:
-                continue
             plot_dict['changed']=temp_reload
             reload = reload or temp_reload
         if reload:
@@ -378,36 +408,6 @@ class ElephantLab_plot:
                 plot_dict['x_range']=plot_dict['og_x_range']
                 plot_dict['changed']=True
                 reload = True
-        if reload:
-            self._raw_plot()
-
-    def set_normalize_y_values(self, normalize_y_values):
-        reload = False
-        for key in self.RawPlotKey:
-            plot_dict = self.plots[key]
-            if normalize_y_values == plot_dict['normalize_y_values']:
-                continue
-            plot_dict['normalize_y_values']=normalize_y_values
-            is_plotted = plot_dict['is_plotted']
-            if not is_plotted  or plot_dict['is_default_normalized_y']:
-                continue
-            plot_dict['changed']=True
-            reload = True
-        if reload:
-            self._raw_plot()
-
-    def set_normalization_method(self, method):
-        reload = False
-        for key in self.RawPlotKey:
-            plot_dict = self.plots[key]
-            if method == plot_dict['normalization_method']:
-                continue
-            plot_dict['normalization_method']=method
-            is_plotted = plot_dict['is_plotted']
-            if not is_plotted:
-                continue
-            plot_dict['changed']=True
-            reload = True
         if reload:
             self._raw_plot()
 

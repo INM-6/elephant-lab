@@ -44,6 +44,8 @@ import {
 	IRenderMimeRegistry,
 }
 	from '@jupyterlab/rendermime';
+
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
 // Lumino imports for dealing with the tabs within JupyterLab
 // These are called Panels
 import {
@@ -64,7 +66,14 @@ import '../style/base.css'
 import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
 import { PlotlyFrontend } from './plot';
+import { PlotSettings } from './plot_settings';
 import elephantLabLogo from '../doc/Elephant-Lab-Logo.png';
+
+type PlotSettingsKey = keyof PlotSettings;
+interface UpdateSettingsCallback {
+	ids: PlotSettingsKey[];
+	callback: (plotSettings: PlotSettings) => void;
+}
 
 class ElephantLabExtension {
 	// declaring members of the class
@@ -82,22 +91,26 @@ class ElephantLabExtension {
 	private outarea_neo_tree: OutputArea | null;
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
+	private settingRegistry: ISettingRegistry;
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
 	private plotlyFrontend: PlotlyFrontend | null;
 	private _lastClickedNode: string | null = null;
 	private _explorerWidget: Panel | null = null;
 	private _detailsWidget: Panel | null = null;
+	private suppressSettingsChanged: boolean = false;
+	private updateSettingsCallbacks: UpdateSettingsCallback[] = [];
 
 	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry, docManager: IDocumentManager) {
+		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry, docManager: IDocumentManager, settingRegistry: ISettingRegistry) {
 		// save all constructor arguments
 		this.app = app;
 		this.command_palette = command_palette;
 		this.notebook_tracker = notebook_tracker;
 		this.widget_tracker = widget_tracker;
 		this.docManager = docManager;
+		this.settingRegistry = settingRegistry;
 		// Store references to all tabs containing notebooks
 		this.myPanels = [];
 		// Store references to all tabs created by this extension
@@ -111,6 +124,36 @@ class ElephantLabExtension {
 		this.kernelBridge = null;
 		this.plotlyFrontend = null;
 	}; // end of constructor()
+
+	private async initializeSettings() {
+		const settings = await this.settingRegistry.load('elephant-lab:plugin');
+
+		const applySettings = async () => {
+
+			const plotSettings: PlotSettings = {};
+
+			for (const { ids, callback } of this.updateSettingsCallbacks) {
+
+				for (const id of ids) {
+					const value = settings.get(id).composite;
+
+					(plotSettings as Record<PlotSettingsKey, unknown>)[id] = value;
+				}
+
+				callback(plotSettings);
+			}
+
+			await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings));
+		}
+
+		// Listen for changes
+		settings.changed.connect(async () => {
+			if (!this.suppressSettingsChanged) {
+				await applySettings();
+			}
+		});
+		await applySettings();
+	}
 
 
 	/******************************************************************************************************************/
@@ -136,6 +179,9 @@ class ElephantLabExtension {
 				getPythonCode(PythonCodeKey.SetPanelVisibility, this._explorerWidget?.isVisible ?? false, this._detailsWidget?.isVisible ?? false),
 				null, false
 			);
+
+			await this.initializeSettings();
+
 			console.log("Elephant Lab: Kernel state and UI plots initialized.");
 		} catch (error) {
 			console.error("Elephant Lab: FAILED to initialize kernel state:", error);
@@ -214,7 +260,7 @@ class ElephantLabExtension {
 			this.output_tabs = null;
 		}
 
-		this.initializeTab(newPanel.content.rendermime as any);
+		await this.initializeTab(newPanel.content.rendermime as any);
 		this.myVisTabs.push(this.widget);
 		this.myPanels.push(newPanel);
 		this.attachTab();
@@ -515,7 +561,7 @@ class ElephantLabExtension {
 		this.app.shell.activateById(this.widget.id);
 	} // end of attachTab()
 
-	public initializeTab(rendermime: IRenderMimeRegistry) {
+	public async initializeTab(rendermime: IRenderMimeRegistry) {
 		/**
 		  * Initialize a new tab for this extension.
 		  */
@@ -534,7 +580,7 @@ class ElephantLabExtension {
 			return;
 		}
 
-		this.createWidgets(rendermime, session);
+		await this.createWidgets(rendermime, session);
 
 	} // end of initializeTab()
 
@@ -950,81 +996,73 @@ class ElephantLabExtension {
 		tree_widget.node.prepend(filterContainer);
 	}
 
-	public create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+	public async create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+		const settings = await this.settingRegistry.load('elephant-lab:plugin');
+
 		const buttonContainer = document.createElement("div");
 		buttonContainer.classList.add("jp-rawplot-button-container");
 
-		const createToggle = (icon: string, label: string, description: string, initial: boolean, is_toggle: boolean, callback: (state: boolean) => void) => {
-			const toggle = document.createElement("button");
-			toggle.type = "button";
-			toggle.classList.add("jp-rawplot-toggle");
-			toggle.setAttribute("aria-pressed", String(initial));
-			toggle.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
-			toggle.title = description;
-
-			toggle.addEventListener("click", () => {
-				if (!is_toggle) {
-					callback(false);
-					return;
-				}
-
-				const checked = toggle.getAttribute("aria-pressed") === "true";
-				const newState = !checked;
-				toggle.setAttribute("aria-pressed", String(newState));
-				callback(newState);
+		const createButton = (icon: string, label: string, description: string, callback: (button: HTMLButtonElement) => void) => {
+			const button = document.createElement("button");
+			button.type = "button";
+			button.classList.add("jp-rawplot-toggle");
+			button.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
+			button.title = description;
+			button.addEventListener("click", () => {
+				callback(button);
 			});
-
+			buttonContainer.appendChild(button);
+			return button;
+		}
+		const createToggle = (default_value: boolean, icon: string, label: string, description: string, callback: (state: boolean) => void) => {
+			const toggle = createButton(icon, label, description, (button: HTMLButtonElement) => {
+				let checked = button.getAttribute("aria-pressed") === "false";
+				button.setAttribute("aria-pressed", String(checked));
+				callback(checked);
+			});
+			toggle.setAttribute("aria-pressed", String(default_value));
 			return toggle;
 		};
+		const createSavedToggle = (id: PlotSettingsKey, icon: string, label: string, description: string, callback: (state: boolean) => void = (state: boolean) => { }) => {
+			const savedToggle = createToggle(false, icon, label, description, async (state: boolean) => {
+				await settings.set(id, state);
+			});
+			this.updateSettingsCallbacks.push({
+				ids: [id],
+				callback: (newSettings: PlotSettings) => {
+					const newValue = newSettings[id] as boolean;
+					savedToggle.setAttribute("aria-pressed", String(newValue));
+					callback(newValue);
+				}
+			});
+			return savedToggle;
+		}
 
-		const darkmodeToggle = createToggle('fa-moon', 'Dark', 'Switch between dark and light mode', true, true, (state) => {
+		const darkmodeToggle = createSavedToggle('dark', 'fa-moon', 'Dark', 'Switch between dark and light mode', (state: boolean) => {
 			this.plotlyFrontend?.setThemes(state);
 		});
 
-		const overlapToggle = createToggle('fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them', false, true, (state) => {
-			const code = getPythonCode(PythonCodeKey.OverlapToggle, state);
+		const overlapToggle = createSavedToggle('overlap', 'fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them');
+
+		const zeroBasedToggle = createSavedToggle('zero_based', 'fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0');
+
+		const upscaleButton = createButton('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range to increase detail', (button: HTMLButtonElement) => {
+			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, this.plotlyFrontend?.getXRanges());
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const zeroBasedToggle = createToggle('fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0', false, true, (state) => {
-			const code = getPythonCode(PythonCodeKey.ZeroBasedToggle, state);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-		});
-
-		const getMaxPoints = () => {
-			if (useAllCheckbox.checked) {
-				return -1; // convention: all points
-			}
-
-			const max_points = Number(numberInput.value);
-			if (max_points < min_max_points) {
-				numberInput.value = min_max_points.toString();
-				return min_max_points;
-			} else {
-				return max_points;
-			}
-		}
-
-		const upscaleButton = createToggle('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range or max points to increase detail', false, false, () => {
-			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, getMaxPoints(), this.plotlyFrontend?.getXRanges());
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-		});
-
-		const resetScaleButton = createToggle('fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', false, false, () => {
+		const resetScaleButton = createButton('fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', (button: HTMLButtonElement) => {
 			const code = getPythonCode(PythonCodeKey.ResetScale);
 			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
 		});
 
-		const normalizeYValuesToggle = createToggle('fa-compress', 'Normalize Y', 'Normalize the y-values of the plots', false, true, (state) => {
-			const code = getPythonCode(PythonCodeKey.NormalizeYValuesToggle, state);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-		});
+		const normalizeYValuesToggle = createSavedToggle('normalize_y_values', 'fa-compress', 'Normalize Y', 'Normalize the y-values of the plots');
 
 		const optionsModal = document.createElement("div");
 		optionsModal.classList.add("jp-rawplot-options-modal");
 
 		// --- OPTIONS MODAL BUTTON ---
-		const optionsToggle = createToggle('fa-cogs', 'Options', '', false, true, (state) => {
+		const optionsToggle = createToggle(false, 'fa-cogs', 'Options', '', (state) => {
 			optionsModal.classList.toggle("jp-visible", state);
 		});
 
@@ -1039,18 +1077,33 @@ class ElephantLabExtension {
 
 		// --- MAX POINTS INPUT ---
 
-		const applyMaxPoints = () => {
+		const max_points_id = 'max_points';
+		const full_resolution_id = 'full_resolution';
 
-			const code = getPythonCode(
-				PythonCodeKey.UpdateMaxPoints,
-				getMaxPoints()
-			);
+		const applyMaxPoints = async () => {
 
-			this.kernelBridge!.executeCode(
-				code,
-				this.outarea_nodeexplorer_raw!,
-				false
-			);
+			let max_points = 0;
+			max_points = Number(numberInput.value);
+			if (max_points < min_max_points) {
+				numberInput.value = min_max_points.toString();
+				max_points = min_max_points;
+			}
+
+			const fullResolutionChanged =
+				(settings.get(full_resolution_id).composite as boolean) !== fullResolutionCheckbox.checked;
+			this.suppressSettingsChanged = fullResolutionChanged;
+			try {
+				await settings.set(max_points_id, max_points);
+
+				if (fullResolutionChanged) {
+					// Enable the listener before the final change.
+					this.suppressSettingsChanged = false;
+
+					await settings.set(full_resolution_id, fullResolutionCheckbox.checked);
+				}
+			} finally {
+				this.suppressSettingsChanged = false;
+			}
 		};
 
 		const numberLabel = document.createElement('label');
@@ -1060,8 +1113,9 @@ class ElephantLabExtension {
 		const min_max_points = 10000;
 		const numberInput = document.createElement('input');
 		numberInput.type = "number";
-		numberInput.value = "10000";
-		numberInput.min = `${min_max_points}`;
+		const savedMaxPoints = min_max_points;
+		numberInput.value = savedMaxPoints.toString();
+		numberInput.min = min_max_points.toString();
 		numberInput.step = "10000";
 		numberInput.classList.add("jp-rawplot-input");
 
@@ -1069,35 +1123,46 @@ class ElephantLabExtension {
 		maxNumberInput.classList.add("jp-rawplot-row");
 		maxNumberInput.title = "Maximum number of points to be plotted. Increasing this number can increase the detail of the plot, but also increases loading times.";
 
-		const useAllCheckbox = document.createElement("input");
-		useAllCheckbox.type = "checkbox";
+		const savedFullResolution = false;
+		const fullResolutionCheckbox = document.createElement("input");
+		fullResolutionCheckbox.type = "checkbox";
+		fullResolutionCheckbox.checked = savedFullResolution;
+		numberInput.disabled = fullResolutionCheckbox.checked;
 
-		const useAllLabel = document.createElement("label");
-		useAllLabel.textContent = "Use all";
-		useAllLabel.classList.add("jp-rawplot-label");
+		const fullResolutionLabel = document.createElement("label");
+		fullResolutionLabel.textContent = "Full Resolution";
+		fullResolutionLabel.classList.add("jp-rawplot-label");
 
-		numberInput.addEventListener("change", () => {
-			applyMaxPoints();
+		numberInput.addEventListener("change", async () => {
+			await applyMaxPoints();
 		});
 
-		useAllCheckbox.addEventListener("change", () => {
-			numberInput.disabled = useAllCheckbox.checked;
-			applyMaxPoints();
+		fullResolutionCheckbox.addEventListener("change", async () => {
+			numberInput.disabled = fullResolutionCheckbox.checked;
+			await applyMaxPoints();
 		});
 
 		maxNumberInput.appendChild(numberLabel);
 		maxNumberInput.appendChild(numberInput);
-		maxNumberInput.appendChild(useAllLabel);
-		maxNumberInput.appendChild(useAllCheckbox);
+		maxNumberInput.appendChild(fullResolutionLabel);
+		maxNumberInput.appendChild(fullResolutionCheckbox);
 
-		function createLabeledSelect(options: {
+		this.updateSettingsCallbacks.push({
+			ids: [max_points_id, full_resolution_id],
+			callback: (newSettings: PlotSettings) => {
+				numberInput.value = (newSettings.max_points as number).toString();
+				fullResolutionCheckbox.checked = newSettings.full_resolution as boolean;
+				numberInput.disabled = fullResolutionCheckbox.checked;
+			}
+		});
+
+		const createLabeledSelect = (options: {
+			id: PlotSettingsKey;
 			label: string;
 			icon?: string;
 			selectOptions: string[];
-			defaultValue?: string;
 			title?: string;
-			onChange: (value: string) => void;
-		}): HTMLDivElement {
+		}): HTMLDivElement => {
 			// Create label
 			const labelEl = document.createElement('label');
 			labelEl.classList.add("jp-rawplot-label");
@@ -1114,12 +1179,8 @@ class ElephantLabExtension {
 				selectEl.appendChild(opt);
 			});
 
-			if (options.defaultValue) {
-				selectEl.value = options.defaultValue;
-			}
-
-			selectEl.onchange = () => {
-				options.onChange(selectEl.value);
+			selectEl.onchange = async () => {
+				await settings.set(options.id, selectEl.value);
 			};
 
 			// Create container
@@ -1129,19 +1190,22 @@ class ElephantLabExtension {
 			container.appendChild(labelEl);
 			container.appendChild(selectEl);
 
+			this.updateSettingsCallbacks.push({
+				ids: [options.id],
+				callback: (newSettings: PlotSettings) => {
+					selectEl.value = newSettings[options.id] as string;
+				}
+			});
+
 			return container;
 		}
 
 		const normalizationMethod = createLabeledSelect({
+			id: "normalization_method",
 			label: "Normalization Method",
 			icon: "fa-compress",
 			selectOptions: ['minmax', 'zscore', 'l2'],
-			defaultValue: 'zscore',
-			title: "Method used to normalize the y-values when 'Normalize Y' is enabled",
-			onChange: (value) => {
-				const code = getPythonCode(PythonCodeKey.SetNormalizationMethod, value);
-				this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-			}
+			title: "Method used to normalize the y-values when 'Normalize Y' is enabled"
 		});
 
 		type SelectOptionGroup = {
@@ -1150,16 +1214,15 @@ class ElephantLabExtension {
 			collapsed?: boolean;
 		};
 
-		function createCollapsibleSelect(options: {
+		const createCollapsibleSelect = (options: {
+			id: PlotSettingsKey;
 			label: string;
 			icon?: string;
 			selectOptions: SelectOptionGroup[];
-			defaultValue?: string;
 			title?: string;
-			onChange: (value: string) => void;
-		}): HTMLDivElement {
+		}): HTMLDivElement => {
 
-			let currentValue = options.defaultValue ?? "";
+			let currentValue = "";
 
 			// Main container
 			const container = document.createElement("div");
@@ -1213,15 +1276,8 @@ class ElephantLabExtension {
 
 					item.textContent = value;
 
-					item.onclick = () => {
-
-						currentValue = value;
-
-						button.textContent = value;
-
-						panel.style.display = "none";
-
-						options.onChange(value);
+					item.onclick = async () => {
+						await settings.set(options.id, value);
 					};
 
 					details.appendChild(item);
@@ -1266,10 +1322,20 @@ class ElephantLabExtension {
 			container.appendChild(labelEl);
 			container.appendChild(wrapper);
 
+			this.updateSettingsCallbacks.push({
+				ids: [options.id],
+				callback: (newSettings: PlotSettings) => {
+					currentValue = newSettings[options.id] as string;
+					button.textContent = currentValue;
+					panel.style.display = "none";
+				}
+			});
+
 			return container;
 		}
 
 		const colorGrade = createCollapsibleSelect({
+			id: "color_grade",
 			label: "Color Grade",
 			icon: "fa-palette",
 
@@ -1321,27 +1387,41 @@ class ElephantLabExtension {
 					],
 					collapsed: true
 				},
-			],
+			]
+		});
 
-			defaultValue: "Viridis",
+		const resetOptionsButton = createButton('fa-undo-alt', 'Reset Options', 'Reset all options to their default values', async (button: HTMLButtonElement) => {
+			const userSettings = settings.user;
+			const keys = Object.keys(userSettings);
 
-			onChange: value => {
-				const code = getPythonCode(PythonCodeKey.SetColorGrade, value);
-				this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
+			this.suppressSettingsChanged = true;
+
+			try {
+				for (let i = 0; i < keys.length; i++) {
+					// Allow the last remove() to trigger the listener
+					if (i === keys.length - 1) {
+						this.suppressSettingsChanged = false;
+					}
+
+					await settings.remove(keys[i]);
+				}
+			} finally {
+				this.suppressSettingsChanged = false;
 			}
 		});
 
 		optionsModal.appendChild(maxNumberInput);
 		optionsModal.appendChild(normalizationMethod);
 		optionsModal.appendChild(colorGrade);
+		optionsModal.appendChild(resetOptionsButton);
 
 		buttonContainer.append(
 			darkmodeToggle,
 			overlapToggle,
 			zeroBasedToggle,
+			normalizeYValuesToggle,
 			upscaleButton,
 			resetScaleButton,
-			normalizeYValuesToggle,
 			optionsToggle
 		);
 
@@ -1354,7 +1434,7 @@ class ElephantLabExtension {
 		raw_plot_widget.node.prepend(toolbarContainer);
 	}
 
-	public createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
+	public async createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
 		// NEO TREE 
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
@@ -1375,12 +1455,12 @@ class ElephantLabExtension {
 		explorer_widget_raw_plot.title.label = 'Explore';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
+		await this.create_raw_plot_options(session, explorer_widget_raw_plot);
 		this._explorerWidget = explorer_widget_raw_plot;
 
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
-		this.create_raw_plot_options(session, explorer_widget_raw_plot);
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
@@ -1422,7 +1502,7 @@ class ElephantLabExtension {
 * Activate the ElephantLabExtension extension
 */
 function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer, docManager: IDocumentManager) {
+	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer, docManager: IDocumentManager, settingRegistry: ISettingRegistry) {
 	/**
 	 * Performs the initialization of the extension
 	 * Parameters:
@@ -1445,7 +1525,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	let widget_tracker = new WidgetTracker<Widget>({ namespace: 'elephant_lab_namespace' });
 
 	// create instance of ElephantLabExtension
-	const jupy_ext = new ElephantLabExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager);
+	const jupy_ext = new ElephantLabExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager, settingRegistry);
 
 	// Add an application command: this is placed into CommandPalette and by clicking on the corresponding button
 	// this command will open the elephant lab tab
@@ -1467,7 +1547,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 	id: 'elephant-lab:extension',
 	autoStart: true,
 	// What to pass to the activate function
-	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager],
+	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager, ISettingRegistry],
 	// activate: Function that is called upon startup of the extension
 	// Parameters are passed by the extension framework as specified in 'requires'
 	activate: activate
