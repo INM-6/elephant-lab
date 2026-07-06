@@ -1,4 +1,3 @@
-import threading as _threading
 from concurrent.futures import ProcessPoolExecutor as _ProcessPoolExecutor
 
 from .PlotlyGraphFigure import PlotlyGraphFigure
