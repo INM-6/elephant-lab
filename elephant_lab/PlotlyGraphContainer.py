@@ -251,7 +251,7 @@ class PlotlyGraphDataTypeList():
 
         self.nGraphs = len(self.data_list)
         self.compress = self.nGraphs > 10
-        if nPoints > max_points:
+        if nPoints > max_points and max_points != -1:
             self.is_downscaled = True
             max_points_per_graph = max_points / self.nGraphs
         else:
