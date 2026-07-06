@@ -260,7 +260,7 @@ class ElephantLabExtension {
 			this.output_tabs = null;
 		}
 
-		this.initializeTab(newPanel.content.rendermime as any);
+		await this.initializeTab(newPanel.content.rendermime as any);
 		this.myVisTabs.push(this.widget);
 		this.myPanels.push(newPanel);
 		this.attachTab();
@@ -561,7 +561,7 @@ class ElephantLabExtension {
 		this.app.shell.activateById(this.widget.id);
 	} // end of attachTab()
 
-	public initializeTab(rendermime: IRenderMimeRegistry) {
+	public async initializeTab(rendermime: IRenderMimeRegistry) {
 		/**
 		  * Initialize a new tab for this extension.
 		  */
@@ -580,7 +580,7 @@ class ElephantLabExtension {
 			return;
 		}
 
-		this.createWidgets(rendermime, session);
+		await this.createWidgets(rendermime, session);
 
 	} // end of initializeTab()
 
@@ -1434,7 +1434,7 @@ class ElephantLabExtension {
 		raw_plot_widget.node.prepend(toolbarContainer);
 	}
 
-	public createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
+	public async createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
 		// NEO TREE 
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
@@ -1455,7 +1455,7 @@ class ElephantLabExtension {
 		explorer_widget_raw_plot.title.label = 'Explore';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
-		this.create_raw_plot_options(session, explorer_widget_raw_plot);
+		await this.create_raw_plot_options(session, explorer_widget_raw_plot);
 		this._explorerWidget = explorer_widget_raw_plot;
 
 		this.widget.addWidget(tree_widget);

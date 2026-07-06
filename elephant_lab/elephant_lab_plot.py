@@ -325,7 +325,7 @@ class ElephantLab_plot:
 
             # Temporary hard cap beacause Jupyterlab crashes with extremly big datasets
             hard_cap = 10000000
-            if hard_cap == -1 or max_points > hard_cap:
+            if not max_points or max_points == -1 or max_points > hard_cap:
                 max_points = hard_cap
             
             if max_points is not None and max_points != plot_dict['max_points']:
