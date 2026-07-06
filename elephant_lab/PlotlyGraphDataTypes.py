@@ -1,5 +1,13 @@
 from .PlotlyGraphContainer import PlotlyGraphDataType, PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
 
+def _raster_calc_size(subplot_height):
+    """Calculate marker size for raster plot based on subplot height.
+
+    This is defined at module level so it can be pickled when included
+    as a function reference on data objects sent to worker processes.
+    """
+    return max(min(30, subplot_height * 0.9), 1)
+
 class SpikeTrainRasterPlot(PlotlyGraphDataType):
     import numpy as np
 
@@ -7,16 +15,7 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
         """Extracts SpikeTrainRasterPlotData from a SpikeTrain"""
         self.name = getattr(spiketrain,'name', None)
         self.mode = 'markers'
-
-        def calcSize(subplot_height):
-            return max(
-                min(
-                30,  # cap size to avoid absurdly large lines
-                subplot_height * 0.9
-                )
-            , 1)  # ensure at least this size
-
-        self.marker = dict(symbol='line-ns-open', size=calcSize, line=dict(width=0.2))
+        self.marker = dict(symbol='line-ns-open', size=_raster_calc_size, line=dict(width=0.2))
         self.x = spiketrain.times.magnitude
         self.y = self.np.zeros(len(self.x))
         self.units_x = spiketrain.times.units

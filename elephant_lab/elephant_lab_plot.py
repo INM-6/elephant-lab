@@ -1,3 +1,22 @@
+import threading as _threading
+from concurrent.futures import ProcessPoolExecutor as _ProcessPoolExecutor
+
+from .PlotlyGraphFigure import PlotlyGraphFigure
+from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
+
+def _plot_plotly_graph_figure(**kwargs):
+    return PlotlyGraphFigure(**kwargs)
+
+def _plot_plotly_image_sequence_figure(**kwargs):
+    return PlotlyImageSequenceFigure(**kwargs)
+
+def _plot_worker(plot_method, plot_args, plot_gen):
+    try:
+        fig = plot_method(**plot_args)
+        return ("ok", fig.to_dict(), plot_gen)
+    except Exception as e:
+        return ("error", str(e), plot_gen)
+
 class ElephantLab_plot:
     from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
     from .PlotlyGraphFigure import PlotlyGraphFigure
@@ -33,6 +52,8 @@ class ElephantLab_plot:
     class DefaultPlotDict(TypedDict):
         is_plotted: bool
         changed: bool
+        plot_gen: int
+        process: any
 
     class RawPlotDict(DefaultPlotDict):
         overlapping: bool
@@ -58,6 +79,8 @@ class ElephantLab_plot:
         return {
             "is_plotted": False,
             "changed": False,
+            "plot_gen": 0,
+            "process": None,
         }
 
     def __init__(self, elephant_lab_entity: "ElephantLab_plot.ElephantLab"):
@@ -72,12 +95,13 @@ class ElephantLab_plot:
             str,
             ElephantLab_plot.RawPlotDict | ElephantLab_plot.ImageSequencePlotDict
         ] = {}
-        self.update_counter = 0
         self.comm: "ElephantLab_plot.Comm" = None
         self._is_panel_active = False
         self._selection_changed = False
+        # Shared process pool for plot generation
+        self._executor = _ProcessPoolExecutor(max_workers=4)
 
-        #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
+        #Setting default and extra options for each plot
         for key in self.RawPlotKey:
             self.plots[key] = {
                 **self._base_plot_dict(),
@@ -107,25 +131,29 @@ class ElephantLab_plot:
         return [
         (
             self.RawPlotKey.RAW_ST,
-            self._create_rasterplot,
+            _plot_plotly_graph_figure,
+            self._create_rasterplot_args,
             [self.NeoKey.spiketrain],
             [self.NeoKey.event, self.NeoKey.epoch],
         ),
         (
             self.RawPlotKey.RAW_ANASIG,
-            self._create_lfpplot,
+            _plot_plotly_graph_figure,
+            self._create_lfpplot_args,
             [self.NeoKey.analogsignal, self.NeoKey.irregularsignal],
             [self.NeoKey.event, self.NeoKey.epoch],
         ),
         (
             self.PLOT_IMGSEQUENCE,
-            self._create_image_sequence,
+            _plot_plotly_image_sequence_figure,
+            self._create_image_sequence_args,
             [self.NeoKey.imagesequence],
             [],
         ),
         (
             self.RawPlotKey.RAW_EVENT,
-            self._create_annotation_plot,
+            _plot_plotly_graph_figure,
+            self._create_annotation_plot_args,
             [self.NeoKey.event, self.NeoKey.epoch],
             self._keys_that_also_display_events(),
         )
@@ -178,6 +206,16 @@ class ElephantLab_plot:
 
             plot_dict = self.plots[plot_key]
 
+            def remove_old_process():
+                plot_dict['plot_gen'] += 1
+                proc = plot_dict['process']
+                if proc is not None:
+                    plot_dict['process'] = None
+                    try:
+                        proc.cancel()
+                    except Exception:
+                        pass
+
             def remove_x_range():
                 for key in ('og_x_range', 'x_range'):
                     if key in plot_dict:
@@ -185,12 +223,15 @@ class ElephantLab_plot:
 
             if plot_key == self.RawPlotKey.RAW_EVENT:
                 if not all(empty_dict[key] for key in self._keys_that_also_display_events()):
+                    remove_old_process()
                     remove_x_range()
                     plots_to_remove.add(plot_key)
                     return False
 
+
             # Case 1: nothing to show → close plot
             if all(empty_dict[k] for k in primary_keys):
+                remove_old_process()
                 remove_x_range()
                 plots_to_remove.add(plot_key)
                 return False
@@ -200,6 +241,7 @@ class ElephantLab_plot:
             if plot_dict["changed"] or (
                 selection_changed and any(change_dict[k] for k in all_keys)
             ):
+                remove_old_process()
                 if selection_changed:
                     remove_x_range()
                 return True
@@ -208,9 +250,9 @@ class ElephantLab_plot:
 
         plot_configs = self._plot_configs()
 
-        for plot_key, method, primary_keys, secondary_keys in plot_configs:
+        for plot_key, plot_method, generate_args_method, primary_keys, secondary_keys in plot_configs:
             if should_update(plot_key, primary_keys, secondary_keys):
-                plots_to_update.append((plot_key, method, primary_keys, secondary_keys))
+                plots_to_update.append((plot_key, plot_method, generate_args_method, primary_keys, secondary_keys))
 
         # -------- only remove the ones that are already plotted --------
         filtered_plots_to_remove = set()
@@ -235,35 +277,55 @@ class ElephantLab_plot:
             })
 
         # -------- compute --------
-        updated_figs = {}
 
-        for plot_key, method, primary_keys, secondary_keys in plots_to_update:
+        for plot_key, plot_method, generate_args_method, primary_keys, secondary_keys in plots_to_update:
             plot_dict = self.plots[plot_key]
+
+            plot_dict["is_plotted"] = True
+            plot_dict["changed"] = False
 
             all_keys = primary_keys + secondary_keys
 
-            plot_kwargs = {
+            plot_args_kwargs = {
                 self._string_key(key) : self.previous_neo_object_dict[key]
                 for key in all_keys if not empty_dict[key]
             }
 
-            fig: ElephantLab_plot.PlotlyGraphFigure | ElephantLab_plot.PlotlyImageSequenceFigure = method(**plot_kwargs)
-            plot_dict["is_plotted"] = True
+            plot_args = generate_args_method(**plot_args_kwargs)
 
-            # store JSON for batch send
-            updated_figs[self._string_key(plot_key) ] = fig.to_dict()
+            plot_gen = plot_dict['plot_gen']
+            # Submit work to shared ProcessPoolExecutor; store Future in 'process'
+            future = self._executor.submit(_plot_worker, plot_method, plot_args, plot_gen)
+            plot_dict['process'] = future
 
-            plot_dict["changed"] = False
+            def _on_done(fut, plot_key=plot_key, plot_gen=plot_gen):
+                try:
+                    status, payload, gen = fut.result()
+                except Exception as e:
+                    status, payload, gen = "error", str(e), plot_gen
 
-        # -------- send updated figures --------
-        current_update_id = self.update_counter
-        if updated_figs:
-            self.comm.send({
-                "type": "plots_update",
-                "update_id": current_update_id,
-                "plots": updated_figs
-            })
-        self.update_counter += 1
+                plot_dict_inner = self.plots[plot_key]
+                if gen != plot_dict_inner['plot_gen']:
+                    return
+                if status == "ok":
+                    fig_dict = payload
+                    updated_figs = { self._string_key(plot_key): fig_dict }
+                    if "x_range" in fig_dict:
+                        self._set_plot_dict_for_raw_plot(plot_dict_inner, fig_dict)
+                    if updated_figs and self.comm:
+                        self.comm.send({
+                            "type": "plots_update",
+                            "update_id": gen,
+                            "plots": updated_figs,
+                        })
+                else:
+                    if self.comm:
+                        self.comm.send({
+                            "type": "error",
+                            "message": f"Error in plot generation:\n{payload}"
+                        })
+
+            future.add_done_callback(_on_done)
 
     def on_selection_changed(self):
         self._selection_changed = True
@@ -408,7 +470,7 @@ class ElephantLab_plot:
         if reload:
             self._raw_plot()
 
-    def _create_plot_dict_for_raw_plot(self, plot_dict):
+    def _create_plot_options_for_raw_plot(self, plot_dict):
         return {
             'overlapping': plot_dict['overlapping'],
             'x_range': plot_dict['x_range'],
@@ -418,27 +480,25 @@ class ElephantLab_plot:
             'normalization_method': plot_dict['normalization_method']
         }
 
-    def _set_plot_dict_for_raw_plot(self, plot_dict, fig: PlotlyGraphFigure):
-        x_range = fig.getXRange()
+    def _set_plot_dict_for_raw_plot(self, plot_dict, fig_dict: dict):
+        x_range = fig_dict.get('x_range')
         plot_dict['x_range']=x_range
         if plot_dict['og_x_range'] is None:
             plot_dict['og_x_range']=x_range
-        plot_dict['is_default_zero_based']=fig.isDefaultZeroBased()
-        plot_dict['is_downscaled']=fig.isDownscaled()
-        plot_dict['is_default_normalized_y']=fig.isDefaultNormalizedY()
-        plot_dict['changes_on_overlap']=fig.changesOnOverlap()
-        
-    def _create_rasterplot(self, spiketrain=None, event=None, epoch=None):
+        plot_dict['is_default_zero_based']=fig_dict.get('is_default_zero_based')
+        plot_dict['is_downscaled']=fig_dict.get('is_downscaled')
+        plot_dict['is_default_normalized_y']=fig_dict.get('is_default_normalized_y')
+        plot_dict['changes_on_overlap']=fig_dict.get('changes_on_overlap')
+
+    def _create_rasterplot_args(self, spiketrain=None, event=None, epoch=None):
         data = [self.SpikeTrainRasterPlot(st, self.elephant_lab_entity.names_for) for st in spiketrain]
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_ST]
-        kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(data, title="Rasterplots", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
-        self._set_plot_dict_for_raw_plot(plot_dict, fig)
-        return fig
+        kwargs_plot_options = self._create_plot_options_for_raw_plot(plot_dict)
+        return dict(data=data, title="Rasterplots", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_options)
 
-    def _create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
+    def _create_lfpplot_args(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
         data = None
         if analogsignal is not None:
             data = self.AnalogSignalLFPPlotList(analogsignal, self.elephant_lab_entity.names_for)
@@ -451,21 +511,24 @@ class ElephantLab_plot:
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
-        kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(data, title="LFP-Plots", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, **kwargs_plot_dict)
-        self._set_plot_dict_for_raw_plot(plot_dict, fig)
-        return fig
-    
-    def _create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
+        kwargs_plot_options = self._create_plot_options_for_raw_plot(plot_dict)
+        return dict(data=data, title="LFP-Plots", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, **kwargs_plot_options)
+
+    def _create_annotation_plot_args(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
         event_annotations = self.EventAnnotations(event) if event is not None else None
         epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
         plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
-        kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(None, title="Plotted Events and Epochs", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
-        self._set_plot_dict_for_raw_plot(plot_dict, fig)
-        return fig
+        kwargs_plot_options = self._create_plot_options_for_raw_plot(plot_dict)
+        return dict(data=None, title="Plotted Events and Epochs", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_options)
 
-    def _create_image_sequence(self, imagesequence=None):
+    def _create_image_sequence_args(self, imagesequence=None):
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         color_grade = plot_dict['color_grade']
-        return self.PlotlyImageSequenceFigure(image_sequences=imagesequence, color_scale=color_grade, name_fallback=self.elephant_lab_entity.names_for)
+        return dict(image_sequences=imagesequence, color_scale=color_grade, name_fallback=self.elephant_lab_entity.names_for)
+
+    def close(self):
+        """Shutdown the process pool executor."""
+        try:
+            self._executor.shutdown(wait=False)
+        except Exception:
+            pass

@@ -54,7 +54,7 @@ class PlotlyGraphFigure:
 
 
         self.layout_options["title"] = {
-            'text': f"{title}{'' if not self.isDownscaled() else ' (downsampled)'}",
+            'text': f"{title}{'' if not self._is_downscaled() else ' (downsampled)'}",
             'x': 0.5,
             'xanchor': 'center'
         }
@@ -374,29 +374,25 @@ class PlotlyGraphFigure:
         """Displays the Plotly figure in a Jupyter notebook."""
         if self.fig:
             fig_dict = self.fig.to_dict()
+            fig_dict['x_range']= self.fig.layout.xaxis.range
+            fig_dict['is_default_zero_based']= self.data.is_default_zero_based
+            fig_dict['is_downscaled']= self._is_downscaled()
+            fig_dict['is_default_normalized_y']= self.data.is_default_normalized_y
+            fig_dict['changes_on_overlap']= self._changes_on_overlap()
             if(self._should_have_y_slider()):
                 fig_dict['y_slider']= (self.total_minY, self.total_maxY)
             if self.compress and not self._should_overlap() and len(self.ticktext)==self.nGraphs:
                 fig_dict['ticklabel_limit'] = 26
             return fig_dict
     
-    def getXRange(self):
-        return self.fig.layout.xaxis.range
-    
-    def isDownscaled(self):
+    def _is_downscaled(self):
         return self.data.is_downscaled
     
-    def isDefaultZeroBased(self):
-        return self.data.is_default_zero_based
-    
-    def isDefaultNormalizedY(self):
-        return self.data.is_default_normalized_y
-    
-    def changesOnOverlap(self):
+    def _changes_on_overlap(self):
         return (not self.compress or self.overlap_on_compress) and self.nGraphs != 1
 
     def _should_overlap(self):
-        return self.overlapping and self.changesOnOverlap()
+        return self.overlapping and self._changes_on_overlap()
     
     def _should_have_y_slider(self):
         return (self.overlapping or self.compress or self.nGraphs==1) and not self._same_y()
