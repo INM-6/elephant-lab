@@ -61,6 +61,8 @@ pip uninstall elephant-lab
 4. Click the **Load** button and select a Neo-compatible dataset (e.g. a `.nix` file).
 5. Browse the object tree, click nodes to inspect them, and use **Insert Code** to use them in your Code.
 
+## Demo Notebook
+
 For a step-by-step walkthrough, open the demo notebook: [examples/Elephant_Lab_Demo.ipynb](examples/Elephant_Lab_Demo.ipynb)
 
 ## Development Install
