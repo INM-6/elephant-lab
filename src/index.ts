@@ -8,9 +8,7 @@ import {
 import {
 	ICommandPalette,
 	ISessionContext,
-	SessionContext,
 	WidgetTracker,
-	MainAreaWidget,
 	showDialog,
 	Dialog
 } from '@jupyterlab/apputils';
@@ -44,8 +42,10 @@ import {
 
 import {
 	IRenderMimeRegistry,
-} from '@jupyterlab/rendermime';
-import { WorkflowEngineWidget } from './workflow_engine';
+}
+	from '@jupyterlab/rendermime';
+
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
 // Lumino imports for dealing with the tabs within JupyterLab
 // These are called Panels
 import {
@@ -54,29 +54,29 @@ import {
 	DockPanel
 } from '@lumino/widgets';
 
-//@ts-ignore: TODO: Why is this necessary?
-import {
-	JSONExt
-} from '@lumino/coreutils';
-
 // Own imports
 // Python Code to execute in the kernel
 import {
-	pythonCode
+	PythonCodeKey,
+	getPythonCode
 } from './kernelcode';
 // Style from css
 import '../style/index.css';
+import '../style/base.css'
 import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
-import { COLORS } from "./style/colors";
+import { PlotlyFrontend } from './plot';
+import { PlotSettings } from './plot_settings';
+import { WorkflowEngineWidget } from './workflow_engine';
+import elephantLabLogo from '../doc/Elephant-Lab-Logo.png';
 
-export interface IJupyterMessage {
-	content: {
-		text: string;
-	};
+type PlotSettingsKey = keyof PlotSettings;
+interface UpdateSettingsCallback {
+	ids: PlotSettingsKey[];
+	callback: (plotSettings: PlotSettings) => void;
 }
 
-class JupyphantExtension {
+class ElephantLabExtension {
 	// declaring members of the class
 	private app: JupyterFrontEnd;
 	private command_palette: ICommandPalette;
@@ -86,45 +86,79 @@ class JupyphantExtension {
 	private myVisTabs: Widget[];
 	private widget: DockPanel;
 	private _updateTimer: number | null = null;
-	private workflowEngine: WorkflowEngineWidget | null;
-	private outarea_content_rasterplot: OutputArea | null;
-	private outarea_content_lfpplot: OutputArea | null;
+	private _clickTimer: number | null = null;
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
-	private outarea_nodeexplorer_statistics: OutputArea | null;
 	private outarea_neo_tree: OutputArea | null;
-	private output_tabs: DockPanel | null;
 	private outarea_workflow: OutputArea | null;
+	private workflowEngine: WorkflowEngineWidget | null;
+	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
+	private settingRegistry: ISettingRegistry;
 	private kernelBridge: KernelBridge | null;
+	private topBar: Widget | null = null;
+	private plotlyFrontend: PlotlyFrontend | null;
+	private _lastClickedNode: string | null = null;
+	private _explorerWidget: Panel | null = null;
+	private _detailsWidget: Panel | null = null;
+	private suppressSettingsChanged: boolean = false;
+	private updateSettingsCallbacks: UpdateSettingsCallback[] = [];
 
-
-	// Construct a new JupyphantExtension
+	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry, docManager: IDocumentManager) {
+		widget_tracker: WidgetTracker<Widget>, rendermime: IRenderMimeRegistry, docManager: IDocumentManager, settingRegistry: ISettingRegistry) {
 		// save all constructor arguments
 		this.app = app;
 		this.command_palette = command_palette;
 		this.notebook_tracker = notebook_tracker;
 		this.widget_tracker = widget_tracker;
 		this.docManager = docManager;
+		this.settingRegistry = settingRegistry;
 		// Store references to all tabs containing notebooks
 		this.myPanels = [];
 		// Store references to all tabs created by this extension
 		this.myVisTabs = [];
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
-		this.widget = new DockPanel();
-		this.workflowEngine = null;
-		this.outarea_content_rasterplot = null;
-		this.outarea_content_lfpplot = null;
+		this.widget = new DockPanel({ tabsMovable: false });
 		this.outarea_nodeexplorer_info = null;
 		this.outarea_nodeexplorer_raw = null;
-		this.outarea_nodeexplorer_statistics = null;
 		this.outarea_neo_tree = null;
-		this.output_tabs = null;
 		this.outarea_workflow = null;
+		this.workflowEngine = null;
+		this.output_tabs = null;
 		this.kernelBridge = null;
+		this.plotlyFrontend = null;
 	}; // end of constructor()
+
+	private async initializeSettings() {
+		const settings = await this.settingRegistry.load('elephant-lab:plugin');
+
+		const applySettings = async () => {
+
+			const plotSettings: PlotSettings = {};
+
+			for (const { ids, callback } of this.updateSettingsCallbacks) {
+
+				for (const id of ids) {
+					const value = settings.get(id).composite;
+
+					(plotSettings as Record<PlotSettingsKey, unknown>)[id] = value;
+				}
+
+				callback(plotSettings);
+			}
+
+			await this.kernelBridge!.executeCode(getPythonCode(PythonCodeKey.UpdatePlotSettings, plotSettings));
+		}
+
+		// Listen for changes
+		settings.changed.connect(async () => {
+			if (!this.suppressSettingsChanged) {
+				await applySettings();
+			}
+		});
+		await applySettings();
+	}
 
 
 	/******************************************************************************************************************/
@@ -132,39 +166,43 @@ class JupyphantExtension {
 	/******************************************************************************************************************/
 	// Create OutputAreas where Python-Code can be executed
 	private async initializeKernelState(session: ISessionContext) {
-		console.log("Jupyphant: Initializing kernel state...");
+		console.log("Elephant Lab: Initializing kernel state...");
 		this.kernelBridge = new KernelBridge(session);
 
-		await this.executeCodeInOutputArea(pythonCode['setupEnv'], this.outarea_neo_tree!, session, false);
+		await this.kernelBridge.executeCode(PythonCodeKey.SetupEnv);
 
-		console.log("Jupyphant: Environment setup complete.");
+		console.log("Elephant Lab: Environment setup complete.");
 		try {
-			// Execute Jupyphant Code to create Neo Tree / Information and Plots  
-			await this.executeCodeInOutputArea(pythonCode['createTree'], this.outarea_neo_tree!, session);
-			await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, session, false);
-			await this.executeCodeInOutputArea(pythonCode['createExplorerInfo'], this.outarea_nodeexplorer_info!, session);
-			await this.executeCodeInOutputArea(pythonCode['createExplorerRawPlot'], this.outarea_nodeexplorer_raw!, session);
-			await this.executeCodeInOutputArea(pythonCode['createExplorerStatistics'], this.outarea_nodeexplorer_statistics!, session);
-			await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, session);
-			await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, session);
-			this.widget.title.label += ' (ready)'; // Indicates that the Jupyphant Extension is completly loaded
+			// Execute Elephant Lab code to create Neo Tree / Information and Plots
+			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
+			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
+			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
+			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
+			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
+			// Notify backend of initial panel active state
+			await this.kernelBridge.executeCode(
+				getPythonCode(PythonCodeKey.SetPanelVisibility, this._explorerWidget?.isVisible ?? false, this._detailsWidget?.isVisible ?? false),
+				null, false
+			);
 
-			console.log("Jupyphant: Kernel state and UI plots initialized.");
+			await this.initializeSettings();
+
+			console.log("Elephant Lab: Kernel state and UI plots initialized.");
 		} catch (error) {
-			console.error("Jupyphant: FAILED to initialize kernel state:", error);
+			console.error("Elephant Lab: FAILED to initialize kernel state:", error);
 		}
 	}
-	// Command on which to execute Jupyphant Extension
+	// Command on which to execute Elephant Lab
 	public createCommand(command: string) {
 		/**
 		  * Creates a hardcoded command to start this extension
 		  * And places it as a button in the CommandPalette on the left-hand side
 		  * of the JupyterLab interface.
-		  * Clicking 'Jupyphant' in the Commands tab on the left activates the Jupyphant extension
+		  * Clicking 'Elephant Lab' in the Commands tab on the left activates the Elephant Lab extension
 		  */
 		// Add the specified command to the commands known by JupyterLab
 		this.app.commands.addCommand(command, {
-			label: 'Jupyphant',
+			label: 'Elephant Lab',
 			execute: () => {
 				// The newTab function that contains the main code is called from the command
 				this.newTab();
@@ -175,52 +213,59 @@ class JupyphantExtension {
 	} // end of createCommand()
 
 
-	// Function to react on command 'Jupyphant'
+	// Function to react on command 'Elephant Lab'
 	// Called only after the command is clicked from CommandPalette
-	public async newTab() {
+	public async newTab(force: boolean = false) {
 		/**
 	  * This function actually starts the extension itself.
-	  * It creates a new Jupyphant tab that is connected to the notebook active when this function is executed
+	  * It creates a new Elephant Lab tab that is connected to the notebook active when this function is executed
 	  * and therefore displays data from this notebook and reacts to its cell executions.
-	  * This function is executed when the command 'Jupyphant' in the CommandPalette is clicked by the user.
-	  * Consequently, the notebook that should be visualized using Jupyphant needs to be opened and its tab
+	  * This function is executed when the command 'Elephant Lab' in the CommandPalette is clicked by the user.
+	  * Consequently, the notebook that should be visualized using Elephant Lab needs to be opened and its tab
 	  * needs to be in the foreground when the command is clicked.
 	  */
 		// Wait for all notebooks to be restored in case newTab is executed early
-		// This is probably important for restoring the Jupyphant tabs (not yet implemented)
+		// This is probably important for restoring the Elephant Lab tabs (not yet implemented)
 
-		console.log("Jupyphant: newTab() started.");
+		console.log("Elephant Lab: newTab() started.");
 		await this.notebook_tracker.restored;
-		console.log("Jupyphant: Notebook tracker restored.");
+		console.log("Elephant Lab: Notebook tracker restored.");
 
-		// Only execute Jupyphant Extension if a Notebook is currently open
+		// Only execute Elephant Lab if a Notebook is currently open
 		const newPanel = this.notebook_tracker.currentWidget;
 		if (!newPanel) {
-			console.error("Jupyphant: No active notebook found.");
+			console.error("Elephant Lab: No active notebook found.");
+			return;
+		}
+		this.notebook_tracker.forEach(notebookWidget => {
+			if (notebookWidget.title.className.includes('elephant-lab-active-notebook')) {
+				notebookWidget.title.className = notebookWidget.title.className
+					.replace('elephant-lab-active-notebook', '')
+					.trim();
+			}
+		});
+
+		newPanel.title.className += ' elephant-lab-active-notebook';
+
+		if (!force && this.widget.isAttached) {
+			console.log("Elephant Lab: Existing widgets found, activating them.");
+			this.app.shell.activateById(this.widget.id);
 			return;
 		}
 
-		const workflowId = 'jupyphant-workflow-main-widget';
-		const elephantId = 'jupyphant-elephant-analysis-widget';
-		const mainWidgets = Array.from(this.app.shell.widgets('main'));
-		const workflowWidget = mainWidgets.find(w => w.id === workflowId);
-		const elephantWidget = mainWidgets.find(w => w.id === elephantId);
-
-		if (workflowWidget && elephantWidget) {
-			console.log("Jupyphant: Existing widgets found, activating them.");
-			this.app.shell.activateById(workflowId);
-			return;
-		}
-
-		console.log("Jupyphant: Creating new Jupyphant instance.");
+		console.log("Elephant Lab: Creating new Elephant Lab instance.");
 
 		// Clear the panel before adding new widgets
 		const oldWidgets = Array.from(this.widget.widgets());
 		for (const w of oldWidgets) {
 			w.dispose();
 		}
+		if (this.output_tabs) {
+			this.output_tabs.dispose();
+			this.output_tabs = null;
+		}
 
-		this.initializeTab(newPanel.content.rendermime);
+		await this.initializeTab(newPanel.content.rendermime as any);
 		this.myVisTabs.push(this.widget);
 		this.myPanels.push(newPanel);
 		this.attachTab();
@@ -229,27 +274,226 @@ class JupyphantExtension {
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
 
+		// Keep backend in sync when the user switches between Details and Explore tabs
+		for (const tabBar of this.widget.tabBars()) {
+			const hasOurPanels = Array.from(tabBar.titles).some(
+				t => t.owner === this._detailsWidget || t.owner === this._explorerWidget
+			);
+			if (hasOurPanels) {
+				tabBar.currentChanged.connect((_sender, args) => {
+					const curr = args.currentTitle?.owner;
+					if (this.kernelBridge) {
+						this.kernelBridge.executeCode(
+							getPythonCode(PythonCodeKey.SetPanelVisibility, curr === this._explorerWidget, curr === this._detailsWidget),
+							null, false
+						);
+					}
+				});
+				break;
+			}
+		}
+
+		// Handle HTML tree interactions (expand/collapse + selection)
+		// All clicks go through a 250ms timer so dblclick can cancel before any Python call fires.
+		this.outarea_neo_tree!.node.addEventListener('click', (e) => {
+			const target = e.target as HTMLElement;
+
+			// Expand/collapse -> pure JS
+			const toggle = target.closest('.jup-toggle') as HTMLElement;
+			if (toggle) {
+				const row = toggle.closest('.jup-row') as HTMLElement;
+				const children = row?.nextElementSibling as HTMLElement;
+				if (children?.classList.contains('jup-children')) {
+					const isOpen = children.classList.contains('jup-open');
+					children.classList.toggle('jup-open', !isOpen);
+					toggle.innerHTML = isOpen ? '<i class="fa fa-plus"></i>' : '<i class="fa fa-minus"></i>';
+				}
+				return;
+			}
+
+			const row = target.closest('.jup-row[data-node-id]') as HTMLElement;
+			if (!row) return;
+
+			const nodeId = row.getAttribute('data-node-id')!;
+			const isShift = (e as MouseEvent).shiftKey;
+			const isCtrl = (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey;
+			const anchorId = this._lastClickedNode; // capture anchor before timer fires
+
+			if (this._clickTimer) {
+				window.clearTimeout(this._clickTimer);
+				this._clickTimer = null;
+			}
+
+			this._clickTimer = window.setTimeout(() => {
+				this._clickTimer = null;
+
+				if (isShift && anchorId) {
+					// Shift+Click: select range of parents only
+					const allRows = Array.from(
+						this.outarea_neo_tree!.node.querySelectorAll('.jup-row[data-node-id]')
+					) as HTMLElement[];
+					const ids = allRows.map(r => r.getAttribute('data-node-id')!);
+					const fromIdx = ids.indexOf(anchorId);
+					const toIdx = ids.indexOf(nodeId);
+
+					if (fromIdx !== -1 && toIdx !== -1) {
+						const [start, end] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+
+						this.outarea_neo_tree!.node
+							.querySelectorAll('.jup-row.jup-selected')
+							.forEach(el => el.classList.remove('jup-selected'));
+
+						const rangeIds: string[] = [];
+						for (let i = start; i <= end; i++) {
+							allRows[i].classList.add('jup-selected');
+							rangeIds.push(ids[i]);
+						}
+
+						const idsJson = JSON.stringify(rangeIds);
+						const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson);
+						this.kernelBridge!.executeCode(code, null, false);
+					}
+				} else if (isCtrl) {
+					// Ctrl+Click: toggle parent only
+					row.classList.toggle('jup-selected');
+					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True', 'False');
+					this.kernelBridge!.executeCode(code, null, false);
+					this._lastClickedNode = nodeId;
+				} else {
+					// Single click: select parent only
+					this.outarea_neo_tree!.node
+						.querySelectorAll('.jup-row.jup-selected')
+						.forEach(el => el.classList.remove('jup-selected'));
+					row.classList.add('jup-selected');
+					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'False');
+					this.kernelBridge!.executeCode(code, null, false);
+					this._lastClickedNode = nodeId;
+				}
+			}, 250);
+		});
+
+		// Double-click: cancel the pending timer then select with children
+		this.outarea_neo_tree!.node.addEventListener('dblclick', (e) => {
+			const target = e.target as HTMLElement;
+
+			if (target.closest('.jup-toggle')) return;
+
+			const row = target.closest('.jup-row[data-node-id]') as HTMLElement;
+			if (!row) return;
+
+			const nodeId = row.getAttribute('data-node-id')!;
+			const isShift = (e as MouseEvent).shiftKey;
+			const isCtrl = (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey;
+			const anchorId = this._lastClickedNode;
+
+			if (this._clickTimer) {
+				window.clearTimeout(this._clickTimer);
+				this._clickTimer = null;
+			}
+
+			if (isShift && anchorId) {
+				// Shift+Double-Click: select range + all children recursively
+				const allRows = Array.from(
+					this.outarea_neo_tree!.node.querySelectorAll('.jup-row[data-node-id]')
+				) as HTMLElement[];
+				const ids = allRows.map(r => r.getAttribute('data-node-id')!);
+				const fromIdx = ids.indexOf(anchorId);
+				const toIdx = ids.indexOf(nodeId);
+
+				if (fromIdx !== -1 && toIdx !== -1) {
+					const [start, end] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+
+					this.outarea_neo_tree!.node
+						.querySelectorAll('.jup-row.jup-selected')
+						.forEach(el => el.classList.remove('jup-selected'));
+
+					const rangeIds: string[] = [];
+					for (let i = start; i <= end; i++) {
+						allRows[i].classList.add('jup-selected');
+						rangeIds.push(ids[i]);
+						const childContainer = allRows[i].nextElementSibling as HTMLElement;
+						if (childContainer?.classList.contains('jup-children')) {
+							childContainer.querySelectorAll('.jup-row[data-node-id]')
+								.forEach(el => el.classList.add('jup-selected'));
+						}
+					}
+
+					const idsJson = JSON.stringify(rangeIds);
+					const code = getPythonCode(PythonCodeKey.HandleSelectionRange, idsJson, true);
+					this.kernelBridge!.executeCode(code, null, false);
+				}
+			} else if (isCtrl) {
+				// Ctrl+Double-Click: toggle parent + all children recursively
+				row.classList.toggle('jup-selected');
+				const isNowSelected = row.classList.contains('jup-selected');
+				const childContainer = row.nextElementSibling as HTMLElement;
+				if (childContainer?.classList.contains('jup-children')) {
+					childContainer.querySelectorAll('.jup-row[data-node-id]')
+						.forEach(el => isNowSelected
+							? el.classList.add('jup-selected')
+							: el.classList.remove('jup-selected'));
+				}
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True', 'True');
+				this.kernelBridge!.executeCode(code, null, false);
+				this._lastClickedNode = nodeId;
+			} else {
+				// Regular double-click: clear selection, select parent + all children
+				this.outarea_neo_tree!.node
+					.querySelectorAll('.jup-row.jup-selected')
+					.forEach(el => el.classList.remove('jup-selected'));
+				row.classList.add('jup-selected');
+				const childContainer = row.nextElementSibling as HTMLElement;
+				if (childContainer?.classList.contains('jup-children')) {
+					childContainer.querySelectorAll('.jup-row[data-node-id]')
+						.forEach(el => el.classList.add('jup-selected'));
+				}
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'True');
+				this.kernelBridge!.executeCode(code, null, false);
+				this._lastClickedNode = nodeId;
+			}
+		});
+
+		// Click listener on the Details panel
+		this.outarea_nodeexplorer_info!.node.addEventListener('click', async (e) => {
+			const target = e.target as HTMLElement;
+
+			const stat = target.closest('.selectable-stat') as HTMLElement;
+			if (stat) {
+				const filterType = stat.getAttribute('data-filter-type');
+				const filterDataRaw = stat.getAttribute('data-filter');
+				if (!filterType || !filterDataRaw) return;
+
+				const filterJson = filterDataRaw.replace(/&quot;/g, '"');
+
+				const code = `elephant_lab_entity.elephant_lab_tree.select_by_stat('${filterType}', ${filterJson})`;
+				const result = await this.kernelBridge!.executeCode(code, null, false);
+				this._applyTreeSelection(result);
+			}
+
+		});
+
+
 		// Listener for cell execution
 		NotebookActions.executed.connect((sender, exec_data) => {
 			if (exec_data.notebook !== newPanel.content) {
 				return;
 			}
-			console.log("Jupyphant: Cell executed, updating plots.");
+			console.log("Elephant Lab: Cell executed, updating plots.");
 
 			if (this._updateTimer) {
 				window.clearTimeout(this._updateTimer);
 			}
-	
+
 			this._updateTimer = window.setTimeout(async () => {
-				await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, initialSession, false);
-				await this.executeCodeInOutputArea(pythonCode['rasterPlot'], this.outarea_content_rasterplot!, initialSession);
-				await this.executeCodeInOutputArea(pythonCode['lfpPlot'], this.outarea_content_lfpplot!, initialSession);
+				await Promise.all([
+					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, initialSession),
+				]);
 			}, 500);
 		});
 
 		// Listener for changed Kernel, waits for Kernel to be ready
 		newPanel.sessionContext.kernelChanged.connect(async (sender, args) => {
-			console.log("Jupyphant: Kernel has changed (restarted).");
+			console.log("Elephant Lab: Kernel has changed (restarted).");
 			const newKernel = args.newValue;
 			if (newKernel) {
 				const waitForIdle = new Promise<void>(resolve => {
@@ -266,11 +510,42 @@ class JupyphantExtension {
 					newKernel.statusChanged.connect(listener);
 				});
 				await waitForIdle;
-				console.log("Jupyphant: New kernel is idle and ready. Re-initializing state.");
+				console.log("Elephant Lab: New kernel is idle and ready. Re-initializing state.");
 			}
 		});
 
-		console.log("Jupyphant: Event listeners registered.");
+		console.log("Elephant Lab: Event listeners registered.");
+	}
+
+	private _applyTreeSelection(result: any) {
+		if (!result?.resultKey) return;
+		const selectedIds: string[] = JSON.parse(result.resultKey);
+
+		this.outarea_neo_tree!.node
+			.querySelectorAll('.jup-row.jup-selected')
+			.forEach(el => el.classList.remove('jup-selected'));
+
+		selectedIds.forEach(id => {
+			const row = this.outarea_neo_tree!.node
+				.querySelector(`.jup-row[data-node-id="${id}"]`) as HTMLElement;
+			if (row) {
+				row.classList.add('jup-selected');
+				let parent = row.parentElement;
+				while (parent) {
+					if (parent.classList.contains('jup-children')) {
+						parent.classList.add('jup-open');
+						const toggle = parent.previousElementSibling
+							?.querySelector('.jup-toggle') as HTMLElement;
+						if (toggle) toggle.innerHTML = '<i class="fa fa-minus"></i>';
+					}
+					parent = parent.parentElement;
+				}
+			}
+		});
+
+		if (selectedIds.length > 0) {
+			this._lastClickedNode = selectedIds[selectedIds.length - 1];
+		}
 	}
 
 	public attachTab() {
@@ -288,30 +563,105 @@ class JupyphantExtension {
 			this.widget_tracker.add(this.widget);
 		}
 		// Display the tab, bring it to the foreground
-		this.app.shell.activateById('jupyphant-workflow-main-widget');
+		this.app.shell.activateById(this.widget.id);
 	} // end of attachTab()
 
-	public initializeTab(rendermime: IRenderMimeRegistry) {
+	public async initializeTab(rendermime: IRenderMimeRegistry) {
 		/**
 		  * Initialize a new tab for this extension.
 		  */
 
-		this.widget.addClass('my-jupyphantWidget');
+		this.widget.addClass('my-elephant-lab-widget');
 		// Set HTML/DOM id
-		this.widget.id = 'jupyphant-right-panel';
+		this.widget.id = 'elephant-lab-right-panel';
 		// Title of the tab
-		this.widget.title.label = 'Jupyphant';
+		this.widget.title.label = 'Elephant Lab';
+		this.widget.title.iconClass = 'elephant-trunk-icon';
 		// Adds the x to close the tab?
 		this.widget.title.closable = true;
 		const session = this.notebook_tracker.currentWidget?.sessionContext;
 		if (!session) {
-			console.error("Jupyphant: No notebook session found during UI initialization!");
+			console.error("Elephant Lab: No notebook session found during UI initialization!");
 			return;
 		}
 
-		this.createWidgets(rendermime, session);
+		await this.createWidgets(rendermime, session);
 
 	} // end of initializeTab()
+
+	private getFilterStates(): Record<string, boolean> {
+		const saved = sessionStorage.getItem('elephant-lab-filter-states');
+		return saved ? JSON.parse(saved) : {};
+	}
+
+	private saveFilterState(key: string, isChecked: boolean) {
+		const states = this.getFilterStates();
+		states[key] = isChecked;
+		sessionStorage.setItem('elephant-lab-filter-states', JSON.stringify(states));
+	}
+
+	public createTopBar(session: ISessionContext) {
+		if (this.topBar) {
+			this.topBar.dispose();
+		}
+
+		const currentFilename = session.path.split('/').pop() || "Unknown Notebook";
+
+		const switchNotebookButton = document.createElement('button');
+		switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${currentFilename}`;
+		switchNotebookButton.title = 'Switch Elephant Lab to current active notebook';
+		switchNotebookButton.className = 'workflow-button workflow-button-io';
+		switchNotebookButton.style.marginRight = '5px';
+		switchNotebookButton.onclick = () => {
+			this.newTab(true);
+		};
+
+		session.propertyChanged.connect((sender, prop) => {
+			if (prop === 'path') {
+				const newFilename = sender.path.split('/').pop() || "Unknown Notebook";
+				switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${newFilename}`;
+			}
+		});
+
+		const infoButton = document.createElement('button');
+		infoButton.innerHTML = '<i class="fa fa-info-circle" aria-hidden="true"></i> Elephant Lab';
+		infoButton.title = 'About Elephant Lab';
+		infoButton.className = 'workflow-button workflow-button-io';
+		infoButton.onclick = async () => {
+			const result = await this.kernelBridge!.executeCode(PythonCodeKey.Version);
+
+			const body = document.createElement('div');
+			body.style.textAlign = 'center';
+			body.innerHTML = `
+				<p>You are using <a href="https://github.com/INM-6/elephant-lab">Elephant Lab</a> ${result?.outputs[0].text}<br>
+				This version is a public preview version. <br>Further Analysis functions will be added in later releases.</p>
+
+				<p>Tobias Michels<br>Jan Nolten<br>Maximilian Kramer<br>Björn Müller<br>Michael Denker<br></p>
+				<p><a href="https://www.fz-juelich.de/en/ias/ias-6">
+				Institute for Advanced Simulation (IAS-6), <br>
+				Computational and Systems Neuroscience, Forschungszentrum Jülich GmbH</a></p><br>
+				<img src="${elephantLabLogo}" alt="Elephant Lab Logo" style="display: block; width: 500px; margin: 10px auto 0 auto;">`;
+			showDialog({
+				title: 'About Elephant Lab',
+				body: new Widget({ node: body }),
+				buttons: [Dialog.okButton()]
+			});
+		};
+
+		const container = document.createElement('div');
+		container.style.display = 'flex';
+		container.style.alignItems = 'center';
+		container.style.padding = '2px';
+		container.appendChild(switchNotebookButton);
+		container.appendChild(infoButton);
+
+		this.topBar = new Widget();
+		this.topBar.node.appendChild(container);
+		this.topBar.id = 'elephant-lab-top-bar';
+		this.topBar.node.style.marginLeft = 'auto';
+
+		this.app.shell.add(this.topBar, 'top', { rank: 1000 });
+	}
 
 	public create_tree_filter(session: ISessionContext, tree_widget: Panel) {
 		const neo_obj_filter_dict = {
@@ -323,47 +673,31 @@ class JupyphantExtension {
 			"channelview": "eye",
 			"group": "object-group",
 			"irregularlysampledsignal": "wave-square",
-			"spiketrainlist": "bars",
 			"event": "map-marker",
 			"imagesequence": "images",
-			"regionofinterest": "map",
 			"circularregionofinterest": "circle",
 			"polygonregionofinterest": "draw-polygon",
 			"rectangularregionofinterest": "square",
 			"open_all": "check",
-			"hide_all": "eye-slash"
 		}
-
-		const checked_style = {
-			color: "#2cbb00ff",
-			fontWeight: "bold",
-			cursor: "pointer",
-			padding: "4px",
-			userSelect: "none",
-		}
-
-		const unchecked_style = {
-			color: "#727272ff",
-			fontWeight: "normal",
-			cursor: "pointer",
-			padding: "4px",
-			userSelect: "none",
-		}
+		const currentFilterStates = this.getFilterStates();
 
 		const filterContainer = document.createElement('div');
-		filterContainer.textContent = "Filter  ";
+		filterContainer.className = 'neo-filter-container';
+		filterContainer.textContent = " Filter  ";
 
 		Object.keys(neo_obj_filter_dict).forEach(key => {
 			const iconName = neo_obj_filter_dict[key as keyof typeof neo_obj_filter_dict];
 			const label = document.createElement("label");
 			label.dataset.key = key;
-			if (key === "open_all") {
-				label.dataset.checked = "false";
-				Object.assign(label.style, unchecked_style);
-			} else {
-				label.dataset.checked = "true";
-				Object.assign(label.style, checked_style);
-			}
+
+			const defaultState = (key === "open_all") ? false : true;
+			const isChecked = currentFilterStates[key] ?? defaultState;
+
+			label.dataset.checked = isChecked ? "true" : "false";
+			label.classList.add(isChecked ? 'checked-label' : 'unchecked-label');
+
+
 			const icon = document.createElement("i");
 			icon.className = `fa fa-${iconName}`
 			icon.setAttribute("aria-hidden", "true");
@@ -373,32 +707,80 @@ class JupyphantExtension {
 				const isCurrentlyChecked = label.dataset.checked === "true";
 				const isNowChecked = !isCurrentlyChecked;
 				label.dataset.checked = isNowChecked ? "true" : "false";
-				isNowChecked ? Object.assign(label.style, checked_style) : Object.assign(label.style, unchecked_style);
-				key === "open_all" ? this.neo_tree_expand(isNowChecked, session) : this.neo_tree_filter(label.dataset.key!, session);
+
+				if (isNowChecked) {
+					label.classList.replace('unchecked-label', 'checked-label');
+				} else {
+					label.classList.replace('checked-label', 'unchecked-label');
+				}
+
+				this.saveFilterState(key, isNowChecked);
+
+				key === "open_all"
+					? this.neo_tree_expand(isNowChecked, session)
+					: this.neo_tree_filter(label.dataset.key!, session);
+
 			};
+
+			key == "open_all" ? label.title = `Expand all containers` : label.title = `Hide/Show ${key.charAt(0).toUpperCase() + key.slice(1)}(s)`;
+
 
 			filterContainer.appendChild(label);
 		});
-		
+
+		const flexBreak = document.createElement('div');
+		flexBreak.style.flexBasis = "100%";
+		flexBreak.style.height = "0";
+		filterContainer.appendChild(flexBreak);
+
 		const loadNeoFileButton = document.createElement('button');
-		loadNeoFileButton.innerHTML = 'Load <i class="fa fa-file-import" aria-hidden="true"></i>';
-        loadNeoFileButton.title = 'Create a neoIO for given Path';
-		loadNeoFileButton.style.backgroundColor = COLORS["Teal"]
-        loadNeoFileButton.className = 'workflow-button workflow-button-io';
+		loadNeoFileButton.innerHTML = '<i class="fa fa-file-import" aria-hidden="true"></i> Load';
+		loadNeoFileButton.title = 'Create a neoIO for given Path';
+		loadNeoFileButton.className = 'workflow-button workflow-button-io';
 		loadNeoFileButton.onclick = () => {
-			FileDialog.getOpenFiles({
+			const dialogPromise = FileDialog.getOpenFiles({
 				manager: this.docManager
-			}).then(result => {
+			});
+
+			// Prevent double-click from triggering JupyterLab's file-open handler
+			let dialogNode: Element | null = null;
+			const stopDblClick = (e: Event) => {
+				const item = (e.target as Element).closest('.jp-DirListing-item');
+				// Allow double-click on folders so navigation still works
+				if (item?.getAttribute('data-isdir') === 'true') {
+					return;
+				}
+				e.stopImmediatePropagation();
+				e.stopPropagation();
+				const acceptBtn = dialogNode?.querySelector('.jp-Dialog-button.jp-mod-accept') as HTMLElement | null;
+				acceptBtn?.click();
+			};
+			setTimeout(() => {
+				dialogNode = document.querySelector('.jp-Dialog');
+				if (dialogNode) {
+					dialogNode.addEventListener('dblclick', stopDblClick, true);
+				}
+			}, 0);
+
+			dialogPromise.then(result => {
+				if (dialogNode) {
+					dialogNode.removeEventListener('dblclick', stopDblClick, true);
+				}
 				if (result.button.accept && result.value && result.value.length > 0) {
 					const selectedFile = result.value[0];
-					const filePath = selectedFile.path;
-	
+					let filePath = selectedFile.path;
+					const slashCount = (session.path.match(/\//g) || []).length;
+					if (slashCount !== 0) {
+						const prefix = '../'.repeat(slashCount);
+						filePath = prefix + filePath;
+					}
+
 					const body = document.createElement('div');
 					const input = document.createElement('input');
 					input.className = 'jp-input';
 					input.placeholder = 'e.g. Spike2IO';
 					body.appendChild(input);
-	
+
 					showDialog({
 						title: 'Enter neo IO class',
 						body: new Widget({ node: body }),
@@ -415,32 +797,31 @@ class JupyphantExtension {
 						} else if (dialogResult.button.label === 'Automatic') {
 							ioClass = await this.kernelBridge!.getNeoIOClass(filePath);
 						}
-	
-						if (ioClass !== null) {
-							const varName = `neo_data_${Date.now()}`;
-							let code = '';
-							if (ioClass) {
-								code = `
-import neo
-io_class = getattr(neo.io, '${ioClass}')
-reader = io_class(filename='${filePath}')
-${varName} = reader.read_block()
-									`;
-							} else {
-								code = `
-import neo
-${varName} = neo.get_io('${filePath}').read()
-if (isinstance(${varName}, list)):
-	${varName} = ${varName}[0]
-elif (isinstance(${varName}, dict)):
-	${varName} = ${varName}['blocks'][0]
-print(${varName}, type(${varName}))
-self.update_tree()
 
-`;
+						if (ioClass !== null) {
+							const varsResult = await this.kernelBridge!.executeCode(PythonCodeKey.GetVars, this.outarea_neo_tree!, false);
+							let allVars: string[] = [];
+							if (varsResult && varsResult.outputs.length > 0) {
+								const output = varsResult.outputs[0];
+								if (output.output_type === 'stream' && output.name === 'stdout') {
+									try {
+										allVars = JSON.parse(output.text);
+									} catch (e) {
+										console.error("Failed to parse kernel variables", e);
+									}
+								}
 							}
-							await this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
-							await this.executeCodeInOutputArea(pythonCode['updateTree'], this.outarea_neo_tree!, session, false);
+
+							let counter = 0;
+							let varName = `loaded_data_${counter}`;
+							while (allVars.includes(varName)) {
+								counter++;
+								varName = `loaded_data_${counter}`;
+							}
+
+							let code = getPythonCode(PythonCodeKey.SetVarName, ioClass, filePath, varName);
+							await this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
+							await this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 						} else if (dialogResult.button.label === 'Automatic') {
 							showDialog({
 								title: 'Error',
@@ -454,9 +835,8 @@ self.update_tree()
 		};
 
 		const saveNeoObjectsButton = document.createElement('button');
-		saveNeoObjectsButton.innerHTML = 'Save <i class="fa fa-file-export" aria-hidden="true"></i>';
+		saveNeoObjectsButton.innerHTML = '<i class="fa fa-file-export" aria-hidden="true"></i> Save';
 		saveNeoObjectsButton.title = 'Save selected neo objects to nix-file';
-		saveNeoObjectsButton.style.backgroundColor = COLORS["Teal"]
 		saveNeoObjectsButton.className = 'workflow-button workflow-button-io';
 		saveNeoObjectsButton.onclick = () => {
 			const body = document.createElement('div');
@@ -484,776 +864,633 @@ self.update_tree()
 						return;
 					}
 
-					const code = `
-from jupyphant.kernelcode import save_selected_neo_objects
-save_selected_neo_objects(jupyphant_entity, '${filePath}')
-					`;
-					this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false)
-					.then(() => {
-                    showDialog({
-                        title: 'Export Successful',
-                        body: `The Neo objects have been saved to: ${filePath}`,
-                        buttons: [Dialog.okButton()]
-                    });
-                })
-                .catch(err => {
-                    showDialog({
-                        title: 'Export Failed',
-                        body: `An error occurred: ${err}`,
-                        buttons: [Dialog.okButton()]
-                    });
-                });
+					const code = getPythonCode(PythonCodeKey.SaveSelectedNeoObjects, filePath);
+					this.kernelBridge!.executeCode(code, this.outarea_neo_tree, false)
+						.then(() => {
+							showDialog({
+								title: 'Export Successful',
+								body: `The Neo objects have been saved to: ${filePath}`,
+								buttons: [Dialog.okButton()]
+							});
+						})
+						.catch(err => {
+							showDialog({
+								title: 'Export Failed',
+								body: `An error occurred: ${err}`,
+								buttons: [Dialog.okButton()]
+							});
+						});
 				}
 			});
 		};
-		
+		const insertCodeButton = document.createElement('button');
+		insertCodeButton.innerHTML = '<i class="fa fa-code" aria-hidden="true"></i> Insert';
+		insertCodeButton.title = 'Insert selected neo objects into current notebook';
+		insertCodeButton.className = 'workflow-button workflow-button-io';
+		insertCodeButton.onclick = async () => {
+			const currentNotebook = this.notebook_tracker.currentWidget;
+			if (!currentNotebook || currentNotebook.sessionContext.path !== session.path) {
+				showDialog({
+					title: 'Incorrect Notebook',
+					body: 'Elephant Lab is not connected to this notebook. Please switch to the notebook Elephant Lab is attached to.',
+					buttons: [Dialog.okButton()]
+				});
+				return;
+			}
+
+			const result = await this.kernelBridge!.executeCode(PythonCodeKey.InsertCode, this.outarea_neo_tree!, false);
+
+			if (result && result.outputs.length > 0) {
+				const output = result.outputs[0];
+				if (output.output_type === 'stream' && output.name === 'stdout') {
+					const data = JSON.parse(output.text);
+
+					if (data.error) {
+						console.error("Elephant Lab: Error creating variables from selection:", data.error);
+						if (data.traceback) {
+							console.error(data.traceback);
+						}
+						return;
+					}
+
+					if (data.code_to_insert) {
+						const notebookPanel = this.notebook_tracker.currentWidget;
+						if (notebookPanel) {
+							const notebook = notebookPanel.content;
+
+							if (data.list_creation_code) {
+								// Insert a new code cell above the current cell containing
+								// the list creation code, so the list can be recreated
+								// after kernel restart by simply re-running that cell.
+								const originalCellIndex = notebook.activeCellIndex;
+								NotebookActions.insertAbove(notebook);
+								const newCell = notebook.activeCell;
+								if (newCell) {
+									newCell.model.sharedModel.setSource(data.list_creation_code);
+								}
+								// Move focus back to the original cell (shifted down by 1)
+								notebook.activeCellIndex = originalCellIndex + 1;
+							}
+
+							const activeCell = notebook.activeCell;
+							if (activeCell && activeCell.editor) {
+								activeCell.editor.replaceSelection!(data.code_to_insert);
+								console.log(`Elephant Lab: Inserted code at cursor.`);
+							} else {
+								console.log(`Elephant Lab: No active cell or editor found. Could not insert code.`);
+							}
+						}
+					}
+				}
+			}
+		}
+
+
+		// Annotation filter row
+		const annoFilterRow = document.createElement('div');
+		annoFilterRow.style.cssText = 'display:flex;gap:4px;align-items:center;padding-top:6px;width:100%;';
+
+		const annoFilterInput = document.createElement('input');
+		annoFilterInput.className = 'jp-rawplot-input';
+		annoFilterInput.style.flex = '1';
+		annoFilterInput.style.minWidth = '0';
+		annoFilterInput.placeholder = 'e.g. sua==True AND spike_count>500';
+		annoFilterInput.title = 'Filter by annotations: key==value AND/OR key>value ...';
+
+		const annoFilterButton = document.createElement('button');
+		annoFilterButton.className = 'workflow-button';
+		annoFilterButton.innerHTML = '<i class="fa fa-filter" aria-hidden="true"></i>';
+		annoFilterButton.title = 'Apply annotation filter';
+		annoFilterButton.onclick = async () => {
+			const expression = annoFilterInput.value.trim();
+
+			if (!expression) return;
+
+			const code = getPythonCode(PythonCodeKey.SelectByAnnotationFilter, expression);
+			const result = await this.kernelBridge!.executeCode(code, null, false);
+			this._applyTreeSelection(result);
+			const matched = result?.resultKey ? (JSON.parse(result.resultKey) as string[]) : null;
+			if (matched !== null && matched.length === 0) {
+				annoFilterInput.classList.remove('anno-filter-no-match');
+				void annoFilterInput.offsetWidth;
+				annoFilterInput.classList.add('anno-filter-no-match');
+			} else {
+				annoFilterInput.classList.remove('anno-filter-no-match');
+			}
+		};
+		annoFilterInput.addEventListener('input', () => {
+			annoFilterInput.classList.remove('anno-filter-no-match');
+		});
+		annoFilterInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				annoFilterButton.click();
+			}
+		});
+
+		annoFilterRow.appendChild(annoFilterInput);
+		annoFilterRow.appendChild(annoFilterButton);
+
 		filterContainer.classList.add('sticky-filter');
+		filterContainer.appendChild(annoFilterRow);
 		filterContainer.appendChild(document.createElement('br'));
 		filterContainer.appendChild(document.createElement('br'));
 		filterContainer.appendChild(loadNeoFileButton);
 		filterContainer.appendChild(saveNeoObjectsButton);
-		
+		filterContainer.appendChild(insertCodeButton);
+
 		tree_widget.node.prepend(filterContainer);
 	}
 
-	// Sets up the DragAndDrop Listeners on the Neo Tree Objects 
-	public setupDragAndDrop(treeWidget: Panel) {
-		const observer = new MutationObserver((mutationsList, observer) => {
-			// Selector for the <li> elements that represent each node in the jsTree that hasn't been processed yet
-			const treeNodes = treeWidget.node.querySelectorAll('.jstree-node:not([data-dnd-setup="true"])');
+	public async create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+		const settings = await this.settingRegistry.load('elephant-lab:plugin');
 
-			if (treeNodes.length > 0) {
-				console.log(`Jupyphant: Found ${treeNodes.length} new jsTree nodes, setting up drag and drop.`);
+		const buttonContainer = document.createElement("div");
+		buttonContainer.classList.add("jp-rawplot-button-container");
 
-				treeNodes.forEach(nodeElement => {
-					const htmlElement = nodeElement as HTMLElement;
-					htmlElement.dataset.dndSetup = 'true'; // Mark as processed
+		const createButton = (icon: string, label: string, description: string, callback: (button: HTMLButtonElement) => void) => {
+			const button = document.createElement("button");
+			button.type = "button";
+			button.classList.add("jp-rawplot-toggle");
+			button.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
+			button.title = description;
+			button.addEventListener("click", () => {
+				callback(button);
+			});
+			buttonContainer.appendChild(button);
+			return button;
+		}
+		const createToggle = (default_value: boolean, icon: string, label: string, description: string, callback: (state: boolean) => void) => {
+			const toggle = createButton(icon, label, description, (button: HTMLButtonElement) => {
+				let checked = button.getAttribute("aria-pressed") === "false";
+				button.setAttribute("aria-pressed", String(checked));
+				callback(checked);
+			});
+			toggle.setAttribute("aria-pressed", String(default_value));
+			return toggle;
+		};
+		const createSavedToggle = (id: PlotSettingsKey, icon: string, label: string, description: string, callback: (state: boolean) => void = (state: boolean) => { }) => {
+			const savedToggle = createToggle(false, icon, label, description, async (state: boolean) => {
+				await settings.set(id, state);
+			});
+			this.updateSettingsCallbacks.push({
+				ids: [id],
+				callback: (newSettings: PlotSettings) => {
+					const newValue = newSettings[id] as boolean;
+					savedToggle.setAttribute("aria-pressed", String(newValue));
+					callback(newValue);
+				}
+			});
+			return savedToggle;
+		}
 
-					// Make the entire node row draggable
-					htmlElement.draggable = true;
+		const darkmodeToggle = createSavedToggle('dark', 'fa-moon', 'Dark', 'Switch between dark and light mode', (state: boolean) => {
+			this.plotlyFrontend?.setThemes(state);
+		});
 
-					htmlElement.addEventListener('dragstart', (event) => {
-						// Find the anchor tag within the node to get the ID and name
-						const anchor = htmlElement.querySelector('.jstree-anchor');
-						if (anchor && event.dataTransfer) {
-							const nodeName = (anchor.textContent || "").trim();
-							const nodeId = htmlElement.id;
+		const overlapToggle = createSavedToggle('overlap', 'fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them');
 
-							const item = {
-								id: nodeId,
-								name: nodeName,
-								code: nodeId,
-								is_class: false,
-								parameters: []
-							};
+		const zeroBasedToggle = createSavedToggle('zero_based', 'fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0');
 
-							// Set the drag data
-							event.dataTransfer.setData('text/plain', JSON.stringify(item));
-							console.log(`Dragging node: ${nodeName} (ID: ${nodeId})`);
+		const upscaleButton = createButton('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range to increase detail', (button: HTMLButtonElement) => {
+			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, this.plotlyFrontend?.getXRanges());
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
+		});
 
-							// Stop jstree's own handlers from interfering with the drag
-							event.stopPropagation();
-						}
-					});
-				});
+		const resetScaleButton = createButton('fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', (button: HTMLButtonElement) => {
+			const code = getPythonCode(PythonCodeKey.ResetScale);
+			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
+		});
+
+		const normalizeYValuesToggle = createSavedToggle('normalize_y_values', 'fa-compress', 'Normalize Y', 'Normalize the y-values of the plots');
+
+		const optionsModal = document.createElement("div");
+		optionsModal.classList.add("jp-rawplot-options-modal");
+
+		// --- OPTIONS MODAL BUTTON ---
+		const optionsToggle = createToggle(false, 'fa-cogs', 'Options', '', (state) => {
+			optionsModal.classList.toggle("jp-visible", state);
+		});
+
+		// Hide options when clicked elsewhere (currently disabled because it seems to annoy more than help)
+		/*raw_plot_widget.node.addEventListener("click", (e) => {
+			const temp: Node = e.target as Node
+			if (!optionsModal.contains(temp) && !optionsToggle.contains(temp)) {
+				optionsModal.classList.remove("jp-visible");
+				optionsToggle.setAttribute("aria-pressed", "false");
+			}
+		});*/
+
+		// --- MAX POINTS INPUT ---
+
+		const max_points_id = 'max_points';
+		const full_resolution_id = 'full_resolution';
+
+		const applyMaxPoints = async () => {
+
+			let max_points = 0;
+			max_points = Number(numberInput.value);
+			if (max_points < min_max_points) {
+				numberInput.value = min_max_points.toString();
+				max_points = min_max_points;
+			}
+
+			const fullResolutionChanged =
+				(settings.get(full_resolution_id).composite as boolean) !== fullResolutionCheckbox.checked;
+			this.suppressSettingsChanged = fullResolutionChanged;
+			try {
+				await settings.set(max_points_id, max_points);
+
+				if (fullResolutionChanged) {
+					// Enable the listener before the final change.
+					this.suppressSettingsChanged = false;
+
+					await settings.set(full_resolution_id, fullResolutionCheckbox.checked);
+				}
+			} finally {
+				this.suppressSettingsChanged = false;
+			}
+		};
+
+		const numberLabel = document.createElement('label');
+		numberLabel.innerHTML = `<i class="fa fa-chart-line"></i> Max Points`;
+		numberLabel.classList.add("jp-rawplot-label");
+
+		const min_max_points = 10000;
+		const numberInput = document.createElement('input');
+		numberInput.type = "number";
+		const savedMaxPoints = min_max_points;
+		numberInput.value = savedMaxPoints.toString();
+		numberInput.min = min_max_points.toString();
+		numberInput.step = "10000";
+		numberInput.classList.add("jp-rawplot-input");
+
+		const maxNumberInput = document.createElement("div");
+		maxNumberInput.classList.add("jp-rawplot-row");
+		maxNumberInput.title = "Maximum number of points to be plotted. Increasing this number can increase the detail of the plot, but also increases loading times.";
+
+		const savedFullResolution = false;
+		const fullResolutionCheckbox = document.createElement("input");
+		fullResolutionCheckbox.type = "checkbox";
+		fullResolutionCheckbox.checked = savedFullResolution;
+		numberInput.disabled = fullResolutionCheckbox.checked;
+
+		const fullResolutionLabel = document.createElement("label");
+		fullResolutionLabel.textContent = "Full Resolution";
+		fullResolutionLabel.classList.add("jp-rawplot-label");
+
+		numberInput.addEventListener("change", async () => {
+			await applyMaxPoints();
+		});
+
+		fullResolutionCheckbox.addEventListener("change", async () => {
+			numberInput.disabled = fullResolutionCheckbox.checked;
+			await applyMaxPoints();
+		});
+
+		maxNumberInput.appendChild(numberLabel);
+		maxNumberInput.appendChild(numberInput);
+		maxNumberInput.appendChild(fullResolutionLabel);
+		maxNumberInput.appendChild(fullResolutionCheckbox);
+
+		this.updateSettingsCallbacks.push({
+			ids: [max_points_id, full_resolution_id],
+			callback: (newSettings: PlotSettings) => {
+				numberInput.value = (newSettings.max_points as number).toString();
+				fullResolutionCheckbox.checked = newSettings.full_resolution as boolean;
+				numberInput.disabled = fullResolutionCheckbox.checked;
 			}
 		});
 
-		// Start observing the tree widget's DOM for changes, and don't disconnect
-		observer.observe(treeWidget.node, { childList: true, subtree: true });
+		const createLabeledSelect = (options: {
+			id: PlotSettingsKey;
+			label: string;
+			icon?: string;
+			selectOptions: string[];
+			title?: string;
+		}): HTMLDivElement => {
+			// Create label
+			const labelEl = document.createElement('label');
+			labelEl.classList.add("jp-rawplot-label");
+			labelEl.innerHTML = options.icon ? `<i class="fa ${options.icon}"></i> ${options.label}` : options.label;
+
+			// Create select
+			const selectEl = document.createElement('select');
+			selectEl.classList.add("jp-rawplot-select");
+
+			options.selectOptions.forEach(optValue => {
+				const opt = document.createElement("option");
+				opt.value = optValue;
+				opt.textContent = optValue;
+				selectEl.appendChild(opt);
+			});
+
+			selectEl.onchange = async () => {
+				await settings.set(options.id, selectEl.value);
+			};
+
+			// Create container
+			const container = document.createElement('div');
+			container.classList.add("jp-rawplot-row");
+			if (options.title) container.title = options.title;
+			container.appendChild(labelEl);
+			container.appendChild(selectEl);
+
+			this.updateSettingsCallbacks.push({
+				ids: [options.id],
+				callback: (newSettings: PlotSettings) => {
+					selectEl.value = newSettings[options.id] as string;
+				}
+			});
+
+			return container;
+		}
+
+		const normalizationMethod = createLabeledSelect({
+			id: "normalization_method",
+			label: "Normalization Method",
+			icon: "fa-compress",
+			selectOptions: ['minmax', 'zscore', 'l2'],
+			title: "Method used to normalize the y-values when 'Normalize Y' is enabled"
+		});
+
+		type SelectOptionGroup = {
+			group: string;
+			options: string[];
+			collapsed?: boolean;
+		};
+
+		const createCollapsibleSelect = (options: {
+			id: PlotSettingsKey;
+			label: string;
+			icon?: string;
+			selectOptions: SelectOptionGroup[];
+			title?: string;
+		}): HTMLDivElement => {
+
+			let currentValue = "";
+
+			// Main container
+			const container = document.createElement("div");
+			container.classList.add("jp-rawplot-row");
+
+			if (options.title) {
+				container.title = options.title;
+			}
+
+			// Label
+			const labelEl = document.createElement("label");
+			labelEl.classList.add("jp-rawplot-label");
+
+			labelEl.innerHTML = options.icon
+				? `<i class="fa ${options.icon}"></i> ${options.label}`
+				: options.label;
+
+			// Dropdown wrapper
+			const wrapper = document.createElement("div");
+			wrapper.classList.add("jp-collapsible-select");
+
+			// Current value button
+			const button = document.createElement("button");
+			button.type = "button";
+			button.classList.add("jp-collapsible-select-button");
+			button.textContent = currentValue || "Select...";
+
+			// Dropdown panel
+			const panel = document.createElement("div");
+			panel.classList.add("jp-collapsible-select-panel");
+			panel.style.display = "none";
+
+			// Groups
+			options.selectOptions.forEach(group => {
+
+				const details = document.createElement("details");
+
+				if (!group.collapsed) {
+					details.open = true;
+				}
+
+				const summary = document.createElement("summary");
+				summary.textContent = group.group;
+
+				details.appendChild(summary);
+
+				group.options.forEach(value => {
+
+					const item = document.createElement("div");
+					item.classList.add("jp-collapsible-select-item");
+
+					item.textContent = value;
+
+					item.onclick = async () => {
+						await settings.set(options.id, value);
+					};
+
+					details.appendChild(item);
+				});
+
+				panel.appendChild(details);
+			});
+
+			// Toggle dropdown
+			button.onclick = (event) => {
+
+				panel.style.display =
+					panel.style.display === "none"
+						? "block"
+						: "none";
+			};
+
+			document.addEventListener("click", (event) => {
+
+				const target = event.target as Node;
+
+				const clickedInsideButton = button.contains(target);
+				const clickedInsidePanel = panel.contains(target);
+
+				if (!clickedInsideButton && !clickedInsidePanel) {
+					panel.style.display = "none";
+				}
+			});
+
+			document.addEventListener("keydown", (event) => {
+
+				if (event.key === "Escape") {
+
+					panel.style.display = "none";
+
+				}
+			});
+
+			wrapper.appendChild(button);
+			wrapper.appendChild(panel);
+
+			container.appendChild(labelEl);
+			container.appendChild(wrapper);
+
+			this.updateSettingsCallbacks.push({
+				ids: [options.id],
+				callback: (newSettings: PlotSettings) => {
+					currentValue = newSettings[options.id] as string;
+					button.textContent = currentValue;
+					panel.style.display = "none";
+				}
+			});
+
+			return container;
+		}
+
+		const colorGrade = createCollapsibleSelect({
+			id: "color_grade",
+			label: "Color Grade",
+			icon: "fa-palette",
+
+			selectOptions: [
+				{
+					group: "Sequential",
+					options: [
+						"Viridis",
+						"Cividis",
+						"Inferno",
+						"Magma",
+						"Plasma",
+						"Turbo",
+						"Blackbody",
+						"Bluered",
+						"Electric",
+						"Hot",
+						"Jet",
+						"Rainbow",
+						"Plotly3"
+					],
+					collapsed: false
+				},
+
+				{
+					group: "Diverging",
+					options: [
+						"BrBG",
+						"RdGy",
+						"oxy",
+						"Fall",
+						"Earth",
+						"Picnic",
+						"Portland"
+					],
+					collapsed: true
+				},
+
+				{
+					group: "Cyclic",
+					options: [
+						"Twilight",
+						"IceFire",
+						"Edge",
+						"Phase",
+						"HSV",
+						"mrybm",
+						"mygbm"
+					],
+					collapsed: true
+				},
+			]
+		});
+
+		const resetOptionsButton = createButton('fa-undo-alt', 'Reset Options', 'Reset all options to their default values', async (button: HTMLButtonElement) => {
+			const userSettings = settings.user;
+			const keys = Object.keys(userSettings);
+
+			this.suppressSettingsChanged = true;
+
+			try {
+				for (let i = 0; i < keys.length; i++) {
+					// Allow the last remove() to trigger the listener
+					if (i === keys.length - 1) {
+						this.suppressSettingsChanged = false;
+					}
+
+					await settings.remove(keys[i]);
+				}
+			} finally {
+				this.suppressSettingsChanged = false;
+			}
+		});
+
+		optionsModal.appendChild(maxNumberInput);
+		optionsModal.appendChild(normalizationMethod);
+		optionsModal.appendChild(colorGrade);
+		optionsModal.appendChild(resetOptionsButton);
+
+		buttonContainer.append(
+			darkmodeToggle,
+			overlapToggle,
+			zeroBasedToggle,
+			normalizeYValuesToggle,
+			upscaleButton,
+			resetScaleButton,
+			optionsToggle
+		);
+
+		// --- MAIN CONTAINER ---
+		const toolbarContainer = document.createElement("div");
+		toolbarContainer.classList.add("jp-rawplot-toolbar");
+
+		toolbarContainer.append(buttonContainer, optionsModal);
+
+		raw_plot_widget.node.prepend(toolbarContainer);
 	}
 
-	public createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
+	public async createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
 		// NEO TREE 
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
 		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_neo_tree = this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
 		this.create_tree_filter(session, tree_widget);
-		this.setupDragAndDrop(tree_widget);
+		this.createTopBar(session);
 
-		// NODE EXPLORER
-		let explorer_widget = new DockPanel({ tabsMovable: false });
-		explorer_widget.title.label = 'Node Explorer';
-		explorer_widget.node.style.cssText = explorer_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		// INFO
 		let explorer_widget_info = new Panel();
-		explorer_widget_info.title.label = 'Info';
+		explorer_widget_info.title.label = 'Details';
 		explorer_widget_info.node.style.cssText = explorer_widget_info.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_info = this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1', session);
-		explorer_widget.addWidget(explorer_widget_info);
+		this._detailsWidget = explorer_widget_info;
+
 		// RAW
 		let explorer_widget_raw_plot = new Panel();
-		explorer_widget_raw_plot.title.label = 'Raw Plot';
+		explorer_widget_raw_plot.title.label = 'Explore';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
-		explorer_widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
-		// STATISTICS
-		let explorer_widget_statistics = new Panel();
-		explorer_widget_statistics.title.label = 'Statistics';
-		explorer_widget_statistics.node.style.cssText = explorer_widget_statistics.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.outarea_nodeexplorer_statistics = this.createOutputArea(rendermime, explorer_widget_statistics, ['my-outarea-class'], 'jup_vis_out_id_2.3', session);
-		explorer_widget.addWidget(explorer_widget_statistics, { mode: 'tab-after', ref: explorer_widget_raw_plot });
+		await this.create_raw_plot_options(session, explorer_widget_raw_plot);
+		this._explorerWidget = explorer_widget_raw_plot;
 
-		// ELEPHANT
-		let elephant_widget = new Panel();
-		elephant_widget.title.label = 'Elephant Analysis';
-		elephant_widget.node.style.cssText = elephant_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.createElephantElements(session, elephant_widget, tree_widget);
-		const elephantMain = new MainAreaWidget({ content: elephant_widget });
-		elephantMain.id = 'jupyphant-elephant-analysis-widget';
-		elephantMain.title.label = 'Elephant Analysis';
-		elephantMain.title.closable = true;
-		this.app.shell.add(elephantMain, 'main');
-		if (!this.widget_tracker.has(elephantMain)) {
-			this.widget_tracker.add(elephantMain);
-		}
+		// WORKFLOW OUTPUT (backing OutputArea for the workflow engine's print/error output)
+		let workflow_output_widget = new Panel();
+		workflow_output_widget.title.label = 'Workflow Output';
+		workflow_output_widget.node.style.cssText = workflow_output_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		this.outarea_workflow = this.createOutputArea(rendermime, workflow_output_widget, ['my-outarea-class'], 'jup_vis_out_id_workflow', session);
 
-
-		// OUTPUT-TABS (Plot, Error, Output)
-		if (!this.output_tabs) {
-			const output_tabs = new DockPanel({ tabsMovable: false });
-			output_tabs.id = 'jupyphant-output-tabs';
-			output_tabs.title.label = 'Output-Area';
-			let output_widget_plot = new Panel();
-			output_widget_plot.title.label = 'Overview Plots';
-			output_widget_plot.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-			this.outarea_content_rasterplot = this.createOutputArea(rendermime, output_widget_plot, ['my-outarea-class'], 'jup_vis_out_id_3.1', session);
-			this.outarea_content_lfpplot = this.createOutputArea(rendermime, output_widget_plot, ['my-outarea-class'], 'jup_vis_out_id_3.2', session);
-
-			// Text Output used for Analysis Results
-			let output_widget_text = new Panel();
-			output_widget_text.title.label = 'Output';
-			output_widget_text.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-			this.outarea_workflow = this.createOutputArea(rendermime, output_widget_text, ['my-outarea-class'], 'jup_vis_out_id_3.3', session);
-
-			// Error Output used mainly for debugging 
-			// TODO: implement this (if necessary?) 
-			let output_widget_error = new Panel();
-			output_widget_error.title.label = 'Error';
-			output_widget_error.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-			this.createOutputArea(rendermime, output_widget_error, ['my-outarea-class'], 'jup_vis_out_id_3.4', session);
-
-			output_tabs.addWidget(output_widget_plot);
-			output_tabs.addWidget(output_widget_text);
-			output_tabs.addWidget(output_widget_error);
-			this.app.shell.add(output_tabs, 'right', { rank: 400 });
-			output_tabs.addClass('my-jupyphantWidget');
-			this.output_tabs = output_tabs;
-			if (!this.widget_tracker.has(output_tabs)) {
-				this.widget_tracker.add(output_tabs);
-			}
-		}
+		// WORKFLOW ENGINE
+		let workflow_widget = new Panel();
+		workflow_widget.title.label = 'Workflow';
+		workflow_widget.node.style.cssText = workflow_widget.node.style.cssText + ' overflow: hidden;';
+		await this.initializeWorkflowEngine(rendermime, session, workflow_widget);
 
 		this.widget.addWidget(tree_widget);
-		this.widget.addWidget(explorer_widget, { mode: 'split-bottom', ref: tree_widget });
-		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker, rendermime, this.docManager);
-		const main = new MainAreaWidget({ content: this.workflowEngine });
-		main.id = 'jupyphant-workflow-main-widget';
-		main.title.label = 'Jupyphant Workflow';
-		main.title.closable = true;
-		this.app.shell.add(main, 'main');
-		if (!this.widget_tracker.has(main)) {
-			this.widget_tracker.add(main);
-		}
-		this.app.shell.activateById(main.id);
+		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
+		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
+		this.widget.addWidget(workflow_widget, { mode: 'tab-after', ref: explorer_widget_raw_plot });
+		this.widget.addWidget(workflow_output_widget, { mode: 'tab-after', ref: workflow_widget });
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
-		let code = `
-			from jupyphant.kernelcode import toggle_neo_tree_objs, update_tree
-			toggle_neo_tree_objs(jupyphant_entity, "${checkbox_id}")
-			update_tree(jupyphant_entity)
-			`
-		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
+		let code = getPythonCode(PythonCodeKey.ToggleNeoTreeFilter, checkbox_id);
+		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 	}
 
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
-		let code = `
-			from jupyphant.kernelcode import expand_neo_tree
-			# TODO: is there a better way to convert ts bool into python bool?
-			if "${checked}" == "true":
-				checked = True
-			else:
-				checked = False
-			expand_neo_tree(jupyphant_entity, checked)
-			`
-		this.executeCodeInOutputArea(code, this.outarea_neo_tree!, session, false);
+		let code = getPythonCode(PythonCodeKey.ExpandNeoTree, checked);
+		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 	}
-
-	public createElephantElements(session: ISessionContext, elephant_widget: Panel, tree_widget: Panel) {
-
-		// Menue is the main container for the Analysis Windows elements
-		const menue = document.createElement("div");
-		menue.style.position = "center";
-		menue.style.width = "90%";
-		menue.style.minWidth = "302px";
-		menue.style.maxWidth = "800px";
-		menue.style.height = "100%";
-		menue.style.backgroundColor = "rgba(0, 0, 0, 0)";
-		menue.style.display = "flex";
-		menue.style.alignItems = "center";
-		menue.style.justifyContent = "center";
-		menue.style.zIndex = "1000";
-
-		const menueBox = document.createElement("div");
-		menueBox.style.backgroundColor = "rgba(0, 0, 0, 0)";
-		menueBox.style.padding = "20px";
-		menueBox.style.borderRadius = "8px";
-		menueBox.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0)";
-		menueBox.style.width = "400px";
-
-
-		// Radio buttons used for remote and local analysis execution
-		const radioContainer = document.createElement("div");
-
-		// Radio button for remote Elephant Analysis
-		const remoteRadioButton = document.createElement("input");
-		remoteRadioButton.type = "radio";
-		remoteRadioButton.name = "location";
-		remoteRadioButton.value = "remote";
-		const remoteLabel = document.createElement("label");
-		remoteLabel.textContent = "Remote";
-		remoteLabel.style.marginRight = "20px";
-		remoteLabel.prepend(remoteRadioButton);
-
-		// Radio button for local Elephant Analysis
-		const localRadioButton = document.createElement("input");
-		localRadioButton.type = "radio";
-		localRadioButton.name = "location";
-		localRadioButton.value = "local";
-		localRadioButton.checked = true;
-		const localLabel = document.createElement("label");
-		localLabel.textContent = "Local";
-		localLabel.prepend(localRadioButton);
-
-		radioContainer.appendChild(localLabel);
-		radioContainer.appendChild(remoteLabel);
-
-		// function used to change state of radio buttons
-		function toggleRadioButtons() {
-			if (remoteRadioButton.checked) {
-				remoteDiv.style.display = "block";
-				localDiv.style.display = "none";
-			} else {
-				remoteDiv.style.display = "none";
-				localDiv.style.display = "block";
-
-			}
-		}
-
-		// EventListeners for activating / deactivating radio buttons
-		remoteRadioButton.addEventListener("change", () => {
-			toggleRadioButtons();
-		})
-
-		localRadioButton.addEventListener("change", () => {
-			toggleRadioButtons();
-		})
-
-		// Local Div is used for grouping elements used for local analysis
-		const localDiv = document.createElement("div");
-		localDiv.id = "localDiv";
-
-		// Remote Div is used for grouping elements used for local analysis
-		const remoteDiv = document.createElement("div");
-		remoteDiv.id = "remoteDiv";
-
-		// Result Div used to display output
-		// TODO: may be removed due to the existence of Output Container
-		const resultDiv = document.createElement("div");
-		resultDiv.style.marginTop = "15px";
-		resultDiv.style.padding = "10px";
-		resultDiv.style.background = "rgba(28, 56, 47, 0.38)";
-		resultDiv.style.border = "1px solid #ddd";
-		resultDiv.style.borderRadius = "5px";
-		resultDiv.style.maxHeight = "200px";
-		resultDiv.style.overflowY = "auto";
-
-		// Dropdown Menus for Elephant Module and Function
-		const dropdownElephantModule = document.createElement("select");
-		dropdownElephantModule.id = "elephant-module-select";
-
-		const dropdownElephantFunction = document.createElement("select");
-		dropdownElephantFunction.id = "elephant-function-select";
-
-		const dropdownContainer = document.createElement("div");
-		dropdownContainer.style.marginTop = "10px";
-		dropdownContainer.appendChild(dropdownElephantModule);
-		dropdownContainer.appendChild(dropdownElephantFunction);
-
-		// Button for Code generation in a new Jupyter Cell
-		const buttonGenerateCode = document.createElement("button");
-		buttonGenerateCode.textContent = "Generate Code";
-		buttonGenerateCode.style.marginTop = "10px";
-		buttonGenerateCode.style.padding = "10px";
-		buttonGenerateCode.style.background = "rgba(104, 33, 203, 1)";
-		buttonGenerateCode.style.color = "white";
-		buttonGenerateCode.style.border = "none";
-		buttonGenerateCode.style.cursor = "pointer";
-		buttonGenerateCode.style.width = "100%";
-
-		// Elephant Server Address, only used for remote Analysis
-		const inputElephantServerAddress = document.createElement("input");
-		inputElephantServerAddress.type = "text";
-		inputElephantServerAddress.placeholder = "Server address  (z.B. http://127.0.0.1:5000)";
-		inputElephantServerAddress.style.width = "100%";
-		inputElephantServerAddress.style.marginBottom = "10px";
-		inputElephantServerAddress.value = localStorage.getItem("elephantServer") || "http://127.0.0.1:5000";
-
-		// Button used to either ping server and load functions from there or search for available functions in local installation
-		const buttonLoadFunctions = document.createElement("button");
-		buttonLoadFunctions.textContent = "Fetch elephant functions";
-		buttonLoadFunctions.style.width = "100%";
-		buttonLoadFunctions.onclick = async () => {
-			await this.loadElephantModules(dropdownElephantModule, dropdownElephantFunction, paramContainer, inputElephantServerAddress.value, remoteRadioButton.checked);
-
-			if (localRadioButton.checked) {
-				let code = `
-				import elephant
-				from importlib.metadata import version, PackageNotFoundError
-				try:
-					print(version("elephant"))
-				except PackageNotFoundError:
-					print("nicht installiert")								
-				`
-				if (!this.kernelBridge) {
-					console.error("KernelBridge not initialized.");
-					return;
-				}
-				const result = await this.kernelBridge.executeCode(code, true);
-				if (result && result.outputs.length > 0 && result.outputs[0].text) {
-					let msg_content = result.outputs[0].text;
-					buttonRunAnalysisLocal.innerHTML = `run elephant analysis (locally)<br>Current local Elephant Version: "${msg_content.trim()}"`;
-				}
-			} else {
-				const response = await fetch(`${inputElephantServerAddress.value}`, { method: "GET" });
-				const data = await response.json();
-				buttonRunAnalysisRemote.innerHTML = `run elephant analysis<br>Current remote Elephant Version: "${data.elephant_version}"`;
-			}
-		};
-
-
-		// Button to start remote Analysis
-		const buttonRunAnalysisRemote = document.createElement("button");
-		buttonRunAnalysisRemote.textContent = "run elephant analysis";
-		buttonRunAnalysisRemote.style.marginTop = "10px";
-		buttonRunAnalysisRemote.style.padding = "10px";
-		buttonRunAnalysisRemote.style.background = "rgb(25, 58, 6)";
-		buttonRunAnalysisRemote.style.color = "white";
-		buttonRunAnalysisRemote.style.border = "none";
-		buttonRunAnalysisRemote.style.cursor = "pointer";
-		buttonRunAnalysisRemote.style.width = "100%";
-		buttonRunAnalysisRemote.disabled = true;
-
-		buttonRunAnalysisRemote.onclick = async () => {
-			const outarea_content_text = this.outarea_workflow!;
-
-
-			const functionName = dropdownElephantFunction.value;
-			const moduleName = dropdownElephantModule.value;
-
-			let params: { [key: string]: any } = {};
-
-			paramContainer.querySelectorAll("input, select").forEach((input) => {
-				if (input instanceof HTMLInputElement || input instanceof HTMLSelectElement) {
-					console.log(`input: ${input}`)
-					console.log(`${input.id}: ${input.value}`);
-				}
-				const paramName = input.id.replace("param-", "");
-
-				let value: any = (input as HTMLInputElement).value;
-
-				if (!isNaN(value) && value.trim() !== "") {
-					value = Number(value);
-				} else if (value.toLowerCase() === "true") {
-					value = true;
-				} else if (value.toLowerCase() === "false") {
-					value = false;
-				}
-				params[paramName] = value;
-			});
-			// Extract input parameters
-			const entriesArray = Object.entries(params)
-			const pythonListString = `[${Object.values(entriesArray).map(v => `'${v}'`).join(', ')}]`;
-
-			// Code logic to send data to server using pickle
-			let code = `
-			import requests
-			import pickle
-			import neo
-			import types
-			import json
-			from pprint import pprint
-
-			from jupyphant.kernelcode import get_neo_to_hash_dict
-			
-			def parse_list_to_dict(data_list):
-				result_dict = {}
-				for item_string in data_list:
-					parts = item_string.split(',', 1)
-								
-					key = parts[0].strip()
-									
-					if len(parts) > 1 and parts[1].strip():
-						value = parts[1].strip()
-					else:
-						value = ""			
-					result_dict[key] = value
-					
-				return result_dict
-
-			def get_notebook_variable(allowed_types=None):
-				g = globals()
-				variables = {}
-
-				for name, val in g.items():
-					if allowed_types is not None and not isinstance(val, allowed_types):
-						continue
-					if isinstance(val, types.ModuleType):
-						continue
-					variables[name] = val
-				return variables
-
-
-			inputObjects = parse_list_to_dict(${pythonListString})
-			neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
-			variables_in_notebook = get_notebook_variable()
-
-			for key, value in inputObjects.items():
-				if value in neo_hash_obj_dict:
-					jupyphant_result = neo_hash_obj_dict[value]
-					inputObjects[key] = jupyphant_result
-				elif value in variables_in_notebook.keys():
-					jupyphant_result = variables_in_notebook.get(value)
-					inputObjects[key] = jupyphant_result
-			url = "${inputElephantServerAddress.value}/execute_pickle"
-			pickled_data = pickle.dumps(inputObjects)
-
-			text_data = {
-				"module_name": "${moduleName}",
-				"function_name": "${functionName}"
-			}
-
-			binary_data = {
-				'params': ('data.pkl', pickled_data, 'application/octet-stream')
-			}
-
-			try:
-				response = requests.post(url, data=text_data, files=binary_data)
-				pprint(f"Server response: {response.text}")
-
-			except requests.exceptions.RequestException as e:
-				pprint(f"Ein Verbindungsfehler ist aufgetreten: {e}")
-			`
-			await this.executeCodeInOutputArea(code, outarea_content_text, session);
-		};
-
-		// Ping Server button and check for reachability
-		const buttonPingServer = document.createElement("button");
-		buttonPingServer.textContent = "Ping server";
-		buttonPingServer.style.width = "100%";
-		buttonPingServer.style.marginBottom = "10px";
-		buttonPingServer.onclick = async () => {
-			const serverUrl = inputElephantServerAddress.value;
-			localStorage.setItem("elephantServer", serverUrl);
-			if (await this.pingElephantServer(serverUrl)) {
-				resultDiv.innerHTML = `<b style="color: green;">Server reachable!</b>`;
-				buttonRunAnalysisRemote.disabled = false;
-				buttonRunAnalysisRemote.style.background = "rgb(59, 201, 95)";
-			} else {
-				resultDiv.innerHTML = `<b style="color: red;">Server not reachable!</b>`
-				buttonRunAnalysisRemote.disabled = true;
-			}
-		};
-
-		// Button to start local Analysis
-		const buttonRunAnalysisLocal = document.createElement("button");
-		buttonRunAnalysisLocal.textContent = "run elephant analysis (locally)";
-		buttonRunAnalysisLocal.style.marginTop = "10px";
-		buttonRunAnalysisLocal.style.padding = "10px";
-		buttonRunAnalysisLocal.style.background = "rgb(59, 201, 95)";
-		buttonRunAnalysisLocal.style.color = "white";
-		buttonRunAnalysisLocal.style.border = "none";
-		buttonRunAnalysisLocal.style.cursor = "pointer";
-		buttonRunAnalysisLocal.style.width = "100%";
-
-		buttonRunAnalysisLocal.onclick = async () => {
-			const outarea_content_text = this.outarea_workflow!;
-
-			const functionName = dropdownElephantFunction.value;
-			const moduleName = dropdownElephantModule.value;
-
-			let params: { [key: string]: any } = {};
-
-			paramContainer.querySelectorAll("input, select").forEach((input) => {
-				if (input instanceof HTMLInputElement || input instanceof HTMLSelectElement) {
-					console.log(`input: ${input}`)
-					console.log(`${input.id}: ${input.value}`);
-				}
-				const paramName = input.id.replace("param-", "");
-
-				let value: any = (input as HTMLInputElement).value;
-
-				if (!isNaN(value) && value.trim() !== "") {
-					value = Number(value);
-				} else if (value.toLowerCase() === "true") {
-					value = true;
-				} else if (value.toLowerCase() === "false") {
-					value = false;
-				}
-				params[paramName] = value;
-			});
-
-			// Extract input parameters
-			const entriesArray = Object.entries(params)
-			const pythonListString = `[${Object.values(entriesArray).map(v => `'${v}'`).join(', ')}]`;
-			let methods_to_execute: Array<string> = [];
-			const methodSelect = paramContainer.querySelector("#method-select") as HTMLSelectElement;
-
-			if (methodSelect && methodSelect.value && methodSelect.value !== "Select a method...") {
-				methods_to_execute.push(methodSelect.value.toLowerCase());
-			}
-
-			let code = `
-			import requests
-			import pickle
-			import neo
-			import types
-			import json
-
-			from jupyphant.kernelcode import get_neo_to_hash_dict
-			elephant_objs = []
-			
-			def parse_list_to_dict(data_list):
-				result_dict = {}
-				for item_string in data_list:
-					parts = item_string.split(',', 1)
-								
-					key = parts[0].strip()
-									
-					if len(parts) > 1 and parts[1].strip():
-						value = parts[1].strip()
-					else:
-						value = ""			
-					result_dict[key] = value
-					
-				return result_dict
-
-			def get_notebook_variable(allowed_types=None):
-				g = globals()
-				variables = {}
-
-				for name, val in g.items():
-					if allowed_types is not None and not isinstance(val, allowed_types):
-						continue
-					if isinstance(val, types.ModuleType):
-						continue
-					variables[name] = val
-				return variables
-
-
-			inputObjects = parse_list_to_dict(${pythonListString})
-			neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
-			variables_in_notebook = get_notebook_variable()
-
-			for key, value in inputObjects.copy().items():
-				if key.lower().startswith('method'):
-					inputObjects.pop(key)
-				elif value in neo_hash_obj_dict:
-					jupyphant_result = neo_hash_obj_dict[value]
-					inputObjects[key] = jupyphant_result
-				elif value in variables_in_notebook.keys():
-					jupyphant_result = variables_in_notebook.get(value)
-					inputObjects[key] = jupyphant_result
-				else: inputObjects[key] = None
-			methods_to_execute = ${JSON.stringify(methods_to_execute)} 
-			if (methods_to_execute):
-				method_parts = []
-				try:
-					object_name = "${moduleName}.${functionName}(**inputObjects)"
-					for method_name in methods_to_execute:
-						method_parts.append(f".{method_name}()")
-					chained_call_string = object_name + "".join(method_parts)
-					result = eval(chained_call_string)
-					elephant_objs.append(result)
-					print(result)
-
-				except requests.exceptions.RequestException as e:
-					print(f"Ein Verbindungsfehler ist aufgetreten: {e}")
-			else:
-				try:
-					object_name = f"${moduleName}.${functionName}(**inputObjects)" 
-					try:
-						result = eval(object_name)
-						elephant_objs.append(result)
-						print(result)
-					except:
-						object_name = f"${moduleName}.${functionName}" 
-						elephant_objs.append(object_name)
-						print(object_name)
-				except requests.exceptions.RequestException as e:
-					print(f"Ein Verbindungsfehler ist aufgetreten: {e}")
-			`
-			await this.executeCodeInOutputArea(code, outarea_content_text, session);
-
-			if (!this.kernelBridge) {
-				console.error("KernelBridge not initialized.");
-				return null;
-			}
-
-			let my_code =
-				`
-			import elephant
-			import json
-			import pickle
-			
-			elephant_object = globals()["elephant_objs"]
-			object_list = []
-			object_list.append({
-							"id": elephant_object.__class__.__name__, 
-							"name": f"{elephant_object}",
-							"is_class": True,
-							"code": f"{pickle.dumps(elephant_object)}"
-			})
-			print(json.dumps(object_list))
-			`
-
-			const result = await this.kernelBridge.executeCode(my_code, true);
-			if (result && result.outputs) {
-				const msg_content = result.outputs.map(o => o.text || '').join('');
-				if (msg_content) {
-					try {
-						this.workflowEngine!.updateItems(JSON.parse(msg_content));
-					} catch (e) {
-						console.error("Failed to parse elephant object list from kernel:", e, msg_content);
-					}
-				}
-			}
-		}
-
-
-		const paramContainer = document.createElement("div");
-		paramContainer.style.marginTop = "10px";
-		paramContainer.innerHTML = "";
-
-		// TODO: maybe unnecessary -> change to onChange Listener on Functions dropdown in order to remove one button (better for user)
-		const fetchParamsButton = document.createElement("button");
-		fetchParamsButton.textContent = "Retrieve parameter"
-		fetchParamsButton.onclick = async () => {
-			if (dropdownElephantFunction.value === "") {
-				return;
-			}
-
-			const moduleName = dropdownElephantModule.value;
-			const functionName = dropdownElephantFunction.value;
-			const response = await fetch(`${inputElephantServerAddress.value}/get_model_schema/${moduleName}.${functionName}`)
-			const data = await response.json();
-			// create input fields with default parameter and description
-			this.createInputFields(data, paramContainer, session);
-
-		};
-
-		buttonGenerateCode.onclick = async () => {
-			let selected_elephant_module = dropdownElephantModule.value;
-			let selected_elephant_function = dropdownElephantFunction.value;
-
-			if (!selected_elephant_module && !selected_elephant_function) {
-				return;
-			}
-
-			const paramArray = Array.from(paramContainer.children).map(async child => {
-				let param = child.querySelector('.form-row-input') as HTMLInputElement | HTMLSelectElement;
-				if (param.value !== "") {
-					try {
-						if (!this.kernelBridge) {
-							console.error("KernelBridge not initialized.");
-							return null;
-						}
-						console.log(`Param Value: ${param.value.trim()}`);
-						let code = `
-						import types
-						from jupyphant.kernelcode import get_neo_obj_from_id
-						
-						jupyphant_neo_obj = get_neo_obj_from_id(jupyphant_entity, "${param.value}")
-						variables_in_notebook = globals().copy().items()
-						if jupyphant_neo_obj is not None:
-							matches = []
-							for key, jupyphant_value in variables_in_notebook:
-								if jupyphant_neo_obj is jupyphant_value:
-									matches.append(key)
-							
-							if matches:
-								non_jupyphant_keys = [k for k in matches if not k.startswith("jupyphant")]
-								if non_jupyphant_keys:
-									print(non_jupyphant_keys[0])
-								else:
-									print(matches[0])
-						`;
-
-						const result = await this.kernelBridge.executeCode(code, true);
-
-						let kernelOutput: string | null = null;
-						if (result && result.outputs.length > 0 && result.outputs[0].text) {
-							kernelOutput = result.outputs[0].text;
-						}
-
-						console.log(`Kernel output was: ${kernelOutput}`);
-
-						return kernelOutput ? kernelOutput.trim() : param.value;
-
-					} catch (error) {
-						console.error("Fehler beim Senden der Anfrage an den Kernel:", error);
-						return null;
-					}
-				}
-				return null;
-			})
-			console.log(selected_elephant_module, selected_elephant_function, paramArray);
-
-			const resolvedValues = await Promise.all(paramArray);
-			const paramValues = resolvedValues.filter(value => value !== null) as string[];
-
-			let currentNotebook = this.notebook_tracker.currentWidget?.content;
-			if (!currentNotebook) {
-				return;
-			}
-			NotebookActions.insertBelow(currentNotebook);
-			const activeCell = currentNotebook.activeCell;
-
-			if (activeCell) {
-				activeCell.model.sharedModel.setSource(`# Code generated using Elephant-Interface\n${selected_elephant_module}.${selected_elephant_function}(${[...paramValues]})`);
-			}
-
-		}
-
-		// Cobble together the Frontend
-		menueBox.appendChild(radioContainer);
-		menueBox.appendChild(buttonLoadFunctions);
-		menueBox.appendChild(dropdownContainer);
-		menueBox.appendChild(localDiv);
-		menueBox.appendChild(remoteDiv);
-		menueBox.appendChild(resultDiv);
-		menueBox.appendChild(buttonGenerateCode);
-		menue.appendChild(menueBox);
-
-
-		remoteDiv.appendChild(inputElephantServerAddress);
-		remoteDiv.appendChild(buttonPingServer);
-		remoteDiv.appendChild(fetchParamsButton);
-		remoteDiv.appendChild(paramContainer);
-		remoteDiv.appendChild(buttonRunAnalysisRemote);
-
-		localDiv.appendChild(buttonRunAnalysisLocal);
-		localDiv.appendChild(paramContainer);
-
-		toggleRadioButtons();
-
-		const menuWidget = new Widget();
-		menuWidget.node.appendChild(menueBox);
-		elephant_widget.addWidget(menuWidget);
-	}
-
 
 	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext): OutputArea {
 		/**
@@ -1269,8 +1506,7 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 		// Create an OutputArea
 		// OutputAreas are used to display stuff, just like the outputs below every cell
 		let model = new OutputAreaModel({ trusted: true });
-		let outarea = new OutputArea({ rendermime, model });
-		// Add OutputArea to the specified tab
+		let outarea = new OutputArea({ rendermime: rendermime as any, model });
 		tab.addWidget(outarea);
 		// Set HTML/DOM id and classes
 		outarea.id = id;
@@ -1280,8 +1516,13 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 		return outarea;
 	}
 
+	private async initializeWorkflowEngine(rendermime: IRenderMimeRegistry, session: ISessionContext, workflow_widget: Panel) {
+		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker, rendermime, this.docManager);
+		workflow_widget.addWidget(this.workflowEngine);
+	}
+
 	//@ts-ignore
-	public registerComm(name: string, context: SessionContext) {
+	public registerComm(name: string, context: ISessionContext) {
 		/**
 		  * Registers a communication channel that allows sending messages
 		  * back and forth between the TypeScript code and the IPython session, i.e., the Python kernel
@@ -1315,41 +1556,6 @@ save_selected_neo_objects(jupyphant_entity, '${filePath}')
 			comm.onClose = (msg: any) => { };
 		});
 	} // end of registerComm()
-
-	/**
-	 * Executes a code snippet in a designated OutputArea and displays the results.
-	 *
-	 * @param code The string of code to be executed by the kernel.
-	 * @param outputArea The Jupyter OutputArea widget where the execution results will be displayed.
-	 * @param sessionContext The session context, used to access the active kernel session.
-	 * @param showOutput A boolean flag that determines whether to display the output. Defaults to `true`.
-	 * @private
-	 */
-	private async executeCodeInOutputArea(code: string, outputArea: OutputArea, sessionContext: ISessionContext, showOutput: boolean = true) {
-		const kernel = sessionContext.session?.kernel;
-		if (!kernel) {
-			console.error("Kernel not available for execution.");
-			return;
-		}
-
-		let output = await this.kernelBridge?.executeCode(code, true);
-		
-		if (output && showOutput) {
-			this.handleOutputs(output.outputs, outputArea);
-		}
-	}
-
-	private handleOutputs(outputs: any[], outputArea: OutputArea) {
-		outputArea.model.clear();
-        for (const output of outputs) {
-            if (output.output_type === 'clear_output') {
-                outputArea.model.clear(false);
-            } else {
-                outputArea.model.add(output);
-            }
-        }
-    }
-
 
 	public async pingElephantServer(serverUrl: string): Promise<boolean> {
 		try {
@@ -1409,7 +1615,7 @@ if name == "elephant" or name.startswith("elephant.")
 ]
 print(modules)
 			`
-			const result = await this.kernelBridge.executeCode(code, true);
+			const result = await this.kernelBridge.executeCode(code);
 			if (result && result.outputs) {
 				const msg_content = result.outputs.map(o => o.text || '').join('');
 				if (msg_content) {
@@ -1445,7 +1651,7 @@ print(function_names)
 					console.error("KernelBridge not initialized.");
 					return;
 				}
-				const result = await this.kernelBridge.executeCode(code, true);
+				const result = await this.kernelBridge.executeCode(code);
 				if (result && result.outputs) {
 					const msg_content = result.outputs.map(o => o.text || '').join('');
 					if (msg_content) {
@@ -1511,7 +1717,7 @@ get_separated_properties(schema_dict)
 					console.error("KernelBridge not initialized.");
 					return;
 				}
-				const result = await this.kernelBridge.executeCode(code, true);
+				const result = await this.kernelBridge.executeCode(code);
 				if (result && result.outputs) {
 					const msg_content = result.outputs.map(o => o.text || '').join('');
 					if (msg_content) {
@@ -1591,7 +1797,7 @@ get_separated_properties(schema_dict)
 				                            if neo_hash:
 				                                print(neo_hash)
 				                            `;
-				                        const result = await this.kernelBridge.executeCode(code, true);
+				                        const result = await this.kernelBridge.executeCode(code);
 				                        if (result && result.outputs.length > 0 && result.outputs[0].text) {
 				                            input.value = result.outputs[0].text.replace("\n", "");
 				                        }
@@ -1637,7 +1843,7 @@ get_separated_properties(schema_dict)
 							if neo_hash:
 								print(neo_hash)
 							`;
-						const result = await this.kernelBridge.executeCode(code, true);
+						const result = await this.kernelBridge.executeCode(code);
 						if (result && result.outputs.length > 0 && result.outputs[0].text) {
 							input.value = result.outputs[0].text.replace("\n", "");
 						}
@@ -1730,13 +1936,13 @@ get_separated_properties(schema_dict)
 		});
 	}
 
-}; // end of JupyphantWidget class
+}; // end of ElephantLabExtension class
 
 /*
-* Activate the JupyphantWidget extension
+* Activate the ElephantLabExtension extension
 */
 function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
-	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer, docManager: IDocumentManager) {
+	render_mime_registry: IRenderMimeRegistry, restorer: ILayoutRestorer, docManager: IDocumentManager, settingRegistry: ISettingRegistry) {
 	/**
 	 * Performs the initialization of the extension
 	 * Parameters:
@@ -1748,41 +1954,40 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	 */
 
 
-	console.log('JupyterLab extension Jupyphant is activated! (OOP)');
+	console.log('JupyterLab extension Elephant Lab is activated! (OOP)');
 
 	//Track and restore extension's tabs, needs to work together with restoration of main area
 	// When Main Area is restored, it needs to get all available Notebooks and Consoles
 	// and then check all of them and connect each tab to the right one
-	// TODO: This is not yet completed
 	// Tracker has a namespace where everything is saved;
 	// this namespace needs to have the same name as in the last session
 	// to restore the last session
-	let widget_tracker = new WidgetTracker<Widget>({ namespace: 'jupyphant_namespace' });
+	let widget_tracker = new WidgetTracker<Widget>({ namespace: 'elephant_lab_namespace' });
 
-	// create instance of JupyphantExtension
-	const jupy_ext = new JupyphantExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager);
+	// create instance of ElephantLabExtension
+	const jupy_ext = new ElephantLabExtension(app, command_palette, notebook_tracker, widget_tracker, render_mime_registry, docManager, settingRegistry);
 
 	// Add an application command: this is placed into CommandPalette and by clicking on the corresponding button
-	// this command will open the jupyphant tab
-	const command: string = 'jupyphant:open';
+	// this command will open the elephant lab tab
+	const command: string = 'elephant-lab:open';
 	jupy_ext.createCommand(command);
 
 	// Restore from corresponding namespace
 	restorer.restore(widget_tracker, {
 		command,
-		name: widget => 'jupyphant:' + widget.id
+		name: widget => 'elephant-lab:' + widget.id
 	});
 
-}; // end of activate()
+};
 
 /*
-* Initialization data for the Jupyphant extension
+* Initialization data for the Elephant Lab extension
 */
 const extension: JupyterFrontEndPlugin<void> = {
-	id: 'Jupyphant',
+	id: 'elephant-lab:extension',
 	autoStart: true,
 	// What to pass to the activate function
-	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager],
+	requires: [ICommandPalette, INotebookTracker, IRenderMimeRegistry, ILayoutRestorer, IDocumentManager, ISettingRegistry],
 	// activate: Function that is called upon startup of the extension
 	// Parameters are passed by the extension framework as specified in 'requires'
 	activate: activate

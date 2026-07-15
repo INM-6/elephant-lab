@@ -1,0 +1,81 @@
+{
+    "title": "Elephant Lab Plot Settings",
+    "description": "Settings for the plotting widget",
+    "type": "object",
+    "properties": {
+        "dark": {
+            "type": "boolean",
+            "title": "Dark Theme",
+            "default": false
+        },
+        "overlap": {
+            "type": "boolean",
+            "title": "Overlap",
+            "default": false
+        },
+        "zero_based": {
+            "type": "boolean",
+            "title": "Zero Based",
+            "default": false
+        },
+        "normalize_y_values": {
+            "type": "boolean",
+            "title": "Normalize Y",
+            "default": false
+        },
+        "max_points": {
+            "type": "number",
+            "title": "Max Points",
+            "default": 10000
+        },
+        "full_resolution": {
+            "type": "boolean",
+            "title": "Full Resolution",
+            "default": false
+        },
+        "normalization_method": {
+            "type": "string",
+            "title": "Normalization Method",
+            "enum": [
+                "minmax",
+                "zscore",
+                "l2"
+            ],
+            "default": "zscore"
+        },
+        "color_grade": {
+            "type": "string",
+            "title": "Color Scale",
+            "default": "Viridis",
+            "enum": [
+                "Viridis",
+                "Cividis",
+                "Inferno",
+                "Magma",
+                "Plasma",
+                "Turbo",
+                "Blackbody",
+                "Bluered",
+                "Electric",
+                "Hot",
+                "Jet",
+                "Rainbow",
+                "Plotly3",
+                "BrBG",
+                "RdGy",
+                "oxy",
+                "Fall",
+                "Earth",
+                "Picnic",
+                "Portland",
+                "Twilight",
+                "IceFire",
+                "Edge",
+                "Phase",
+                "HSV",
+                "mrybm",
+                "mygbm"
+            ]
+        }
+    }
+}

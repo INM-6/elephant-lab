@@ -387,8 +387,7 @@ export class WorkflowEngineWidget extends Widget {
         const resultsDictName = "workflow_results";
         const collected_outputs: any[] = [];
         const result = await this.kernelBridge.executeCode(
-            `import uuid, json, pickle, sys, gc\n${resultsDictName} = {}\ngc.collect()`,
-            true
+            `import uuid, json, pickle, sys, gc\n${resultsDictName} = {}\ngc.collect()`
         );
         if (result && result.outputs) {
             collected_outputs.push(...result.outputs);
@@ -532,7 +531,7 @@ ${loopBodyCode}
 `;
 
             console.log("Executing loop code:\n", codeToExecute);
-            const loopResult = await this.kernelBridge.executeCode(codeToExecute, true);
+            const loopResult = await this.kernelBridge.executeCode(codeToExecute);
             if (loopResult) {
                 if (collected_outputs) {
                     collected_outputs.push(...loopResult.outputs);
@@ -573,7 +572,7 @@ else:
 if _is_true:
     print("JUPYPHANT_IF_TRUE")
 `;
-            const conditionResult = await this.kernelBridge.executeCode(checkConditionCode, true);
+            const conditionResult = await this.kernelBridge.executeCode(checkConditionCode);
             let conditionIsTrue = false;
             if (conditionResult && conditionResult.outputs) {
                 for (const output of conditionResult.outputs) {
@@ -638,7 +637,7 @@ if _is_true:
         }
 
         console.log("Executing code for", item.name);
-        const executionResult = await this.kernelBridge.executeCode(codeToExecute, true);
+        const executionResult = await this.kernelBridge.executeCode(codeToExecute);
         
         let result_key: string | null = null;
         if (executionResult) {
@@ -1381,7 +1380,7 @@ except Exception as e:
 
                     const command = `${tempVar} = jupyphant_entity.map_neo_obj_hash_to_neo_obj.get(jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get('${varName}'))`;
                     
-                    const executionPromise = this.kernelBridge.executeCode(command, true);
+                    const executionPromise = this.kernelBridge.executeCode(command);
                     preExecutionPromises.push(executionPromise);
                     
                     lineOfCode = `${resultVarName} = ${tempVar}`;

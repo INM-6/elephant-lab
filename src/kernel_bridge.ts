@@ -1,5 +1,16 @@
 import { ISessionContext } from '@jupyterlab/apputils';
 import { KernelMessage } from '@jupyterlab/services';
+
+// Python Code to execute in the kernel
+import {
+    PythonCodeKey,
+    getPythonCode
+} from './kernelcode';
+
+import {
+    OutputArea
+} from '@jupyterlab/outputarea';
+
 import { DraggableItem } from './jupyphant_node';
 
 export interface IExecutionResult {
@@ -16,15 +27,7 @@ export class KernelBridge {
 
     public async getNeoIOClass(filename: string): Promise<string | null> {
         if (!this.session || !this.session.session) { return null; }
-        const code = `
-import neo, json, sys
-try:
-    io = neo.get_io("${filename}")
-    print(json.dumps(io.__class__.__name__))
-except Exception as e:
-    print(f"Error getting IO for {filename}: {e}", file=sys.stderr)
-    print(json.dumps(null))
-        `;
+        const code = getPythonCode(PythonCodeKey.GetIOClass, filename);
         let msg_content: string = "";
         const future = this.session.session.kernel!.requestExecute({ code });
         future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
@@ -42,6 +45,10 @@ except Exception as e:
      * Fetches details for a fully qualified Python object name (e.g., 'elephant.statistics.isi').
      * It executes Python's `inspect` module in the kernel to determine if the object is a
      * class or function and to get its parameters.
+     *
+     * Restored from the pre-rewrite workflow engine; still targets the legacy
+     * `jupyphant_entity`/`jupyphant.kernelcode` backend names, so it will not resolve
+     * against the current `elephant_lab` backend until those references are updated.
      * @param fqn The fully qualified name of the Python object.
      * @returns A promise that resolves to a DraggableItem object, or null if inspection fails.
      */
@@ -52,34 +59,34 @@ except Exception as e:
         def _get_params_for_obj(obj):
             param_list_for_json = []
             try:
-                if inspect.isclass(obj): 
+                if inspect.isclass(obj):
                     sig = inspect.signature(obj.__init__)
                     params = list(sig.parameters.values())[1:]
-                else: 
-                    sig = inspect.signature(obj) 
+                else:
+                    sig = inspect.signature(obj)
                     params = sig.parameters.values()
-            except (ValueError, TypeError): 
+            except (ValueError, TypeError):
                 return []
             for param in params:
                 if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
                     default_val = param.default
-                    if default_val is inspect.Parameter.empty: 
-                        default_val = "__REQUIRED__" 
+                    if default_val is inspect.Parameter.empty:
+                        default_val = "__REQUIRED__"
                     param_list_for_json.append({"name": param.name, "default": str(default_val)})
             return param_list_for_json
         try:
             fqn = "${fqn}"; parts = fqn.split('.')
             func_name = parts.pop()
             module_path = ".".join(parts)
-            __import__(module_path) 
-            import sys 
-            module_obj = sys.modules[module_path] 
+            __import__(module_path)
+            import sys
+            module_obj = sys.modules[module_path]
             target_obj = getattr(module_obj, func_name)
             details = {"id": fqn, "name": fqn, "is_class": inspect.isclass(target_obj), "code": fqn, "parameters": _get_params_for_obj(target_obj)}
             print(json.dumps(details))
         except Exception as e:
             try: __import__(module_path)
-            except Exception as e_import: 
+            except Exception as e_import:
                 print(f"Failed to import {module_path}: {e_import}", file=sys.stderr)
             print(f"Error inspecting {fqn}: {e}", file=sys.stderr); print(json.dumps(None))
         `;
@@ -96,10 +103,11 @@ except Exception as e:
         catch (e) { console.error("Failed to parse details from kernel:", e, msg_content); return null; }
     }
 
-
     /**
      * For a given class instance in the kernel, get all of its public methods.
      * This is used to populate the dropdown on class nodes in the workflow.
+     * Restored from the legacy workflow engine; still references the old
+     * `jupyphant_entity`/`jupyphant.kernelcode` backend names.
      * @param target_id The identifier for the object in the kernel (e.g., 'result_123' or a fqn).
      * @returns A promise that resolves to an array of items representing the methods.
      */
@@ -116,24 +124,24 @@ except Exception as e:
             try:
                 sig = inspect.signature(obj)
                 params = sig.parameters.values()
-            except (ValueError, TypeError): 
+            except (ValueError, TypeError):
                 return []
 
             param_list_for_json.append({"name": "__self__", "default": "CONNECTION_REQUIRED"})
-            
+
             for param in params:
-                if param.name == 'self': 
-                    continue 
+                if param.name == 'self':
+                    continue
                 if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
                     default_val = param.default
-                    if default_val is inspect.Parameter.empty: 
-                        default_val = "__REQUIRED__" 
+                    if default_val is inspect.Parameter.empty:
+                        default_val = "__REQUIRED__"
                     param_list_for_json.append({"name": param.name, "default": str(default_val)})
             return param_list_for_json
-        
+
         item_list = []
         target_id_str = "${target_id}"
-        
+
         try:
             target_obj = None
             # result_*HASH* is the structure internally used to track objects / results
@@ -156,13 +164,13 @@ except Exception as e:
 
             # Target is a pickled string
             elif target_id_str.startswith("b'"):
-                target_obj = pickle.loads(eval(target_id_str)) 
+                target_obj = pickle.loads(eval(target_id_str))
                 if isinstance(target_obj, list):
                     target_obj = target_obj[0]
 
             else:
                 # Try to get Object using Neo Hash
-                global jupyphant_entity 
+                global jupyphant_entity
                 neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
                 target_obj = neo_hash_obj_dict[target_id_str]
 
@@ -173,16 +181,16 @@ except Exception as e:
                     if not name.startswith("_") and callable(member_obj):
                         if inspect.isclass(member_obj):
                             continue
-                        
+
                         new_code = f"{target_id_str}.{name}"
                         item_list.append({
                             "id": f"{target_id_str}.{name}",
                             "name": f".{name}()",
                             "is_class": False,
-                            "code": new_code, 
+                            "code": new_code,
                             "parameters": _get_params_for_obj(member_obj)
                         })
-            
+
             print(json.dumps(item_list))
 
         except Exception as e:
@@ -210,63 +218,66 @@ except Exception as e:
         }
     }
 
-    // Get all available elephant modules + functions using Python Kernel
-        public async getElephantMembers(): Promise<{ [moduleName: string]: { name: string, is_class: boolean }[] } | null> {
-            let code = `
-            import inspect
-            import pkgutil
-            import json
-            import elephant
-            import importlib
-            import sys
-    
-            elephant_module_func_dict = {}
-            try:
-                library = importlib.import_module("elephant")
-                library_path = library.__path__
-                for _, module_name, _ in pkgutil.iter_modules(library_path, prefix=library.__name__ + '.'):
-                    try:
-                        module = importlib.import_module(module_name)
-                        for name, func in (inspect.getmembers(module, inspect.isfunction) + 
-                                        inspect.getmembers(module, inspect.isclass)):
-                            if func.__module__ == module_name:
-                                if not func.__name__.startswith("_"):
-                                    is_class = inspect.isclass(func)
-                                    elephant_module_func_dict.setdefault(module_name, []).append(
-                                        {"name": func.__name__, "is_class": is_class}
-                                    )
-                    except Exception as e:
-                        print(f"An error occurred while processing {module_name}: {e}", file=sys.stderr)
-                print(json.dumps(elephant_module_func_dict))
-            except ImportError:
-                print("Elephant not found!", file=sys.stderr)
-            except Exception as e:
-                print(f"An error occurred: {e}", file=sys.stderr)
-            `
-            let msg_content: string = "";
-            if (!this.session || !this.session.session) { return null; }
-            let future = this.session!.session!.kernel!.requestExecute({ code });
-            future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-                if (KernelMessage.isStreamMsg(msg) && msg.content.name === 'stdout') {
-                    msg_content += msg.content.text;
-                } else if (KernelMessage.isStreamMsg(msg)) {
-                    console.warn("Kernel STDERR:", msg.content.text);
-                }
-            };
-            await future.done;
-            try {
-                const result = JSON.parse(msg_content.trim());
-                if (Object.keys(result).length === 0) {
-                    return null;
-                }
-                return result;
+    // Get all available elephant modules + functions using the Python kernel.
+    // Restored from the legacy workflow engine.
+    public async getElephantMembers(): Promise<{ [moduleName: string]: { name: string, is_class: boolean }[] } | null> {
+        let code = `
+        import inspect
+        import pkgutil
+        import json
+        import elephant
+        import importlib
+        import sys
+
+        elephant_module_func_dict = {}
+        try:
+            library = importlib.import_module("elephant")
+            library_path = library.__path__
+            for _, module_name, _ in pkgutil.iter_modules(library_path, prefix=library.__name__ + '.'):
+                try:
+                    module = importlib.import_module(module_name)
+                    for name, func in (inspect.getmembers(module, inspect.isfunction) +
+                                    inspect.getmembers(module, inspect.isclass)):
+                        if func.__module__ == module_name:
+                            if not func.__name__.startswith("_"):
+                                is_class = inspect.isclass(func)
+                                elephant_module_func_dict.setdefault(module_name, []).append(
+                                    {"name": func.__name__, "is_class": is_class}
+                                )
+                except Exception as e:
+                    print(f"An error occurred while processing {module_name}: {e}", file=sys.stderr)
+            print(json.dumps(elephant_module_func_dict))
+        except ImportError:
+            print("Elephant not found!", file=sys.stderr)
+        except Exception as e:
+            print(f"An error occurred: {e}", file=sys.stderr)
+        `
+        let msg_content: string = "";
+        if (!this.session || !this.session.session) { return null; }
+        let future = this.session!.session!.kernel!.requestExecute({ code });
+        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+            if (KernelMessage.isStreamMsg(msg) && msg.content.name === 'stdout') {
+                msg_content += msg.content.text;
+            } else if (KernelMessage.isStreamMsg(msg)) {
+                console.warn("Kernel STDERR:", msg.content.text);
             }
-            catch (e) {
-                console.error("Failed to parse elephant members from kernel:", e, msg_content);
+        };
+        await future.done;
+        try {
+            const result = JSON.parse(msg_content.trim());
+            if (Object.keys(result).length === 0) {
                 return null;
             }
+            return result;
         }
-    // Extract Docstring of passed code
+        catch (e) {
+            console.error("Failed to parse elephant members from kernel:", e, msg_content);
+            return null;
+        }
+    }
+
+    // Extract Docstring of passed code. Restored from the legacy workflow engine;
+    // still references the old `jupyphant_entity`/`jupyphant.kernelcode` backend names.
     public async getDocstring(code: string): Promise<string | null> {
         if (!this.session || !this.session.session) { return null; }
         const pythonCode = `
@@ -289,7 +300,7 @@ except Exception as e:
             'NEO_GET_EPOCHS': '### Get Epochs\\n\\nExtracts epochs from a neo object.',
             'NEO_GET_SEGMENTS': '### Get Segments\\n\\nExtracts segments from a neo object.'
         }
-        
+
         util_docstrings['__UTIL_LOOP__'] = util_docstrings['UTIL_LOOP']
         util_docstrings['__UTIL_IF__'] = util_docstrings['UTIL_IF']
         util_docstrings['__UTIL_LIST__'] = util_docstrings['UTIL_LIST']
@@ -326,7 +337,7 @@ except Exception as e:
                         target_obj = getattr(module_obj, func_name)
                     except (ImportError, AttributeError):
                         pass
-                
+
                 if target_obj is None:
                     try:
                         target_obj = eval(target_id_str)
@@ -335,10 +346,10 @@ except Exception as e:
 
                 if target_obj is None:
                     try:
-                        global jupyphant_entity 
+                        global jupyphant_entity
                         if 'jupyphant_entity' in globals():
                             neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
-                            
+
                             if target_id_str in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash:
                                 sha1_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[target_id_str]
                                 if sha1_hash in neo_hash_obj_dict:
@@ -367,7 +378,7 @@ except Exception as e:
                         md_output.append(docstring)
                     else:
                         md_output.append("*No docstring found.*")
-                
+
                 final_md = "\\n\\n".join(md_output)
                 print(json.dumps(final_md if final_md else None))
 
@@ -387,28 +398,43 @@ except Exception as e:
         catch (e) { console.error("Failed to parse docstring from kernel:", e, msg_content); return null; }
     }
 
-
     /**
      * Executes Python code in the kernel and returns the result and any output.
-     * This method is decoupled from the UI and does not directly interact with OutputArea.
-     * @param code The Python code to execute.
+     * This method is decoupled from the UI.
+     * @param pythonCodeKey The Python code key for the code.
+     * @param outputArea The Jupyter OutputArea widget where the execution results will be displayed. If null, the output will be logged.
+     * @param showOutput A boolean flag that determines whether to display the output. Defaults to `true`.
      * @param executeCode If true, execute the code as is. If false, wrap it in a print statement.
      * @returns A promise that resolves to an IExecutionResult object, containing the result key
      * and an array of output messages. Returns null if the session is not available.
      */
-    public async executeCode(code: string, executeCode = false): Promise<IExecutionResult | null> {
-        if (!this.session || !this.session.session) {
+    public async executeCode(pythonCode: PythonCodeKey | string, outputArea: OutputArea | null = null, showOutput = true, executeCode = true, session: ISessionContext | null = null): Promise<IExecutionResult | null> {
+        if (!session) {
+            session = this.session;
+        }
+        if (!session || !session.session) {
             return null;
         }
+        const kernel = session.session?.kernel;
+        if (!kernel) {
+            console.error("Kernel not available for execution.");
+            return null;
+        }
+
+        const code = Object.values(PythonCodeKey).includes(pythonCode as PythonCodeKey)
+            ? getPythonCode(pythonCode as PythonCodeKey)
+            : pythonCode;
+        console.log("Executing code in kernel:", code);
+
         let codeToRun: string;
         if (executeCode) {
-            codeToRun = "import gc; gc.collect()\n" + code;
+            codeToRun = "import gc as elephant_lab_gc; elephant_lab_gc.collect()\n" + code;
         }
         else {
             codeToRun = `print(${JSON.stringify(code)})`;
         }
 
-        const future = this.session.session.kernel!.requestExecute({ code: codeToRun, store_history: false });
+        const future = session.session.kernel!.requestExecute({ code: codeToRun, store_history: false });
 
         let resultKey: string | null = null;
         const outputs: any[] = [];
@@ -421,11 +447,11 @@ except Exception as e:
                     const lines = text.split('\n');
                     const lines_to_print: string[] = [];
                     for (const line of lines) {
-                        if (line.trim().startsWith("JUPYPHANT_RESULT_KEY:")) {
+                        if (line.trim().startsWith("ELEPHANT_LAB_RESULT_KEY:")) {
                             if (resultKey === null) {
                                 resultKey = "";
                             }
-                            resultKey += line.trim().substring("JUPYPHANT_RESULT_KEY:".length);
+                            resultKey += line.trim().substring("ELEPHANT_LAB_RESULT_KEY:".length);
                         } else {
                             lines_to_print.push(line);
                         }
@@ -438,7 +464,6 @@ except Exception as e:
                         }
                     }
                 } else if (msg.content.name === 'stderr') {
-                    console.warn("Kernel STDERR:", msg.content.text);
                     const output: any = { ...msg.content, output_type: msg_type };
                     outputs.push(output);
                 }
@@ -452,6 +477,34 @@ except Exception as e:
 
         await future.done;
 
-        return { resultKey: resultKey ? resultKey : null, outputs };
+        let result: IExecutionResult = { resultKey: resultKey ? resultKey : null, outputs };
+
+        if (result) {
+            this.handleOutputs(result.outputs, outputArea, showOutput);
+        }
+
+        return result;
+    }
+
+    private handleOutputs(outputs: any[], outputArea: OutputArea | null, showOutput: boolean) {
+        if (outputArea != null && showOutput) outputArea.model.clear();
+        for (const output of outputs) {
+            if (output.output_type === 'clear_output') {
+                if (outputArea != null && showOutput) {
+                    outputArea.model.clear(false);
+                }
+            } else if ((output.output_type === 'stream' && output.name === 'stderr') || output.output_type === 'error') {
+                console.error("Error output from kernel:", output);
+            } else {
+                if (showOutput) {
+                    if (outputArea == null) {
+                        console.log("Output from kernel:", output);
+                    }
+                    else {
+                        outputArea.model.add(output);
+                    }
+                }
+            }
+        }
     }
 }

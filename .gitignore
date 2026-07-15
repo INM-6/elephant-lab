@@ -6,7 +6,7 @@ node_modules/
 *.egg-info/
 .ipynb_checkpoints
 *.tsbuildinfo
-jupyphant/labextension
+elephant_lab/labextension
 *.zip
 *.html
 *.png
@@ -129,3 +129,10 @@ dmypy.json
 
 # IDE
 .idea/
+
+.yarnrc.yml
+yarn.lock
+
+.vscode/
+
+uv.lock

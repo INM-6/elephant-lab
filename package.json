@@ -1,5 +1,5 @@
 {
-  "name": "jupyphant",
+  "name": "elephant-lab",
   "version": "0.1.0",
   "description": "A JupyterLab extension for interactive exploration, analysis and visualization of electrophysiological data.",
   "keywords": [
@@ -7,25 +7,34 @@
     "jupyterlab",
     "jupyterlab-extension"
   ],
-  "homepage": "https://github.com/INM-6/jupyphant",
+  "homepage": "https://github.com/INM-6/elephant-lab",
   "bugs": {
-    "url": "https://github.com/INM-6/jupyphant/issues"
+    "url": "https://github.com/INM-6/elephant-lab/issues"
   },
   "license": "BSD-3-Clause",
-  "author": {
-    "name": "Maximilian Kramer",
-    "email": "m.kramer@fz-juelich.de"
-  },
-  "files": [
-    "lib/**/*.{d.ts,eot,gif,html,jpg,js,js.map,json,png,svg,woff2,ttf}",
-    "style/**/*.{css,js,eot,gif,html,jpg,json,png,svg,woff2,ttf}"
+  "contributors": [
+    {
+      "name": "Tobias Michels"
+    },
+    {
+      "name": "Jan Nolten"
+    },
+    {
+      "name": "Maximilian Kramer"
+    },
+    {
+      "name": "Björn Müller"
+    },
+    {
+      "name": "Michael Denker"
+    }
   ],
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "style": "style/index.css",
   "repository": {
     "type": "git",
-    "url": "https://github.com/INM-6/jupyphant.git"
+    "url": "https://github.com/INM-6/elephant-lab.git"
   },
   "scripts": {
     "build": "jlpm build:lib && jlpm build:labextension:dev",
@@ -35,57 +44,38 @@
     "build:lib": "tsc",
     "clean": "jlpm clean:lib",
     "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
-    "clean:lintcache": "rimraf .eslintcache .stylelintcache",
-    "clean:labextension": "rimraf jupyphant/labextension",
-    "clean:all": "jlpm clean:lib && jlpm clean:labextension && jlpm clean:lintcache",
-    "eslint": "jlpm eslint:check --fix",
-    "eslint:check": "eslint . --cache --ext .ts,.tsx",
+    "clean:labextension": "rimraf elephant_lab/labextension",
+    "clean:all": "jlpm clean:lib && jlpm clean:labextension",
     "install:extension": "jlpm build",
-    "lint": "jlpm stylelint && jlpm prettier && jlpm eslint",
-    "lint:check": "jlpm stylelint:check && jlpm prettier:check && jlpm eslint:check",
-    "prettier": "jlpm prettier:base --write --list-different",
-    "prettier:base": "prettier \"**/*{.ts,.tsx,.js,.jsx,.css,.json,.md}\"",
-    "prettier:check": "jlpm prettier:base --check",
-    "stylelint": "jlpm stylelint:check --fix",
-    "stylelint:check": "stylelint --cache \"style/**/*.css\"",
-    "test": "jest --coverage",
     "watch": "run-p watch:src watch:labextension",
     "watch:src": "tsc -w",
     "watch:labextension": "jupyter labextension watch ."
   },
   "dependencies": {
-    "@jupyterlab/application": "^4.2.0",
-    "@jupyterlab/apputils": "^4.3.0",
-    "@jupyterlab/filebrowser": "^4.2.0",
-    "@jupyterlab/notebook": "^4.2.0",
-    "@jupyterlab/outputarea": "^4.2.0",
-    "@jupyterlab/rendermime": "^4.2.0",
-    "@jupyterlab/services": "^7.2.0",
-    "@lumino/coreutils": "^2.1.2",
-    "@lumino/widgets": "^2.3.2",
-    "litegraph.js": "^0.7.18"
+    "@jupyterlab/application": "^4.1.0",
+    "@jupyterlab/apputils": "^4.1.0",
+    "@jupyterlab/docmanager": "^4.1.0",
+    "@jupyterlab/filebrowser": "^4.1.0",
+    "@jupyterlab/notebook": "^4.1.0",
+    "@jupyterlab/outputarea": "^4.1.0",
+    "@jupyterlab/rendermime": "^4.1.0",
+    "@jupyterlab/services": "^7.1.0",
+    "@lumino/coreutils": "^2.1.0",
+    "@lumino/widgets": "^2.3.0",
+    "litegraph.js": "^0.7.18",
+    "nouislider": "^15.8.1",
+    "plotly.js-dist": "^3.4.0"
+  },
+  "resolutions": {
+    "@lumino/coreutils": "^2.1.0",
+    "@lumino/widgets": "^2.3.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.0.0",
-    "@babel/preset-env": "^7.0.0",
-    "@jupyterlab/builder": "^4.2.0",
-    "@jupyterlab/testutils": "^4.3.0",
-    "@types/jest": "^29.2.0",
-    "@typescript-eslint/eslint-plugin": "^5.59.1",
-    "@typescript-eslint/parser": "^5.59.1",
-    "eslint": "^8.37.0",
-    "eslint-config-prettier": "^8.8.0",
-    "eslint-plugin-prettier": "^4.2.1",
-    "jest": "^29.2.0",
-    "npm-run-all": "^4.1.5",
-    "prettier": "^2.1.1",
+    "@jupyterlab/builder": "^4.1.0",
+    "@playwright/test": "^1.58.2",
+    "@types/nouislider": "^9.0.10",
+    "@types/plotly.js": "^3.0.10",
     "rimraf": "^3.0.2",
-    "stylelint": "^14.3.0",
-    "stylelint-config-prettier": "^9.0.3",
-    "stylelint-config-recommended": "^6.0.0",
-    "stylelint-config-standard": "~24.0.0",
-    "stylelint-prettier": "^2.0.0",
-    "ts-jest": "^29.0.5",
     "typescript": "~5.0.2"
   },
   "sideEffects": [
@@ -98,6 +88,104 @@
   },
   "jupyterlab": {
     "extension": true,
-    "outputDir": "jupyphant/labextension"
+    "outputDir": "elephant_lab/labextension",
+    "schemaDir": "schema",
+    "sharedPackages": {
+      "@jupyterlab/application": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/apputils": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/docmanager": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/filebrowser": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/notebook": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/outputarea": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/rendermime": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/services": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=7.0.0 <8.0.0"
+      },
+      "@lumino/widgets": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=2.0.0 <3.0.0"
+      },
+      "@jupyterlab/coreutils": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=6.0.0 <7.0.0"
+      },
+      "@jupyterlab/ui-components": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/mainmenu": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/console": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/logconsole": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/statusbar": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/settingregistry": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/translation": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/launcher": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      },
+      "@jupyterlab/fileeditor": {
+        "bundled": false,
+        "singleton": true,
+        "requiredVersion": ">=4.0.0 <5.0.0"
+      }
+    }
   }
 }

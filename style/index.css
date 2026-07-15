@@ -1,22 +1,22 @@
 @import url('base.css');
 
-.jupyphant-panel-container.p-Panel {
-    padding: 0px;
+.elephant-lab-panel-container.p-Panel {
+  padding: 0;
 }
 
 .my-outarea-class .jp-OutputArea-prompt,
 .my-outarea-class .jp-OutputPrompt {
-    display: none !important;
+  display: none !important;
 }
 
 .my-outarea-class .jp-OutputArea-child {
-    padding-left: 0px !important;
+  padding-left: 0 !important;
 }
 
 .my-outarea-class .jp-OutputArea-output,
 .my-outarea-class .jp-RenderedHTMLCommon,
 .my-outarea-class .jstree-container-ul {
-    padding-left: 0px;
-    padding-inline-start: 0px;
-    margin-inline-start: 0px;
+  padding-left: 0;
+  padding-inline-start: 0;
+  margin-inline-start: 0;
 }
