@@ -10,7 +10,8 @@ import {
 	ISessionContext,
 	WidgetTracker,
 	showDialog,
-	Dialog
+	Dialog,
+	MainAreaWidget
 } from '@jupyterlab/apputils';
 
 import {
@@ -1439,6 +1440,50 @@ class ElephantLabExtension {
 		raw_plot_widget.node.prepend(toolbarContainer);
 	}
 
+	// Sets up the DragAndDrop Listeners on the Neo Tree Objects
+	public setupDragAndDrop(treeWidget: Panel) {
+		const observer = new MutationObserver((mutationsList, observer) => {
+			// Selector for the elements that represent each node in the Neo tree that hasn't been processed yet
+			const treeNodes = treeWidget.node.querySelectorAll('.jup-row:not([data-dnd-setup="true"])');
+
+			if (treeNodes.length > 0) {
+				console.log(`Elephant Lab: Found ${treeNodes.length} new tree nodes, setting up drag and drop.`);
+
+				treeNodes.forEach(nodeElement => {
+					const htmlElement = nodeElement as HTMLElement;
+					htmlElement.dataset.dndSetup = 'true'; // Mark as processed
+
+					// Make the entire node row draggable
+					htmlElement.draggable = true;
+
+					htmlElement.addEventListener('dragstart', (event) => {
+						const nodeId = htmlElement.dataset.nodeId;
+						if (nodeId && event.dataTransfer) {
+							const nodeName = (htmlElement.textContent || "").trim().replace(/\s+/g, ' ');
+
+							const item = {
+								id: nodeId,
+								name: nodeName,
+								code: nodeId,
+								is_class: false,
+								parameters: []
+							};
+
+							// Set the drag data
+							event.dataTransfer.setData('text/plain', JSON.stringify(item));
+							console.log(`Dragging node: ${nodeName} (ID: ${nodeId})`);
+
+							event.stopPropagation();
+						}
+					});
+				});
+			}
+		});
+
+		// Start observing the tree widget's DOM for changes, and don't disconnect
+		observer.observe(treeWidget.node, { childList: true, subtree: true });
+	}
+
 	public async createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
 		// NEO TREE 
 		let tree_widget = new Panel();
@@ -1446,6 +1491,7 @@ class ElephantLabExtension {
 		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_neo_tree = this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
 		this.create_tree_filter(session, tree_widget);
+		this.setupDragAndDrop(tree_widget);
 		this.createTopBar(session);
 
 		// INFO
@@ -1469,17 +1515,22 @@ class ElephantLabExtension {
 		workflow_output_widget.node.style.cssText = workflow_output_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
 		this.outarea_workflow = this.createOutputArea(rendermime, workflow_output_widget, ['my-outarea-class'], 'jup_vis_out_id_workflow', session);
 
-		// WORKFLOW ENGINE
-		let workflow_widget = new Panel();
-		workflow_widget.title.label = 'Workflow';
-		workflow_widget.node.style.cssText = workflow_widget.node.style.cssText + ' overflow: hidden;';
-		await this.initializeWorkflowEngine(rendermime, session, workflow_widget);
-
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
-		this.widget.addWidget(workflow_widget, { mode: 'tab-after', ref: explorer_widget_raw_plot });
-		this.widget.addWidget(workflow_output_widget, { mode: 'tab-after', ref: workflow_widget });
+		this.widget.addWidget(workflow_output_widget, { mode: 'tab-after', ref: explorer_widget_raw_plot });
+
+		// WORKFLOW ENGINE (its own tab in the main area, next to the notebook)
+		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker, rendermime, this.docManager);
+		const workflowMain = new MainAreaWidget({ content: this.workflowEngine });
+		workflowMain.id = 'elephant-lab-workflow-main-widget';
+		workflowMain.title.label = 'Elephant Lab Workflow';
+		workflowMain.title.closable = true;
+		this.app.shell.add(workflowMain, 'main');
+		if (!this.widget_tracker.has(workflowMain)) {
+			this.widget_tracker.add(workflowMain);
+		}
+		this.app.shell.activateById(workflowMain.id);
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
@@ -1514,11 +1565,6 @@ class ElephantLabExtension {
 			outarea.addClass(currCls);
 		}
 		return outarea;
-	}
-
-	private async initializeWorkflowEngine(rendermime: IRenderMimeRegistry, session: ISessionContext, workflow_widget: Panel) {
-		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker, rendermime, this.docManager);
-		workflow_widget.addWidget(this.workflowEngine);
 	}
 
 	//@ts-ignore
