@@ -1,5 +1,5 @@
 import { WorkflowEngineWidget } from "./workflow_engine";
-import { JupyphantNode } from "./jupyphant_node";
+import { ElephantLabNode } from "./elephant_lab_node";
 import { COLORS } from "./style/colors";
 
 function createWorkflowToolbar(engine: WorkflowEngineWidget): HTMLElement {
@@ -71,7 +71,7 @@ const header = document.createElement('h3');
         const toggleExecPinsCheckbox = document.createElement('input');
         toggleExecPinsCheckbox.type = 'checkbox';
         toggleExecPinsCheckbox.id = 'toggle-exec-pins';
-        toggleExecPinsCheckbox.checked = JupyphantNode.showExecPins;
+        toggleExecPinsCheckbox.checked = ElephantLabNode.showExecPins;
 
         const toggleExecPinsLabel = document.createElement('label');
         toggleExecPinsLabel.htmlFor = 'toggle-exec-pins';

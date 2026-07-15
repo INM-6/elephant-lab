@@ -1839,7 +1839,7 @@ get_separated_properties(schema_dict)
 				                        }
 				                        let code = `
 				                            node_id = "${nodeId}"
-				                            neo_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
+				                            neo_hash = elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
 				                            if neo_hash:
 				                                print(neo_hash)
 				                            `;
@@ -1885,7 +1885,7 @@ get_separated_properties(schema_dict)
 						}
 						let code = `
 							node_id = "${nodeId}"
-							neo_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
+							neo_hash = elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
 							if neo_hash:
 								print(neo_hash)
 							`;

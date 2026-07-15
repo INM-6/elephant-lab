@@ -7,7 +7,7 @@ import { OutputArea } from '@jupyterlab/outputarea';
 import { LiteGraph, LGraph, LGraphCanvas, LGraphNode } from 'litegraph.js';
 import { INotebookTracker, NotebookActions } from '@jupyterlab/notebook';
 import { IRenderMimeRegistry, MimeModel } from '@jupyterlab/rendermime';
-import { JupyphantNode, DraggableItem } from './jupyphant_node';
+import { ElephantLabNode, DraggableItem } from './elephant_lab_node';
 import { createWorkflowToolbar } from './workflowEngine_toolbar';
 import { KernelBridge } from './kernel_bridge';
 import 'litegraph.js/css/litegraph.css';
@@ -23,14 +23,14 @@ export class WorkflowEngineWidget extends Widget {
     private canvasElement: HTMLCanvasElement;
     private outputArea: OutputArea;
     private notebook_tracker: INotebookTracker; // Current active Notebook -> used for Cell Injection
-    public session: ISessionContext | null; // used to execute Python Code in same session as Jupyphant 
+    public session: ISessionContext | null; // used to execute Python Code in same session as Elephant Lab 
     private elephantMenu: any = { content: "Elephant (loading...)", disabled: true };
     private rendermime: IRenderMimeRegistry;
     public docManager: IDocumentManager;
 
     /*
     session, widget and notebook_tracker are used to keep track of the notebook status 
-    and communicate with Jupyphant (since the WorkflowEngine is a Widget of its own)
+    and communicate with Elephant Lab (since the WorkflowEngine is a Widget of its own)
     */
     constructor(session: ISessionContext | null = null, outputArea: OutputArea, notebook_tracker: INotebookTracker, rendermime: IRenderMimeRegistry, docManager: IDocumentManager) {
         super();
@@ -91,7 +91,7 @@ export class WorkflowEngineWidget extends Widget {
             if (itemString && itemString.trim().startsWith('{')) {
                 try {
                     const item: DraggableItem = JSON.parse(itemString);
-                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                     if (this.graph && this.graphCanvas) {
                         node.docManager = this.docManager;
                         node.properties.item = item;
@@ -114,7 +114,7 @@ export class WorkflowEngineWidget extends Widget {
             /*
             This prevents the default right click behavior of the lightgraph Canvas
             One may want to change this behavior but to prevent improper inputs, this will be prevented for now
-            TODO: change this either back or overwrite with own JupyphantNodes as well as Quantity Nodes (which might actually be a good idea...)
+            TODO: change this either back or overwrite with own ElephantLabNodes as well as Quantity Nodes (which might actually be a good idea...)
             */
 
             this.graphCanvas.getCanvasMenuOptions = this._generateNodeMenu();
@@ -175,7 +175,7 @@ export class WorkflowEngineWidget extends Widget {
                 fullItems.push(pickledItem); continue;
             }
 
-            // If item is a list it is probably passed from Jupyphant (passing elephant objects as list)
+            // If item is a list it is probably passed from Elephant Lab (passing elephant objects as list)
             if (typeof item === 'object' && item.name) {
                 if (typeof item.name === 'string' && item.name.startsWith("['") && item.name.endsWith("']")) {
                     try {
@@ -215,7 +215,7 @@ export class WorkflowEngineWidget extends Widget {
 
         // Create and configure a node for each Workflow Item
         for (const [index, item] of fullItems.entries()) {
-            const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+            const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
             if (node) {
                 node.docManager = this.docManager;
                 node.properties.item = item;
@@ -247,7 +247,7 @@ export class WorkflowEngineWidget extends Widget {
                                 // If a method (except placeholder) is selected -> create a new node for that method
                                 const selectedMethod = methods.find(m => m.name === methodName);
                                 if (selectedMethod) {
-                                    const methodNode = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    const methodNode = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                     methodNode.docManager = this.docManager;
                                     methodNode.properties.item = selectedMethod;
                                     methodNode.setProperty("item", selectedMethod);
@@ -291,7 +291,7 @@ export class WorkflowEngineWidget extends Widget {
 
         // Find all nodes within subgraphs (if/else/loop bodies)
         for (const node of nodes) {
-            if (node instanceof JupyphantNode) {
+            if (node instanceof ElephantLabNode) {
                 if (node.properties.item.code === '__UTIL_IF__' || node.properties.item.code === '__UTIL_LOOP__') {
                     const bodyOutputs = node.outputs.filter(o => o.name === 'if body' || o.name === 'else body' || o.name === 'loop body');
                     for (const output of bodyOutputs) {
@@ -341,9 +341,9 @@ export class WorkflowEngineWidget extends Widget {
 
             // Find the 'exec out' slot and see what it's connected to
             let execOutput;
-            if ((currentNode as JupyphantNode).properties?.item.code === '__UTIL_LOOP__') {
+            if ((currentNode as ElephantLabNode).properties?.item.code === '__UTIL_LOOP__') {
                 execOutput = currentNode.outputs.find(output => output.name === 'after loop');
-            } else if ((currentNode as JupyphantNode).properties?.item.code === '__UTIL_IF__') {
+            } else if ((currentNode as ElephantLabNode).properties?.item.code === '__UTIL_IF__') {
                 execOutput = currentNode.outputs.find(output => output.name === 'after if/else');
             } else {
                 execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'loop body');
@@ -421,51 +421,51 @@ export class WorkflowEngineWidget extends Widget {
             return executed_nodes.get(node) || null;
         }
 
-        if (!(node instanceof JupyphantNode)) {
-            console.log("3a. Skipping non-Jupyphant node:", node.title);
+        if (!(node instanceof ElephantLabNode)) {
+            console.log("3a. Skipping non-Elephant Lab node:", node.title);
             executed_nodes.set(node, null);
             return null;
         }
 
-        const jupyphantNode = node as JupyphantNode;
-        const item = jupyphantNode.properties.item;
+        const elephant_labNode = node as ElephantLabNode;
+        const item = elephant_labNode.properties.item;
 
         if (!item || !item.code || !this.session || !this.session.session) {
             console.log("3b. Skipping node, invalid item/code/session:", item.name);
-            executed_nodes.set(jupyphantNode, null);
+            executed_nodes.set(elephant_labNode, null);
             return null;
         }
 
         console.log("4. Processing node:", item.name);
 
         if (item.code === '__UTIL_LOOP__') {
-            const listInput = jupyphantNode.inputs.find(i => i.name === 'List');
+            const listInput = elephant_labNode.inputs.find(i => i.name === 'List');
             if (!listInput || listInput.link === null) {
-                executed_nodes.set(jupyphantNode, null);
+                executed_nodes.set(elephant_labNode, null);
                 return null;
             }
             const listLink = this.graph!.links[listInput.link];
             const listOriginNode = this.graph!.getNodeById(listLink.origin_id);
             if (!listOriginNode) {
-                executed_nodes.set(jupyphantNode, null);
+                executed_nodes.set(elephant_labNode, null);
                 return null;
             }
             const listKey = await this.executeNode(listOriginNode, executed_nodes, outputArea, collected_outputs);
             if (!listKey) {
-                executed_nodes.set(jupyphantNode, null);
+                executed_nodes.set(elephant_labNode, null);
                 return null;
             }
 
-            const loopBodyExecOutput = jupyphantNode.outputs.find(o => o.name === 'loop body');
+            const loopBodyExecOutput = elephant_labNode.outputs.find(o => o.name === 'loop body');
             if (!loopBodyExecOutput || !loopBodyExecOutput.links || loopBodyExecOutput.links.length === 0) {
-                executed_nodes.set(jupyphantNode, null);
+                executed_nodes.set(elephant_labNode, null);
                 return null;
             }
             const loopBodyStartLink = this.graph!.links[loopBodyExecOutput.links[0]];
             const loopBodyStartNode = this.graph!.getNodeById(loopBodyStartLink.target_id);
 
             if (!loopBodyStartNode) {
-                executed_nodes.set(jupyphantNode, null);
+                executed_nodes.set(elephant_labNode, null);
                 return null;
             }
 
@@ -475,7 +475,7 @@ export class WorkflowEngineWidget extends Widget {
             const loopScopeExecutedNodes = new Map<LGraphNode, string | null>();
 
             for (const bodyNode of loopBodyNodes) {
-                if (!(bodyNode instanceof JupyphantNode)) continue;
+                if (!(bodyNode instanceof ElephantLabNode)) continue;
 
                 const bodyNodeItem = bodyNode.properties.item;
                 const bodyNodeArgs: (string | null)[] = [];
@@ -490,12 +490,12 @@ export class WorkflowEngineWidget extends Widget {
                             const originNode = this.graph!.getNodeById(linkInfo.origin_id);
 
                             if (originNode) {
-                                if (originNode === jupyphantNode) {
-                                    const outputSlot = jupyphantNode.outputs[linkInfo.origin_slot];
+                                if (originNode === elephant_labNode) {
+                                    const outputSlot = elephant_labNode.outputs[linkInfo.origin_slot];
                                     if (outputSlot.name === 'item') {
-                                        value = '__jupyphant_loop_item__';
+                                        value = '__elephant_lab_loop_item__';
                                     } else if (outputSlot.name === 'index') {
-                                        value = '__jupyphant_loop_index__';
+                                        value = '__elephant_lab_loop_index__';
                                     }
                                 } else if (loopScopeExecutedNodes.has(originNode)) {
                                     value = loopScopeExecutedNodes.get(originNode)!;
@@ -513,7 +513,7 @@ export class WorkflowEngineWidget extends Widget {
                     }
                 }
                 const bodyNodeResultId = `result_${crypto.randomUUID().replace(/-/g, '_')}`;
-                const nodeCode = this._generatePythonCodeForNode(bodyNode as JupyphantNode, bodyNodeArgs, bodyNodeResultId);
+                const nodeCode = this._generatePythonCodeForNode(bodyNode as ElephantLabNode, bodyNodeArgs, bodyNodeResultId);
                 if (nodeCode) {
                     const indentedCode = nodeCode.split('\n').map(line => "    " + line).join('\n');
                     loopBodyCode += indentedCode + "\n";
@@ -524,9 +524,9 @@ export class WorkflowEngineWidget extends Widget {
             const resultsDictName = "workflow_results";
             const codeToExecute = `
 _list = ${resultsDictName}['${listKey}']
-for __jupyphant_loop_index__, __jupyphant_loop_item__ in enumerate(_list):
-    ${resultsDictName}['__jupyphant_loop_item__'] = __jupyphant_loop_item__
-    ${resultsDictName}['__jupyphant_loop_index__'] = __jupyphant_loop_index__
+for __elephant_lab_loop_index__, __elephant_lab_loop_item__ in enumerate(_list):
+    ${resultsDictName}['__elephant_lab_loop_item__'] = __elephant_lab_loop_item__
+    ${resultsDictName}['__elephant_lab_loop_index__'] = __elephant_lab_loop_index__
 ${loopBodyCode}
 `;
 
@@ -540,26 +540,26 @@ ${loopBodyCode}
                 }
             }
 
-            executed_nodes.set(jupyphantNode, null); // Loop node itself has no result
+            executed_nodes.set(elephant_labNode, null); // Loop node itself has no result
             return null;
         } else if (item.code === '__UTIL_IF__') {
-            const conditionInput = jupyphantNode.inputs.find(i => i.name === 'condition');
+            const conditionInput = elephant_labNode.inputs.find(i => i.name === 'condition');
             if (!conditionInput || conditionInput.link === null) {
                 console.error("If/Else node has no condition connected.");
-                executed_nodes.set(jupyphantNode, null);
+                executed_nodes.set(elephant_labNode, null);
                 return null;
             }
             const conditionLink = this.graph!.links[conditionInput.link];
             const conditionOriginNode = this.graph!.getNodeById(conditionLink.origin_id);
             if (!conditionOriginNode) {
-                executed_nodes.set(jupyphantNode, null);
+                executed_nodes.set(elephant_labNode, null);
                 return null;
             }
 
             const conditionKey = await this.executeNode(conditionOriginNode, executed_nodes, outputArea, collected_outputs);
             if (!conditionKey) {
                 console.error("Condition for If/Else node did not execute properly.");
-                executed_nodes.set(jupyphantNode, null);
+                executed_nodes.set(elephant_labNode, null);
                 return null;
             }
 
@@ -570,13 +570,13 @@ if isinstance(_condition_val, str):
 else:
     _is_true = bool(_condition_val)
 if _is_true:
-    print("JUPYPHANT_IF_TRUE")
+    print("ELEPHANT_LAB_IF_TRUE")
 `;
             const conditionResult = await this.kernelBridge.executeCode(checkConditionCode);
             let conditionIsTrue = false;
             if (conditionResult && conditionResult.outputs) {
                 for (const output of conditionResult.outputs) {
-                    if (output.output_type === 'stream' && output.name === 'stdout' && typeof output.text === 'string' && output.text.includes('JUPYPHANT_IF_TRUE')) {
+                    if (output.output_type === 'stream' && output.name === 'stdout' && typeof output.text === 'string' && output.text.includes('ELEPHANT_LAB_IF_TRUE')) {
                         conditionIsTrue = true;
                         break;
                     }
@@ -584,7 +584,7 @@ if _is_true:
             }
             
             const branch = conditionIsTrue ? 'if body' : 'else body';
-            const bodyExecOutput = jupyphantNode.outputs.find(o => o.name === branch);
+            const bodyExecOutput = elephant_labNode.outputs.find(o => o.name === branch);
             
             if (bodyExecOutput && bodyExecOutput.links && bodyExecOutput.links.length > 0) {
                 const bodyStartLink = this.graph!.links[bodyExecOutput.links[0]];
@@ -598,7 +598,7 @@ if _is_true:
                 }
             }
 
-            executed_nodes.set(jupyphantNode, null); 
+            executed_nodes.set(elephant_labNode, null); 
             return null;
         }
 
@@ -606,11 +606,11 @@ if _is_true:
         if (item.parameters && item.parameters.length > 0) {
             console.log("...collecting parameters for", item.name);
             for (const param of item.parameters) {
-                const inputIndex = jupyphantNode.inputs.findIndex(i => i.name === param.name);
+                const inputIndex = elephant_labNode.inputs.findIndex(i => i.name === param.name);
                 let value: string | null = null;
 
-                if (inputIndex !== -1 && jupyphantNode.inputs[inputIndex].link !== null) {
-                    const linkInfo = this.graph!.links[jupyphantNode.inputs[inputIndex].link!];
+                if (inputIndex !== -1 && elephant_labNode.inputs[inputIndex].link !== null) {
+                    const linkInfo = this.graph!.links[elephant_labNode.inputs[inputIndex].link!];
                     if (linkInfo) {
                         const originNode = this.graph!.getNodeById(linkInfo.origin_id);
                         if (originNode) {
@@ -620,7 +620,7 @@ if _is_true:
                     }
                 } else {
                     const propName = `param_${param.name}`;
-                    value = (jupyphantNode.properties[propName] as string) || null;
+                    value = (elephant_labNode.properties[propName] as string) || null;
                 }
                 args.push(value);
             }
@@ -629,10 +629,10 @@ if _is_true:
 
 
         const resultId = `result_${crypto.randomUUID().replace(/-/g, '_')}`;
-        const codeToExecute = this._generatePythonCodeForNode(jupyphantNode, args, resultId);
+        const codeToExecute = this._generatePythonCodeForNode(elephant_labNode, args, resultId);
 
         if (!codeToExecute) {
-            executed_nodes.set(jupyphantNode, null);
+            executed_nodes.set(elephant_labNode, null);
             return null;
         }
 
@@ -651,22 +651,22 @@ if _is_true:
 
         if (result_key && result_key.startsWith("result_")) {
             console.log("Got result key for", item.name, ":", result_key);
-            const dataOutputIndex = jupyphantNode.outputs.findIndex(o => o.name === 'result');
+            const dataOutputIndex = elephant_labNode.outputs.findIndex(o => o.name === 'result');
             if (dataOutputIndex !== -1) {
-                jupyphantNode.setOutputData(dataOutputIndex, result_key);
+                elephant_labNode.setOutputData(dataOutputIndex, result_key);
             }
-            executed_nodes.set(jupyphantNode, result_key);
+            executed_nodes.set(elephant_labNode, result_key);
             return result_key;
         } else {
             if (result_key) {
                 console.warn("Got error or unexpected stdout for", item.name, ":", result_key);
             }
-            executed_nodes.set(jupyphantNode, null);
+            executed_nodes.set(elephant_labNode, null);
             return null;
         }
     }
 
-    private _generatePythonCodeForNode(node: JupyphantNode, args: (string | null)[], resultId: string): string {
+    private _generatePythonCodeForNode(node: ElephantLabNode, args: (string | null)[], resultId: string): string {
         const item = node.properties.item;
         const args_json_string = JSON.stringify(args);
         const resultsDictName = "workflow_results";
@@ -677,9 +677,9 @@ if _is_true:
             console.log("...using INSTANCE (pickle) execution logic");
             codeToExecute = `try:
     data = pickle.loads(${item.code})
-    jupyphant_result = data[0]
-    ${resultsDictName}["${resultId}"] = jupyphant_result
-    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+    elephant_lab_result = data[0]
+    ${resultsDictName}["${resultId}"] = elephant_lab_result
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
 except Exception as e:
     print(f"Error loading instance ${item.name}: {e}", file=sys.stderr)`;
         }
@@ -705,7 +705,7 @@ try:
     final_list = [arg for arg in processed_args if arg is not None]
     
     ${resultsDictName}["${resultId}"] = final_list
-    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
 
 except Exception as e:
     print(f"Error creating list: {e}", file=sys.stderr)`;
@@ -727,7 +727,7 @@ try:
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     integer_value = int(processed_args[0])
     ${resultsDictName}["${resultId}"] = integer_value
-    print(f"JUPYPHANT_RESULT_KEY:${resultId}")
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error in Integer node: {e}", file=sys.stderr)`;
         } else if (item.code === '__UTIL_GETITEM__') {
@@ -747,16 +747,16 @@ try:
     raw_args = json.loads('''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     
-    jupyphant_target_list = processed_args[0]
+    elephant_lab_target_list = processed_args[0]
     index = int(processed_args[1])
 
-    if not isinstance(jupyphant_target_list, list):
+    if not isinstance(elephant_lab_target_list, list):
         raise TypeError("Input 'list' must be a list.")
 
-    jupyphant_result = jupyphant_target_list[index]
+    elephant_lab_result = elephant_lab_target_list[index]
     
-    ${resultsDictName}["${resultId}"] = jupyphant_result
-    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+    ${resultsDictName}["${resultId}"] = elephant_lab_result
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
 
 except Exception as e:
     print(f"Error in Get Item node: {e}", file=sys.stderr)`;
@@ -777,10 +777,10 @@ try:
     raw_args = json.loads('''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     printed_results = [arg for arg in processed_args if arg is not None]
-    for jupyphant_res in printed_results:
-        print(jupyphant_res)
+    for elephant_lab_res in printed_results:
+        print(elephant_lab_res)
     ${resultsDictName}["${resultId}"] = printed_results
-    print(f"JUPYPHANT_RESULT_KEY:${resultId}")
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error in Print node: {e}", file=sys.stderr)`;
         } else if (item.code === '__NEO_READ_FILE__') {
@@ -817,10 +817,10 @@ try:
         reader = neo.get_io(filename)
 
     blocks = reader.read()
-    jupyphant_result = blocks[0] if blocks else None
+    elephant_lab_result = blocks[0] if blocks else None
     
-    ${resultsDictName}["${resultId}"] = jupyphant_result
-    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+    ${resultsDictName}["${resultId}"] = elephant_lab_result
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
 
 except Exception as e:
     print(f"Error in Neo File Reader: {e}", file=sys.stderr)`;
@@ -856,15 +856,15 @@ try:
     raw_args = json.loads('''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     
-    jupyphant_neo_object = processed_args[0]
+    elephant_lab_neo_object = processed_args[0]
     
-    if jupyphant_neo_object is None:
-        raise ValueError("Input 'jupyphant_neo_object' is not connected or is None.")
+    if elephant_lab_neo_object is None:
+        raise ValueError("Input 'elephant_lab_neo_object' is not connected or is None.")
 
-    jupyphant_result = jupyphant_neo_object.list_children_by_class('${neoClassName}')
+    elephant_lab_result = elephant_lab_neo_object.list_children_by_class('${neoClassName}')
     
-    ${resultsDictName}["${resultId}"] = jupyphant_result
-    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+    ${resultsDictName}["${resultId}"] = elephant_lab_result
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
 
 except Exception as e:
     print(f"Error in ${item.name} node: {e}", file=sys.stderr)`;
@@ -906,10 +906,10 @@ try:
     method_args = raw_args[1:]
     processed_args = [_prepare_arg(arg) for arg in method_args]
 
-    jupyphant_result = method_to_run(*processed_args)
+    elephant_lab_result = method_to_run(*processed_args)
         
-    ${resultsDictName}["${resultId}"] = jupyphant_result
-    print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+    ${resultsDictName}["${resultId}"] = elephant_lab_result
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
 
 except Exception as e:
     print(f"Error running method ${item.name}: {e}", file=sys.stderr)`;
@@ -964,10 +964,10 @@ try:
         if "${functionName}" == "SpikeTrain" and isinstance(kwargs.get('times'), list):
             kwargs['times'] = np.array(kwargs['times'], dtype=np.float64)
 
-        jupyphant_result = method_to_run(**kwargs)
+        elephant_lab_result = method_to_run(**kwargs)
 
-        ${resultsDictName}["${resultId}"] = jupyphant_result
-        print(f"JUPYPHANT_RESULT_KEY:${resultId}") 
+        ${resultsDictName}["${resultId}"] = elephant_lab_result
+        print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
     else:
         print(f"Error: Module ${modulePath} not loaded.", file=sys.stderr)
 except Exception as e:
@@ -980,22 +980,22 @@ except Exception as e:
             const varName = item.code;
             codeToExecute = `try:
     node_id = "${varName}"
-    jupyphant_result = None
-    if 'jupyphant_entity' in globals() and hasattr(jupyphant_entity, 'map_ipytree_node_id_to_neo_obj_hash'):
-        obj_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
+    elephant_lab_result = None
+    if 'elephant_lab_entity' in globals() and hasattr(elephant_lab_entity, 'map_ipytree_node_id_to_neo_obj_hash'):
+        obj_hash = elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get(node_id)
         if obj_hash:
-            jupyphant_result = jupyphant_entity.map_neo_obj_hash_to_neo_obj.get(obj_hash)
+            elephant_lab_result = elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(obj_hash)
 
-    if jupyphant_result is None:
+    if elephant_lab_result is None:
         if node_id in globals():
-            jupyphant_result = globals()[node_id]
+            elephant_lab_result = globals()[node_id]
         else:
-            jupyphant_result = None
+            elephant_lab_result = None
             print(f"Error: Variable or node id '{varName}' not found.", file=sys.stderr)
     
-    if jupyphant_result is not None:
-        ${resultsDictName}["${resultId}"] = jupyphant_result
-        print(f"JUPYPHANT_RESULT_KEY:${resultId}")
+    if elephant_lab_result is not None:
+        ${resultsDictName}["${resultId}"] = elephant_lab_result
+        print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error getting object for variable '${varName}': {e}", file=sys.stderr)`;
         }
@@ -1025,9 +1025,9 @@ except Exception as e:
             sortedList.push(currentNode);
 
             let execOutput;
-            if ((currentNode as JupyphantNode).properties?.item.code === '__UTIL_LOOP__') {
+            if ((currentNode as ElephantLabNode).properties?.item.code === '__UTIL_LOOP__') {
                 execOutput = currentNode.outputs.find(output => output.name === 'after loop');
-            } else if ((currentNode as JupyphantNode).properties?.item.code === '__UTIL_IF__') {
+            } else if ((currentNode as ElephantLabNode).properties?.item.code === '__UTIL_IF__') {
                 execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'if body' && output.name !== 'else body');
             } else {
                 execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'loop body');
@@ -1049,7 +1049,7 @@ except Exception as e:
         return sortedList;
     }
 
-    // Helper function to get Text-OutputArea of Jupyphant (for Plot you may use another one)
+    // Helper function to get Text-OutputArea of Elephant Lab (for Plot you may use another one)
     private _getWorkflowOutputArea(): OutputArea | null {
         try {
             return this.outputArea;
@@ -1104,43 +1104,43 @@ except Exception as e:
                 .replace(/^_+|_+$/g, '')
                 .replace(/^[^a-z_]*/, '');
             if (!sanitized || sanitized === 'list' || sanitized === 'print' || sanitized === 'neo') {
-                return `jupyphant_result_${varCounter++}`;
+                return `elephant_lab_result_${varCounter++}`;
             }
             return sanitized;
         };
 
-        const generateCodeForNode = (jupyphantNode: JupyphantNode, indent = "") => {
-            if (generatedNodes.has(jupyphantNode)) {
+        const generateCodeForNode = (elephant_labNode: ElephantLabNode, indent = "") => {
+            if (generatedNodes.has(elephant_labNode)) {
                 return;
             }
 
-            const item = jupyphantNode.properties.item;
+            const item = elephant_labNode.properties.item;
 
             if (item.variable_name && item.variable_name !== "") {
-                nodeResultNames.set(jupyphantNode, item.variable_name);
-                generatedNodes.add(jupyphantNode);
+                nodeResultNames.set(elephant_labNode, item.variable_name);
+                generatedNodes.add(elephant_labNode);
                 return;
             }
 
             if (!item || !item.code) {
-                generatedNodes.add(jupyphantNode);
+                generatedNodes.add(elephant_labNode);
                 return;
             }
 
             if (item.code === '__UTIL_LOOP__') {
-                generatedNodes.add(jupyphantNode);
+                generatedNodes.add(elephant_labNode);
 
-                const listInput = jupyphantNode.inputs.find(i => i.name === 'List');
+                const listInput = elephant_labNode.inputs.find(i => i.name === 'List');
                 if (!listInput || listInput.link === null) return;
                 const listLink = this.graph!.links[listInput.link];
                 const listOriginNode = this.graph!.getNodeById(listLink.origin_id);
 
-                if (listOriginNode instanceof JupyphantNode) {
+                if (listOriginNode instanceof ElephantLabNode) {
                     generateCodeForNode(listOriginNode, indent);
                     const listVarName = nodeResultNames.get(listOriginNode);
                     if (!listVarName) return;
 
-                    const loopBodyExecOutput = jupyphantNode.outputs.find(o => o.name === 'loop body');
+                    const loopBodyExecOutput = elephant_labNode.outputs.find(o => o.name === 'loop body');
                     if (!loopBodyExecOutput || !loopBodyExecOutput.links || !loopBodyExecOutput.links.length) return;
 
                     const loopBodyStartLink = this.graph!.links[loopBodyExecOutput.links[0]];
@@ -1149,10 +1149,10 @@ except Exception as e:
                     if (loopBodyStartNode) {
                         const loopBodyNodes = this._getSubgraphExecutionOrder(loopBodyStartNode);
 
-                        codeLines.push(indent + `for jupyphant_loop_index, jupyphant_loop_item in enumerate(${listVarName}):`);
+                        codeLines.push(indent + `for elephant_lab_loop_index, elephant_lab_loop_item in enumerate(${listVarName}):`);
 
                         for (const bodyNode of loopBodyNodes) {
-                            if (bodyNode instanceof JupyphantNode) {
+                            if (bodyNode instanceof ElephantLabNode) {
                                 generateCodeForNode(bodyNode, indent + "    ");
                             }
                         }
@@ -1160,28 +1160,28 @@ except Exception as e:
                 }
                 return;
             } else if (item.code === '__UTIL_IF__') {
-                generatedNodes.add(jupyphantNode);
+                generatedNodes.add(elephant_labNode);
 
-                const conditionInput = jupyphantNode.inputs.find(i => i.name === 'condition');
+                const conditionInput = elephant_labNode.inputs.find(i => i.name === 'condition');
                 if (!conditionInput || conditionInput.link === null) return;
                 const conditionLink = this.graph!.links[conditionInput.link];
                 const conditionOriginNode = this.graph!.getNodeById(conditionLink.origin_id);
 
-                if (conditionOriginNode instanceof JupyphantNode) {
+                if (conditionOriginNode instanceof ElephantLabNode) {
                     generateCodeForNode(conditionOriginNode, indent);
                     const conditionVarName = nodeResultNames.get(conditionOriginNode);
                     if (!conditionVarName) return;
 
                     codeLines.push(indent + `if ${conditionVarName}:`);
 
-                    const ifBodyExecOutput = jupyphantNode.outputs.find(o => o.name === 'if body');
+                    const ifBodyExecOutput = elephant_labNode.outputs.find(o => o.name === 'if body');
                     if (ifBodyExecOutput && ifBodyExecOutput.links && ifBodyExecOutput.links.length > 0) {
                         const ifBodyStartLink = this.graph!.links[ifBodyExecOutput.links[0]];
                         const ifBodyStartNode = this.graph!.getNodeById(ifBodyStartLink.target_id);
                         if (ifBodyStartNode) {
                             const ifBodyNodes = this._getSubgraphExecutionOrder(ifBodyStartNode);
                             for (const bodyNode of ifBodyNodes) {
-                                if (bodyNode instanceof JupyphantNode) {
+                                if (bodyNode instanceof ElephantLabNode) {
                                     generateCodeForNode(bodyNode, indent + "    ");
                                 }
                             }
@@ -1190,14 +1190,14 @@ except Exception as e:
 
                     codeLines.push(indent + `else:`);
 
-                    const elseBodyExecOutput = jupyphantNode.outputs.find(o => o.name === 'else body');
+                    const elseBodyExecOutput = elephant_labNode.outputs.find(o => o.name === 'else body');
                     if (elseBodyExecOutput && elseBodyExecOutput.links && elseBodyExecOutput.links.length > 0) {
                         const elseBodyStartLink = this.graph!.links[elseBodyExecOutput.links[0]];
                         const elseBodyStartNode = this.graph!.getNodeById(elseBodyStartLink.target_id);
                         if (elseBodyStartNode) {
                             const elseBodyNodes = this._getSubgraphExecutionOrder(elseBodyStartNode);
                             for (const bodyNode of elseBodyNodes) {
-                                if (bodyNode instanceof JupyphantNode) {
+                                if (bodyNode instanceof ElephantLabNode) {
                                     generateCodeForNode(bodyNode, indent + "    ");
                                 }
                             }
@@ -1213,12 +1213,12 @@ except Exception as e:
             // Recursively generate code for dependencies first
             if (item.parameters) {
                 for (const param of item.parameters) {
-                    const input = jupyphantNode.inputs.find(inp => inp.name === param.name);
+                    const input = elephant_labNode.inputs.find(inp => inp.name === param.name);
                     if (input && input.link != null) {
                         const linkInfo = this.graph!.links[input.link];
                         if (linkInfo) {
                             const originNode = this.graph!.getNodeById(linkInfo.origin_id);
-                            if (originNode instanceof JupyphantNode) {
+                            if (originNode instanceof ElephantLabNode) {
                                 generateCodeForNode(originNode, indent);
                             }
                         }
@@ -1232,7 +1232,7 @@ except Exception as e:
             while (Array.from(nodeResultNames.values()).includes(resultVarName)) {
                 resultVarName = `${originalName}_${counter++}`;
             }
-            nodeResultNames.set(jupyphantNode, resultVarName);
+            nodeResultNames.set(elephant_labNode, resultVarName);
 
             const processedArgs: { name: string, value: string, isSelf: boolean }[] = [];
             if (item.parameters) {
@@ -1240,18 +1240,18 @@ except Exception as e:
                     const propName = `param_${param.name}`;
                     let argumentValue: string;
 
-                    const input = jupyphantNode.inputs.find(inp => inp.name === param.name);
+                    const input = elephant_labNode.inputs.find(inp => inp.name === param.name);
 
                     if (input && input.link != null) {
                         const linkInfo = this.graph!.links[input.link];
                         if (linkInfo) {
                             const originNode = this.graph!.getNodeById(linkInfo.origin_id);
-                            if (originNode && (originNode as JupyphantNode).properties.item.code === '__UTIL_LOOP__') {
+                            if (originNode && (originNode as ElephantLabNode).properties.item.code === '__UTIL_LOOP__') {
                                 const outputSlot = originNode.outputs[linkInfo.origin_slot];
                                 if (outputSlot.name === 'item') {
-                                    argumentValue = 'jupyphant_loop_item';
+                                    argumentValue = 'elephant_lab_loop_item';
                                 } else if (outputSlot.name === 'index') {
-                                    argumentValue = 'jupyphant_loop_index';
+                                    argumentValue = 'elephant_lab_loop_index';
                                 } else {
                                     argumentValue = 'None';
                                 }
@@ -1264,7 +1264,7 @@ except Exception as e:
                             argumentValue = 'None';
                         }
                     } else {
-                        const value = String(jupyphantNode.properties[propName] ?? '');
+                        const value = String(elephant_labNode.properties[propName] ?? '');
                         if (value === "" || value === "__REQUIRED__") {
                             argumentValue = "None";
                         } else if (value === "None" || value === "True" || value === "False") {
@@ -1349,7 +1349,7 @@ except Exception as e:
 
                 if (!self_arg) {
                     console.warn(`'self' argument not found for method ${methodName}`);
-                    generatedNodes.add(jupyphantNode);
+                    generatedNodes.add(elephant_labNode);
                     return;
                 }
 
@@ -1376,9 +1376,9 @@ except Exception as e:
                 const isNeoObject = varName.length > 20 && varName.includes('-');
 
                 if (isNeoObject) {
-                    const tempVar = `jupyphant_var_${varCounter++}`;
+                    const tempVar = `elephant_lab_var_${varCounter++}`;
 
-                    const command = `${tempVar} = jupyphant_entity.map_neo_obj_hash_to_neo_obj.get(jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash.get('${varName}'))`;
+                    const command = `${tempVar} = elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get('${varName}'))`;
                     
                     const executionPromise = this.kernelBridge.executeCode(command);
                     preExecutionPromises.push(executionPromise);
@@ -1393,12 +1393,12 @@ except Exception as e:
                 codeLines.push(indent + lineOfCode);
             }
 
-            generatedNodes.add(jupyphantNode);
+            generatedNodes.add(elephant_labNode);
         };
 
         const executionOrder = this._getExecutionOrder();
         for (const node of executionOrder) {
-            if (node instanceof JupyphantNode) {
+            if (node instanceof ElephantLabNode) {
                 generateCodeForNode(node);
             }
         }
@@ -1412,7 +1412,7 @@ except Exception as e:
     }
 
     // Create docstring for given Node and display it
-    public async showNodeInfo(node: JupyphantNode) {
+    public async showNodeInfo(node: ElephantLabNode) {
         const code = node.properties.item.code;
         const docstring = await this.kernelBridge.getDocstring(code);
 
@@ -1452,7 +1452,7 @@ except Exception as e:
                                                         // No standard parameters here, we will set up inputs/outputs manually
                                                     ]
                                                 };
-                                                const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                                const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                                 if (this.graph && this.graphCanvas) {
                                                     node.docManager = this.docManager;
                                                     node.properties.item = item;
@@ -1474,7 +1474,7 @@ except Exception as e:
                                                         // No standard parameters here, we will set up inputs/outputs manually
                                                     ]
                                                 };
-                                                const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                                const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                                 if (this.graph && this.graphCanvas) {
                                                     node.docManager = this.docManager;
                                                     node.properties.item = item;
@@ -1503,7 +1503,7 @@ except Exception as e:
                                             { name: "item to print", default: "" },
                                         ]
                                     };
-                                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                     if (this.graph && this.graphCanvas) {
                                         node.properties.item = item;
                                         node.setProperty("item", item);
@@ -1524,7 +1524,7 @@ except Exception as e:
                                             { name: "item to plot", default: "" },
                                         ]
                                     };
-                                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                     if (this.graph && this.graphCanvas) {
                                         node.properties.item = item;
                                         node.setProperty("item", item);
@@ -1555,7 +1555,7 @@ except Exception as e:
                                             { name: "item 3", default: "" },
                                         ]
                                     };
-                                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                     if (this.graph && this.graphCanvas) {
                                         node.properties.item = item;
                                         node.setProperty("item", item);
@@ -1576,7 +1576,7 @@ except Exception as e:
                                             { name: "value", default: "__REQUIRED__" },
                                         ]
                                     };
-                                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                     if (this.graph && this.graphCanvas) {
                                         node.properties.item = item;
                                         node.setProperty("item", item);
@@ -1598,7 +1598,7 @@ except Exception as e:
                                             { name: "index", default: "0" },
                                         ]
                                     };
-                                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                     if (this.graph && this.graphCanvas) {
                                         node.properties.item = item;
                                         node.setProperty("item", item);
@@ -1628,7 +1628,7 @@ except Exception as e:
                                             { name: "filename", default: "__REQUIRED__" },
                                         ]
                                     };
-                                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                     if (this.graph && this.graphCanvas) {
                                         node.properties.item = item;
                                         node.setProperty("item", item);
@@ -1652,7 +1652,7 @@ except Exception as e:
                                             { name: "t_start", default: "0 * pq.s" },
                                         ]
                                     };
-                                    const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                     if (this.graph && this.graphCanvas) {
                                         node.properties.item = item;
                                         node.setProperty("item", item);
@@ -1677,7 +1677,7 @@ except Exception as e:
                                 { name: "units", default: "__REQUIRED__" }
                             ]
                         };
-                        const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                        const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                         if (this.graph && this.graphCanvas) {
                             node.properties.item = item;
                             node.setProperty("item", item);
@@ -1719,7 +1719,7 @@ except Exception as e:
                     callback: async (value: any, options: any, event: any, parentMenu: any) => {
                         const details = await this.kernelBridge.getDetailsForName(fqn);
                         if (details) {
-                            const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                            const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                             if (this.graph && this.graphCanvas) {
                                 node.properties.item = details;
                                 node.setProperty("item", details);
@@ -1740,7 +1740,7 @@ except Exception as e:
                                                 // If a method (except placeholder) is selected -> create a new node for that method
                                                 const selectedMethod = methods.find(m => m.name === methodName);
                                                 if (selectedMethod) {
-                                                    const methodNode = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                                                    const methodNode = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                                                     methodNode.properties.item = selectedMethod;
                                                     methodNode.setProperty("item", selectedMethod);
                                                     // Paste node slightly to the right of existing parent node
@@ -1805,12 +1805,12 @@ except Exception as e:
     }
 
     public toggleExecPins(show: boolean): void {
-        JupyphantNode.showExecPins = show;
+        ElephantLabNode.showExecPins = show;
         if (this.graph) {
         const nodes: LGraphNode[] = (this.graph as any)._nodes;
 
             for (const node of nodes) {
-                if (node instanceof JupyphantNode) {
+                if (node instanceof ElephantLabNode) {
                     node.setupInputs();
                 }
             }
@@ -1826,7 +1826,7 @@ except Exception as e:
         try {
             const data = this.graph.serialize();
             const dataStr = JSON.stringify(data, null, 2);
-            localStorage.setItem('jupyphant-workflow', dataStr);
+            localStorage.setItem('elephant_lab-workflow', dataStr);
         } catch (err) {
             console.error("Error serializing workflow to localStorage:", err);
         }
@@ -1836,7 +1836,7 @@ except Exception as e:
         if (!this.graph) {
             return;
         }
-        const dataStr = localStorage.getItem('jupyphant-workflow');
+        const dataStr = localStorage.getItem('elephant_lab-workflow');
         if (!dataStr) {
             return;
         }
@@ -1866,7 +1866,7 @@ except Exception as e:
                         console.error("Node type not found: " + node_info.type);
                         continue;
                     }
-                    const node = LiteGraph.createNode(node_info.type) as JupyphantNode;
+                    const node = LiteGraph.createNode(node_info.type) as ElephantLabNode;
                     if (node) {
                         node.id = node_info.id;
                         node.pos = node_info.pos;
@@ -1976,7 +1976,7 @@ except Exception as e:
             ]
         };
 
-        const node = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+        const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
         if (this.graph && this.graphCanvas) {
             node.properties.item = item;
             node.setProperty("item", item);
@@ -1986,7 +1986,7 @@ except Exception as e:
 
             let x = 100;
             let y = 100;
-            const current_nodes = this.graph!.findNodesByClass(JupyphantNode as any);
+            const current_nodes = this.graph!.findNodesByClass(ElephantLabNode as any);
             if(current_nodes && current_nodes.length > 0) {
                 const last_node = current_nodes[current_nodes.length - 1];
                 x = last_node.pos[0];

@@ -3,7 +3,7 @@ import { WorkflowEngineWidget } from './workflow_engine';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { FileDialog } from '@jupyterlab/filebrowser';
 
-// Attributes of a Jupyphant Node to distinguish different types of nodes
+// Attributes of an Elephant Lab Node to distinguish different types of nodes
 export type DraggableItem = {
     id: string;
     name: string;
@@ -14,16 +14,16 @@ export type DraggableItem = {
     variable_name?: string;
 };
 
-export type JupyphantNodeProperties = {
+export type ElephantLabNodeProperties = {
     item: DraggableItem;
     [key: string]: any;
 }
 
-// Own Jupyphant Node Class which adds additional properties to the regular LGraphNode
-export class JupyphantNode extends LGraphNode {
+// Own ElephantLab Node Class which adds additional properties to the regular LGraphNode
+export class ElephantLabNode extends LGraphNode {
     public static showExecPins = false;
     public docManager?: IDocumentManager;
-    properties: JupyphantNodeProperties = {
+    properties: ElephantLabNodeProperties = {
         item: { id: '', name: '', code: '', is_class: false, parameters: [] }
     };
     constructor() {
@@ -70,7 +70,7 @@ export class JupyphantNode extends LGraphNode {
 
     // Method used to set up input for classes / functions 
     public setupInputs(): void {
-        if (JupyphantNode.showExecPins) {
+        if (ElephantLabNode.showExecPins) {
             if (this.inputs.find(i => i.name === 'exec in')) { return; }
             if (this.properties.item?.code === '__UTIL_LOOP__') {
                 this.addInput("exec in", "jupy_exec");
@@ -120,12 +120,12 @@ export class JupyphantNode extends LGraphNode {
 
         if (this.properties.item?.code === '__UTIL_LOOP__') {
             this.title = "For Loop";
-            if (JupyphantNode.showExecPins) {
+            if (ElephantLabNode.showExecPins) {
                 this.addInput("exec in", "jupy_exec");
             }
             this.addInput("List", "");
 
-            if (JupyphantNode.showExecPins) {
+            if (ElephantLabNode.showExecPins) {
                 this.addOutput("after loop", "jupy_exec");
                 this.addOutput("loop body", "jupy_exec");
             }
@@ -134,12 +134,12 @@ export class JupyphantNode extends LGraphNode {
             return;
         } else if (this.properties.item?.code === '__UTIL_IF__') {
             this.title = "If/Else";
-            if (JupyphantNode.showExecPins) {
+            if (ElephantLabNode.showExecPins) {
                 this.addInput("exec in", "jupy_exec");
             }
             this.addInput("condition", "");
 
-            if (JupyphantNode.showExecPins) {
+            if (ElephantLabNode.showExecPins) {
                 this.addOutput("after if/else", "jupy_exec");
                 this.addOutput("if body", "jupy_exec");
                 this.addOutput("else body", "jupy_exec");
@@ -150,7 +150,7 @@ export class JupyphantNode extends LGraphNode {
         const isProcessingNode = this._isProcessingNode()
 
         if (isProcessingNode) {
-            if (JupyphantNode.showExecPins) {
+            if (ElephantLabNode.showExecPins) {
                 this.addInput("exec in", "jupy_exec");
                 this.addOutput("exec out", "jupy_exec");
             }
@@ -193,7 +193,7 @@ export class JupyphantNode extends LGraphNode {
                                     }
                                 });
                             } else {
-                                console.error("docManager is not available on this JupyphantNode.");
+                                console.error("docManager is not available on this ElephantLabNode.");
                             }
                         });
                     }
@@ -230,7 +230,7 @@ export class JupyphantNode extends LGraphNode {
                             parameters: [{ name: 'neo_object', default: '__REQUIRED__' }]
                         };
 
-                        const extractorNode = LiteGraph.createNode("workflow/jupyphant_node") as JupyphantNode;
+                        const extractorNode = LiteGraph.createNode("workflow/ElephantLab_node") as ElephantLabNode;
                         extractorNode.properties.item = extractorItem;
                         extractorNode.setProperty("item", extractorItem);
 
@@ -346,4 +346,4 @@ export class JupyphantNode extends LGraphNode {
 
     }
 }
-LiteGraph.registerNodeType("workflow/jupyphant_node", JupyphantNode);
+LiteGraph.registerNodeType("workflow/elephant_lab_node", ElephantLabNode);

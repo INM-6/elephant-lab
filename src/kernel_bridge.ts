@@ -11,7 +11,7 @@ import {
     OutputArea
 } from '@jupyterlab/outputarea';
 
-import { DraggableItem } from './jupyphant_node';
+import { DraggableItem } from './elephant_lab_node';
 
 export interface IExecutionResult {
     resultKey: string | null;
@@ -47,7 +47,7 @@ export class KernelBridge {
      * class or function and to get its parameters.
      *
      * Restored from the pre-rewrite workflow engine; still targets the legacy
-     * `jupyphant_entity`/`jupyphant.kernelcode` backend names, so it will not resolve
+     * `elephant_lab_entity`/`jupyphant.kernelcode` backend names, so it will not resolve
      * against the current `elephant_lab` backend until those references are updated.
      * @param fqn The fully qualified name of the Python object.
      * @returns A promise that resolves to a DraggableItem object, or null if inspection fails.
@@ -107,7 +107,7 @@ export class KernelBridge {
      * For a given class instance in the kernel, get all of its public methods.
      * This is used to populate the dropdown on class nodes in the workflow.
      * Restored from the legacy workflow engine; still references the old
-     * `jupyphant_entity`/`jupyphant.kernelcode` backend names.
+     * `elephant_lab_entity`/`jupyphant.kernelcode` backend names.
      * @param target_id The identifier for the object in the kernel (e.g., 'result_123' or a fqn).
      * @returns A promise that resolves to an array of items representing the methods.
      */
@@ -170,8 +170,8 @@ export class KernelBridge {
 
             else:
                 # Try to get Object using Neo Hash
-                global jupyphant_entity
-                neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
+                global elephant_lab_entity
+                neo_hash_obj_dict = get_neo_to_hash_dict(elephant_lab_entity)
                 target_obj = neo_hash_obj_dict[target_id_str]
 
             if target_obj is not None:
@@ -277,7 +277,7 @@ export class KernelBridge {
     }
 
     // Extract Docstring of passed code. Restored from the legacy workflow engine;
-    // still references the old `jupyphant_entity`/`jupyphant.kernelcode` backend names.
+    // still references the old `elephant_lab_entity`/`jupyphant.kernelcode` backend names.
     public async getDocstring(code: string): Promise<string | null> {
         if (!this.session || !this.session.session) { return null; }
         const pythonCode = `
@@ -346,9 +346,9 @@ export class KernelBridge {
 
                 if target_obj is None:
                     try:
-                        global jupyphant_entity
-                        if 'jupyphant_entity' in globals():
-                            neo_hash_obj_dict = get_neo_to_hash_dict(jupyphant_entity)
+                        global elephant_lab_entity
+                        if 'elephant_lab_entity' in globals():
+                            neo_hash_obj_dict = get_neo_to_hash_dict(elephant_lab_entity)
 
                             if target_id_str in jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash:
                                 sha1_hash = jupyphant_entity.map_ipytree_node_id_to_neo_obj_hash[target_id_str]
