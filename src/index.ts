@@ -1467,6 +1467,33 @@ class ElephantLabExtension {
 					htmlElement.addEventListener('dragstart', (event) => {
 						const nodeId = htmlElement.dataset.nodeId;
 						if (nodeId && event.dataTransfer) {
+							// Folder rows (e.g. "Spiketrains [12]") are grouping containers, not
+							// real objects - drag their leaf children as a list instead.
+							if (nodeId.startsWith('folder-')) {
+								const childrenContainer = htmlElement.nextElementSibling as HTMLElement | null;
+								const childRows = childrenContainer
+									? Array.from(
+										childrenContainer.querySelectorAll('.jup-row[data-node-id]')
+									).filter(el => !(el as HTMLElement).dataset.nodeId?.startsWith('folder-')) as HTMLElement[]
+									: [];
+
+								if (childRows.length > 0) {
+									const items = childRows.map(el => ({
+										id: el.dataset.nodeId,
+										name: (el.textContent || "").trim().replace(/\s+/g, ' '),
+										code: el.dataset.nodeId,
+										is_class: false,
+										parameters: []
+									}));
+
+									event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'multi', items }));
+									console.log(`Dragging folder as a list of ${items.length} nodes.`);
+
+									event.stopPropagation();
+									return;
+								}
+							}
+
 							// Drag items as list
 							if (htmlElement.classList.contains('jup-selected')) {
 								const selectedRows = Array.from(

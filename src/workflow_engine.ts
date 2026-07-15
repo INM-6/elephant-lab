@@ -1033,7 +1033,7 @@ except Exception as e:
             elephant_lab_result = globals()[node_id]
         else:
             elephant_lab_result = None
-            print(f"Error: Variable or node id '{varName}' not found.", file=sys.stderr)
+            print(f"Error: Variable or node id '{node_id}' not found.", file=sys.stderr)
     
     if elephant_lab_result is not None:
         ${resultsDictName}["${resultId}"] = elephant_lab_result
@@ -1138,17 +1138,27 @@ except Exception as e:
         const generatedNodes = new Set<LGraphNode>();
         const preExecutionPromises: Promise<any>[] = [];
 
+        const isUnusable = (s: string) => !s || s === 'list' || s === 'print' || s === 'neo';
+
         const sanitizeVarName = (name: string) => {
             const namePart = name.split(' ')[0];
-            let sanitized = namePart.toLowerCase()
+            const sanitized = namePart.toLowerCase()
                 .replace(/\(\)/g, '')
                 .replace(/[^a-z0-9_]/g, '_')
                 .replace(/^_+|_+$/g, '')
                 .replace(/^[^a-z_]*/, '');
-            if (!sanitized || sanitized === 'list' || sanitized === 'print' || sanitized === 'neo') {
-                return `elephant_lab_result_${varCounter++}`;
+
+            if (!isUnusable(sanitized)) {
+                return sanitized;
             }
-            return sanitized;
+
+            const fallbackMatch = name.match(/[A-Za-z_][A-Za-z0-9_]*/);
+            const fallback = fallbackMatch ? fallbackMatch[0].toLowerCase() : '';
+            if (!isUnusable(fallback)) {
+                return fallback;
+            }
+
+            return `elephant_lab_result_${varCounter++}`;
         };
 
         const generateCodeForNode = (elephant_labNode: ElephantLabNode, indent = "") => {
@@ -1418,14 +1428,10 @@ except Exception as e:
                 const isNeoObject = /^[a-f0-9]{40}$/.test(varName);
 
                 if (isNeoObject) {
-                    const tempVar = `elephant_lab_var_${varCounter++}`;
-
-                    const command = `${tempVar} = elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get('${varName}'))`;
-                    
-                    const executionPromise = this.kernelBridge.executeCode(command);
-                    preExecutionPromises.push(executionPromise);
-                    
-                    lineOfCode = `${resultVarName} = ${tempVar}`;
+                    // Resolve the object into a nicely-named kernel variable behind the scenes
+                    const command = `${resultVarName} = elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get('${varName}'))`;
+                    preExecutionPromises.push(this.kernelBridge.executeCode(command));
+                    lineOfCode = "";
                 } else {
                     lineOfCode = `${resultVarName} = ${varName}`;
                 }
