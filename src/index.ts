@@ -104,6 +104,7 @@ class ElephantLabExtension {
 	private _detailsWidget: Panel | null = null;
 	private suppressSettingsChanged: boolean = false;
 	private updateSettingsCallbacks: UpdateSettingsCallback[] = [];
+	private _buildStarted: boolean = false;
 
 	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -253,6 +254,13 @@ class ElephantLabExtension {
 			this.app.shell.activateById(this.widget.id);
 			return;
 		}
+
+		// Guards against duplicated UI when the layout restorer replays the open
+		// command more than once on page reload
+		if (!force && this._buildStarted) {
+			return;
+		}
+		this._buildStarted = true;
 
 		console.log("Elephant Lab: Creating new Elephant Lab instance.");
 
@@ -1527,9 +1535,6 @@ class ElephantLabExtension {
 		workflowMain.title.label = 'Elephant Lab Workflow';
 		workflowMain.title.closable = true;
 		this.app.shell.add(workflowMain, 'main');
-		if (!this.widget_tracker.has(workflowMain)) {
-			this.widget_tracker.add(workflowMain);
-		}
 		this.app.shell.activateById(workflowMain.id);
 	}
 
