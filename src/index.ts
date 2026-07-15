@@ -1467,6 +1467,29 @@ class ElephantLabExtension {
 					htmlElement.addEventListener('dragstart', (event) => {
 						const nodeId = htmlElement.dataset.nodeId;
 						if (nodeId && event.dataTransfer) {
+							// Drag items as list
+							if (htmlElement.classList.contains('jup-selected')) {
+								const selectedRows = Array.from(
+									treeWidget.node.querySelectorAll('.jup-row.jup-selected[data-node-id]')
+								) as HTMLElement[];
+
+								if (selectedRows.length > 1) {
+									const items = selectedRows.map(el => ({
+										id: el.dataset.nodeId,
+										name: (el.textContent || "").trim().replace(/\s+/g, ' '),
+										code: el.dataset.nodeId,
+										is_class: false,
+										parameters: []
+									}));
+
+									event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'multi', items }));
+									console.log(`Dragging ${items.length} selected nodes as a list.`);
+
+									event.stopPropagation();
+									return;
+								}
+							}
+
 							const nodeName = (htmlElement.textContent || "").trim().replace(/\s+/g, ' ');
 
 							const item = {

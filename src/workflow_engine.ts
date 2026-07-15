@@ -90,7 +90,13 @@ export class WorkflowEngineWidget extends Widget {
             const itemString = event.dataTransfer?.getData('text/plain');
             if (itemString && itemString.trim().startsWith('{')) {
                 try {
-                    const item: DraggableItem = JSON.parse(itemString);
+                    const parsed = JSON.parse(itemString);
+                    if (parsed && parsed.type === 'multi' && Array.isArray(parsed.items)) {
+                        this._createListNodeFromItems(parsed.items as DraggableItem[], event);
+                        return;
+                    }
+
+                    const item: DraggableItem = parsed;
                     const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                     if (this.graph && this.graphCanvas) {
                         node.docManager = this.docManager;
@@ -124,6 +130,42 @@ export class WorkflowEngineWidget extends Widget {
             console.error("Error initializing LiteGraph:", e);
         }
 
+    }
+
+    // Builds a List node wired up to one object node per dropped item, so dragging
+    // multiple selected Neo Tree rows produces a ready-to-use list of those objects.
+    private _createListNodeFromItems(items: DraggableItem[], event: DragEvent): void {
+        if (!this.graph || !this.graphCanvas || items.length === 0) { return; }
+
+        const dropPos = this.graphCanvas.convertEventToCanvasOffset(event);
+
+        const listItem: DraggableItem = {
+            id: "util/list_node",
+            name: "List",
+            code: "__UTIL_LIST__",
+            is_class: false,
+            parameters: items.map((_, index) => ({ name: `item ${index}`, default: "" }))
+        };
+        const listNode = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
+        listNode.docManager = this.docManager;
+        listNode.properties.item = listItem;
+        listNode.setProperty("item", listItem);
+        listNode.pos = [dropPos[0] + 250, dropPos[1]];
+        this.graph.add(listNode);
+
+        items.forEach((item, index) => {
+            const objectNode = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
+            objectNode.docManager = this.docManager;
+            objectNode.properties.item = item;
+            objectNode.setProperty("item", item);
+            objectNode.pos = [dropPos[0], dropPos[1] + index * 60];
+            this.graph!.add(objectNode);
+
+            const outputSlot = objectNode.outputs.findIndex(o => o.name === 'result');
+            if (outputSlot !== -1) {
+                objectNode.connect(outputSlot, listNode, index);
+            }
+        });
     }
 
     // Executed after Widget is opened

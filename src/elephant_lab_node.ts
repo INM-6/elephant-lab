@@ -230,7 +230,7 @@ export class ElephantLabNode extends LGraphNode {
                             parameters: [{ name: 'neo_object', default: '__REQUIRED__' }]
                         };
 
-                        const extractorNode = LiteGraph.createNode("workflow/ElephantLab_node") as ElephantLabNode;
+                        const extractorNode = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
                         extractorNode.properties.item = extractorItem;
                         extractorNode.setProperty("item", extractorItem);
 
