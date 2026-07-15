@@ -1373,7 +1373,7 @@ except Exception as e:
                 lineOfCode = `${resultVarName} = ${fqn}(${processed_args})`;
             } else {
                 const varName = item.code;
-                const isNeoObject = varName.length > 20 && varName.includes('-');
+                const isNeoObject = /^[a-f0-9]{40}$/.test(varName);
 
                 if (isNeoObject) {
                     const tempVar = `elephant_lab_var_${varCounter++}`;
