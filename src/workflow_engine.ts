@@ -429,7 +429,7 @@ export class WorkflowEngineWidget extends Widget {
         const resultsDictName = "workflow_results";
         const collected_outputs: any[] = [];
         const result = await this.kernelBridge.executeCode(
-            `import uuid, json, pickle, sys, gc\n${resultsDictName} = {}\ngc.collect()`
+            `import uuid, json, pickle, sys, gc\n${resultsDictName} = {}\n_ = gc.collect()`
         );
         if (result && result.outputs) {
             collected_outputs.push(...result.outputs);
