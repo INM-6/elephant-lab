@@ -23,6 +23,10 @@ export class WorkflowEngineWidget extends Widget {
     private canvasElement: HTMLCanvasElement;
     private minimapElement: HTMLCanvasElement;
     private _minimapRafId: number | null = null;
+    private _history: string[] = [];
+    private _historyIndex: number = -1;
+    private _isRestoringHistory: boolean = false;
+    private _historySaveTimeout: number | null = null;
     private outputArea: OutputArea;
     private notebook_tracker: INotebookTracker; // Current active Notebook -> used for Cell Injection
     public session: ISessionContext | null; // used to execute Python Code in same session as Elephant Lab 
@@ -113,6 +117,24 @@ export class WorkflowEngineWidget extends Widget {
             }
         });
 
+        this.canvasElement.tabIndex = 0;
+        this.canvasElement.style.outline = 'none';
+        this.canvasElement.addEventListener('keydown', (event) => {
+            const modifier = event.metaKey || event.ctrlKey;
+            if (!modifier) { return; }
+            const key = event.key.toLowerCase();
+            if (key === 'z' && event.shiftKey) {
+                event.preventDefault();
+                this.redo();
+            } else if (key === 'z') {
+                event.preventDefault();
+                this.undo();
+            } else if (key === 'y') {
+                event.preventDefault();
+                this.redo();
+            }
+        });
+
         this.minimapElement = document.createElement('canvas');
         this.minimapElement.id = 'workflow-minimap';
         this.minimapElement.className = 'workflow-minimap';
@@ -124,7 +146,10 @@ export class WorkflowEngineWidget extends Widget {
         try {
             this.graph = new LGraph();
             (this.graph as any).widget = this;
-            this.graph.change = () => this._saveWorkflowToLocalStorage();
+            this.graph.change = () => {
+                this._saveWorkflowToLocalStorage();
+                this._scheduleHistorySnapshot();
+            };
             this.graphCanvas = new LGraphCanvas(this.canvasElement, this.graph);
             this.graphCanvas.always_render_background = true;
             /*
@@ -182,6 +207,7 @@ export class WorkflowEngineWidget extends Widget {
     protected onAfterAttach(msg: Message): void {
         super.onAfterAttach(msg);
         this._loadWorkflowFromLocalStorage();
+        this._pushHistorySnapshot();
         if (this.graph) { this.graph.start(); }
         this.onResize(Widget.ResizeMessage.UnknownSize);
         this._startMinimapLoop();
@@ -2057,6 +2083,128 @@ except Exception as e:
 
     public resetZoom(): void {
         this.graphCanvas?.ds.reset();
+    }
+
+    private _scheduleHistorySnapshot(): void {
+        if (this._isRestoringHistory) { return; }
+        if (this._historySaveTimeout !== null) {
+            window.clearTimeout(this._historySaveTimeout);
+        }
+        this._historySaveTimeout = window.setTimeout(() => {
+            this._historySaveTimeout = null;
+            this._pushHistorySnapshot();
+        }, 400);
+    }
+
+    private _pushHistorySnapshot(): void {
+        if (!this.graph || this._isRestoringHistory) { return; }
+
+        let snapshot: string;
+        try {
+            snapshot = JSON.stringify(this.graph.serialize());
+        } catch (err) {
+            console.error("Error capturing undo snapshot:", err);
+            return;
+        }
+
+        if (this._historyIndex >= 0 && this._history[this._historyIndex] === snapshot) {
+            return;
+        }
+
+        this._history = this._history.slice(0, this._historyIndex + 1);
+        this._history.push(snapshot);
+
+        const HISTORY_LIMIT = 50;
+        if (this._history.length > HISTORY_LIMIT) {
+            this._history.shift();
+        }
+        this._historyIndex = this._history.length - 1;
+    }
+
+    private _restoreHistorySnapshot(snapshot: string): void {
+        if (!this.graph) { return; }
+        this._isRestoringHistory = true;
+        try {
+            const data = JSON.parse(snapshot);
+            this._importWorkflowData(data);
+            this._saveWorkflowToLocalStorage();
+        } catch (err) {
+            console.error("Error restoring undo/redo snapshot:", err);
+        } finally {
+            this._isRestoringHistory = false;
+        }
+    }
+
+    public undo(): void {
+        if (this._historyIndex <= 0) { return; }
+        this._historyIndex--;
+        this._restoreHistorySnapshot(this._history[this._historyIndex]);
+    }
+
+    public redo(): void {
+        if (this._historyIndex >= this._history.length - 1) { return; }
+        this._historyIndex++;
+        this._restoreHistorySnapshot(this._history[this._historyIndex]);
+    }
+
+    // Arranges nodes into left-to-right columns by dependency depth
+    // reflects how data actually flows through the graph.
+    public autoLayout(): void {
+        if (!this.graph) { return; }
+        const nodes = (this.graph as any)._nodes as LGraphNode[];
+        if (nodes.length === 0) { return; }
+
+        const depthCache = new Map<LGraphNode, number>();
+        const computeDepth = (node: LGraphNode, visiting: Set<LGraphNode>): number => {
+            if (depthCache.has(node)) { return depthCache.get(node)!; }
+            if (visiting.has(node)) { return 0; }
+            visiting.add(node);
+
+            let maxParentDepth = -1;
+            for (const input of node.inputs || []) {
+                if (input.link === null || input.link === undefined) { continue; }
+                const linkInfo = this.graph!.links[input.link];
+                if (!linkInfo) { continue; }
+                const originNode = this.graph!.getNodeById(linkInfo.origin_id);
+                if (originNode && originNode !== node) {
+                    maxParentDepth = Math.max(maxParentDepth, computeDepth(originNode, visiting));
+                }
+            }
+
+            visiting.delete(node);
+            const depth = maxParentDepth + 1;
+            depthCache.set(node, depth);
+            return depth;
+        };
+
+        const layers = new Map<number, LGraphNode[]>();
+        for (const node of nodes) {
+            const depth = computeDepth(node, new Set());
+            if (!layers.has(depth)) { layers.set(depth, []); }
+            layers.get(depth)!.push(node);
+        }
+
+        const COLUMN_GAP = 60;
+        const ROW_GAP = 30;
+        const START_X = 40;
+        const START_Y = 40;
+
+        let x = START_X;
+        for (const depth of Array.from(layers.keys()).sort((a, b) => a - b)) {
+            const columnNodes = layers.get(depth)!;
+            let y = START_Y;
+            let columnWidth = 0;
+            for (const node of columnNodes) {
+                node.pos = [x, y];
+                y += (node.size[1] || 60) + ROW_GAP;
+                columnWidth = Math.max(columnWidth, node.size[0] || 180);
+            }
+            x += columnWidth + COLUMN_GAP;
+        }
+
+        this.graph.setDirtyCanvas(true, true);
+        this._saveWorkflowToLocalStorage();
+        this._pushHistorySnapshot();
     }
 
     public toggleExecPins(show: boolean): void {

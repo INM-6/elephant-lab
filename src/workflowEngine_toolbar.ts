@@ -37,6 +37,27 @@ const header = document.createElement('h3');
         resetZoomButton.onclick = () => { engine.resetZoom(); };
         buttonContainer.appendChild(resetZoomButton);
 
+        const undoButton = document.createElement('button');
+        undoButton.textContent = '↶ Undo';
+        undoButton.title = 'Undo the last change (Ctrl/Cmd+Z)';
+        undoButton.className = 'workflow-button';
+        undoButton.onclick = () => { engine.undo(); };
+        buttonContainer.appendChild(undoButton);
+
+        const redoButton = document.createElement('button');
+        redoButton.textContent = '↷ Redo';
+        redoButton.title = 'Redo the last undone change (Ctrl/Cmd+Shift+Z)';
+        redoButton.className = 'workflow-button';
+        redoButton.onclick = () => { engine.redo(); };
+        buttonContainer.appendChild(redoButton);
+
+        const autoLayoutButton = document.createElement('button');
+        autoLayoutButton.textContent = '▤ Auto Layout';
+        autoLayoutButton.title = 'Arrange nodes into columns following the data flow';
+        autoLayoutButton.className = 'workflow-button';
+        autoLayoutButton.onclick = () => { engine.autoLayout(); };
+        buttonContainer.appendChild(autoLayoutButton);
+
         const generateCodeButton = document.createElement('button');
         generateCodeButton.textContent = '</> Generate Code';
         generateCodeButton.style.backgroundColor = COLORS["Olive"];
