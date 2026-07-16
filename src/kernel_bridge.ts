@@ -15,6 +15,7 @@ import { DraggableItem } from './elephant_lab_node';
 
 export interface IExecutionResult {
     resultKey: string | null;
+    resultKeys: string[];
     outputs: any[];
 }
 
@@ -428,6 +429,7 @@ export class KernelBridge {
         const future = session.session.kernel!.requestExecute({ code: codeToRun, store_history: false });
 
         let resultKey: string | null = null;
+        const resultKeys: string[] = [];
         const outputs: any[] = [];
 
         future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
@@ -439,10 +441,8 @@ export class KernelBridge {
                     const lines_to_print: string[] = [];
                     for (const line of lines) {
                         if (line.trim().startsWith("ELEPHANT_LAB_RESULT_KEY:")) {
-                            if (resultKey === null) {
-                                resultKey = "";
-                            }
-                            resultKey += line.trim().substring("ELEPHANT_LAB_RESULT_KEY:".length);
+                            resultKey = line.trim().substring("ELEPHANT_LAB_RESULT_KEY:".length);
+                            resultKeys.push(resultKey);
                         } else {
                             lines_to_print.push(line);
                         }
@@ -468,7 +468,7 @@ export class KernelBridge {
 
         await future.done;
 
-        let result: IExecutionResult = { resultKey: resultKey ? resultKey : null, outputs };
+        let result: IExecutionResult = { resultKey: resultKey ? resultKey : null, resultKeys, outputs };
 
         if (result) {
             this.handleOutputs(result.outputs, outputArea, showOutput);

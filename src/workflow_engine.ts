@@ -572,9 +572,81 @@ export class WorkflowEngineWidget extends Widget {
 
         const executed_nodes = new Map<LGraphNode, string | null>();
 
+        let pendingCode: string[] = [];
+        let pendingNodes: { node: ElephantLabNode; resultId: string }[] = [];
+
+        const flushBatch = async () => {
+            if (pendingCode.length === 0) { return; }
+            const batchResult = await this.kernelBridge.executeCode(pendingCode.join('\n\n'));
+            if (batchResult) {
+                collected_outputs.push(...batchResult.outputs);
+                const foundKeys = new Set(batchResult.resultKeys);
+                for (const { node, resultId } of pendingNodes) {
+                    if (foundKeys.has(resultId)) {
+                        const dataOutputIndex = node.outputs.findIndex(o => o.name === 'result');
+                        if (dataOutputIndex !== -1) { node.setOutputData(dataOutputIndex, resultId); }
+                        executed_nodes.set(node, resultId);
+                    } else {
+                        executed_nodes.set(node, null);
+                    }
+                }
+            }
+            pendingCode = [];
+            pendingNodes = [];
+        };
+
         for (const node of executionOrder) {
-            await this.executeNode(node, executed_nodes, outputArea, collected_outputs);
+            if (executed_nodes.has(node)) { continue; }
+
+            if (!(node instanceof ElephantLabNode)) {
+                executed_nodes.set(node, null);
+                continue;
+            }
+
+            const item = node.properties.item;
+            if (!item || !item.code || !this.session || !this.session.session ||
+                item.code === '__UTIL_LOOP__' || item.code === '__UTIL_IF__') {
+                await flushBatch();
+                await this.executeNode(node, executed_nodes, outputArea, collected_outputs);
+                continue;
+            }
+
+            const args: (string | null)[] = [];
+            if (item.parameters) {
+                for (const param of item.parameters) {
+                    const inputIndex = node.inputs.findIndex(i => i.name === param.name);
+                    let value: string | null = null;
+
+                    if (inputIndex !== -1 && node.inputs[inputIndex].link !== null) {
+                        const linkInfo = this.graph!.links[node.inputs[inputIndex].link!];
+                        if (linkInfo) {
+                            const originNode = this.graph!.getNodeById(linkInfo.origin_id);
+                            if (originNode) {
+                                value = await this.executeNode(originNode, executed_nodes, outputArea, collected_outputs);
+                            }
+                        }
+                    } else {
+                        const propName = `param_${param.name}`;
+                        value = (node.properties[propName] as string) || null;
+                    }
+                    args.push(value);
+                }
+            }
+
+            const resultId = `result_${crypto.randomUUID().replace(/-/g, '_')}`;
+            const codeToExecute = this._generatePythonCodeForNode(node, args, resultId);
+
+            if (!codeToExecute) {
+                executed_nodes.set(node, null);
+                continue;
+            }
+
+            pendingCode.push(codeToExecute);
+            pendingNodes.push({ node, resultId });
+            executed_nodes.set(node, resultId);
         }
+
+        await flushBatch();
 
         this.handleOutputs(collected_outputs, outputArea);
 
