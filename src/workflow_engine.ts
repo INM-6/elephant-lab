@@ -1268,7 +1268,8 @@ except Exception as e:
         const imports = new Set<string>();
         let varCounter = 0;
         const generatedNodes = new Set<LGraphNode>();
-        const preExecutionPromises: Promise<any>[] = [];
+        const usedResultNames = new Set<string>();
+        const neoResolveCommands: string[] = [];
 
         const isUnusable = (s: string) => !s || s === 'list' || s === 'print' || s === 'neo';
 
@@ -1413,9 +1414,10 @@ except Exception as e:
             let resultVarName = item.code === '__NEO_READ_FILE__' ? 'neo_data' : sanitizeVarName(item.name);
             const originalName = resultVarName;
             let counter = 1;
-            while (Array.from(nodeResultNames.values()).includes(resultVarName)) {
+            while (usedResultNames.has(resultVarName)) {
                 resultVarName = `${originalName}_${counter++}`;
             }
+            usedResultNames.add(resultVarName);
             nodeResultNames.set(elephant_labNode, resultVarName);
 
             const processedArgs: { name: string, value: string, isSelf: boolean }[] = [];
@@ -1561,8 +1563,7 @@ except Exception as e:
 
                 if (isNeoObject) {
                     // Resolve the object into a nicely-named kernel variable behind the scenes
-                    const command = `${resultVarName} = elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get('${varName}'))`;
-                    preExecutionPromises.push(this.kernelBridge.executeCode(command));
+                    neoResolveCommands.push(`${resultVarName} = elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get('${varName}'))`);
                     lineOfCode = "";
                 } else {
                     lineOfCode = `${resultVarName} = ${varName}`;
@@ -1583,7 +1584,9 @@ except Exception as e:
             }
         }
 
-        await Promise.all(preExecutionPromises);
+        if (neoResolveCommands.length > 0) {
+            await this.kernelBridge.executeCode(neoResolveCommands.join('\n'));
+        }
 
         const importLines = Array.from(imports).join('\n');
         const fullCode = (importLines ? importLines + '\n\n' : '') + codeLines.join('\n');

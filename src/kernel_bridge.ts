@@ -419,7 +419,7 @@ export class KernelBridge {
 
         let codeToRun: string;
         if (executeCode) {
-            codeToRun = "import gc as elephant_lab_gc; elephant_lab_gc.collect()\n" + code;
+            codeToRun = code;
         }
         else {
             codeToRun = `print(${JSON.stringify(code)})`;
