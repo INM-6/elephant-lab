@@ -21,6 +21,8 @@ export class WorkflowEngineWidget extends Widget {
     private graphCanvas: LGraphCanvas | null;
     private kernelBridge: KernelBridge;
     private canvasElement: HTMLCanvasElement;
+    private minimapElement: HTMLCanvasElement;
+    private _minimapRafId: number | null = null;
     private outputArea: OutputArea;
     private notebook_tracker: INotebookTracker; // Current active Notebook -> used for Cell Injection
     public session: ISessionContext | null; // used to execute Python Code in same session as Elephant Lab 
@@ -111,6 +113,14 @@ export class WorkflowEngineWidget extends Widget {
             }
         });
 
+        this.minimapElement = document.createElement('canvas');
+        this.minimapElement.id = 'workflow-minimap';
+        this.minimapElement.className = 'workflow-minimap';
+        this.minimapElement.width = 180;
+        this.minimapElement.height = 130;
+        this.node.appendChild(this.minimapElement);
+        this._setupMinimapInteraction();
+
         try {
             this.graph = new LGraph();
             (this.graph as any).widget = this;
@@ -174,6 +184,7 @@ export class WorkflowEngineWidget extends Widget {
         this._loadWorkflowFromLocalStorage();
         if (this.graph) { this.graph.start(); }
         this.onResize(Widget.ResizeMessage.UnknownSize);
+        this._startMinimapLoop();
     }
     // Dynamically resizing is important to keep the hitboxes of the Nodes correct
     protected onResize(msg: Widget.ResizeMessage): void {
@@ -181,15 +192,136 @@ export class WorkflowEngineWidget extends Widget {
         if (this.graphCanvas) { this.graphCanvas.resize(); }
     }
 
-    // hide the graph after hiding the widget -> more memory efficient (?) 
+    // hide the graph after hiding the widget -> more memory efficient (?)
     protected onAfterHide(msg: Message): void {
         super.onAfterHide(msg);
         if (this.graph) { this.graph.stop(); }
+        this._stopMinimapLoop();
     }
     protected onAfterShow(msg: Message): void {
         super.onAfterShow(msg);
         if (this.graph) { this.graph.start(); }
         this.onResize(Widget.ResizeMessage.UnknownSize);
+        this._startMinimapLoop();
+    }
+
+    private _startMinimapLoop(): void {
+        if (this._minimapRafId !== null) { return; }
+        const loop = () => {
+            this._drawMinimap();
+            this._minimapRafId = requestAnimationFrame(loop);
+        };
+        this._minimapRafId = requestAnimationFrame(loop);
+    }
+
+    private _stopMinimapLoop(): void {
+        if (this._minimapRafId !== null) {
+            cancelAnimationFrame(this._minimapRafId);
+            this._minimapRafId = null;
+        }
+    }
+
+    private _getMinimapBounds(): { minX: number; minY: number; mmScale: number; paddingX: number; paddingY: number } | null {
+        if (!this.graph || !this.graphCanvas) { return null; }
+
+        const nodes = (this.graph as any)._nodes as LGraphNode[];
+        this.graphCanvas.ds.computeVisibleArea();
+        const visibleArea = this.graphCanvas.ds.visible_area;
+
+        let minX = visibleArea[0];
+        let minY = visibleArea[1];
+        let maxX = visibleArea[0] + visibleArea[2];
+        let maxY = visibleArea[1] + visibleArea[3];
+
+        for (const node of nodes) {
+            minX = Math.min(minX, node.pos[0]);
+            minY = Math.min(minY, node.pos[1]);
+            maxX = Math.max(maxX, node.pos[0] + node.size[0]);
+            maxY = Math.max(maxY, node.pos[1] + node.size[1]);
+        }
+
+        const marginX = (maxX - minX) * 0.05 || 20;
+        const marginY = (maxY - minY) * 0.05 || 20;
+        minX -= marginX; minY -= marginY;
+        maxX += marginX; maxY += marginY;
+
+        const boundingW = Math.max(maxX - minX, 1);
+        const boundingH = Math.max(maxY - minY, 1);
+
+        const mmScale = Math.min(this.minimapElement.width / boundingW, this.minimapElement.height / boundingH);
+        const paddingX = (this.minimapElement.width - boundingW * mmScale) / 2;
+        const paddingY = (this.minimapElement.height - boundingH * mmScale) / 2;
+
+        return { minX, minY, mmScale, paddingX, paddingY };
+    }
+
+    private _drawMinimap(): void {
+        if (!this.graph || !this.graphCanvas) { return; }
+        const ctx = this.minimapElement.getContext('2d');
+        if (!ctx) { return; }
+
+        ctx.clearRect(0, 0, this.minimapElement.width, this.minimapElement.height);
+
+        const bounds = this._getMinimapBounds();
+        if (!bounds) { return; }
+        const { minX, minY, mmScale, paddingX, paddingY } = bounds;
+
+        const toMinimap = (x: number, y: number): [number, number] => [
+            (x - minX) * mmScale + paddingX,
+            (y - minY) * mmScale + paddingY
+        ];
+
+        const nodes = (this.graph as any)._nodes as LGraphNode[];
+        ctx.fillStyle = 'rgba(120, 170, 255, 0.85)';
+        for (const node of nodes) {
+            const [nx, ny] = toMinimap(node.pos[0], node.pos[1]);
+            const nw = Math.max(node.size[0] * mmScale, 2);
+            const nh = Math.max(node.size[1] * mmScale, 2);
+            ctx.fillRect(nx, ny, nw, nh);
+        }
+
+        // Current viewport
+        this.graphCanvas.ds.computeVisibleArea();
+        const visibleArea = this.graphCanvas.ds.visible_area;
+        const [vx, vy] = toMinimap(visibleArea[0], visibleArea[1]);
+        const vw = visibleArea[2] * mmScale;
+        const vh = visibleArea[3] * mmScale;
+        ctx.strokeStyle = '#ff6d00';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(vx, vy, vw, vh);
+    }
+
+    // Clicking/dragging on the minimap re-centers the main canvas on that point
+    private _setupMinimapInteraction(): void {
+        let dragging = false;
+
+        const navigateTo = (event: MouseEvent) => {
+            if (!this.graph || !this.graphCanvas) { return; }
+            const bounds = this._getMinimapBounds();
+            if (!bounds) { return; }
+
+            const rect = this.minimapElement.getBoundingClientRect();
+            const clickX = (event.clientX - rect.left) * (this.minimapElement.width / rect.width);
+            const clickY = (event.clientY - rect.top) * (this.minimapElement.height / rect.height);
+
+            const graphX = (clickX - bounds.paddingX) / bounds.mmScale + bounds.minX;
+            const graphY = (clickY - bounds.paddingY) / bounds.mmScale + bounds.minY;
+
+            this.graphCanvas.ds.computeVisibleArea();
+            const visibleArea = this.graphCanvas.ds.visible_area;
+            this.graphCanvas.ds.offset[0] = visibleArea[2] / 2 - graphX;
+            this.graphCanvas.ds.offset[1] = visibleArea[3] / 2 - graphY;
+            this.graphCanvas.draw(true, true);
+        };
+
+        this.minimapElement.addEventListener('mousedown', (event) => {
+            dragging = true;
+            navigateTo(event);
+        });
+        window.addEventListener('mousemove', (event) => {
+            if (dragging) { navigateTo(event); }
+        });
+        window.addEventListener('mouseup', () => { dragging = false; });
     }
 
     // Method to be called when graph Items should be updated, clearGraph will remove any existing nodes
