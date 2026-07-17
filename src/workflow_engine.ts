@@ -4,7 +4,7 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 import { Widget } from '@lumino/widgets';
 import { Message } from '@lumino/messaging';
 import { OutputArea } from '@jupyterlab/outputarea';
-import { LiteGraph, LGraph, LGraphCanvas, LGraphNode } from 'litegraph.js';
+import { LiteGraph, LGraph, LGraphCanvas, LGraphNode, LGraphGroup } from 'litegraph.js';
 import { INotebookTracker, NotebookActions } from '@jupyterlab/notebook';
 import { IRenderMimeRegistry, MimeModel } from '@jupyterlab/rendermime';
 import { ElephantLabNode, DraggableItem } from './elephant_lab_node';
@@ -74,6 +74,27 @@ export class WorkflowEngineWidget extends Widget {
             }
             return link;
         }
+
+        const original_getGroupMenuOptions = (LGraphCanvas.prototype as any).getGroupMenuOptions;
+        (LGraphCanvas.prototype as any).getGroupMenuOptions = function (this: LGraphCanvas, group: LGraphGroup): any[] {
+            const options: any[] = original_getGroupMenuOptions.call(this, group);
+            group.recomputeInsideNodes();
+            const groupNodes = (group as any)._nodes as LGraphNode[];
+            const anyExpanded = groupNodes.some(n => !n.flags?.collapsed);
+            options.unshift({
+                content: anyExpanded ? "Collapse Nodes" : "Expand Nodes",
+                callback: () => {
+                    group.recomputeInsideNodes();
+                    for (const node of (group as any)._nodes as LGraphNode[]) {
+                        node.flags = node.flags || {};
+                        node.flags.collapsed = anyExpanded;
+                    }
+                    if (this.graph) { (this.graph as any).change?.(); }
+                    this.setDirty(true, true);
+                }
+            }, null);
+            return options;
+        };
 
         if (this.session) {
             this.session.ready.then(() => {
@@ -188,6 +209,7 @@ export class WorkflowEngineWidget extends Widget {
         listNode.pos = [dropPos[0] + 250, dropPos[1]];
         this.graph.add(listNode);
 
+        const objectNodes: ElephantLabNode[] = [];
         items.forEach((item, index) => {
             const objectNode = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
             objectNode.docManager = this.docManager;
@@ -195,12 +217,22 @@ export class WorkflowEngineWidget extends Widget {
             objectNode.setProperty("item", item);
             objectNode.pos = [dropPos[0], dropPos[1] + index * 60];
             this.graph!.add(objectNode);
+            objectNodes.push(objectNode);
 
             const outputSlot = objectNode.outputs.findIndex(o => o.name === 'result');
             if (outputSlot !== -1) {
                 objectNode.connect(outputSlot, listNode, index);
             }
         });
+
+        if (objectNodes.length > 1) {
+            this._wrapNodesInGroup(objectNodes, `${listItem.name} items (${objectNodes.length})`);
+            for (const node of objectNodes) {
+                node.flags = node.flags || {};
+                node.flags.collapsed = true;
+            }
+            this.graph!.setDirtyCanvas(true, true);
+        }
     }
 
     // Executed after Widget is opened
@@ -2154,6 +2186,17 @@ except Exception as e:
         const nodes = (this.graph as any)._nodes as LGraphNode[];
         if (nodes.length === 0) { return; }
 
+        const groups = ((this.graph as any)._groups || []) as LGraphGroup[];
+        const nodeToGroup = new Map<LGraphNode, LGraphGroup>();
+        for (const group of groups) {
+            group.recomputeInsideNodes();
+            for (const node of (group as any)._nodes as LGraphNode[]) {
+                if (!nodeToGroup.has(node)) {
+                    nodeToGroup.set(node, group);
+                }
+            }
+        }
+
         const depthCache = new Map<LGraphNode, number>();
         const computeDepth = (node: LGraphNode, visiting: Set<LGraphNode>): number => {
             if (depthCache.has(node)) { return depthCache.get(node)!; }
@@ -2177,30 +2220,116 @@ except Exception as e:
             return depth;
         };
 
-        const layers = new Map<number, LGraphNode[]>();
+        type LayoutUnit = { depth: number; nodes: LGraphNode[]; group: LGraphGroup | null };
+        const unitsByGroup = new Map<LGraphGroup, LayoutUnit>();
+        const units: LayoutUnit[] = [];
+
         for (const node of nodes) {
             const depth = computeDepth(node, new Set());
-            if (!layers.has(depth)) { layers.set(depth, []); }
-            layers.get(depth)!.push(node);
+            const group = nodeToGroup.get(node) || null;
+            if (group) {
+                let unit = unitsByGroup.get(group);
+                if (!unit) {
+                    unit = { depth, nodes: [], group };
+                    unitsByGroup.set(group, unit);
+                    units.push(unit);
+                }
+                unit.depth = Math.max(unit.depth, depth);
+                unit.nodes.push(node);
+            } else {
+                units.push({ depth, nodes: [node], group: null });
+            }
+        }
+
+        const layers = new Map<number, LayoutUnit[]>();
+        for (const unit of units) {
+            if (!layers.has(unit.depth)) { layers.set(unit.depth, []); }
+            layers.get(unit.depth)!.push(unit);
         }
 
         const COLUMN_GAP = 60;
         const ROW_GAP = 30;
         const START_X = 40;
         const START_Y = 40;
+        const GROUP_PADDING = 24;
+        const GROUP_TITLE_SPACE = 30;
 
         let x = START_X;
         for (const depth of Array.from(layers.keys()).sort((a, b) => a - b)) {
-            const columnNodes = layers.get(depth)!;
+            const columnUnits = layers.get(depth)!;
             let y = START_Y;
             let columnWidth = 0;
-            for (const node of columnNodes) {
-                node.pos = [x, y];
-                y += (node.size[1] || 60) + ROW_GAP;
-                columnWidth = Math.max(columnWidth, node.size[0] || 180);
+
+            for (const unit of columnUnits) {
+                if (unit.group) {
+                    let groupMinX = Infinity, groupMinY = Infinity;
+                    for (const node of unit.nodes) {
+                        groupMinX = Math.min(groupMinX, node.pos[0]);
+                        groupMinY = Math.min(groupMinY, node.pos[1]);
+                    }
+                    const targetX = x + GROUP_PADDING;
+                    const targetY = y + GROUP_PADDING + GROUP_TITLE_SPACE;
+                    const dx = targetX - groupMinX;
+                    const dy = targetY - groupMinY;
+                    for (const node of unit.nodes) {
+                        node.pos = [node.pos[0] + dx, node.pos[1] + dy];
+                    }
+
+                    let groupMaxX = -Infinity, groupMaxY = -Infinity;
+                    for (const node of unit.nodes) {
+                        groupMaxX = Math.max(groupMaxX, node.pos[0] + node.size[0]);
+                        groupMaxY = Math.max(groupMaxY, node.pos[1] + node.size[1]);
+                    }
+                    const groupWidth = (groupMaxX - targetX) + GROUP_PADDING * 2;
+                    const groupHeight = (groupMaxY - targetY) + GROUP_PADDING * 2 + GROUP_TITLE_SPACE;
+                    (unit.group as any).pos = [x, y];
+                    (unit.group as any).size = [groupWidth, groupHeight];
+
+                    y += groupHeight + ROW_GAP;
+                    columnWidth = Math.max(columnWidth, groupWidth);
+                } else {
+                    const node = unit.nodes[0];
+                    node.pos = [x, y];
+                    y += (node.size[1] || 60) + ROW_GAP;
+                    columnWidth = Math.max(columnWidth, node.size[0] || 180);
+                }
             }
             x += columnWidth + COLUMN_GAP;
         }
+
+        this.graph.setDirtyCanvas(true, true);
+        this._saveWorkflowToLocalStorage();
+        this._pushHistorySnapshot();
+    }
+
+    public groupSelectedNodes(title: string = "Group"): void {
+        if (!this.graph || !this.graphCanvas) { return; }
+        const selected = Object.values(this.graphCanvas.selected_nodes || {}) as LGraphNode[];
+        if (selected.length === 0) {
+            console.warn("No nodes selected to group.");
+            return;
+        }
+        this._wrapNodesInGroup(selected, title);
+    }
+
+    private _wrapNodesInGroup(nodes: LGraphNode[], title: string): void {
+        if (!this.graph || nodes.length === 0) { return; }
+
+        const PADDING = 24;
+        const TITLE_SPACE = 30;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const node of nodes) {
+            minX = Math.min(minX, node.pos[0]);
+            minY = Math.min(minY, node.pos[1]);
+            maxX = Math.max(maxX, node.pos[0] + node.size[0]);
+            maxY = Math.max(maxY, node.pos[1] + node.size[1]);
+        }
+
+        const group = new (LGraphGroup as any)(title) as LGraphGroup;
+        (group as any).pos = [minX - PADDING, minY - PADDING - TITLE_SPACE];
+        (group as any).size = [(maxX - minX) + PADDING * 2, (maxY - minY) + PADDING * 2 + TITLE_SPACE];
+        (this.graph as any).add(group);
+        group.recomputeInsideNodes();
 
         this.graph.setDirtyCanvas(true, true);
         this._saveWorkflowToLocalStorage();
@@ -2283,6 +2412,10 @@ except Exception as e:
                             }
                         }
 
+                        if (node_info.flags) {
+                            node.flags = Object.assign({}, node.flags, node_info.flags);
+                        }
+
                         this.graph.add(node);
                     }
                 }
@@ -2302,6 +2435,15 @@ except Exception as e:
                     }
                 }
             }
+
+            if (data.groups) {
+                for (const group_info of data.groups) {
+                    const group = new (LGraphGroup as any)() as LGraphGroup;
+                    (group as any).configure(group_info);
+                    (this.graph as any).add(group);
+                }
+            }
+
             this.graph.setDirtyCanvas(true, true);
         }
     }

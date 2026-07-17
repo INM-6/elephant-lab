@@ -58,6 +58,13 @@ const header = document.createElement('h3');
         autoLayoutButton.onclick = () => { engine.autoLayout(); };
         buttonContainer.appendChild(autoLayoutButton);
 
+        const groupSelectedButton = document.createElement('button');
+        groupSelectedButton.textContent = '▭ Group Selected';
+        groupSelectedButton.title = 'Wrap the selected nodes in a group box (right-click the group to collapse/expand it)';
+        groupSelectedButton.className = 'workflow-button';
+        groupSelectedButton.onclick = () => { engine.groupSelectedNodes(); };
+        buttonContainer.appendChild(groupSelectedButton);
+
         const generateCodeButton = document.createElement('button');
         generateCodeButton.textContent = '</> Generate Code';
         generateCodeButton.style.backgroundColor = COLORS["Olive"];
