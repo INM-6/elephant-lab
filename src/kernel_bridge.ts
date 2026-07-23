@@ -49,7 +49,7 @@ export class KernelBridge {
      * @returns A promise that resolves to an IExecutionResult object, containing the result key
      * and an array of output messages. Returns null if the session is not available.
      */
-    public async executeCode(pythonCode: PythonCodeKey | string, outputArea: OutputArea | null = null, showOutput = true, executeCode = true, session: ISessionContext | null = null): Promise<IExecutionResult | null> {
+    public async executeCode(pythonCode: PythonCodeKey | string, outputArea: OutputArea | null = null, showOutput = true, executeCode = true, session: ISessionContext | null = null, onDone: (() => void) | null = null): Promise<IExecutionResult | null> {
         if (!session) {
             session = this.session;
         }
@@ -122,6 +122,10 @@ export class KernelBridge {
 
         if (result) {
             this.handleOutputs(result.outputs, outputArea, showOutput);
+        }
+
+        if (onDone) {
+            onDone()
         }
 
         return result;

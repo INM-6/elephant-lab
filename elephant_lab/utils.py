@@ -123,16 +123,11 @@ class OutputUtils:
         #print(f"WARNING: {message}", file=PlotlyUtils.sys.stderr)
 
     @staticmethod
-    def normalize(values, method="minmax", do_normalize=True):
+    def normalize(values, method="minmax"):
         np = OutputUtils.np
         values = np.asarray(values, dtype=float)
         
         eps = np.finfo(values.dtype).eps
-
-        # Fast exit: all values are near zero
-        if np.all(np.abs(values) <= eps):
-            # Return values unchanged; they are considered already normalized
-            return values, True
 
         method = method.lower()
         if method == "minmax":
@@ -142,14 +137,9 @@ class OutputUtils:
 
             # Stricter check: already normalized to [0,1]
             if denom > eps and np.isclose(vmin, 0, atol=eps) and np.isclose(vmax, 1, atol=eps):
-                return values, True
+                return values
 
-            if do_normalize:
-                # Only normalize if requested
-                return (values - vmin) / denom if denom > eps else np.zeros_like(values), False
-            else:
-                # Skip normalization; just indicate it's not normalized
-                return values, False
+            return (values - vmin) / denom if denom > eps else np.zeros_like(values)
 
         elif method == "zscore":
             mean = np.nanmean(values)
@@ -157,12 +147,9 @@ class OutputUtils:
 
             # Already standardized (mean≈0, std≈1)
             if std > eps and np.isclose(mean, 0, atol=eps) and np.isclose(std, 1, atol=eps):
-                return values, True
+                return values
 
-            if do_normalize:
-                return (values - mean) / std if std > eps else np.zeros_like(values), False
-            else:
-                return values, False
+            return (values - mean) / std if std > eps else np.zeros_like(values)
 
         elif method == "l2":
             norm = np.linalg.norm(values)
@@ -171,66 +158,7 @@ class OutputUtils:
             if norm > eps and np.isclose(norm, 1, atol=eps):
                 return values, True
 
-            if do_normalize:
-                return values / norm if norm > eps else np.zeros_like(values), False
-            else:
-                return values, False
+            return values / norm if norm > eps else np.zeros_like(values)
 
         else:
             raise ValueError(f"Unknown normalization method: {method}")
-        
-    @staticmethod
-    def lttb_downsample(x, y, threshold):
-        threshold = int(threshold)
-        n = len(x)
-        if threshold >= n or threshold == 0:
-            return x, y
-        np = OutputUtils.np
-
-        sampled_x = np.empty(threshold)
-        sampled_y = np.empty(threshold)
-
-        # always keep first point
-        sampled_x[0] = x[0]
-        sampled_y[0] = y[0]
-
-        bucket_size = (n - 2) / (threshold - 2)
-
-        a = 0  # index of previously selected point
-
-        for i in range(1, threshold - 1):
-
-            start = int(np.floor((i - 1) * bucket_size)) + 1
-            end   = int(np.floor(i * bucket_size)) + 1
-
-            next_start = end
-            next_end   = int(np.floor((i + 1) * bucket_size)) + 1
-            next_end   = min(next_end, n)
-
-            # average point of next bucket
-            avg_x = np.nanmean(x[next_start:next_end])
-            avg_y = np.nanmean(y[next_start:next_end])
-
-            bx = x[start:end]
-            by = y[start:end]
-
-            ax = x[a]
-            ay = y[a]
-
-            # triangle area calculation (vectorized)
-            area = np.abs(
-                (ax - avg_x) * (by - ay) -
-                (ax - bx)    * (avg_y - ay)
-            )
-
-            idx = np.argmax(area)
-            a = start + idx
-
-            sampled_x[i] = x[a]
-            sampled_y[i] = y[a]
-
-        # keep last point
-        sampled_x[-1] = x[-1]
-        sampled_y[-1] = y[-1]
-
-        return sampled_x, sampled_y

@@ -1,17 +1,36 @@
 import * as Plotly from 'plotly.js-dist';
 import * as noUiSlider from 'nouislider';
 import { OutputArea } from '@jupyterlab/outputarea';
+import {
+    Widget,
+} from '@lumino/widgets';
+import {
+    PythonCodeKey,
+    getPythonCode
+} from './kernelcode';
+import { KernelBridge } from './kernel_bridge';
+import {
+    IRenderMimeRegistry,
+}
+    from '@jupyterlab/rendermime';
+import { createOutputArea } from './output_functionalities';
 
 export class PlotContainer {
+    private kernelBridge: KernelBridge;
+    private rendermime: IRenderMimeRegistry;
     private wrapper: HTMLDivElement;
     private container: HTMLDivElement;
+    private plotOutputArea: OutputArea;
     private loading: HTMLDivElement;
     private updateId: number;
     private hasFrames: boolean;
+    // @ts-ignore
     private slider?: HTMLElement;
     private ticklabel_limit?: number;
 
-    constructor(outputArea: OutputArea | null) {
+    constructor(kernelBridge: KernelBridge, rendermime: IRenderMimeRegistry, outputWiget: Widget | null) {
+        this.kernelBridge = kernelBridge;
+        this.rendermime = rendermime;
         const wrapper = document.createElement('div');
         wrapper.classList.add('plot-wrapper');
         wrapper.style.position = 'relative';
@@ -24,6 +43,12 @@ export class PlotContainer {
         container.classList.add('plot-container');
         container.style.flex = '1'; // fill remaining space
         container.style.minWidth = '0'; // allow shrinking in flex
+
+
+        this.plotOutputArea = createOutputArea(this.rendermime, ['my-outarea-class'], 'jup_vis_out_id_2.3');;
+
+        // Add it to the container
+        container.appendChild(this.plotOutputArea.node);
         wrapper.appendChild(container);
 
         // Loading overlay
@@ -49,8 +74,8 @@ export class PlotContainer {
         });
         wrapper.appendChild(loading);
 
-        if (outputArea) {
-            outputArea.node.appendChild(wrapper);
+        if (outputWiget) {
+            outputWiget.node.appendChild(wrapper);
         } else {
             document.body.appendChild(wrapper);
         }
@@ -62,8 +87,8 @@ export class PlotContainer {
         this.hasFrames = false;
     }
 
-    showLoading() {
-        const gd = this.container as any;
+    async startLoading(plot_key: string) {
+        const gd = this.plotOutputArea.node.querySelector('.js-plotly-plot') as any;
         if (!gd || !gd.data || gd.data.length === 0) {
             // Get the current JupyterLab theme background color
             const rootStyles = getComputedStyle(document.documentElement);
@@ -79,6 +104,25 @@ export class PlotContainer {
         }
         this.loading.style.opacity = '1';
         this.loading.style.pointerEvents = 'all';
+
+        const onDone = () => {
+
+            const waitForPlot = () => {
+                const plot = this.plotOutputArea.node.querySelector('.js-plotly-plot');
+                if (plot) {
+                    this.hideLoading();
+                    //this.setTheme(this.isPlotlyDarkTheme);
+                    this.kernelBridge.executeCode(PythonCodeKey.ResizePlots);
+                } else {
+                    requestAnimationFrame(waitForPlot);
+                }
+            };
+
+            waitForPlot();
+        }
+
+        const code = getPythonCode(PythonCodeKey.PlotByPlotKey, plot_key);
+        this.kernelBridge.executeCode(code, this.plotOutputArea, true, true, null, onDone);
     }
 
     hideLoading() {
@@ -122,8 +166,6 @@ export class PlotContainer {
                 this.removeYRangeSlider()
             }
 
-            this.setTheme(is_plot_theme_dark)
-            this.resize();
         }).catch((err) => {
             console.error('Plotly render error:', err);
         }).finally(() => {
@@ -219,50 +261,11 @@ export class PlotContainer {
         this.slider = undefined
     }
 
-    resize() {
-        Plotly.Plots.resize(this.container);
-    }
-
-    setTheme(is_dark: boolean) {
-        const gd = this.container as any;
-        if (!gd || !gd.data) return;
-
-        const theme = is_dark
-            ? { paper_bgcolor: '#111111', plot_bgcolor: '#111111', fontColor: '#fff', gridColor: '#444' }
-            : { paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff', fontColor: '#000', gridColor: '#e5e5e5' };
-
-        const layoutCopy: Partial<Plotly.Layout> = {
-            paper_bgcolor: theme.paper_bgcolor,
-            plot_bgcolor: theme.plot_bgcolor,
-            font: { ...gd.layout?.font, color: theme.fontColor },
-        };
-
-        // Cast to any for dynamic axis assignment
-        const layoutAny = layoutCopy as any;
-
-        // Loop over all keys in layout that start with "xaxis" or "yaxis"
-        Object.keys(gd.layout).forEach((key) => {
-            if (key.startsWith('xaxis') || key.startsWith('yaxis')) {
-                layoutAny[key] = {
-                    ...gd.layout[key], // preserve existing range, tickvals, ticktext
-                    gridcolor: theme.gridColor,
-                    zerolinecolor: theme.gridColor,
-                    color: theme.fontColor,
-                };
-            }
-        });
-
-        // Apply the theme without overwriting ranges, ticks, etc.
-        Plotly.relayout(this.container, layoutCopy);
-    }
-
-    getXRange(): [number, number] | undefined {
-        const gd = this.container as any;
-        return gd?.layout?.xaxis?.range;
-    }
-
     destroy() {
-        Plotly.purge(this.container);
+        const gd = this.plotOutputArea.node.querySelector('.js-plotly-plot') as any;
+        if (gd) {
+            Plotly.purge(gd);
+        }
         this.wrapper.remove();
     }
 }

@@ -64,12 +64,6 @@ function updatePlotSettings(settings: PlotSettings): string {
 	return `elephant_lab_entity.elephant_lab_plot.update_settings(${args.join(", ")})`;
 }
 
-function upscaleRawPlot(x_ranges: string): string {
-	return `elephant_lab_entity.elephant_lab_plot.upscale_raw_plot(${x_ranges})`
-}
-
-const resetScale = `elephant_lab_entity.elephant_lab_plot.reset_scale()`;
-
 function setPanelVisibility(exploreActive: boolean, detailsActive: boolean): string {
 	return `elephant_lab_entity.set_panel_visibility(${pythonValue(exploreActive)}, ${pythonValue(detailsActive)})`;
 }
@@ -94,6 +88,12 @@ function selectByAnnotationFilter(expression: string): string {
 	return `elephant_lab_entity.elephant_lab_tree.select_by_annotation_filter(${JSON.stringify(expression)})`;
 }
 
+function plotByPlotKey(plot_key: string): string {
+	return `elephant_lab_entity.elephant_lab_plot.plot('${plot_key}')`;
+}
+
+const resize_plots = "elephant_lab_entity.elephant_lab_plot.resize_plots()"
+
 // Make all strings publicly available in a dict
 // This dict is used in index.ts to actually execute the code
 export enum PythonCodeKey {
@@ -107,8 +107,6 @@ export enum PythonCodeKey {
 	InsertCode = 'insertCode',
 	SetVarName = 'setVarName',
 	SaveSelectedNeoObjects = 'saveSelectedNeoObjects',
-	UpscaleRawPlot = 'upscaleRawPlot',
-	ResetScale = 'resetScale',
 	ToggleNeoTreeFilter = 'toggleNeoTreeFilter',
 	ExpandNeoTree = 'expandNeoTree',
 	GetIOClass = 'getIOClass',
@@ -117,6 +115,8 @@ export enum PythonCodeKey {
 	SelectByAnnotationFilter = 'selectByAnnotationFilter',
 	SetPanelVisibility = 'setPanelVisibility',
 	UpdatePlotSettings = 'updatePlotSettings',
+	PlotByPlotKey = 'plotByPlotKey',
+	ResizePlots = 'resizePlots'
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -130,8 +130,6 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.InsertCode]: insertCode,
 	[PythonCodeKey.SetVarName]: (...args: any[]) => setVarName(args[0], args[1], args[2]),
 	[PythonCodeKey.SaveSelectedNeoObjects]: (...args: any[]) => saveSelectedNeoObjects(args[0]),
-	[PythonCodeKey.UpscaleRawPlot]: (...args: any[]) => upscaleRawPlot(args[0]),
-	[PythonCodeKey.ResetScale]: resetScale,
 	[PythonCodeKey.ToggleNeoTreeFilter]: (...args: any[]) => toggleNeoTreeFilter(args[0]),
 	[PythonCodeKey.ExpandNeoTree]: (...args: any[]) => expandNeoTree(args[0]),
 	[PythonCodeKey.GetIOClass]: (...args: any[]) => getNeoIOClass(args[0]),
@@ -140,6 +138,8 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
 	[PythonCodeKey.SetPanelVisibility]: (...args: any[]) => setPanelVisibility(args[0], args[1]),
 	[PythonCodeKey.UpdatePlotSettings]: (...args: any[]) => updatePlotSettings(args[0]),
+	[PythonCodeKey.PlotByPlotKey]: (...args: any[]) => plotByPlotKey(args[0]),
+	[PythonCodeKey.ResizePlots]: resize_plots
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {

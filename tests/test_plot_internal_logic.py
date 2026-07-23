@@ -6,7 +6,7 @@ import re
 from matplotlib.colors import to_rgb
 from elephant_lab.PlotlyGraphFigure import *
 from elephant_lab.PlotlyGraphContainer import *
-from elephant_lab.PlotlyGraphDataTypes import SpikeTrainRasterPlot
+from elephant_lab.PlotlyGraphDatas import SpikeTrainRasterPlot
 from elephant_lab.PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
 from elephant_lab.utils import OutputUtils
 from ipywidgets import FloatRangeSlider
@@ -57,7 +57,7 @@ def test_height(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
     assert PlotlyGraphFigure([spikeTrainRasterPlot1, spikeTrainRasterPlot2, spikeTrainRasterPlot3], overlap_on_compress=False, overlapping=True).fig.layout.height == 600
 
 def test_None_data(none_plotlyGraphFigure):
-    assert isinstance(none_plotlyGraphFigure.data, PlotlyGraphDataTypeList)
+    assert isinstance(none_plotlyGraphFigure.data, PlotlyGraphDataList)
     assert none_plotlyGraphFigure.fig is not None
     assert none_plotlyGraphFigure.data.common_units_y is None
     assert np.allclose(none_plotlyGraphFigure.getXRange(), [0,0], atol=1e-6, rtol=1e-3)
@@ -130,7 +130,7 @@ def test_filtering():
     assert plotlyGraphFigure.nGraphs == 1
 
 def test_offset_traces_on_compress():
-    def createPlotlyGraphDataTypeList():
+    def createPlotlyGraphDataList():
         def createGraphObject():
             class Dummy:
                 pass
@@ -141,10 +141,10 @@ def test_offset_traces_on_compress():
             graphObject.units_y = pq.V
             return graphObject
         
-        return PlotlyGraphDataTypeList([createGraphObject() for _ in range(20)])
-    plotlyGraphFigure1 = PlotlyGraphFigure(createPlotlyGraphDataTypeList())
-    plotlyGraphFigure2 = PlotlyGraphFigure(createPlotlyGraphDataTypeList(), overlapping=True)
-    plotlyGraphFigure3 = PlotlyGraphFigure(createPlotlyGraphDataTypeList(), overlapping=True, overlap_on_compress=False)
+        return PlotlyGraphDataList([createGraphObject() for _ in range(20)])
+    plotlyGraphFigure1 = PlotlyGraphFigure(createPlotlyGraphDataList())
+    plotlyGraphFigure2 = PlotlyGraphFigure(createPlotlyGraphDataList(), overlapping=True)
+    plotlyGraphFigure3 = PlotlyGraphFigure(createPlotlyGraphDataList(), overlapping=True, overlap_on_compress=False)
     assert plotlyGraphFigure1.nGraphs == 20
     assert plotlyGraphFigure1.compress == True
     assert np.allclose(plotlyGraphFigure1.fig.data[19].y, plotlyGraphFigure3.fig.data[19].y)

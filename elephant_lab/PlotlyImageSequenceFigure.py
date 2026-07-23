@@ -8,7 +8,7 @@ class PlotlyImageSequenceFigure:
     from neo.core import ImageSequence
     import math
 
-    def __init__(self, image_sequences, title=None, color_scale='Viridis', max_cols=2, name_fallback="Image Sequence"):
+    def __init__(self, image_sequences, title=None, color_scale='Viridis', max_cols=2, name_fallback="Image Sequence", dark=False):
         if isinstance(image_sequences, self.ImageSequence):
             image_sequences = [image_sequences]
 
@@ -171,8 +171,6 @@ class PlotlyImageSequenceFigure:
             height=fig_height,
             title=dict(text=title or "Image Sequences", x=0.5, xanchor="center"),
             updatemenus=updatemenus,
-            showlegend=False
+            showlegend=False,
+            template = "plotly_dark" if dark else "plotly_white"
         )
-
-    def to_dict(self):
-        return self.fig.to_dict()

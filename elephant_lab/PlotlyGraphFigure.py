@@ -1,14 +1,14 @@
 class PlotlyGraphFigure:
     from .utils import OutputUtils
-    from .PlotlyGraphContainer import PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
+    from .PlotlyGraphContainer import PlotlyGraphDataBundle
 
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
-    from ipywidgets import HBox, FloatRangeSlider
+    from plotly_resampler import FigureWidgetResampler
     import numpy as np
 
 
-    def __init__(self, data, overlapping=False, title=None, annotation_data=None, annotation_interval_data=None, overlap_on_compress=True, x_range=None, shift_to_0=False, max_points=10000, normalize_y_values=False,normalization_method="zscore"):
+    def __init__(self, data, overlapping=False, title=None, overlap_on_compress=True, shift_to_0=False, normalize_y_values=False,normalization_method="zscore", dark=False):
         """
         Creates a Plotly figure and adds traces from the provided data.
         Data can be a single trace, a list of traces, or nested lists of traces.
@@ -21,14 +21,12 @@ class PlotlyGraphFigure:
         self.overlapping = overlapping
         self.overlap_on_compress = overlap_on_compress
 
-        if not isinstance(data, self.PlotlyGraphDataTypeList):
-            data = self.PlotlyGraphDataTypeList(data)
-        data.normalize(x_range=x_range,offset_traces_on_compress= not overlapping or not self.overlap_on_compress, shift_to_0=shift_to_0, max_points=max_points, normalize_y_values=normalize_y_values, normalization_method=normalization_method)
+        if not isinstance(data, self.PlotlyGraphDataBundle):
+            data = self.PlotlyGraphDataBundle(data)
+        data.normalize(offset_traces_on_compress= not overlapping or not overlap_on_compress, shift_to_0=shift_to_0, normalize_y_values=normalize_y_values, normalization_method=normalization_method)
         self.nGraphs = data.nGraphs
         self.compress = data.compress
         self.data = data
-        self.total_minX = data.minX
-        self.total_maxX = data.maxX
         self.total_minY = data.minY
         self.total_maxY = data.maxY
 
@@ -37,16 +35,16 @@ class PlotlyGraphFigure:
         else:
             self.height = 800 if (self.nGraphs > 2 and not self._should_overlap()) else 600
         if self._is_single_plot():
-            self.fig = self.go.Figure()
+            self.fig = self.FigureWidgetResampler(self.go.Figure())
             if self.compress:
                 self.ticktext=[]
         else:
-            self.fig = PlotlyGraphFigure.make_subplots(
+            self.fig = self.FigureWidgetResampler(PlotlyGraphFigure.make_subplots(
                 rows=self.nGraphs,
                 cols=1,
                 vertical_spacing=self.vertical_spacing,
                 shared_xaxes=True
-            )
+            ))
         self._create_graphs()
 
         if title is None:
@@ -54,24 +52,19 @@ class PlotlyGraphFigure:
 
 
         self.layout_options["title"] = {
-            'text': f"{title}{'' if not self.isDownscaled() else ' (downsampled)'}",
+            'text': title,
             'x': 0.5,
             'xanchor': 'center'
         }
         self.layout_options["dragmode"] = "pan"
         self.layout_options["height"] = self.height
         self.layout_options["autosize"] = True
+        self.layout_options["template"] = "plotly_dark" if dark else "plotly_white"
 
         self._manage_ticklabels()
         self._manage_legend()
-        self._create_annotations(annotation_data, annotation_interval_data, x_range)
+        self._create_annotations()
         self._manage_axis_units()
-        self._create_slider()
-        # Set x_range to total min and max
-        for i in range(1, self.nGraphs + 1):
-            self._update_layout_options_dict(f"xaxis{i}", dict(
-                range = [self.total_minX, self.total_maxX]
-            ))
         self._update_layout()
 
     def _update_layout_options_dict(self, key, options_dict):
@@ -97,7 +90,7 @@ class PlotlyGraphFigure:
         """
         Adds traces to a Plotly figure from the extracted and normalized data
         """
-        for index, d in enumerate(self.data.data_list):
+        for index, d in enumerate(self.data.datas):
 
             # Choose Scatter or Scattergl based on x and y size (It does not work with go.Scatter and there is no important benefit of using it)
             """
@@ -171,22 +164,6 @@ class PlotlyGraphFigure:
             except Exception as e:
                 self.OutputUtils.print_warning(f"Failed to add trace '{d.name}': {e}")
 
-    def _create_slider(self):
-        """Updates the range slider to the last x-axis"""
-        n = self.nGraphs
-        x_bgcolor = "#1e7fcc"
-        PIXELS = 25
-        x_height = max(0.02, PIXELS / self.height)
-        xaxis_options = dict(
-            rangeslider=dict(
-                visible=True,
-                bgcolor=x_bgcolor,
-                thickness=x_height
-            )
-        )
-        axis_key = 'xaxis' if self._is_single_plot() else f'xaxis{n}'
-        self._update_layout_options_dict(axis_key, xaxis_options)
-
     def _manage_legend(self):
         if self.nGraphs == 1:
             self.layout_options["showlegend"] = False
@@ -203,144 +180,31 @@ class PlotlyGraphFigure:
             if self.hide_legend:
                 self.layout_options["showlegend"] = False
     
-    def _create_annotations(self, annotation_data, annotation_interval_data, x_range):
+    def _create_annotations(self):
         """Updates the graph annotations."""
-        if annotation_data is None and annotation_interval_data is None:
-            return
-        np = self.np
-        if annotation_data is None:
-            annotation_data = self.PlotlyGraphAnnotations(np.array([]), np.array([]), np.array([]), [])
-        if annotation_interval_data is None:
-            annotation_interval_data = self.PlotlyGraphAnnotationIntervals(np.array([]), np.array([]), np.array([]), np.array([]), [])
 
-        number_of_events = len(annotation_data.x)
-        
-        xs = np.concatenate((annotation_data.x, (annotation_interval_data.x0 + annotation_interval_data.x1) / 2))
-        texts = np.concatenate((annotation_data.text, annotation_interval_data.text))
-        unit_indice = np.concatenate((annotation_data.unit_indice, annotation_interval_data.unit_indice + len(annotation_data.units)))
-        unit_indice = unit_indice.astype(int)
-        units = annotation_data.units + annotation_interval_data.units
-        widths = np.concatenate((np.zeros(annotation_data.x.size), (annotation_interval_data.x1 - annotation_interval_data.x0)))
+        if not self.data.is_annotation_empty:
 
-        if self.data.is_empty and xs.size > 0 and len(units)>0:
-            self.data.is_empty = False
-            if(self.data.common_units_x is None):
-                self.data.common_units_x = units[0]
+            np = self.np
 
-        if self.data.common_units_x is not None:
-            for i, (x, unit_index) in enumerate(zip(xs, unit_indice)):
-                unit = units[unit_index]
-                can_convert = self.OutputUtils.can_convert_units(
-                    unit=unit,
-                    convert_unit=self.data.common_units_x
-                )
-                if can_convert == -1:  # cannot convert
-                    self.data.common_units_x = None
-                    break
-                elif can_convert == 1:  # needs conversion
-                    xs[i] = self.OutputUtils.convert_to_other_units(
-                        x, unit=unit, convert_unit=self.data.common_units_x
-                    )
-                    if i >= number_of_events:
-                        widths[i] = self.OutputUtils.convert_to_other_units(
-                            widths[i], unit=unit, convert_unit=self.data.common_units_x
-                        )
-                else:  # already compatible
-                    pass
-
-        # From this point unit_indice are not needed anymore, so they are not maintained
-
-        # Filter out of x_range
-        if x_range is not None:
-            x0, x1 = x_range
-            mask = (xs >= x0) & (xs <= x1)
-            xs = xs[mask]
-            texts = texts[mask]
-            widths = widths[mask]
-
-        max_events = 1000
-
-        n = len(xs)
-        if n > max_events:
-            order = np.argsort(xs)
-
-            xs = xs[order]
-            texts = texts[order]
-            widths = widths[order]
-
-            gaps = np.diff(xs)
-
-            # max_events - 1 largest gaps get used
-            keep_separators = np.argpartition(
-                gaps,
-                -(max_events - 1)
-            )[-(max_events - 1):]
-
-            keep_separators.sort()
-
-            new_xs = []
-            new_texts = []
-            new_widths = []
-
-            def add_group(start, e):
-                gxs = xs[start:e]
-                ghalfwidths = widths[start:e] / 2
-
-                left = np.min(gxs - ghalfwidths)
-                right = np.max(gxs + ghalfwidths)
-
-                new_xs.append((left + right) / 2)
-                new_widths.append(right - left)
-
-                max_texts_joined = 5
-
-                gn = e - start
-
-                if gn > max_texts_joined:
-                    shown = texts[start:start + max_texts_joined]
-                    hidden = gn - max_texts_joined
-
-                    new_texts.append(
-                        "<br>".join(shown)
-                        + f"<br>...<br>(+{hidden} more)"
-                    )
-                else:
-                    new_texts.append("<br>".join(texts[start:e]))
-
-            start = 0
-
-            for sep in keep_separators:
-                e = sep + 1
-
-                add_group(start, e)
-
-                start = e
-
-            # final group
-            add_group(start, n)
-
-            xs = np.asarray(new_xs)
-            texts = np.asarray(new_texts, dtype=object)
-            widths = np.asarray(new_widths)
-            n = max_events
-
-        if n > 0:
-            self.total_minX = min(self.total_minX, np.nanmin(xs))
-            self.total_maxX = max(self.total_maxX, np.nanmax(xs))
-
+            annotations = self.data.annotation_list
+            xs = annotations.xs
+            durations = annotations.durations
+            texts = annotations.texts
+            n = xs.size
             dynamic_divider = 4 * n
             min_divider = 500
             max_divider = 4000
-            min_bar_width = (self.total_maxX - self.total_minX) / min(max_divider, max(min_divider, dynamic_divider))
+            min_bar_width = (self.data.maxX - self.data.minX) / min(max_divider, max(min_divider, dynamic_divider))
 
             # Format values
             xs_str = self.OutputUtils.format_with_auto_digits(xs)
-            start_str = self.OutputUtils.format_with_auto_digits(xs - widths/2)
-            end_str = self.OutputUtils.format_with_auto_digits(xs + widths/2)
+            start_str = self.OutputUtils.format_with_auto_digits(xs)
+            end_str = self.OutputUtils.format_with_auto_digits(xs + durations)
 
             # Build hover text
             hover_texts = self.np.where(
-                widths == 0,
+                durations == 0,
                 np.char.add(
                     np.char.add(texts, "<br>Time: "),
                     xs_str
@@ -364,8 +228,8 @@ class PlotlyGraphFigure:
 
             def create_trace(ymin, ymax):
                 return self.go.Bar(
-                    x=xs,
-                    width= np.where(widths==0, min_bar_width, widths),
+                    x=xs - durations/2,
+                    width= np.where(durations==0, min_bar_width, durations),
                     y=np.full(xs.shape, ymax - ymin),
                     base=ymin,
                     hovertext=hover_texts,
@@ -384,7 +248,7 @@ class PlotlyGraphFigure:
                 self.fig.add_trace(create_trace(ymin, ymax))
             else:
                 for i in range(1, self.nGraphs + 1):
-                    graph_trace_data = self.data.data_list[i-1]
+                    graph_trace_data = self.data.datas[i-1]
                     ymin = graph_trace_data.minY
                     ymax = graph_trace_data.maxY
                     ymin, ymax = calc_new_y(ymin, ymax)
@@ -433,7 +297,7 @@ class PlotlyGraphFigure:
                 ))
         else:
             for i in range(1, self.nGraphs + 1):
-                graph_trace_data = self.data.data_list[i-1]
+                graph_trace_data = self.data.datas[i-1]
                 ymin = graph_trace_data.minY
                 ymax = graph_trace_data.maxY
                 if ymax - ymin < 1e-9 and (not self._can_have_custom_ticklabels() or not getattr(graph_trace_data, 'use_name_as_ticklabels', False)):
@@ -450,12 +314,6 @@ class PlotlyGraphFigure:
             if self.compress and not self._should_overlap() and len(self.ticktext)==self.nGraphs:
                 fig_dict['ticklabel_limit'] = 26
             return fig_dict
-    
-    def getXRange(self):
-        return self.fig.layout.xaxis.range
-    
-    def isDownscaled(self):
-        return self.data.is_downscaled
     
     def isDefaultZeroBased(self):
         return self.data.is_default_zero_based

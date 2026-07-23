@@ -1,6 +1,6 @@
-from .PlotlyGraphContainer import PlotlyGraphDataType, PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
+from .PlotlyGraphContainer import PlotlyGraphData, PlotlyGraphDataList, PlotlyGraphAnnotation
 
-class SpikeTrainRasterPlot(PlotlyGraphDataType):
+class SpikeTrainRasterPlot(PlotlyGraphData):
     import numpy as np
 
     def extract_data(self, spiketrain):
@@ -22,8 +22,8 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
         self.units_x = spiketrain.times.units
         self.use_name_as_ticklabels = True
 
-class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
-    class AnalogSignalChannelLFPPlot(PlotlyGraphDataType):
+class AnalogSignalLFPPlotList(PlotlyGraphDataList):
+    class AnalogSignalChannelLFPPlot(PlotlyGraphData):
         def extract_data(self, dict_with_signal_info):
             """Extracts AnalogSignalChannelLFPPlot from a dict containing info about an AnalogSignal"""
             self.name = dict_with_signal_info.get('name')
@@ -53,10 +53,10 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                 if num_channels > 1:
                     channel_name += f' Ch{ch_idx}'
                 # Plot
-                self.data_list.append(self.AnalogSignalChannelLFPPlot({ 'x': lfp.times.magnitude, 'y': channel_data, 'name': channel_name, 'units_x': lfp.times.units, 'units_y': lfp.units}))
+                self.datas.append(self.AnalogSignalChannelLFPPlot({ 'x': lfp.times.magnitude, 'y': channel_data, 'name': channel_name, 'units_x': lfp.times.units, 'units_y': lfp.units}))
 
-class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
-    class IrregularlySampledSignalPlot(PlotlyGraphDataType):
+class IrregularlySampledSignalPlotList(PlotlyGraphDataList):
+    class IrregularlySampledSignalPlot(PlotlyGraphData):
         def extract_data(self, irregular_signal):
             """Extracts IrregularlySampledSignalPlotData from a IrregularlySampledSignal"""
             self.name = getattr(irregular_signal,'name', None)
@@ -70,41 +70,13 @@ class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
     def extract_data(self, data, name_fallback):
         """Extracts IrregularlySampledSignalData from a list of IrregularlySampledSignals"""
         for iss in data:
-            self.data_list.append(self.IrregularlySampledSignalPlot(iss, name_fallback))
+            self.datas.append(self.IrregularlySampledSignalPlot(iss, name_fallback))
 
 
-class EventAnnotations(PlotlyGraphAnnotations):
-    import numpy as np
+class EventAnnotation(PlotlyGraphAnnotation):
+    def __init__(self, event):
+        super().__init__(event.times.magnitude, event.labels, event.times.units)
 
-    def __init__(self, events):
-        x=[]
-        text=[]
-        unit_indice=[]
-        units=[]
-        for i, event in enumerate(events):
-            x.append(event.times.magnitude)
-            text.append(event.labels)
-            n = len(event.times.magnitude)
-            unit_indice.append(self.np.full(n, i))
-            units.append(event.times.units)
-        super().__init__(self.np.concatenate(x), self.np.concatenate(text), self.np.concatenate(unit_indice), units)
-
-class EpochIntervals(PlotlyGraphAnnotationIntervals):
-    import numpy as np
-
-    def __init__(self, epochs):
-        x=[]
-        duration=[]
-        text=[]
-        unit_indice=[]
-        units=[]
-        for i, epoch in enumerate(epochs):
-            x.append(epoch.times.magnitude)
-            duration.append(epoch.durations.magnitude)
-            text.append(epoch.labels)
-            n = len(epoch.times.magnitude)
-            unit_indice.append(self.np.full(n, i))
-            units.append(epoch.times.units)
-        x = self.np.concatenate(x)
-        duration = self.np.concatenate(duration)
-        super().__init__(x, x+duration, self.np.concatenate(text), self.np.concatenate(unit_indice), units)
+class EpochAnnotation(PlotlyGraphAnnotation):
+    def __init__(self, epoch):
+        super().__init__(epoch.times.magnitude, epoch.labels, epoch.times.units, epoch.durations.magnitude)

@@ -1,38 +1,54 @@
 import { KernelMessage, Session } from '@jupyterlab/services';
-import { OutputArea } from '@jupyterlab/outputarea';
+import {
+    Widget,
+} from '@lumino/widgets';
 import 'nouislider/dist/nouislider.css';
 import { PlotContainer } from './plot_container';
+import { KernelBridge } from './kernel_bridge';
+import {
+    PythonCodeKey,
+} from './kernelcode';
+import {
+    IRenderMimeRegistry,
+}
+    from '@jupyterlab/rendermime';
 
 export class PlotlyFrontend {
     private session: Session.ISessionConnection;
+    private kernelBridge: KernelBridge;
+    private rendermime: IRenderMimeRegistry;
     private plots: Map<string, PlotContainer> = new Map();
-    private outputArea: OutputArea | null;
-    private is_plot_theme_dark: boolean;
+    private outputWiget: Widget | null;
 
-    constructor(session: Session.ISessionConnection, outputArea: OutputArea | null = null) {
+    constructor(session: Session.ISessionConnection, kernelBridge: KernelBridge, rendermime: IRenderMimeRegistry, outputWiget: Widget | null = null) {
         this.session = session;
-        this.outputArea = outputArea;
-        this.is_plot_theme_dark = true
+        this.kernelBridge = kernelBridge;
+        this.rendermime = rendermime;
+        this.outputWiget = outputWiget;
 
         // Register the comm target to receive messages from Python
         this.session.kernel?.registerCommTarget(
             'plot_channel',
             (comm, msg) => {
-                comm.onMsg = (msg) => this.handleCommMessage(msg);
+                comm.onMsg = async (msg) => await this.handleCommMessage(msg);
             }
         );
 
+        let resizeTimeout: ReturnType<typeof setTimeout> | undefined;
+
         const resizePlots = () => {
-            for (const plot of this.plots.values()) {
-                plot.resize()
-            }
+            clearTimeout(resizeTimeout);
+
+            resizeTimeout = setTimeout(() => {
+                kernelBridge.executeCode(PythonCodeKey.ResizePlots);
+            }, 200); // Wait 200ms after the last resize event
         };
 
         const resizeObserver = new ResizeObserver(resizePlots);
-        resizeObserver.observe(outputArea!.node);
+        resizeObserver.observe(outputWiget!.node);
     }
 
-    private handleCommMessage(msg: KernelMessage.ICommMsgMsg) {
+    private async handleCommMessage(msg: KernelMessage.ICommMsgMsg) {
         const data = msg.content.data;
 
         switch (data.type) {
@@ -49,12 +65,7 @@ export class PlotlyFrontend {
                 const plots2: string[] = Array.isArray(plotsRaw2)
                     ? plotsRaw2.filter((x): x is string => typeof x === 'string')
                     : [];
-                this.handleLoading(plots2);
-                break;
-            case 'plots_update':
-                const figs = (data.plots as Record<string, any>) ?? {};
-                const updateId = typeof data.update_id === 'number' ? data.update_id : -1;
-                this.handleUpdate(figs, updateId);
+                await this.handleLoading(plots2);
                 break;
             default:
                 console.warn('Unknown plot message type', data.type, data.message);
@@ -71,49 +82,14 @@ export class PlotlyFrontend {
         });
     }
 
-    private handleLoading(plotKeys: string[]) {
-        plotKeys.forEach((key) => {
+    private async handleLoading(plotKeys: string[]) {
+        await Promise.all(plotKeys.map(async (key) => {
             let state = this.plots.get(key);
             if (!state) {
-                state = new PlotContainer(this.outputArea);
+                state = new PlotContainer(this.kernelBridge, this.rendermime, this.outputWiget);
                 this.plots.set(key, state);
             }
-            state.showLoading()
-        });
-    }
-
-    private handleUpdate(figs: Record<string, any>, updateId: number) {
-        Object.entries(figs).forEach(([key, figJson]) => {
-            let state = this.plots.get(key);
-            if (!state) {
-                state = new PlotContainer(this.outputArea);
-                this.plots.set(key, state);
-            }
-            if (!state.canUpdate(updateId)) return;
-
-            state.setUpdateId(updateId)
-            state.render(figJson, updateId, this.is_plot_theme_dark)
-        });
-    }
-
-    public setThemes(is_dark: boolean) {
-        if (this.is_plot_theme_dark == is_dark) {
-            return;
-        }
-        this.is_plot_theme_dark = is_dark;
-        for (const plot of this.plots.values()) {
-            plot.setTheme(is_dark)
-        }
-    }
-
-    public getXRanges(): string {
-        const result: Record<string, [number, number] | null> = {};
-
-        for (const [key, plot] of this.plots.entries()) {
-            result[key] = plot.getXRange() ?? null;
-        }
-
-        const json = JSON.stringify(result).replace(/\bnull\b/g, "None");
-        return json;
+            await state.startLoading(key)
+        }));
     }
 }
