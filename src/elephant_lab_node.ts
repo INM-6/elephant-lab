@@ -19,6 +19,18 @@ export type ElephantLabNodeProperties = {
     [key: string]: any;
 }
 
+function deriveItemLabel(rawLabel: string | undefined, index: number): string {
+    const isUnusable = (s: string) => !s || s === 'list' || s === 'print' || s === 'neo';
+    if (rawLabel) {
+        const match = rawLabel.match(/[A-Za-z_][A-Za-z0-9_]*/);
+        const word = match ? match[0].toLowerCase() : '';
+        if (!isUnusable(word)) {
+            return `${word}_${index}`;
+        }
+    }
+    return `list_item_${index}`;
+}
+
 // Own ElephantLab Node Class which adds additional properties to the regular LGraphNode
 export class ElephantLabNode extends LGraphNode {
     public static showExecPins = false;
@@ -157,7 +169,19 @@ export class ElephantLabNode extends LGraphNode {
         }
 
         const params = this.properties.item?.parameters;
-        if (params && Array.isArray(params)) {
+        const isCompactListNode = this.properties.item?.code === '__UTIL_LIST__' &&
+            !!params && params.length > 0 &&
+            params.every(p => p.default && p.default !== '' && p.default !== '__REQUIRED__');
+
+        if (isCompactListNode && params) {
+            for (const param of params) {
+                const propName = `param_${param.name}`;
+                if (this.properties[propName] === undefined) {
+                    this.properties[propName] = param.default;
+                }
+            }
+            this.addWidget("text", "items", `${params.length} items (right-click: Extract Items)`, () => { }, {});
+        } else if (params && Array.isArray(params)) {
             params.forEach(param => {
                 const propName = `param_${param.name}`;
                 const defaultValue = (param.default === "__REQUIRED__") ? "" : param.default;
@@ -201,6 +225,89 @@ export class ElephantLabNode extends LGraphNode {
             });
         }
         this.addOutput("result", -1);
+    }
+
+    getExtraMenuOptions(): any[] | null {
+        if (this.properties.item?.code !== '__UTIL_LIST__') { return null; }
+        const node = this;
+
+        return [
+            {
+                content: "Extract Items",
+                callback: () => {
+                    if (!node.graph) { return; }
+                    const count = node.properties.item.parameters?.length || 0;
+                    if (count === 0) { return; }
+
+                    const revealedNodes: LGraphNode[] = [];
+                    const createdNodes: ElephantLabNode[] = [];
+                    const outputSlot = node.outputs.findIndex(o => o.name === 'result');
+                    let x = node.pos[0] + node.size[0] + 30;
+                    let y = node.pos[1];
+
+                    for (let index = 0; index < count; index++) {
+                        const inputInfo = node.inputs[index];
+                        if (inputInfo && inputInfo.link !== null && inputInfo.link !== undefined) {
+                            const linkInfo = (node.graph as any).links[inputInfo.link];
+                            const originNode = linkInfo ? node.graph.getNodeById(linkInfo.origin_id) : null;
+                            if (originNode) {
+                                originNode.flags = originNode.flags || {};
+                                originNode.flags.collapsed = false;
+                                revealedNodes.push(originNode);
+                                continue;
+                            }
+                        }
+
+                        const originalLabels = (node as ElephantLabNode).properties['item_labels'] as string[] | undefined;
+                        const getItemItem: DraggableItem = {
+                            id: `util/getitem_${index}`,
+                            name: deriveItemLabel(originalLabels?.[index], index),
+                            code: "__UTIL_GETITEM__",
+                            is_class: false,
+                            parameters: [
+                                { name: "list", default: "__REQUIRED__" },
+                                { name: "index", default: String(index) }
+                            ]
+                        };
+
+                        const getItemNode = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
+                        getItemNode.properties.item = getItemItem;
+                        getItemNode.setProperty("item", getItemItem);
+
+                        while (node.graph.getNodeOnPos(x, y)) {
+                            y += 30;
+                        }
+                        getItemNode.pos = [x, y];
+                        node.graph.add(getItemNode);
+                        createdNodes.push(getItemNode);
+                        y += 60;
+
+                        const inputSlot = getItemNode.inputs.findIndex(i => i.name === 'list');
+                        if (outputSlot !== -1 && inputSlot !== -1) {
+                            node.connect(outputSlot, getItemNode, inputSlot);
+                        }
+                    }
+
+                    const engineWidget = (node.graph as any).widget as WorkflowEngineWidget | undefined;
+                    if (engineWidget) {
+                        if (revealedNodes.length > 0) {
+                            engineWidget.refitGroupsContaining(revealedNodes);
+                        }
+                        if (createdNodes.length > 1) {
+                            engineWidget.wrapNodesInGroup(createdNodes, `${node.title} items (${createdNodes.length})`);
+                            for (const createdNode of createdNodes) {
+                                createdNode.flags = createdNode.flags || {};
+                                createdNode.flags.collapsed = true;
+                            }
+                        }
+                    }
+
+                    if ((node.graph as any)._canvas) {
+                        (node.graph as any)._canvas.draw(true, true);
+                    }
+                }
+            }
+        ];
     }
 
     // called when a new Node gets created

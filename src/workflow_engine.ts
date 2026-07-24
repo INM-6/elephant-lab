@@ -17,6 +17,24 @@ import '../style/workflow_engine.css';
 
 // Workflow Engine Class / Widget
 export class WorkflowEngineWidget extends Widget {
+    private static readonly PREPARE_ARG_SNIPPET = `try:
+    _prepare_arg
+except NameError:
+    def _prepare_arg(arg_str):
+        global workflow_results
+        if isinstance(arg_str, str):
+            if arg_str in workflow_results: return workflow_results[arg_str]
+            if arg_str == "" or arg_str == "__REQUIRED__": return None
+            if len(arg_str) == 40 and all(c in "0123456789abcdef" for c in arg_str):
+                if 'elephant_lab_entity' in globals():
+                    obj_hash = elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get(arg_str, arg_str)
+                    resolved = elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(obj_hash)
+                    if resolved is not None:
+                        return resolved
+            try: return eval(arg_str)
+            except: return arg_str
+        return arg_str`;
+
     private graph: LGraph | null;
     private graphCanvas: LGraphCanvas | null;
     private kernelBridge: KernelBridge;
@@ -197,42 +215,18 @@ export class WorkflowEngineWidget extends Widget {
 
         const listItem: DraggableItem = {
             id: "util/list_node",
-            name: "List",
+            name: `List (${items.length} items)`,
             code: "__UTIL_LIST__",
             is_class: false,
-            parameters: items.map((_, index) => ({ name: `item ${index}`, default: "" }))
+            parameters: items.map((item, index) => ({ name: `item ${index}`, default: item.code }))
         };
         const listNode = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
         listNode.docManager = this.docManager;
         listNode.properties.item = listItem;
         listNode.setProperty("item", listItem);
-        listNode.pos = [dropPos[0] + 250, dropPos[1]];
+        listNode.properties['item_labels'] = items.map(i => i.name);
+        listNode.pos = dropPos;
         this.graph.add(listNode);
-
-        const objectNodes: ElephantLabNode[] = [];
-        items.forEach((item, index) => {
-            const objectNode = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
-            objectNode.docManager = this.docManager;
-            objectNode.properties.item = item;
-            objectNode.setProperty("item", item);
-            objectNode.pos = [dropPos[0], dropPos[1] + index * 60];
-            this.graph!.add(objectNode);
-            objectNodes.push(objectNode);
-
-            const outputSlot = objectNode.outputs.findIndex(o => o.name === 'result');
-            if (outputSlot !== -1) {
-                objectNode.connect(outputSlot, listNode, index);
-            }
-        });
-
-        if (objectNodes.length > 1) {
-            this._wrapNodesInGroup(objectNodes, `${listItem.name} items (${objectNodes.length})`);
-            for (const node of objectNodes) {
-                node.flags = node.flags || {};
-                node.flags.collapsed = true;
-            }
-            this.graph!.setDirtyCanvas(true, true);
-        }
     }
 
     // Executed after Widget is opened
@@ -991,17 +985,7 @@ except Exception as e:
         // Code logic for a list
         else if (item.code === "__UTIL_LIST__") {
             console.log("...using UTILITY (List) execution logic");
-            codeToExecute = `try: 
-    _prepare_arg
-except NameError:
-    def _prepare_arg(arg_str):
-        global ${resultsDictName}
-        if isinstance(arg_str, str):
-            if arg_str in ${resultsDictName}: return ${resultsDictName}[arg_str]
-            if arg_str == "" or arg_str == "__REQUIRED__": return None
-            try: return eval(arg_str)
-            except: return arg_str
-        return arg_str
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 
 try:
     raw_args = json.loads('''${args_json_string}''')
@@ -1015,17 +999,7 @@ except Exception as e:
     print(f"Error creating list: {e}", file=sys.stderr)`;
         } else if (item.code === '__UTIL_INTEGER__') {
             console.log("...using UTILITY (Integer) execution logic");
-            codeToExecute = `try:
-    _prepare_arg
-except NameError:
-    def _prepare_arg(arg_str):
-        global ${resultsDictName}
-        if isinstance(arg_str, str):
-            if arg_str in ${resultsDictName}: return ${resultsDictName}[arg_str]
-            if arg_str == "" or arg_str == "__REQUIRED__": return None
-            try: return eval(arg_str)
-            except: return arg_str
-        return arg_str
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 try:
     raw_args = json.loads('''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
@@ -1036,21 +1010,11 @@ except Exception as e:
     print(f"Error in Integer node: {e}", file=sys.stderr)`;
         } else if (item.code === '__UTIL_GETITEM__') {
             console.log("...using UTILITY (Get Item) execution logic");
-            codeToExecute = `try:
-    _prepare_arg
-except NameError:
-    def _prepare_arg(arg_str):
-        global ${resultsDictName}
-        if isinstance(arg_str, str):
-            if arg_str in ${resultsDictName}: return ${resultsDictName}[arg_str]
-            if arg_str == "" or arg_str == "__REQUIRED__": return None
-            try: return eval(arg_str)
-            except: return arg_str
-        return arg_str
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 try:
     raw_args = json.loads('''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
-    
+
     elephant_lab_target_list = processed_args[0]
     index = int(processed_args[1])
 
@@ -1066,17 +1030,7 @@ except Exception as e:
     print(f"Error in Get Item node: {e}", file=sys.stderr)`;
         } else if (item.code === '__UTIL_PRINT__') {
             console.log("...using UTILITY (Print) execution logic");
-            codeToExecute = `try: 
-    _prepare_arg
-except NameError:
-    def _prepare_arg(arg_str):
-        global ${resultsDictName}
-        if isinstance(arg_str, str):
-            if arg_str in ${resultsDictName}: return ${resultsDictName}[arg_str]
-            if arg_str == "" or arg_str == "__REQUIRED__": return None
-            try: return eval(arg_str)
-            except: return arg_str
-        return arg_str
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 try:
     raw_args = json.loads('''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
@@ -1090,17 +1044,7 @@ except Exception as e:
         } else if (item.code === '__NEO_READ_FILE__') {
             console.log("...using NEO IO execution logic");
 
-            codeToExecute = `try:
-    _prepare_arg
-except NameError:
-    def _prepare_arg(arg_str):
-        global ${resultsDictName}
-        if isinstance(arg_str, str):
-            if arg_str in ${resultsDictName}: return ${resultsDictName}[arg_str]
-            if arg_str == "" or arg_str == "__REQUIRED__": return None
-            try: return eval(arg_str)
-            except: return arg_str
-        return arg_str
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 
 try:
     import neo
@@ -1145,21 +1089,11 @@ except Exception as e:
             }
             
             console.log(`...using NEO GET (${neoClassName}) execution logic`);
-            codeToExecute = `try:
-    _prepare_arg
-except NameError:
-    def _prepare_arg(arg_str):
-        global ${resultsDictName}
-        if isinstance(arg_str, str):
-            if arg_str in ${resultsDictName}: return ${resultsDictName}[arg_str]
-            if arg_str == "" or arg_str == "__REQUIRED__": return None
-            try: return eval(arg_str)
-            except: return arg_str
-        return arg_str
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 try:
     raw_args = json.loads('''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
-    
+
     elephant_lab_neo_object = processed_args[0]
     
     if elephant_lab_neo_object is None:
@@ -1183,17 +1117,7 @@ except Exception as e:
             const parts = item.code.split('.');
             const method_name = parts.pop();
 
-            codeToExecute = `try: 
-    _prepare_arg
-except NameError:
-    def _prepare_arg(arg_str):
-        global ${resultsDictName}
-        if isinstance(arg_str, str):
-            if arg_str in ${resultsDictName}: return ${resultsDictName}[arg_str]
-        if arg_str == "" or arg_str == "__REQUIRED__": return None
-        try: return eval(arg_str)
-        except: return arg_str
-        return arg_str
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 
 try:
     target_obj = None
@@ -1244,17 +1168,7 @@ except ImportError:
     print(f"Error: Could not import module ${modulePath}", file=sys.stderr)
     module_obj = None
 
-def _prepare_arg(arg_str):
-    global ${resultsDictName}
-    if isinstance(arg_str, str):
-        if arg_str in ${resultsDictName}:
-            return ${resultsDictName}[arg_str]
-    if arg_str == "" or arg_str == "__REQUIRED__":
-        return None
-    try:
-        return eval(arg_str)
-    except:
-        return arg_str
+${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 
 try:
     if module_obj:
@@ -1592,6 +1506,10 @@ except Exception as e:
                         } else if (value.includes("pq.")) {
                             argumentValue = value;
                             imports.add("import quantities as pq");
+                        } else if (/^[a-f0-9]{40}$/.test(value)) {
+                            const neoVarName = `elephant_lab_neo_${varCounter++}`;
+                            neoResolveCommands.push(`${neoVarName} = elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get('${value}'))`);
+                            argumentValue = neoVarName;
                         } else {
                             argumentValue = `'${value.replace(/'/g, "\\'")}'`;
                         }
@@ -2309,11 +2227,24 @@ except Exception as e:
             console.warn("No nodes selected to group.");
             return;
         }
-        this._wrapNodesInGroup(selected, title);
+        this.wrapNodesInGroup(selected, title);
     }
 
-    private _wrapNodesInGroup(nodes: LGraphNode[], title: string): void {
+    public wrapNodesInGroup(nodes: LGraphNode[], title: string): void {
         if (!this.graph || nodes.length === 0) { return; }
+
+        const group = new (LGraphGroup as any)(title) as LGraphGroup;
+        (this.graph as any).add(group);
+        this._resizeGroupToFitNodes(group, nodes);
+        group.recomputeInsideNodes();
+
+        this.graph.setDirtyCanvas(true, true);
+        this._saveWorkflowToLocalStorage();
+        this._pushHistorySnapshot();
+    }
+
+    private _resizeGroupToFitNodes(group: LGraphGroup, nodes: LGraphNode[]): void {
+        if (nodes.length === 0) { return; }
 
         const PADDING = 24;
         const TITLE_SPACE = 30;
@@ -2325,15 +2256,31 @@ except Exception as e:
             maxY = Math.max(maxY, node.pos[1] + node.size[1]);
         }
 
-        const group = new (LGraphGroup as any)(title) as LGraphGroup;
         (group as any).pos = [minX - PADDING, minY - PADDING - TITLE_SPACE];
         (group as any).size = [(maxX - minX) + PADDING * 2, (maxY - minY) + PADDING * 2 + TITLE_SPACE];
-        (this.graph as any).add(group);
-        group.recomputeInsideNodes();
+    }
 
-        this.graph.setDirtyCanvas(true, true);
-        this._saveWorkflowToLocalStorage();
-        this._pushHistorySnapshot();
+    public refitGroupsContaining(nodes: LGraphNode[]): void {
+        if (!this.graph || nodes.length === 0) { return; }
+
+        const groups = ((this.graph as any)._groups || []) as LGraphGroup[];
+        const nodeSet = new Set(nodes);
+        let changed = false;
+
+        for (const group of groups) {
+            group.recomputeInsideNodes();
+            const members = (group as any)._nodes as LGraphNode[];
+            if (members.some(n => nodeSet.has(n))) {
+                this._resizeGroupToFitNodes(group, members);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            this.graph.setDirtyCanvas(true, true);
+            this._saveWorkflowToLocalStorage();
+            this._pushHistorySnapshot();
+        }
     }
 
     public toggleExecPins(show: boolean): void {
