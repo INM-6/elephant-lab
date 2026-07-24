@@ -181,8 +181,13 @@ class PlotlyGraphDataTypeList():
                 data.y = y_values
                 data.name = f"{name} (real)"
             i+=1
-            x_values[self.np.isinf(x_values)] = self.np.nan
-            y_values[self.np.isinf(y_values)] = self.np.nan
+            def filter_out_inf(values):
+                if self.np.isinf(values).any():
+                    if not self.np.issubdtype(values.dtype, self.np.floating):
+                        values = values.astype(float)
+                    values[self.np.isinf(values)] = self.np.nan
+            filter_out_inf(x_values)
+            filter_out_inf(y_values)
 
             # Check if x and y are valid
             x_length = len(x_values)
