@@ -1,3 +1,14 @@
+"""
+Managment of of plotting:
+1.a. Gets info what should be plotted
+1.b. Gets info how something should be plotted
+2. Checks if new plotting is neccessary
+3. Runs the Pipline:
+-notifies Frontend what to delete and update
+-Convert Neo data to Plotly useable data
+-Creates PlotlyFigures
+-Send the PlotlyFigures to the Frontend
+"""
 class ElephantLab_plot:
     from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
     from .PlotlyGraphFigure import PlotlyGraphFigure
@@ -139,6 +150,16 @@ class ElephantLab_plot:
         ]
 
     def _raw_plot(self):
+        """
+        Called when selection or plot settings change
+
+        2. Checks if new plotting is neccessary
+        3. Runs the Pipline:
+        -notifies Frontend what to delete and update
+        -Convert Neo data to Plotly useable data
+        -Creates PlotlyFigures
+        -Send the PlotlyFigures to the Frontend
+        """
         if not self._is_panel_active or (not self._selection_changed and not any(v["changed"] for v in self.plots.values())):
             return
         neo_object_dict = None
@@ -283,6 +304,12 @@ class ElephantLab_plot:
         self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
 
     def update_settings(self, **settings):
+        """
+        Gets called once at the beginning, when the saved settings are loaded
+        and then every time the saved settings change
+
+        Update the saved settings and replots if neccessary
+        """
         overlap = settings.get("overlap")
         zero_based = settings.get("zero_based")
         color_grade = settings.get("color_grade")
@@ -378,6 +405,9 @@ class ElephantLab_plot:
             self._raw_plot()
 
     def upscale_raw_plot(self, x_ranges):
+        """
+        Replots the plot if the new x_range for it changes its resolution
+        """
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
@@ -398,6 +428,9 @@ class ElephantLab_plot:
             self._raw_plot()
     
     def reset_scale(self):
+        """
+        Replots the plot to its original x_range
+        """
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]

@@ -1,3 +1,8 @@
+"""
+Creates a plotly Figure and customizes it to the desired settings
+and inputted data
+"""
+
 class PlotlyGraphFigure:
     from .utils import OutputUtils
     from .PlotlyGraphContainer import PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
@@ -204,7 +209,10 @@ class PlotlyGraphFigure:
                 self.layout_options["showlegend"] = False
     
     def _create_annotations(self, annotation_data, annotation_interval_data, x_range):
-        """Updates the graph annotations."""
+        """
+        Updates the graph annotations and optimizes the performance by grouping
+        close ones when there are to many
+        """
         if annotation_data is None and annotation_interval_data is None:
             return
         np = self.np
@@ -412,6 +420,10 @@ class PlotlyGraphFigure:
                     self._update_layout_options_dict(f"xaxis{i}", dict(title=None))
 
     def _manage_ticklabels(self):
+        """
+        Sets the trace x-axis tickbals to the datas name if it
+        is desired and possible
+        """
         if self.compress:
             if self._can_have_custom_ticklabels():
                 if len(self.ticktext)==self.nGraphs:

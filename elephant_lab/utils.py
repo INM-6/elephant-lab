@@ -1,4 +1,12 @@
+"""
+General utility funcitons, that can be used at multiple
+occasions
+"""
+
 class OutputUtils:
+    """
+    Utilitys regarding outputing data
+    """
     import quantities as pq
     import numpy as np
     import sys
@@ -23,6 +31,9 @@ class OutputUtils:
     
     @staticmethod
     def get_text_label(unit):
+        """
+        Returns the fitting word for a unit
+        """
         pq = OutputUtils.pq
         def simplify(unit):
             if unit == pq.dimensionless:
@@ -71,6 +82,11 @@ class OutputUtils:
     
     @staticmethod
     def convert_unit_to_label(unit, short=False):
+        """
+        Returns label for a unit:
+        Short: Just the unit dimensionality
+        Normal: UnitsAsWord(unitsDimensionality)
+        """
         if unit is None:
             return ""
 
@@ -81,6 +97,13 @@ class OutputUtils:
 
     @staticmethod
     def center_text_for_length(text, length):
+        """
+        Centers text by adding a character to the start
+        that does not get trimmed and then the fitting
+        number of spaces to center it to the desired length.
+        Should ONLY be used, if there is no clean way of doing
+        it with css or a property that would center it!
+        """
         text = str(text)
         if len(text) >= length:
             return text
@@ -124,6 +147,12 @@ class OutputUtils:
 
     @staticmethod
     def normalize(values, method="minmax", do_normalize=True):
+        """
+        Normalizes the values with the desired method
+        do_normalize:
+            -True: actually does the normalization
+            -False: only returns if the normalization would change something
+        """
         np = OutputUtils.np
         values = np.asarray(values, dtype=float)
         
@@ -181,6 +210,10 @@ class OutputUtils:
         
     @staticmethod
     def lttb_downsample(x, y, threshold):
+        """
+        Downsamples the x and y values to the desired
+        threshold using the Larges Triangle Three Buckets method
+        """
         threshold = int(threshold)
         n = len(x)
         if threshold >= n or threshold == 0:
