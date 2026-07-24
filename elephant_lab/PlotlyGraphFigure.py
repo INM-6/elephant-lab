@@ -421,7 +421,7 @@ class PlotlyGraphFigure:
 
     def _manage_ticklabels(self):
         """
-        Sets the trace x-axis tickbals to the datas name if it
+        Sets the trace x-axis tickvals to the data name if it
         is desired and possible
         """
         if self.compress:

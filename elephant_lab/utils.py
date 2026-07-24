@@ -1,11 +1,11 @@
 """
-General utility funcitons, that can be used at multiple
+General utility functions, that can be used at multiple
 occasions
 """
 
 class OutputUtils:
     """
-    Utilitys regarding outputing data
+    Utilities regarding outputting data
     """
     import quantities as pq
     import numpy as np
@@ -65,7 +65,7 @@ class OutputUtils:
             simplify(pq.H): "Inductance",
             simplify(pq.T): "Magnetic Flux Density",
             simplify(pq.Wb): "Magnetic Flux",
-            # overrides dimensionless wich is more commonly used than using a solid angle and there is no simple way to find out what excactly the user wanted
+            # overrides dimensionless which is more commonly used than using a solid angle and there is no simple way to find out what exactly the user wanted
             #simplify(pq.sr): "Solid Angle",
             simplify(pq.B): "Bel",
             simplify(pq.kg * pq.m / pq.s): "Momentum",

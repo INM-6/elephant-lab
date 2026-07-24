@@ -1,5 +1,5 @@
 """
-Blueprints for the PlorlyGraphFigure compatible data objects
+Blueprints for the PlotlyGraphFigure compatible data objects
 
 And Normalization for them
 """
@@ -87,7 +87,7 @@ class PlotlyGraphDataType:
 class PlotlyGraphDataTypeList():
 
     """
-    Blueprint for a list of standard datas, that can get normalized together
+    Blueprint for a list of standard data, that can get normalized together
     """
 
     import numpy as np
@@ -388,9 +388,9 @@ class PlotlyGraphAnnotations():
 
 class PlotlyGraphAnnotationIntervals():
     """
-        Blueprint for annotations that are going to be displayed as an Interval
-        with text and time information
-        """
+    Blueprint for annotations that are going to be displayed as an Interval
+    with text and time information
+    """
     def __init__(self, x0, x1, text, unit_indice, units):
         self.x0 = x0
         self.x1 = x1

@@ -5,7 +5,7 @@ import { PlotContainer } from './plot_container';
 
 export class PlotlyFrontend {
     /**
-     * Manages the creation and insertion of Plot Conatainers.
+     * Manages the creation and insertion of Plot Containers.
      *
      */
     private session: Session.ISessionConnection;

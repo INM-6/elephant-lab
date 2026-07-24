@@ -1,9 +1,9 @@
 """
-Managment of of plotting:
+Management of of plotting:
 1.a. Gets info what should be plotted
 1.b. Gets info how something should be plotted
-2. Checks if new plotting is neccessary
-3. Runs the Pipline:
+2. Checks if new plotting is necessary
+3. Runs the Pipeline:
 -notifies Frontend what to delete and update
 -Convert Neo data to Plotly useable data
 -Creates PlotlyFigures
@@ -308,7 +308,7 @@ class ElephantLab_plot:
         Gets called once at the beginning, when the saved settings are loaded
         and then every time the saved settings change
 
-        Update the saved settings and replots if neccessary
+        Update the saved settings and replots if necessary
         """
         overlap = settings.get("overlap")
         zero_based = settings.get("zero_based")
@@ -350,7 +350,7 @@ class ElephantLab_plot:
             # max_points
             max_points = -1 if full_resolution else max_points # -1 is convention for "full_resolution" in the backend
 
-            # Temporary hard cap beacause Jupyterlab crashes with extremly big datasets
+            # Temporary hard cap because Jupyterlab crashes with extremely big datasets
             hard_cap = 10000000
             if not max_points or max_points == -1 or max_points > hard_cap:
                 max_points = hard_cap
