@@ -1,4 +1,11 @@
+"""
+Shared helper functions used across elephant lab for unit handling, value
+formatting, and downsampling of numeric arrays for display.
+"""
+
 class OutputUtils:
+    """Static helper methods for converting units, formatting numbers, and downsampling data."""
+
     import quantities as pq
     import numpy as np
     import sys
@@ -18,11 +25,13 @@ class OutputUtils:
         
     @staticmethod
     def convert_to_other_units(val, unit, convert_unit):
+        """Rescales a value from unit to convert_unit and returns the raw magnitude."""
         q = OutputUtils.pq.Quantity(val, unit)
         return q.rescale(convert_unit).magnitude
-    
+
     @staticmethod
     def get_text_label(unit):
+        """Returns a human-readable physical quantity name (e.g. 'Frequency') for a quantities unit."""
         pq = OutputUtils.pq
         def simplify(unit):
             if unit == pq.dimensionless:
@@ -71,6 +80,7 @@ class OutputUtils:
     
     @staticmethod
     def convert_unit_to_label(unit, short=False):
+        """Formats a unit as a display label, either short ('s') or long ('Time(s)')."""
         if unit is None:
             return ""
 
@@ -81,6 +91,7 @@ class OutputUtils:
 
     @staticmethod
     def center_text_for_length(text, length):
+        """Pads text with leading spaces to roughly center it within length characters."""
         text = str(text)
         if len(text) >= length:
             return text
@@ -119,11 +130,18 @@ class OutputUtils:
     
     @staticmethod
     def print_warning(message):
+        """Currently a no-op placeholder for emitting warnings; kept as a single call site."""
         pass
         #print(f"WARNING: {message}", file=PlotlyUtils.sys.stderr)
 
     @staticmethod
     def normalize(values, method="minmax", do_normalize=True):
+        """
+        Normalizes an array of values using "minmax", "zscore", or "l2" scaling.
+
+        If do_normalize is False, values are left unchanged and only checked for
+        whether they are already normalized. Returns a tuple (values, already_normalized).
+        """
         np = OutputUtils.np
         values = np.asarray(values, dtype=float)
         
@@ -181,6 +199,11 @@ class OutputUtils:
         
     @staticmethod
     def lttb_downsample(x, y, threshold):
+        """
+        Downsamples (x, y) to at most threshold points using the Largest
+        Triangle Three Buckets algorithm, keeping the first and last point
+        and picking the most visually significant point per bucket.
+        """
         threshold = int(threshold)
         n = len(x)
         if threshold >= n or threshold == 0:
