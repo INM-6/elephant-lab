@@ -142,12 +142,21 @@ class ElephantLab_tree:
 
         nodes_html = []
         top_level_simple_nodes = []
+        tracked_ids = {
+            id(v) for v in self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.values()
+        }
         for variable_name, neo_obj in self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.items():
             if type(neo_obj) not in self.NEO_OBJS_TO_SHOW:
                 continue
-            if hasattr(neo_obj, 'block') and neo_obj.block is not None:
+            # Only skip this object if its parent is itself a tracked top-level
+            # variable (actually shown somewhere in the tree). A neo object
+            # can carry a reference to a parent (e.g. Segment.block)
+            # even when that parent was never assigned to a variable
+            parent_block = getattr(neo_obj, 'block', None)
+            if parent_block is not None and id(parent_block) in tracked_ids:
                 continue
-            if hasattr(neo_obj, 'segment') and neo_obj.segment is not None:
+            parent_segment = getattr(neo_obj, 'segment', None)
+            if parent_segment is not None and id(parent_segment) in tracked_ids:
                 continue
             html, simple_node = self._build_node_html(neo_obj, variable_name=variable_name)
             nodes_html.append(html)
