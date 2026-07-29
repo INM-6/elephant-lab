@@ -1,6 +1,6 @@
 """
 Specific implementations of the Blueprints of PlotlyGraphContainer
-for Neo Data
+for Neo data
 """
 
 from .PlotlyGraphContainer import PlotlyGraphDataType, PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals

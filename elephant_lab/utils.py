@@ -102,7 +102,7 @@ class OutputUtils:
         that does not get trimmed and then the fitting
         number of spaces to center it to the desired length.
         Should ONLY be used, if there is no clean way of doing
-        it with css or a property that would center it!
+        it with CSS or a property that would center it!
         """
         text = str(text)
         if len(text) >= length:
@@ -212,7 +212,7 @@ class OutputUtils:
     def lttb_downsample(x, y, threshold):
         """
         Downsamples the x and y values to the desired
-        threshold using the Larges Triangle Three Buckets method
+        threshold using the Largest Triangle Three Buckets method
         """
         threshold = int(threshold)
         n = len(x)

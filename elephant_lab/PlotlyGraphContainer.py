@@ -388,7 +388,7 @@ class PlotlyGraphAnnotations():
 
 class PlotlyGraphAnnotationIntervals():
     """
-    Blueprint for annotations that are going to be displayed as an Interval
+    Blueprint for annotations that are going to be displayed as an interval
     with text and time information
     """
     def __init__(self, x0, x1, text, unit_indice, units):

@@ -211,7 +211,7 @@ class PlotlyGraphFigure:
     def _create_annotations(self, annotation_data, annotation_interval_data, x_range):
         """
         Updates the graph annotations and optimizes the performance by grouping
-        close ones when there are to many
+        close ones when there are too many
         """
         if annotation_data is None and annotation_interval_data is None:
             return
