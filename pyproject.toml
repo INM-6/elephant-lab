@@ -32,9 +32,7 @@ dependencies = [
     "elephant>=1.1.0",
     "quantities",
     "plotly>4.0",
-    "plotly-resampler>=0.11.0",
-    "pytz>=2026.2",
-    "anywidget>=0.11.0",
+    "tsdownsample>=0.1.5.1"
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 

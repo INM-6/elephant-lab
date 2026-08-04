@@ -1,36 +1,19 @@
 import * as Plotly from 'plotly.js-dist';
-import * as noUiSlider from 'nouislider';
-import { OutputArea } from '@jupyterlab/outputarea';
 import {
     Widget,
 } from '@lumino/widgets';
-import {
-    PythonCodeKey,
-    getPythonCode
-} from './kernelcode';
 import { KernelBridge } from './kernel_bridge';
-import {
-    IRenderMimeRegistry,
-}
-    from '@jupyterlab/rendermime';
-import { createOutputArea } from './output_functionalities';
 
-export class PlotContainer {
-    private kernelBridge: KernelBridge;
-    private rendermime: IRenderMimeRegistry;
-    private wrapper: HTMLDivElement;
-    private container: HTMLDivElement;
-    private plotOutputArea: OutputArea;
+export abstract class PlotContainer {
+    protected plotKey: string;
+    protected kernelBridge: KernelBridge;
+    protected wrapper: HTMLDivElement;
+    protected container: HTMLDivElement;
     private loading: HTMLDivElement;
-    private updateId: number;
-    private hasFrames: boolean;
-    // @ts-ignore
-    private slider?: HTMLElement;
-    private ticklabel_limit?: number;
 
-    constructor(kernelBridge: KernelBridge, rendermime: IRenderMimeRegistry, outputWiget: Widget | null) {
+    public constructor(plotKey: string, kernelBridge: KernelBridge, outputWidget: Widget | null) {
+        this.plotKey = plotKey;
         this.kernelBridge = kernelBridge;
-        this.rendermime = rendermime;
         const wrapper = document.createElement('div');
         wrapper.classList.add('plot-wrapper');
         wrapper.style.position = 'relative';
@@ -43,12 +26,6 @@ export class PlotContainer {
         container.classList.add('plot-container');
         container.style.flex = '1'; // fill remaining space
         container.style.minWidth = '0'; // allow shrinking in flex
-
-
-        this.plotOutputArea = createOutputArea(this.rendermime, ['my-outarea-class'], 'jup_vis_out_id_2.3');;
-
-        // Add it to the container
-        container.appendChild(this.plotOutputArea.node);
         wrapper.appendChild(container);
 
         // Loading overlay
@@ -74,8 +51,8 @@ export class PlotContainer {
         });
         wrapper.appendChild(loading);
 
-        if (outputWiget) {
-            outputWiget.node.appendChild(wrapper);
+        if (outputWidget) {
+            outputWidget.node.appendChild(wrapper);
         } else {
             document.body.appendChild(wrapper);
         }
@@ -83,12 +60,10 @@ export class PlotContainer {
         this.wrapper = wrapper;
         this.container = container;
         this.loading = loading;
-        this.updateId = -1;
-        this.hasFrames = false;
     }
 
-    async startLoading(plot_key: string) {
-        const gd = this.plotOutputArea.node.querySelector('.js-plotly-plot') as any;
+    public startLoading() {
+        const gd = this.container as any;
         if (!gd || !gd.data || gd.data.length === 0) {
             // Get the current JupyterLab theme background color
             const rootStyles = getComputedStyle(document.documentElement);
@@ -104,168 +79,54 @@ export class PlotContainer {
         }
         this.loading.style.opacity = '1';
         this.loading.style.pointerEvents = 'all';
-
-        const onDone = () => {
-
-            const waitForPlot = () => {
-                const plot = this.plotOutputArea.node.querySelector('.js-plotly-plot');
-                if (plot) {
-                    this.hideLoading();
-                    //this.setTheme(this.isPlotlyDarkTheme);
-                    this.kernelBridge.executeCode(PythonCodeKey.ResizePlots);
-                } else {
-                    requestAnimationFrame(waitForPlot);
-                }
-            };
-
-            waitForPlot();
-        }
-
-        const code = getPythonCode(PythonCodeKey.PlotByPlotKey, plot_key);
-        this.kernelBridge.executeCode(code, this.plotOutputArea, true, true, null, onDone);
     }
 
-    hideLoading() {
+    protected hideLoading() {
         this.loading.style.opacity = '0';
         this.loading.style.pointerEvents = 'none';
     }
-    setUpdateId(id: number) {
-        this.updateId = id;
+
+    public abstract render(figDict: any, is_plot_theme_dark: boolean): void;
+
+    public resize() {
+        Plotly.Plots.resize(this.container);
     }
 
-    canUpdate(newId: number) {
-        return newId > this.updateId;
-    }
-
-    render(figJson: any, updateId: number, is_plot_theme_dark: boolean) {
-        const currentId = updateId;
+    public setTheme(is_dark: boolean) {
         const gd = this.container as any;
-        if (!gd) return;
+        if (!gd || !gd.data) return;
 
-        if (this.hasFrames) {
-            this.hasFrames = false;
-            Plotly.purge(this.container);
-        }
+        const theme = is_dark
+            ? { paper_bgcolor: '#111111', plot_bgcolor: '#111111', fontColor: '#fff', gridColor: '#444' }
+            : { paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff', fontColor: '#000', gridColor: '#e5e5e5' };
 
-        Plotly.react(this.container, figJson.data, figJson.layout).then((gd) => {
-            if (this.updateId !== currentId) return;
+        const layoutCopy: Partial<Plotly.Layout> = {
+            paper_bgcolor: theme.paper_bgcolor,
+            plot_bgcolor: theme.plot_bgcolor,
+            font: { ...gd.layout?.font, color: theme.fontColor },
+        };
 
-            if (figJson.frames) {
-                this.hasFrames = true;
-                Plotly.addFrames(gd, figJson.frames);
+        // Cast to any for dynamic axis assignment
+        const layoutAny = layoutCopy as any;
+
+        // Loop over all keys in layout that start with "xaxis" or "yaxis"
+        Object.keys(gd.layout).forEach((key) => {
+            if (key.startsWith('xaxis') || key.startsWith('yaxis')) {
+                layoutAny[key] = {
+                    ...gd.layout[key], // preserve existing range, tickvals, ticktext
+                    gridcolor: theme.gridColor,
+                    zerolinecolor: theme.gridColor,
+                    color: theme.fontColor,
+                };
             }
-            if (figJson.ticklabel_limit) {
-                this.ticklabel_limit = figJson.ticklabel_limit;
-            } else {
-                this.ticklabel_limit = undefined
-            }
-            if (figJson.y_slider) {
-                const [minY, maxY] = figJson.y_slider as [number, number];
-                this.addYRangeSlider(minY, maxY);
-            } else {
-                this.removeYRangeSlider()
-            }
-
-        }).catch((err) => {
-            console.error('Plotly render error:', err);
-        }).finally(() => {
-            this.hideLoading();
         });
+
+        // Apply the theme without overwriting ranges, ticks, etc.
+        Plotly.relayout(this.container, layoutCopy);
     }
 
-    addYRangeSlider(minY: number, maxY: number) {
-        let sliderInstance;
-
-        // If slider already exists → reuse it
-        if (this.slider) {
-            sliderInstance = (this.slider as any).noUiSlider;
-            if (!sliderInstance) return;
-
-            const currentRange = sliderInstance.options.range;
-            const currentMin = currentRange.min;
-            const currentMax = currentRange.max;
-
-            const EPSILON = 1e-6;
-
-            const isDifferent =
-                Math.abs(currentMin - minY) > EPSILON ||
-                Math.abs(currentMax - maxY) > EPSILON;
-
-            // Update only if range changed
-            if (isDifferent) {
-                sliderInstance.updateOptions({
-                    range: {
-                        min: minY,
-                        max: maxY
-                    }
-                });
-            } else {
-                const values = sliderInstance.get(); // returns [min, max] as strings
-                minY = Number(values[0]);
-                maxY = Number(values[1]);
-            }
-        } else {
-            // --- Create slider (only once) ---
-            const slider = document.createElement('div');
-            slider.classList.add('my-slider');
-            slider.style.width = '20px';
-            slider.style.flexShrink = '0';
-            slider.style.marginTop = `100px`;
-            slider.style.marginBottom = `100px`;
-            slider.style.marginLeft = '15px';
-
-            this.wrapper.insertBefore(slider, this.container);
-
-            sliderInstance = noUiSlider.create(slider, {
-                start: [minY, maxY],
-                connect: true,
-                orientation: 'vertical',
-                direction: 'rtl',
-                range: {
-                    min: minY,
-                    max: maxY
-                }
-            });
-
-            sliderInstance.on('update', (values) => {
-                const gd = this.container as any;
-                if (!gd || !gd.data) return;
-
-                const min = Number(values[0]);
-                const max = Number(values[1]);
-
-                const yaxis = gd.layout.yaxis;
-                yaxis.range = [min, max];
-                yaxis.autorange = false;
-
-                if (this.ticklabel_limit) {
-                    const showticklabels = this.ticklabel_limit > max - min;
-                    yaxis.showticklabels = showticklabels;
-                    yaxis.zeroline = showticklabels;
-                    yaxis.showgrid = showticklabels;
-                }
-
-                Plotly.relayout(this.container, { yaxis });
-            });
-
-            this.slider = slider;
-        }
-
-        // ALWAYS trigger update logic
-        sliderInstance.set([minY, maxY]);
-    }
-
-    removeYRangeSlider() {
-        if (!this.slider) return;
-        this.slider.remove()
-        this.slider = undefined
-    }
-
-    destroy() {
-        const gd = this.plotOutputArea.node.querySelector('.js-plotly-plot') as any;
-        if (gd) {
-            Plotly.purge(gd);
-        }
+    public destroy() {
+        Plotly.purge(this.container);
         this.wrapper.remove();
     }
 }

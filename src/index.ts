@@ -174,7 +174,7 @@ class ElephantLabExtension {
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
-			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.kernelBridge, this.rendermime!, this.plots_container!);
+			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.kernelBridge, this.plots_container!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw);
 			// Notify backend of initial panel active state
 			await this.kernelBridge.executeCode(
@@ -1041,7 +1041,9 @@ class ElephantLabExtension {
 			return savedToggle;
 		}
 
-		const darkmodeToggle = createSavedToggle('dark', 'fa-moon', 'Dark', 'Switch between dark and light mode');
+		const darkmodeToggle = createSavedToggle('dark', 'fa-moon', 'Dark', 'Switch between dark and light mode', (state: boolean) => {
+			this.plotlyFrontend?.setThemes(state);
+		});
 
 		const overlapToggle = createSavedToggle('overlap', 'fa-layer-group', 'Overlap', 'Switch between stacking the graphs vertically or overlapping them');
 

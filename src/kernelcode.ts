@@ -88,11 +88,9 @@ function selectByAnnotationFilter(expression: string): string {
 	return `elephant_lab_entity.elephant_lab_tree.select_by_annotation_filter(${JSON.stringify(expression)})`;
 }
 
-function plotByPlotKey(plot_key: string): string {
-	return `elephant_lab_entity.elephant_lab_plot.plot('${plot_key}')`;
+function getNormalizedDataForPlotWithXRange(plotKey: string, xRange?: [number, number]): string {
+	return `elephant_lab_entity.elephant_lab_plot.get_normalized_data_for_plot_with_x_range('${plotKey}', ${xRange ? `[${xRange.join(', ')}]` : 'None'})`;
 }
-
-const resize_plots = "elephant_lab_entity.elephant_lab_plot.resize_plots()"
 
 // Make all strings publicly available in a dict
 // This dict is used in index.ts to actually execute the code
@@ -115,8 +113,7 @@ export enum PythonCodeKey {
 	SelectByAnnotationFilter = 'selectByAnnotationFilter',
 	SetPanelVisibility = 'setPanelVisibility',
 	UpdatePlotSettings = 'updatePlotSettings',
-	PlotByPlotKey = 'plotByPlotKey',
-	ResizePlots = 'resizePlots'
+	GetNormalizedDataForPlotWithXRange = 'getNormalizedDataForPlotWithXRange',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -138,8 +135,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
 	[PythonCodeKey.SetPanelVisibility]: (...args: any[]) => setPanelVisibility(args[0], args[1]),
 	[PythonCodeKey.UpdatePlotSettings]: (...args: any[]) => updatePlotSettings(args[0]),
-	[PythonCodeKey.PlotByPlotKey]: (...args: any[]) => plotByPlotKey(args[0]),
-	[PythonCodeKey.ResizePlots]: resize_plots
+	[PythonCodeKey.GetNormalizedDataForPlotWithXRange]: (...args: any[]) => getNormalizedDataForPlotWithXRange(args[0], args[1]),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {

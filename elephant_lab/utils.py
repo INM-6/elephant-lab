@@ -15,6 +15,11 @@ class OutputUtils:
         if unit.simplified.dimensionality != convert_unit.simplified.dimensionality:
             return -1
         return 1
+
+    @staticmethod
+    def get_conversion_factor(unit, convert_unit):
+        q = OutputUtils.pq.Quantity(1,unit)
+        return q.rescale(convert_unit).magnitude
         
     @staticmethod
     def convert_to_other_units(val, unit, convert_unit):
@@ -125,7 +130,9 @@ class OutputUtils:
     @staticmethod
     def normalize(values, method="minmax"):
         np = OutputUtils.np
-        values = np.asarray(values, dtype=float)
+        values = np.asarray(values)
+        if not np.issubdtype(values.dtype, np.floating):
+            values = values.astype(float)
         
         eps = np.finfo(values.dtype).eps
 
@@ -137,9 +144,13 @@ class OutputUtils:
 
             # Stricter check: already normalized to [0,1]
             if denom > eps and np.isclose(vmin, 0, atol=eps) and np.isclose(vmax, 1, atol=eps):
-                return values
+                return lambda val : val
 
-            return (values - vmin) / denom if denom > eps else np.zeros_like(values)
+            def normalize(val):
+                val -= vmin
+                val /= denom
+                return val
+            return normalize if denom > eps else lambda val: np.zeros_like(val)
 
         elif method == "zscore":
             mean = np.nanmean(values)
@@ -147,18 +158,25 @@ class OutputUtils:
 
             # Already standardized (mean≈0, std≈1)
             if std > eps and np.isclose(mean, 0, atol=eps) and np.isclose(std, 1, atol=eps):
-                return values
+                return lambda val : val
 
-            return (values - mean) / std if std > eps else np.zeros_like(values)
+            def normalize(val):
+                val -= mean
+                val /= std
+                return val
+            return normalize if std > eps else lambda val: np.zeros_like(val)
 
         elif method == "l2":
             norm = np.linalg.norm(values)
 
             # Already unit norm
             if norm > eps and np.isclose(norm, 1, atol=eps):
-                return values, True
+                return lambda val : val
 
-            return values / norm if norm > eps else np.zeros_like(values)
+            def normalize(val):
+                val /= norm
+                return val
+            return normalize if norm > eps else lambda val: np.zeros_like(val)
 
         else:
             raise ValueError(f"Unknown normalization method: {method}")

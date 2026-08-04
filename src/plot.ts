@@ -4,27 +4,22 @@ import {
 } from '@lumino/widgets';
 import 'nouislider/dist/nouislider.css';
 import { PlotContainer } from './plot_container';
+import { PlotGraph } from './plot_graph';
 import { KernelBridge } from './kernel_bridge';
-import {
-    PythonCodeKey,
-} from './kernelcode';
-import {
-    IRenderMimeRegistry,
-}
-    from '@jupyterlab/rendermime';
+import { PlotResponse } from './plot_graph_interfaces';
 
 export class PlotlyFrontend {
     private session: Session.ISessionConnection;
     private kernelBridge: KernelBridge;
-    private rendermime: IRenderMimeRegistry;
     private plots: Map<string, PlotContainer> = new Map();
-    private outputWiget: Widget | null;
+    private outputWidget: Widget | null;
+    private is_plot_theme_dark: boolean;
 
-    constructor(session: Session.ISessionConnection, kernelBridge: KernelBridge, rendermime: IRenderMimeRegistry, outputWiget: Widget | null = null) {
+    constructor(session: Session.ISessionConnection, kernelBridge: KernelBridge, outputWidget: Widget | null = null) {
         this.session = session;
         this.kernelBridge = kernelBridge;
-        this.rendermime = rendermime;
-        this.outputWiget = outputWiget;
+        this.outputWidget = outputWidget;
+        this.is_plot_theme_dark = false;
 
         // Register the comm target to receive messages from Python
         this.session.kernel?.registerCommTarget(
@@ -34,18 +29,14 @@ export class PlotlyFrontend {
             }
         );
 
-        let resizeTimeout: ReturnType<typeof setTimeout> | undefined;
-
         const resizePlots = () => {
-            clearTimeout(resizeTimeout);
-
-            resizeTimeout = setTimeout(() => {
-                kernelBridge.executeCode(PythonCodeKey.ResizePlots);
-            }, 200); // Wait 200ms after the last resize event
+            for (const plot of this.plots.values()) {
+                plot.resize()
+            }
         };
 
         const resizeObserver = new ResizeObserver(resizePlots);
-        resizeObserver.observe(outputWiget!.node);
+        resizeObserver.observe(outputWidget!.node);
     }
 
     private async handleCommMessage(msg: KernelMessage.ICommMsgMsg) {
@@ -67,6 +58,15 @@ export class PlotlyFrontend {
                     : [];
                 await this.handleLoading(plots2);
                 break;
+            case 'plots_update':
+                const figs = (data.plots as Record<string, any>) ?? {};
+                this.handleUpdate(figs);
+                break;
+            case 'plot_resample':
+                const plotKey = data.plot_key as string;
+                const dataBundle = data.data_bundle as unknown as PlotResponse;
+                this.handleResample(plotKey, dataBundle);
+                break;
             default:
                 console.warn('Unknown plot message type', data.type, data.message);
         }
@@ -86,10 +86,38 @@ export class PlotlyFrontend {
         await Promise.all(plotKeys.map(async (key) => {
             let state = this.plots.get(key);
             if (!state) {
-                state = new PlotContainer(this.kernelBridge, this.rendermime, this.outputWiget);
+                state = new PlotGraph(key, this.kernelBridge, this.outputWidget);
                 this.plots.set(key, state);
             }
-            await state.startLoading(key)
+            state.startLoading();
         }));
+    }
+
+    private handleUpdate(figs: Record<string, any>) {
+        Object.entries(figs).forEach(([key, figDict]) => {
+            let state = this.plots.get(key);
+            if (!state) {
+                state = new PlotGraph(key, this.kernelBridge, this.outputWidget);
+                this.plots.set(key, state);
+            }
+            state.render(figDict, this.is_plot_theme_dark)
+        });
+    }
+
+    private handleResample(plotKey: string, dataBundle: PlotResponse) {
+        let state = this.plots.get(plotKey) as PlotGraph;
+        if (state) {
+            state.resample(dataBundle);
+        }
+    }
+
+    public setThemes(is_dark: boolean) {
+        if (this.is_plot_theme_dark == is_dark) {
+            return;
+        }
+        this.is_plot_theme_dark = is_dark;
+        for (const plot of this.plots.values()) {
+            plot.setTheme(is_dark)
+        }
     }
 }
