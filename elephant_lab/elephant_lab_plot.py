@@ -273,7 +273,9 @@ class ElephantLab_plot:
             plot_dict = self.plots[self._enum_key(plot_key)]
             data_bundle = plot_dict['data_bundle']
             if data_bundle is not None and self.comm:
-                self.comm.send({"type": "plot_resample", "plot_key": plot_key, "data_bundle": data_bundle.get_normalized_data_for_x_range(x_range=x_range)})
+                normalized_data = data_bundle.get_normalized_data_for_x_range(x_range=x_range)
+                if normalized_data['plotly_graph_data_list_changed'] or normalized_data['annotation_list_changed']:
+                    self.comm.send({"type": "plot_resample", "plot_key": plot_key, "data_bundle": normalized_data})
 
     def update_settings(self, **settings):
         overlap = settings.get("overlap")
@@ -362,7 +364,7 @@ class ElephantLab_plot:
             "title": title,
             "overlapping": overlapping,
             "changes_on_overlap": changes_on_overlap,
-            "data_bundle": data_bundle.get_normalized_data_for_x_range(),
+            "data_bundle": data_bundle.get_normalized_data_for_x_range(setup=True),
         }
 
         plot_dict['changes_on_overlap'] = changes_on_overlap

@@ -51,7 +51,7 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataList):
 
                 channel_name = name
                 if num_channels > 1:
-                    channel_name += f' Ch{ch_idx}'
+                    channel_name = f'{channel_name}-ch{ch_idx}'
                 # Plot
                 self.datas.append(self.AnalogSignalChannelLFPPlot({ 'x': lfp.times.magnitude, 'y': channel_data, 'name': channel_name, 'units_x': lfp.times.units, 'units_y': lfp.units}))
 

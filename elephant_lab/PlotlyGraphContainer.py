@@ -1,7 +1,7 @@
 class PlotlyGraphData:
 
     from .utils import OutputUtils
-    from tsdownsample import MinMaxLTTBDownsampler
+    import numpy as np
 
     def __init__(self, data, name_fallback='Trace', **kwargs):
         self.unit_x_conversion_factor = 1
@@ -10,6 +10,7 @@ class PlotlyGraphData:
         self.y_normalization_method = None
         self.y_offset = 0
         self.constant_sampling_rate = False
+        self.last_full_sampled_x_range = None
         if data is None:
             self.x = [0]
             self.y = [0]
@@ -23,6 +24,19 @@ class PlotlyGraphData:
                 else:
                     self.name = str(name_fallback)
         # Override / add attributes from kwargs
+        l_name = len(self.name)
+        if l_name > 13:
+            idx = self.name.rfind('-')
+            if idx == -1:
+                self.name = f"{self.name[:10]}..."
+            else:
+                idx += 1
+                l_end = l_name - idx
+                if l_end < 7:
+                    self.name = f"{self.name[:10-l_end]}...{self.name[idx:]}"
+                else:
+                    self.name = f"{self.name[:10]}..."
+
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -82,66 +96,86 @@ class PlotlyGraphData:
             self.x, self.y = None, None
 
     def normalize_x(self, x_values):
-        x_values += self.shift_x_to_0
-        x_values *= self.unit_x_conversion_factor
+        if self.shift_x_to_0 != 0:
+            x_values += self.shift_x_to_0
+        if self.unit_x_conversion_factor != 1:
+            x_values *= self.unit_x_conversion_factor
         return x_values
 
     def normalize_y(self, y_values):
         if self.y_normalization_method:
             y_values = self.y_normalization_method(y_values)
         else:
-            y_values *= self.unit_y_conversion_factor
+            if self.unit_y_conversion_factor != 1:
+                y_values *= self.unit_y_conversion_factor
+        if self.y_offset != 0:
+            y_values += self.y_offset
         return y_values
 
     def un_normalize_x(self, x_values):
-        x_values /= self.unit_x_conversion_factor
-        x_values -= self.shift_x_to_0
+        if self.unit_x_conversion_factor != 1:
+            x_values /= self.unit_x_conversion_factor
+        if self.shift_x_to_0 != 0:
+            x_values -= self.shift_x_to_0
         return x_values
 
-    def to_dict(self, x_range, max_points):
+    def to_dict(self, min_max_lttb_downsampler, x_range, max_points, common_units_x_label=None, common_units_y_label=None, setup = False):
         """name, mode, marker, x, y, (unit_x, unit_y)"""
         data_dict = {}
-        data_dict['name'] = self.name
-        data_dict['mode'] = self.mode
-        if hasattr(self, "marker"):
-            data_dict['marker'] = self.marker
-        if hasattr(self, "units_x"):
-            data_dict['units_x'] = self.OutputUtils.convert_unit_to_label(self.units_x)
-        if hasattr(self, "units_y"):
-            data_dict['units_y'] = self.OutputUtils.convert_unit_to_label(self.units_y)
-        if hasattr(self, "use_name_as_ticklabels"):
-            data_dict['use_name_as_ticklabels'] = self.use_name_as_ticklabels
-        if hasattr(self, "minX"):
-            data_dict['minX'] = self.minX
-        if hasattr(self, "minY"):
-            data_dict['minY'] = self.minY
-        if hasattr(self, "maxX"):
-            data_dict['maxX'] = self.maxX
-        if hasattr(self, "maxY"):
-            data_dict['maxY'] = self.maxY
-
-        minX, maxX = x_range
-        un_normalized_minX = self.un_normalize_x(minX)
-        un_normalized_maxX = self.un_normalize_x(maxX)
+        if setup:
+            data_dict['name'] = self.name
+            data_dict['mode'] = self.mode
+            if hasattr(self, "marker"):
+                data_dict['marker'] = self.marker
+            if hasattr(self, "units_x"):
+                data_dict['units_x'] = self.OutputUtils.convert_unit_to_label(self.units_x) if common_units_x_label is None else common_units_x_label
+            if hasattr(self, "units_y"):
+                data_dict['units_y'] = self.OutputUtils.convert_unit_to_label(self.units_y) if common_units_y_label is None else common_units_y_label
+            if hasattr(self, "use_name_as_ticklabels"):
+                data_dict['use_name_as_ticklabels'] = self.use_name_as_ticklabels
+            if hasattr(self, "minX"):
+                data_dict['minX'] = self.minX
+            if hasattr(self, "minY"):
+                data_dict['minY'] = self.minY
+            if hasattr(self, "maxX"):
+                data_dict['maxX'] = self.maxX
+            if hasattr(self, "maxY"):
+                data_dict['maxY'] = self.maxY
 
         x_values = self.x
         y_values = self.y
 
-        mask = (x_values >= un_normalized_minX) & (x_values <= un_normalized_maxX)
-        x_values = x_values[mask]
-        y_values = y_values[mask]
+        if x_range is not None:
+            minX, maxX = x_range
+            if self.last_full_sampled_x_range is not None:
+                last_minX, last_maxX = self.last_full_sampled_x_range
+                if last_minX <= minX <= maxX <= last_maxX:
+                    return False
+                self.last_full_sampled_x_range = None
+            un_normalized_minX = self.un_normalize_x(minX)
+            un_normalized_maxX = self.un_normalize_x(maxX)
 
-        max_points = int(max_points)
-        if(self.constant_sampling_rate):
-            s_ds = self.MinMaxLTTBDownsampler().downsample(y_values, n_out=max_points)
+            i0 = self.np.searchsorted(x_values, un_normalized_minX, side="left")
+            i1 = self.np.searchsorted(x_values, un_normalized_maxX, side="right")
+
+            x_values = x_values[i0:i1]
+            y_values = y_values[i0:i1]
+
+        n = x_values.size
+        if n > max_points:
+            if(self.constant_sampling_rate):
+                s_ds = min_max_lttb_downsampler.downsample(y_values, n_out=max_points)
+            else:
+                s_ds = min_max_lttb_downsampler.downsample(x_values, y_values, n_out=max_points)
+            x_values = x_values[s_ds]
+            y_values = y_values[s_ds]
         else:
-            s_ds = self.MinMaxLTTBDownsampler().downsample(x_values, y_values, n_out=max_points)
-        x_values = x_values[s_ds]
-        y_values = y_values[s_ds]
+            self.last_full_sampled_x_range = x_range
+            x_values = x_values.copy()
+            y_values = y_values.copy()
 
         x_values = self.normalize_x(x_values)
         y_values = self.normalize_y(y_values)
-        y_values += self.y_offset
         data_dict['x'] = x_values.tolist()
         data_dict['y'] = y_values.tolist()
 
@@ -217,6 +251,7 @@ class PlotlyGraphDataBundle:
 
     import numpy as np
     from .utils import OutputUtils
+    from tsdownsample import MinMaxLTTBDownsampler
 
     def __init__(self, data_list, annotation_list=None):
         if isinstance(data_list, PlotlyGraphDataBundle):
@@ -264,6 +299,12 @@ class PlotlyGraphDataBundle:
 
     
     def _set_default_attributes_for_normalization(self):
+        """
+        Sets default values for normalization.
+        Theses are not set in the constructor to ensure,
+        that they only can be used onces the object
+        actually has been normalized.
+        """
         self.common_units_x = None
         self.common_units_y = None
         self.data_minX = 0
@@ -278,6 +319,11 @@ class PlotlyGraphDataBundle:
         self.is_default_normalized_y = True
 
     def _filter_empty_and_normalize_complex(self):
+        """
+        Filters out empty traces and traces without the same amount of x and y values.
+        Handles Complex, inf and nan values properly.
+        Ensures x values are ordered (ASC).
+        """
         if self.is_data_empty:
             return
 
@@ -343,6 +389,11 @@ class PlotlyGraphDataBundle:
         self.data_list.datas = filtered
 
     def _normalize_units(self, y_instead_of_x = False):
+        """
+        If there is one common_unit which all other units already are or
+        can be converted to, thant it sets the fitting conversion factor for each data.
+        Otherwise nothing is going converted.
+        """
         if y_instead_of_x and self.is_data_empty:
             return
         units_string = "units_y" if y_instead_of_x else "units_x"
@@ -353,8 +404,7 @@ class PlotlyGraphDataBundle:
         units_to_data = {}
 
         def handle_unit(unit, data):
-            units = getattr(data, units_string)
-            can_convert = self.OutputUtils.can_convert_units(units, common_units)
+            can_convert = self.OutputUtils.can_convert_units(unit, common_units)
             if can_convert == -1:
                 return
             elif can_convert == 1:
@@ -384,6 +434,11 @@ class PlotlyGraphDataBundle:
         setattr(self, common_units_string, common_units)
 
     def _shift_to_0(self, shift_to_0):
+        """
+        Figures out if it ever needs to be shifted to 0.
+        If it needs and should, than it sets the factor that the values
+        need to be shifted by.
+        """
         if self.is_data_empty:
             return
         is_default_zero_based = True
@@ -398,6 +453,9 @@ class PlotlyGraphDataBundle:
 
     def _normalize_y_values(self, normalize_y_values, normalization_method):
         """
+        If normalization is desired, than it calculates the function, that needs to be applied
+        to the y values to normalize them (Never normalizes for y values with only zeros).
+
         Normalization will not work equally (Unit conversion then normalizing, is different from just normalizing)
         if the common_units invoke an offset unit conversion like:
         °C → °F
@@ -417,6 +475,11 @@ class PlotlyGraphDataBundle:
         self.is_default_normalized_y = is_default_normalized_y
 
     def _calc_min_max_apply_offset(self, offset_traces_on_compress):
+        """
+        Sets the absolute extreme values for each data and the total for all data
+        and the total for all annotations.
+        Sets a y offset for each data, if the graph is compressed and stacked.
+        """
 
         np = self.np
 
@@ -475,10 +538,8 @@ class PlotlyGraphDataBundle:
     
     def normalize(self, offset_traces_on_compress, shift_to_0, normalize_y_values, normalization_method):
         """
-        Tries to normalize units to first unit found
-        Shifts all graphs to 0 if shift_to_0 is True and minX is not already close to 0
-        Decreases number of points if there are to many
-        sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), minX, minY, maxX, maxY, is_default_zero_based, nGraphs, compress, is_empty, is_default_normalized_y
+        Does the normalization steps and sets:
+        common_units_x, common_units_y(They are None if no common units for x or y could be found), data_minX, annotation_minX, minY, data_maxX, annotation_maxX, maxY, is_default_zero_based, nGraphs, compress, is_data_empty, is_annotation_empty, is_default_normalized_y
         """
         normalization_steps = [
             self._set_default_attributes_for_normalization, 
@@ -493,30 +554,47 @@ class PlotlyGraphDataBundle:
             if self.is_empty:
                 return
             normalization_step()
+        self._min_max_lttb_downsampler = self.MinMaxLTTBDownsampler()
 
-    def get_normalized_data_for_x_range(self, x_range=None, max_points=100000):
+    def get_normalized_data_for_x_range(self, x_range=None, max_points=100000, setup = False):
         np = self.np
 
-        if x_range is None:
-            x_range = (self.minX, self.maxX)
-        max_points_per_data = max_points / len(self.datas)
+        max_points_per_data = int(max_points / len(self.datas))
         annotation_list_dict = {
             'xs': np.concatenate([annotation.xs * annotation.unit_x_conversion_factor for annotation in self.annotation_list]),
             'texts':  np.concatenate([annotation.texts for annotation in self.annotation_list]),
             'durations': np.concatenate([annotation.durations * annotation.unit_x_conversion_factor for annotation in self.annotation_list])
         } if not self.is_annotation_empty else None
-        data_bundle_dict = {
-            'plotly_graph_data_list': [data.to_dict(x_range, max_points_per_data) for data in self.datas],
-            'annotation_list_dict': annotation_list_dict,
-            "compress": self.compress,
-            "nGraphs": self.nGraphs,
-            "minX": self.minX,
-            "minY": self.minY,
-            "maxX": self.maxX,
-            "maxY": self.maxY,
-        }
-        if self.common_units_x is not None:
-            data_bundle_dict['common_units_x'] = self.OutputUtils.convert_unit_to_label(self.common_units_x)
-        if self.common_units_y is not None:
-            data_bundle_dict['common_units_y'] = self.OutputUtils.convert_unit_to_label(self.common_units_y)
+        data_bundle_dict = {}
+        common_units_x_label = None
+        common_units_y_label = None
+        if setup:
+            if self.common_units_x is not None:
+                common_units_x_label = self.OutputUtils.convert_unit_to_label(self.common_units_x)
+                data_bundle_dict['common_units_x'] = common_units_x_label
+            if self.common_units_y is not None:
+                common_units_y_label = self.OutputUtils.convert_unit_to_label(self.common_units_y)
+                data_bundle_dict['common_units_y'] = common_units_y_label
+        plotly_graph_data_list = [
+            {**d, "index": i}
+            for i, data in enumerate(self.datas)
+            if (d := data.to_dict(self._min_max_lttb_downsampler, x_range, max_points_per_data, common_units_x_label, common_units_y_label, setup))
+        ]
+        data_bundle_dict.update({
+            'plotly_graph_data_list': plotly_graph_data_list,
+            'plotly_graph_data_list_changed': len(plotly_graph_data_list) > 0,
+            'annotation_list': annotation_list_dict,
+            'annotation_list_changed': False,
+        })
+        if setup:
+            data_bundle_dict.update({
+                "compress": self.compress,
+                "nGraphs": self.nGraphs,
+                "minX": self.minX,
+                "minY": self.minY,
+                "maxX": self.maxX,
+                "maxY": self.maxY,
+                "extended_minY": self.minY,
+                "extended_maxY": self.maxY
+            })
         return data_bundle_dict

@@ -7,7 +7,9 @@ export interface FigureDict {
 
 export interface PlotResponse {
     plotly_graph_data_list: PlotlyGraphData[];
-    annotation_list_dict: AnnotationListDict | null;
+    plotly_graph_data_list_changed: boolean;
+    annotation_list: AnnotationListDict | null;
+    annotation_list_changed: boolean;
 
     compress: boolean;
     nGraphs: number;
@@ -19,6 +21,8 @@ export interface PlotResponse {
     minY: number;
     maxX: number;
     maxY: number;
+    extended_minY: number;
+    extended_maxY: number;
 }
 
 export interface AnnotationListDict {
@@ -35,6 +39,7 @@ export interface PlotlyMarker {
 
 export interface PlotlyGraphData {
     name: string;
+    index: number;
     mode: string;
 
     marker?: PlotlyMarker;

@@ -3,6 +3,40 @@ class OutputUtils:
     import numpy as np
     import sys
 
+    UNIT_TO_LABEL_DICT = {
+        pq.dimensionless: "",
+
+        pq.s.simplified.dimensionality: "Time",
+        pq.m.simplified.dimensionality: "Length",
+        pq.kg.simplified.dimensionality: "Mass",
+        pq.A.simplified.dimensionality: "Current",
+        pq.K.simplified.dimensionality: "Temperature",
+        pq.mol.simplified.dimensionality: "Substance",
+        pq.cd.simplified.dimensionality: "Luminous Intensity",
+
+        pq.Hz.simplified.dimensionality: "Frequency",
+        (pq.m / pq.s).simplified.dimensionality: "Velocity",
+        (pq.m / pq.s**2).simplified.dimensionality: "Acceleration",
+        pq.N.simplified.dimensionality: "Force",
+        pq.J.simplified.dimensionality: "Energy",
+        pq.Pa.simplified.dimensionality: "Pressure",
+        pq.W.simplified.dimensionality: "Power",
+        pq.C.simplified.dimensionality: "Electric Charge",
+        pq.V.simplified.dimensionality: "Voltage",
+        pq.Ohm.simplified.dimensionality: "Resistance",
+        pq.F.simplified.dimensionality: "Capacitance",
+        pq.H.simplified.dimensionality: "Inductance",
+        pq.T.simplified.dimensionality: "Magnetic Flux Density",
+        pq.Wb.simplified.dimensionality: "Magnetic Flux",
+        # overrides dimensionless wich is more commonly used than using a solid angle and there is no simple way to find out what excactly the user wanted
+        #pq.sr.simplified.dimensionality: "Solid Angle",
+        pq.B.simplified.dimensionality: "Bel",
+        (pq.kg * pq.m / pq.s).simplified.dimensionality: "Momentum",
+        (pq.N * pq.m).simplified.dimensionality: "Torque",
+        (pq.W / pq.m**2).simplified.dimensionality: "Irradiance",
+        (pq.J / pq.K).simplified.dimensionality: "Entropy",
+    }
+
     @staticmethod
     def can_convert_units(unit, convert_unit):
         """
@@ -25,52 +59,20 @@ class OutputUtils:
     def convert_to_other_units(val, unit, convert_unit):
         q = OutputUtils.pq.Quantity(val, unit)
         return q.rescale(convert_unit).magnitude
+
     
     @staticmethod
     def get_text_label(unit):
         pq = OutputUtils.pq
+
         def simplify(unit):
             if unit == pq.dimensionless:
                 return pq.dimensionless
             return unit.simplified.dimensionality
 
-        unit_to_label = {
-            simplify(pq.dimensionless): "",
-
-            simplify(pq.s): "Time",
-            simplify(pq.m): "Length",
-            simplify(pq.kg): "Mass",
-            simplify(pq.A): "Current",
-            simplify(pq.K): "Temperature",
-            simplify(pq.mol): "Substance",
-            simplify(pq.cd): "Luminous Intensity",
-
-            simplify(pq.Hz): "Frequency",
-            simplify((pq.m / pq.s)): "Velocity",
-            simplify((pq.m / pq.s**2)): "Acceleration",
-            simplify(pq.N): "Force",
-            simplify(pq.J): "Energy",
-            simplify(pq.Pa): "Pressure",
-            simplify(pq.W): "Power",
-            simplify(pq.C): "Electric Charge",
-            simplify(pq.V): "Voltage",
-            simplify(pq.Ohm): "Resistance",
-            simplify(pq.F): "Capacitance",
-            simplify(pq.H): "Inductance",
-            simplify(pq.T): "Magnetic Flux Density",
-            simplify(pq.Wb): "Magnetic Flux",
-            # overrides dimensionless wich is more commonly used than using a solid angle and there is no simple way to find out what excactly the user wanted
-            #simplify(pq.sr): "Solid Angle",
-            simplify(pq.B): "Bel",
-            simplify(pq.kg * pq.m / pq.s): "Momentum",
-            simplify(pq.N * pq.m): "Torque",
-            simplify(pq.W / pq.m**2): "Irradiance",
-            simplify(pq.J / pq.K): "Entropy",
-        }
-
         unit_key = simplify(unit)
-        if unit_key in unit_to_label:
-            return unit_to_label[unit_key]
+        if unit_key in OutputUtils.UNIT_TO_LABEL_DICT:
+            return OutputUtils.UNIT_TO_LABEL_DICT[unit_key]
         else:
             return ""
     

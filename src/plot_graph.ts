@@ -50,12 +50,11 @@ export class PlotGraph extends PlotContainer {
             this.layout.grid = {
                 rows: this.figureDict.data_bundle.nGraphs,
                 columns: 1,
-                pattern: 'independent',
-                roworder: 'top to bottom'
+                roworder: "bottom to top"
             };
         }
 
-        this.addData(true);
+        this.addData();
 
         this.layout.title = {
             'text': this.figureDict.title,
@@ -69,15 +68,20 @@ export class PlotGraph extends PlotContainer {
         this.manageTickLabels();
         this.manageLegend();
         this.manageAxisUnits();
-        this.createSlider();
-        for (let i = 1; i <= this.figureDict.data_bundle.nGraphs; i++) {
+        this.createXSlider();
+        /*for (let i = 1; i <= this.figureDict.data_bundle.nGraphs; i++) {
             this.updateLayoutAxis(`xaxis${i}`, {
                 range: [this.figureDict.data_bundle.minX, this.figureDict.data_bundle.maxX],
             });
-        }
+        }*/
 
         Plotly.react(this.container, this.data, this.layout).then((gd) => {
             this.setTheme(is_plot_theme_dark);
+            if (this.shouldHaveYSlider()) {
+                this.addYRangeSlider();
+            } else {
+                this.removeYRangeSlider()
+            }
             this.resize();
             this.saveXRange(gd.layout?.xaxis?.range as [number, number] | undefined);
             gd.on('plotly_relayout', async (event) => {
@@ -116,27 +120,33 @@ export class PlotGraph extends PlotContainer {
             console.error('Plotly render error:', err);
         }).finally(() => {
             this.hideLoading();
+            this.data = [];
+            this.layout = {};
         });
     }
 
     public resample(dataBundle: PlotResponse) {
-        this.data = [];
-        this.figureDict.data_bundle = dataBundle;
-        this.addData();
-        // @ts-ignore
-        const x = this.data.map(t => t.x);
-        // @ts-ignore
-        const y = this.data.map(t => t.y);
-        const indices = this.data.map((_, i) => i);
-
-        Plotly.restyle(
-            this.container,
-            { x, y },
-            indices
-        );
+        if (dataBundle.plotly_graph_data_list_changed) {
+            const indices = [];
+            const x = [];
+            const y = [];
+            for (const plotGraphData of dataBundle.plotly_graph_data_list) {
+                indices.push(plotGraphData.index);
+                const currentPlotGraphData = this.figureDict.data_bundle.plotly_graph_data_list[plotGraphData.index];
+                currentPlotGraphData.x = plotGraphData.x;
+                currentPlotGraphData.y = plotGraphData.y;
+                x.push(plotGraphData.x);
+                y.push(plotGraphData.y);
+            }
+            Plotly.restyle(
+                this.container,
+                { x, y },
+                indices
+            );
+        }
     }
 
-    private addData(setup: boolean = false): void {
+    private addData(): void {
         for (let i = 0; i < this.figureDict.data_bundle.plotly_graph_data_list.length; i++) {
             const graphData = this.figureDict.data_bundle.plotly_graph_data_list[i];
 
@@ -158,62 +168,72 @@ export class PlotGraph extends PlotContainer {
                 marker: marker_settings,
                 line: line_settings
             };
+            const global_index = graphData.index;
             if (this.isSinglePlot()) {
-                if (setup) {
-                    if (this.canHaveCustomTickLabels() && graphData.use_name_as_ticklabels) {
-                        if (this.figureDict.data_bundle.compress) {
-                            this.ticktext.push(graphData.name);
-                        } else {
-                            this.layout.yaxis = {
-                                ...this.layout.yaxis,
-                                tickvals: [0],
-                                ticktext: [graphData.name],
-                            };
-                        }
+                if (this.canHaveCustomTickLabels() && graphData.use_name_as_ticklabels) {
+                    if (this.figureDict.data_bundle.compress) {
+                        this.ticktext.push(graphData.name);
+                    } else {
+                        this.layout.yaxis = {
+                            ...this.layout.yaxis,
+                            tickvals: [0],
+                            ticktext: [graphData.name],
+                        };
                     }
                 }
             } else {
-                const row = i + 1;
+                const row = global_index + 1;
                 trace = {
                     ...trace,
-                    xaxis: `x${row}`,
                     yaxis: `y${row}`,
                 };
-                if (setup) {
-                    if (graphData.units_x !== undefined) {
-                        this.updateLayoutAxis(`xaxis${row}`, {
-                            title: {
-                                text: graphData.units_x,
-                            }
-                        });
-                    }
-                    if (graphData.units_y !== undefined) {
-                        this.updateLayoutAxis(`yaxis${row}`, {
-                            title: {
-                                text: graphData.units_y,
-                            }
-                        });
-                    }
-                    if (this.canHaveCustomTickLabels() && graphData.use_name_as_ticklabels) {
-                        this.hasCustomTickLabels = true;
 
-                        this.updateLayoutAxis(`yaxis${row}`, {
-                            tickvals: [0],
-                            ticktext: [graphData.name],
-                        });
-
-                        if (this.hideLegend !== undefined) {
-                            if (!graphData.use_name_as_ticklabels) {
-                                this.hideLegend = false;
-                            }
-                        } else {
-                            this.hideLegend = graphData.use_name_as_ticklabels;
+                if (graphData.units_y !== undefined) {
+                    this.updateLayoutAxis(`yaxis${row}`, {
+                        title: {
+                            text: graphData.units_y,
                         }
+                    });
+                }
+                if (this.canHaveCustomTickLabels() && graphData.use_name_as_ticklabels) {
+                    this.hasCustomTickLabels = true;
+
+                    this.updateLayoutAxis(`yaxis${row}`, {
+                        tickvals: [0],
+                        ticktext: [graphData.name],
+                    });
+
+                    if (this.hideLegend !== undefined) {
+                        if (!graphData.use_name_as_ticklabels) {
+                            this.hideLegend = false;
+                        }
+                    } else {
+                        this.hideLegend = graphData.use_name_as_ticklabels;
                     }
                 }
             }
             this.data.push(trace);
         }
+        // add a trace with (minX, minY) and (maxX, maxY), so the view does not change after using the sliders
+        let extentTrace: Partial<Plotly.PlotData> = {
+            type: "scatter",
+            mode: "markers",
+            x: [this.figureDict.data_bundle.minX, this.figureDict.data_bundle.maxX],
+            y: [this.figureDict.data_bundle.extended_minY, this.figureDict.data_bundle.extended_maxY],
+            marker: {
+                size: 0,
+                opacity: 0
+            },
+            showlegend: false,
+            hoverinfo: "skip"
+        };
+        if (!this.isSinglePlot()) {
+            extentTrace = {
+                ...extentTrace,
+                yaxis: `y1`,
+            };
+        }
+        this.data.push(extentTrace);
     }
 
     private manageTickLabels(): void {
@@ -234,7 +254,9 @@ export class PlotGraph extends PlotContainer {
             if (!this.hasCustomTickLabels && !this.shouldOverlap()) {
                 this.layout.yaxis = {
                     ...this.layout.yaxis,
-                    visible: false,
+                    showticklabels: false,
+                    zeroline: false,
+                    showgrid: false,
                 };
             }
         }
@@ -287,15 +309,16 @@ export class PlotGraph extends PlotContainer {
     }
 
     private manageAxisUnits(): void {
+        if (this.figureDict.data_bundle.common_units_x !== undefined) {
+            this.layout.xaxis = {
+                ...this.layout.xaxis,
+                title: {
+                    text: this.figureDict.data_bundle.common_units_x,
+                },
+            };
+        }
+
         if (this.isSinglePlot()) {
-            if (this.figureDict.data_bundle.common_units_x !== undefined) {
-                this.layout.xaxis = {
-                    ...this.layout.xaxis,
-                    title: {
-                        text: this.figureDict.data_bundle.common_units_x,
-                    },
-                };
-            }
 
             if (this.figureDict.data_bundle.common_units_y !== undefined) {
                 this.layout.yaxis = {
@@ -305,50 +328,29 @@ export class PlotGraph extends PlotContainer {
                     },
                 };
             }
-        } else {
-            if (this.figureDict.data_bundle.common_units_x !== undefined) {
-                // Clear all x-axis titles except the last one.
-
-                for (let i = 1; i < this.figureDict.data_bundle.nGraphs; i++) {
-                    this.updateLayoutAxis(`xaxis${i}`, {
-                        title: {
-                            text: undefined,
-                        },
-                    });
-                }
-            }
         }
     }
 
-    private createSlider(): void {
-        const n = this.figureDict.data_bundle.nGraphs;
-
+    private createXSlider(): void {
         const xBgColor = "#1e7fcc";
         const pixels = 25;
         const xHeight = Math.max(0.02, pixels / this.height);
 
-        const axisKey = this.isSinglePlot() ? "xaxis" : `xaxis${n}`;
-
-        this.updateLayoutAxis(axisKey, {
+        this.layout.xaxis = {
+            ...this.layout.xaxis,
             rangeslider: {
                 visible: true,
                 bgcolor: xBgColor,
                 thickness: xHeight,
             },
-        });
-
-        if (this.shouldHaveYSlider()) {
-            this.addYRangeSlider();
-        } else {
-            this.removeYRangeSlider()
-        }
+        };
     }
 
     private addYRangeSlider() {
         let sliderInstance;
 
-        let minY = this.figureDict.data_bundle.minY;
-        let maxY = this.figureDict.data_bundle.maxY;
+        let minY = this.figureDict.data_bundle.extended_minY;
+        let maxY = this.figureDict.data_bundle.extended_maxY;
         // If slider already exists → reuse it
         if (this.slider) {
             sliderInstance = (this.slider as any).noUiSlider;
