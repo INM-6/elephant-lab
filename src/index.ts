@@ -134,7 +134,7 @@ class ElephantLabExtension {
 		MessageLoop.installMessageHook(this.widget, (_handler, msg) => {
 			if (msg.type === 'after-show') {
 				this.topBar?.show();
-			} else if (msg.type === 'before-hide') {
+			} else if (msg.type === 'before-hide' || msg.type === 'before-detach') {
 				this.topBar?.hide();
 			}
 			return true;
