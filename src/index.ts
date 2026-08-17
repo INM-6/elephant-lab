@@ -53,6 +53,7 @@ import {
 	Widget,
 	DockPanel
 } from '@lumino/widgets';
+import { MessageLoop } from '@lumino/messaging';
 
 // Own imports
 // Python Code to execute in the kernel
@@ -123,6 +124,15 @@ class ElephantLabExtension {
 		this.output_tabs = null;
 		this.kernelBridge = null;
 		this.plotlyFrontend = null;
+
+		MessageLoop.installMessageHook(this.widget, (_handler, msg) => {
+			if (msg.type === 'after-show') {
+				this.topBar?.show();
+			} else if (msg.type === 'before-hide') {
+				this.topBar?.hide();
+			}
+			return true;
+		});
 	}; // end of constructor()
 
 	private async initializeSettings() {
@@ -656,6 +666,9 @@ class ElephantLabExtension {
 		this.topBar.node.style.marginLeft = 'auto';
 
 		this.app.shell.add(this.topBar, 'top', { rank: 1000 });
+		if (!this.widget.isVisible) {
+			this.topBar.hide();
+		}
 	}
 
 	public create_tree_filter(session: ISessionContext, tree_widget: Panel) {
