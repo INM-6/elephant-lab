@@ -17,13 +17,18 @@ import {
 	IDocumentManager
 } from '@jupyterlab/docmanager';
 
+import { DocumentRegistry } from '@jupyterlab/docregistry';
+
 import { FileDialog } from '@jupyterlab/filebrowser';
 
 import {
+	INotebookModel,
 	INotebookTracker,
 	NotebookActions,
 	NotebookPanel
 } from '@jupyterlab/notebook';
+
+import { ToolbarButton } from '@jupyterlab/ui-components';
 
 import {
 	KernelMessage,
@@ -54,6 +59,7 @@ import {
 	DockPanel
 } from '@lumino/widgets';
 import { MessageLoop } from '@lumino/messaging';
+import { DisposableDelegate, IDisposable } from '@lumino/disposable';
 
 // Own imports
 // Python Code to execute in the kernel
@@ -216,6 +222,33 @@ class ElephantLabExtension {
 		// Add the command to the CommandPalette, to make it available on click
 		this.command_palette.addItem({ command, category: 'NeuroScience' });
 	} // end of createCommand()
+
+	// Add an "Elephant Lab" button to every notebook's own toolbar, so it can
+	// be launched without going through the CommandPalette.
+	public registerToolbarButton(command: string) {
+		this.app.docRegistry.addWidgetExtension('Notebook', {
+			createNew: (panel: NotebookPanel, _context: DocumentRegistry.IContext<INotebookModel>): IDisposable => {
+				const button = new ToolbarButton({
+					iconClass: 'elephant-lab-toolbar-icon',
+					tooltip: 'Open Elephant Lab',
+					onClick: () => {
+						if (this.widget.isAttached && this.widget.isVisible) {
+							this.widget.close();
+							return;
+						}
+						this.app.shell.activateById(panel.id);
+						this.app.commands.execute(command);
+					}
+				});
+				if (!panel.toolbar.insertBefore('spacer', 'elephantLab', button)) {
+					panel.toolbar.addItem('elephantLab', button);
+				}
+				return new DisposableDelegate(() => {
+					button.dispose();
+				});
+			}
+		});
+	} // end of registerToolbarButton()
 
 
 	// Function to react on command 'Elephant Lab'
@@ -1544,6 +1577,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	// this command will open the elephant lab tab
 	const command: string = 'elephant-lab:open';
 	jupy_ext.createCommand(command);
+	jupy_ext.registerToolbarButton(command);
 
 	// Restore from corresponding namespace
 	restorer.restore(widget_tracker, {

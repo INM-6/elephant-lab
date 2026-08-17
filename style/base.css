@@ -123,6 +123,16 @@
   right: -6px;
 }
 
+.elephant-lab-toolbar-icon {
+  background-image: url('../doc/elephant_trunk.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+}
+
 .unchecked-label:hover,
 .workflow-button:hover,
 .checked-label:hover,
