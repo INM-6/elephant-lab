@@ -96,20 +96,27 @@
   color: var(--jp-ui-font-color1);
 }
 
-.lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabLabel::after,
+.lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabIcon::after,
 .elephant-trunk-icon {
   background-image: url('../doc/elephant_trunk.png');
   background-size: contain;
   background-repeat: no-repeat;
 }
 
-.lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabLabel::after {
+.lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabIcon {
+  position: relative;
+  width: 46px;
+}
+
+.lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabIcon::after {
   content: '';
-  display: inline-block;
+  position: absolute;
+  left: 30px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 14px;
   height: 14px;
-  margin-left: 8px;
-  vertical-align: middle;
+  pointer-events: none;
 }
 
 .elephant-trunk-icon {
@@ -121,6 +128,10 @@
   position: relative;
   top: -8px;
   right: -6px;
+}
+
+.jp-mod-left .elephant-trunk-icon {
+  transform: rotate(270deg) scaleX(-1);
 }
 
 .unchecked-label:hover,
