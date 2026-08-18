@@ -104,19 +104,20 @@
 }
 
 .lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabIcon {
-  position: relative;
-  width: 46px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
 }
 
 .lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabIcon::after {
   content: '';
-  position: absolute;
-  left: 30px;
-  top: 50%;
-  transform: translateY(-50%);
+  flex: 0 0 auto;
   width: 14px;
   height: 14px;
   pointer-events: none;
+  position: relative;
+  top: 1px;
 }
 
 .elephant-trunk-icon {
