@@ -878,6 +878,83 @@ class ElephantLabExtension {
 				}
 			});
 		};
+		const createGroupButton = document.createElement('button');
+		createGroupButton.innerHTML = '<i class="fa fa-object-group" aria-hidden="true"></i> Group';
+		createGroupButton.title = 'Bundle the selected neo objects into a new neo.Group';
+		createGroupButton.className = 'workflow-button workflow-button-io';
+		createGroupButton.onclick = async () => {
+			const currentNotebook = this.notebook_tracker.currentWidget;
+			if (!currentNotebook || currentNotebook.sessionContext.path !== session.path) {
+				showDialog({
+					title: 'Incorrect Notebook',
+					body: 'Elephant Lab is not connected to this notebook. Please switch to the notebook Elephant Lab is attached to.',
+					buttons: [Dialog.okButton()]
+				});
+				return;
+			}
+
+			const body = document.createElement('div');
+			const input = document.createElement('input');
+			input.className = 'jp-input';
+			input.placeholder = 'Group name (optional)';
+			body.appendChild(input);
+
+			const dialogResult = await showDialog({
+				title: 'Create Group from Selection',
+				body: new Widget({ node: body }),
+				buttons: [
+					Dialog.cancelButton(),
+					Dialog.okButton({ label: 'Create' })
+				],
+				hasClose: true
+			});
+
+			if (dialogResult.button.label !== 'Create') return;
+
+			const code = getPythonCode(PythonCodeKey.CreateGroupFromSelection, input.value.trim());
+			const result = await this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
+
+			if (result && result.outputs.length > 0) {
+				const output = result.outputs[0];
+				if (output.output_type === 'stream' && output.name === 'stdout') {
+					const data = JSON.parse(output.text);
+
+					if (data.error) {
+						showDialog({
+							title: 'Could Not Create Group',
+							body: data.error,
+							buttons: [Dialog.okButton()]
+						});
+						return;
+					}
+
+					if (data.list_creation_code) {
+						const notebookPanel = this.notebook_tracker.currentWidget;
+						if (notebookPanel) {
+							const notebook = notebookPanel.content;
+							const originalCellIndex = notebook.activeCellIndex;
+							NotebookActions.insertAbove(notebook);
+							const newCell = notebook.activeCell;
+							if (newCell) {
+								newCell.model.sharedModel.setSource(data.list_creation_code);
+							}
+							notebook.activeCellIndex = originalCellIndex + 1;
+						}
+					}
+
+					if (data.warning) {
+						showDialog({
+							title: 'Group Created',
+							body: data.warning,
+							buttons: [Dialog.okButton()]
+						});
+					}
+				}
+			}
+
+			this._applyTreeSelection(result);
+		};
+
 		const insertCodeButton = document.createElement('button');
 		insertCodeButton.innerHTML = '<i class="fa fa-code" aria-hidden="true"></i> Insert';
 		insertCodeButton.title = 'Insert selected neo objects into current notebook';
@@ -992,6 +1069,7 @@ class ElephantLabExtension {
 		filterContainer.appendChild(loadNeoFileButton);
 		filterContainer.appendChild(saveNeoObjectsButton);
 		filterContainer.appendChild(insertCodeButton);
+		filterContainer.appendChild(createGroupButton);
 
 		tree_widget.node.prepend(filterContainer);
 	}

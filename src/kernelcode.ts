@@ -94,6 +94,10 @@ function selectByAnnotationFilter(expression: string): string {
 	return `elephant_lab_entity.elephant_lab_tree.select_by_annotation_filter(${JSON.stringify(expression)})`;
 }
 
+function createGroupFromSelection(name: string): string {
+	return `elephant_lab_entity.create_group_from_selection(${JSON.stringify(name)})`;
+}
+
 // Make all strings publicly available in a dict
 // This dict is used in index.ts to actually execute the code
 export enum PythonCodeKey {
@@ -115,6 +119,7 @@ export enum PythonCodeKey {
 	HandleTreeSelection = 'handleTreeSelection',
 	HandleSelectionRange = 'handleSelectionRange',
 	SelectByAnnotationFilter = 'selectByAnnotationFilter',
+	CreateGroupFromSelection = 'createGroupFromSelection',
 	SetPanelVisibility = 'setPanelVisibility',
 	UpdatePlotSettings = 'updatePlotSettings',
 }
@@ -138,6 +143,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1], args[2]),
 	[PythonCodeKey.HandleSelectionRange]: (...args: any[]) => handleSelectionRange(args[0], args[1]),
 	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
+	[PythonCodeKey.CreateGroupFromSelection]: (...args: any[]) => createGroupFromSelection(args[0]),
 	[PythonCodeKey.SetPanelVisibility]: (...args: any[]) => setPanelVisibility(args[0], args[1]),
 	[PythonCodeKey.UpdatePlotSettings]: (...args: any[]) => updatePlotSettings(args[0]),
 };

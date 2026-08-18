@@ -368,6 +368,73 @@ class ElephantLab:
         except Exception as e:
             print(self.json.dumps({"code_to_insert": "", "error": str(e), "traceback": self.traceback.format_exc()}), file=self.sys.stdout)
 
+    def create_group_from_selection(self, name=""):
+        try:
+            selected_nodes = self.selected_neo_objects
+
+            if not selected_nodes:
+                print(self.json.dumps({"error": "No nodes selected in the Neo tree."}))
+                return
+
+            groupable_type_names = self.Group._data_child_objects
+
+            paths = []
+            objects_for_group = []
+            skipped = 0
+            for node in selected_nodes:
+                if node._id not in self.map_ipytree_node_id_to_neo_obj:
+                    continue
+                neo_obj = self.map_ipytree_node_id_to_neo_obj[node._id]
+
+                is_groupable = type(neo_obj).__name__ in groupable_type_names or isinstance(neo_obj, self.Group)
+                if not is_groupable:
+                    skipped += 1
+                    continue
+
+                variable_name = node.metadata.get('variable_name', '')
+                path = self._get_obj_path(neo_obj, variable_name=variable_name)
+                if path:
+                    paths.append(path)
+                    objects_for_group.append(neo_obj)
+
+            if not objects_for_group:
+                print(self.json.dumps({
+                    "error": "None of the selected objects can be added to a Group "
+                             "(Blocks and Segments cannot be grouped directly)."
+                }))
+                return
+
+            all_vars = list(self.__main__.__dict__.keys())
+            counter = 0
+            var_name = f"group_{counter}"
+            while var_name in all_vars:
+                counter += 1
+                var_name = f"group_{counter}"
+
+            new_group = self.Group(objects_for_group, name=name or None)
+            self.__main__.__dict__[var_name] = new_group
+
+            # Insert a reproducible cell above the active one
+            name_kwarg = f", name={name!r}" if name else ""
+            neo_import_prefix = "" if 'neo' in self.__main__.__dict__ else "import neo\n"
+            list_creation_code = f"{neo_import_prefix}{var_name} = neo.Group([{', '.join(paths)}]{name_kwarg})"
+
+            self.elephant_lab_tree.update_tree()
+
+            new_hash = self.get_neo_hash(new_group, hash_name='sha1')
+            selected = self.elephant_lab_tree.select_node_by_hash(new_hash)
+
+            response = {"list_creation_code": list_creation_code, "var_name": var_name}
+            if skipped:
+                response["warning"] = f"{skipped} selected object(s) were skipped (Blocks/Segments cannot be grouped)."
+            print(self.json.dumps(response))
+
+            if selected:
+                print(f"ELEPHANT_LAB_RESULT_KEY:{self.json.dumps([new_hash])}")
+
+        except Exception as e:
+            print(self.json.dumps({"error": str(e), "traceback": self.traceback.format_exc()}), file=self.sys.stdout)
+
     def _extract_selected_neo_data_objects_by_top_node(self, selected_ids=None, neo_class=None):
         collected_neo_objs = {}
         # iterate over 'neo_objs_and_lists_of_neo_objs_with_var_name' and

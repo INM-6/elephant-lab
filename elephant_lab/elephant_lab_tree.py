@@ -340,6 +340,16 @@ class ElephantLab_tree:
 
         return html, folder_node, child_nodes
             
+    def select_node_by_hash(self, hash_id):
+        """Selects a single node by its hash id, replacing the current selection."""
+        node = self._node_registry.get(hash_id)
+        if not node:
+            return False
+        self.elephant_lab_entity.selected_neo_objects.clear()
+        self.elephant_lab_entity.selected_neo_objects.add(node)
+        self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
+        return True
+
     def handle_selection(self, node_id, multi_select=False, select_children=True):
         """Called from TypeScript when user clicks a node."""
         if node_id not in self._node_registry:
@@ -392,14 +402,23 @@ class ElephantLab_tree:
         self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
 
     def _get_candidates(self) -> dict:
+        # Block/Segment/Group are organizational containers, not data. Filtering
+        # by stat or annotation should only ever match actual data objects
+        def data_candidates(source):
+            return {
+                node._id: obj
+                for node in source
+                if not node._id.startswith('folder-')
+                and (obj := self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.get(node._id)) is not None
+                and not isinstance(obj, (self.Block, self.Segment, self.Group))
+            }
+
         selected = self.elephant_lab_entity.selected_neo_objects
-        source = selected if selected else self._node_registry.values()
-        return {
-            node._id: self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[node._id]
-            for node in source
-            if not node._id.startswith('folder-')
-            and node._id in self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj
-        }
+        if selected:
+            candidates = data_candidates(selected)
+            if candidates:
+                return candidates
+        return data_candidates(self._node_registry.values())
 
     def select_by_stat(self, filter_type: str, filter_data: dict):
         """
