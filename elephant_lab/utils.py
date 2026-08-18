@@ -63,7 +63,7 @@ class OutputUtils:
             simplify(pq.H): "Inductance",
             simplify(pq.T): "Magnetic Flux Density",
             simplify(pq.Wb): "Magnetic Flux",
-            # overrides dimensionless wich is more commonly used than using a solid angle and there is no simple way to find out what excactly the user wanted
+            # overrides dimensionless which is more commonly used than using a solid angle and there is no simple way to find out what exactly the user wanted
             #simplify(pq.sr): "Solid Angle",
             simplify(pq.B): "Bel",
             simplify(pq.kg * pq.m / pq.s): "Momentum",
@@ -91,7 +91,13 @@ class OutputUtils:
 
     @staticmethod
     def center_text_for_length(text, length):
-        """Pads text with leading spaces to roughly center it within length characters."""
+        """
+        Centers text by adding a character to the start
+        that does not get trimmed and then the fitting
+        number of spaces to center it to the desired length.
+        Should ONLY be used, if there is no clean way of doing
+        it with CSS or a property that would center it!
+        """
         text = str(text)
         if len(text) >= length:
             return text

@@ -3,6 +3,12 @@ import * as noUiSlider from 'nouislider';
 import { OutputArea } from '@jupyterlab/outputarea';
 
 export class PlotContainer {
+    /**
+     * Creates a fitting container for the plots and
+     * all its accessories like loading text
+     * and y-slider
+     *
+     */
     private wrapper: HTMLDivElement;
     private container: HTMLDivElement;
     private loading: HTMLDivElement;

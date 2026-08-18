@@ -1,3 +1,8 @@
+"""
+Creates a plotly figure for image sequences with
+the desired settings
+"""
+
 class PlotlyImageSequenceFigure:
 
     from .utils import OutputUtils

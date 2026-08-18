@@ -4,6 +4,10 @@ import 'nouislider/dist/nouislider.css';
 import { PlotContainer } from './plot_container';
 
 export class PlotlyFrontend {
+    /**
+     * Manages the creation and insertion of Plot Containers.
+     *
+     */
     private session: Session.ISessionConnection;
     private plots: Map<string, PlotContainer> = new Map();
     private outputArea: OutputArea | null;

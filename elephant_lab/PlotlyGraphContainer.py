@@ -1,4 +1,14 @@
+"""
+Blueprints for the PlotlyGraphFigure compatible data objects
+
+And Normalization for them
+"""
+
 class PlotlyGraphDataType:
+
+    """
+    Blueprint for the standard data, that will be displayed as a single trace
+    """
 
     from .utils import OutputUtils
 
@@ -75,6 +85,11 @@ class PlotlyGraphDataType:
             self.x, self.y = None, None
 
 class PlotlyGraphDataTypeList():
+
+    """
+    Blueprint for a list of standard data, that can get normalized together
+    """
+
     import numpy as np
     from .utils import OutputUtils
 
@@ -181,8 +196,13 @@ class PlotlyGraphDataTypeList():
                 data.y = y_values
                 data.name = f"{name} (real)"
             i+=1
-            x_values[self.np.isinf(x_values)] = self.np.nan
-            y_values[self.np.isinf(y_values)] = self.np.nan
+            def filter_out_inf(values):
+                if self.np.isinf(values).any():
+                    if not self.np.issubdtype(values.dtype, self.np.floating):
+                        values = values.astype(float)
+                    values[self.np.isinf(values)] = self.np.nan
+            filter_out_inf(x_values)
+            filter_out_inf(y_values)
 
             # Check if x and y are valid
             x_length = len(x_values)
@@ -356,6 +376,10 @@ class PlotlyGraphDataTypeList():
         self.is_default_normalized_y = is_default_normalized_y
 
 class PlotlyGraphAnnotations():
+    """
+    Blueprint for annotations that are going to be displayed as a single event line
+    with text and time information
+    """
     def __init__(self, x, text, unit_indice, units):
         self.x = x
         self.text = text
@@ -363,6 +387,10 @@ class PlotlyGraphAnnotations():
         self.units = units
 
 class PlotlyGraphAnnotationIntervals():
+    """
+    Blueprint for annotations that are going to be displayed as an interval
+    with text and time information
+    """
     def __init__(self, x0, x1, text, unit_indice, units):
         self.x0 = x0
         self.x1 = x1
