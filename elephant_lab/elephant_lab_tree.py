@@ -194,7 +194,7 @@ class ElephantLab_tree:
         <div class="jup-tree">{"".join(nodes_html)}</div>
         '''
 
-    def _build_node_html(self, neo_obj, variable_name='', list_index=None):
+    def _build_node_html(self, neo_obj, variable_name='', list_index=None, ancestors=frozenset()):
         hash_id = self.elephant_lab_entity.get_neo_hash(neo_obj, hash_name='sha1')
         self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj[hash_id] = neo_obj
         self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[hash_id] = neo_obj
@@ -202,6 +202,9 @@ class ElephantLab_tree:
 
         class_name = neo_obj.__class__.__name__
         icon = self.NEO_ABBREVIATIONS.get(class_name, {}).get('icon', 'circle')
+
+        obj_key = id(neo_obj)
+        is_cyclic_ref = obj_key in ancestors
 
         if list_index is not None:
             name_part = f"<b>#{list_index}</b>" + (f" → <b>{neo_obj.name}</b>" if hasattr(neo_obj, 'name') and neo_obj.name else "")
@@ -224,8 +227,13 @@ class ElephantLab_tree:
         )
         
         label = f"<span style='{self.NODE_STYLE}'>{name_part}</span> <i style='{self.SECOND_STYLE}'>({class_name})</i> <small style='{self.SECOND_STYLE}'>[{hash_id[:4]}]</small>"
+        if is_cyclic_ref:
+            label += ' <i class="fa fa-exclamation-triangle" title="Circular group reference — not expanded"></i>'
 
-        children_html, child_simple_nodes = self._build_children_html(neo_obj)
+        if is_cyclic_ref:
+            children_html, child_simple_nodes = '', []
+        else:
+            children_html, child_simple_nodes = self._build_children_html(neo_obj, ancestors | {obj_key})
         has_children = bool(children_html)
         
         simple_node.nodes = child_simple_nodes
@@ -252,10 +260,11 @@ class ElephantLab_tree:
 
         return html, simple_node
 
-    def _build_children_html(self, neo_obj):
+    def _build_children_html(self, neo_obj, ancestors=frozenset()):
         NEO_CONTAINER_ATTRIBUTES = [
             'segments', 'analogsignals', 'spiketrains', 'events',
-            'epochs', 'channel_indexes', 'irregularlysampledsignals', 'imagesequences'
+            'epochs', 'channel_indexes', 'irregularlysampledsignals', 'imagesequences',
+            'channelviews', 'regionsofinterest', 'groups'
         ]
         parts = []
         all_child_nodes = []
@@ -273,7 +282,7 @@ class ElephantLab_tree:
                 if not attr_list or len(attr_list) == 0:
                     continue
 
-                folder_html, folder_node, _ = self._build_folder_html(attr_name, attr_list)
+                folder_html, folder_node, _ = self._build_folder_html(attr_name, attr_list, ancestors)
                 parts.append(folder_html)
                 all_child_nodes.append(folder_node)
 
@@ -281,16 +290,18 @@ class ElephantLab_tree:
             for i, child in enumerate(neo_obj):
                 if type(child) not in self.NEO_OBJS_TO_SHOW:
                     continue
-                child_html, child_node = self._build_node_html(child, list_index=i)
+                child_html, child_node = self._build_node_html(child, list_index=i, ancestors=ancestors)
                 parts.append(child_html)
                 all_child_nodes.append(child_node)
 
         return ''.join(parts), all_child_nodes
 
-    def _build_folder_html(self, attr_name, attr_list):
+    def _build_folder_html(self, attr_name, attr_list, ancestors=frozenset()):
         cap = attr_name.capitalize()
         if attr_name == 'irregularlysampledsignals': cap = 'IrregularlySampledSignals'
         elif attr_name == 'channel_indexes': cap = 'Channel Indexes'
+        elif attr_name == 'channelviews': cap = 'ChannelViews'
+        elif attr_name == 'regionsofinterest': cap = 'RegionsOfInterest'
 
         label = f"<span style='{self.NODE_STYLE}'>{cap}</span> <b style='{self.CS}'>[{len(attr_list)}]</b>"
 
@@ -299,7 +310,7 @@ class ElephantLab_tree:
         for i, child in enumerate(attr_list):
             if type(child) not in self.NEO_OBJS_TO_SHOW:
                 continue
-            child_html, child_node = self._build_node_html(child, list_index=i)
+            child_html, child_node = self._build_node_html(child, list_index=i, ancestors=ancestors)
             children_parts.append(child_html)
             child_nodes.append(child_node)
 
