@@ -107,6 +107,7 @@ class ElephantLabExtension {
 	private _detailsWidget: Panel | null = null;
 	private suppressSettingsChanged: boolean = false;
 	private updateSettingsCallbacks: UpdateSettingsCallback[] = [];
+	private toolbarButtons: ToolbarButton[] = [];
 
 	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -134,8 +135,10 @@ class ElephantLabExtension {
 		MessageLoop.installMessageHook(this.widget, (_handler, msg) => {
 			if (msg.type === 'after-show') {
 				this.topBar?.show();
+				this.toolbarButtons.forEach(b => b.node.classList.add('elephant-lab-open'));
 			} else if (msg.type === 'before-hide' || msg.type === 'before-detach') {
 				this.topBar?.hide();
+				this.toolbarButtons.forEach(b => b.node.classList.remove('elephant-lab-open'));
 			}
 			return true;
 		});
@@ -231,9 +234,18 @@ class ElephantLabExtension {
 				const button = new ToolbarButton({
 					iconClass: 'elephant-lab-toolbar-icon',
 					tooltip: 'Open Elephant Lab',
-					onClick: () => {
+					onClick: async () => {
 						if (this.widget.isAttached && this.widget.isVisible) {
-							this.widget.close();
+							const result = await showDialog({
+								title: 'Close Elephant Lab',
+								body: 'Are you sure you want to close Elephant Lab? This will stop the '
+									+ 'running Elephant Lab instance. If you only want to hide Elephant Lab, '
+									+ 'you can instead hide it by clicking its tab in the sidebar.',
+								buttons: [Dialog.cancelButton(), Dialog.warnButton({ label: 'Close' })]
+							});
+							if (result.button.accept) {
+								this.widget.close();
+							}
 							return;
 						}
 						this.app.shell.activateById(panel.id);
@@ -243,7 +255,12 @@ class ElephantLabExtension {
 				if (!panel.toolbar.insertBefore('spacer', 'elephantLab', button)) {
 					panel.toolbar.addItem('elephantLab', button);
 				}
+				if (this.widget.isAttached && this.widget.isVisible) {
+					button.node.classList.add('elephant-lab-open');
+				}
+				this.toolbarButtons.push(button);
 				return new DisposableDelegate(() => {
+					this.toolbarButtons = this.toolbarButtons.filter(b => b !== button);
 					button.dispose();
 				});
 			}
