@@ -1,3 +1,9 @@
+"""
+Renders the details panel of elephant lab: an HTML summary of the currently
+selected neo object(s), showing metadata, annotations, and a data preview
+table, with per-type overviews when multiple objects are selected.
+"""
+
 class ElephantLab_info:
 
     from IPython.display import display, clear_output, HTML
@@ -53,6 +59,7 @@ class ElephantLab_info:
         self._output_node_info = None
 
     def create_details_panel(self):
+        """Creates the output widget for the details panel and wires it to update whenever selection changes."""
         def on_selected_change_info():
             if not self._is_panel_active:
                 self._pending_info_update = True
@@ -71,12 +78,19 @@ class ElephantLab_info:
                 self.pretty_print_of_selected_neo_objects()
 
     def set_details_panel_active(self, is_active: bool):
+        """Marks the details panel visible/hidden and flushes any update that was skipped while hidden."""
         self._is_panel_active = is_active
         if is_active and self._pending_info_update:
             self._pending_info_update = False
             self._render_info()
 
     def pretty_print_of_selected_neo_objects(self):
+        """
+        Renders the details panel content for the current selection: a
+        single-object detail view when one node is selected, or a grouped
+        overview (spike trains, analog signals, etc.) when several objects
+        of possibly different types are selected.
+        """
         if not self.elephant_lab_entity.selected_neo_objects:
             return
 

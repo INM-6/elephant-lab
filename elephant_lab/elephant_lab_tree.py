@@ -1,3 +1,9 @@
+"""
+Builds and maintains the interactive neo object tree shown in elephant lab,
+including rendering it as HTML, tracking node selection, and filtering or
+selecting nodes by statistic value or annotation expression.
+"""
+
 # Node class which represents a node in the neo tree
 class SimpleNode:
     def __init__(self, node_id, name='', metadata=None):
@@ -107,11 +113,13 @@ class ElephantLab_tree:
         self.expand_all = False
 
     def expand_neo_tree(self, opened):
+        """Sets whether all tree nodes should render expanded by default and rebuilds the tree."""
         self.expand_all = opened
         self.elephant_lab_entity.filter_changed = True
         self.update_tree()
-    
+
     def show_neo_obj(self, neo_obj_string):
+        """Toggles whether the given neo type (by lowercase name) is shown in the tree, then rebuilds it."""
         try:
             neo_obj_type = self.STRING_TO_NEO_OBJ[neo_obj_string]
         except KeyError:
@@ -125,11 +133,17 @@ class ElephantLab_tree:
         self.update_tree()
 
     def cache_stat(self, hash_id: str, stat_name: str, value: float):
+        """Caches a computed statistic (e.g. firing rate) for a neo object so select_by_stat can reuse it."""
         if hash_id not in self._stat_cache:
             self._stat_cache[hash_id] = {}
         self._stat_cache[hash_id][stat_name] = value
 
     def update_tree(self):
+        """
+        Refreshes the notebook's neo object snapshot and, if anything changed,
+        rebuilds the tree widget's HTML from the current top-level neo objects
+        and lists.
+        """
         self.elephant_lab_entity.update()
         self._stat_cache.clear()
         if self._tree_widget is None or not self.elephant_lab_entity.neo_objs_changed_after_update:
@@ -368,6 +382,12 @@ class ElephantLab_tree:
         }
 
     def select_by_stat(self, filter_type: str, filter_data: dict):
+        """
+        Selects all currently visible neo objects (or a subset if some are
+        already selected) whose statistic filter_type ('firing_rate', 'cv',
+        't_start', 't_stop', or 'duration') matches filter_data['value']
+        within a small tolerance. Computed statistics are cached for reuse.
+        """
         import json
         from elephant import statistics as elephant_stats
 
@@ -430,6 +450,12 @@ class ElephantLab_tree:
         print(f"ELEPHANT_LAB_RESULT_KEY:{json.dumps(selected_ids)}")
     
     def select_by_annotation_filter(self, expression: str):
+        """
+        Selects candidate neo objects whose annotations satisfy a boolean
+        expression string (supports and/or/not, comparisons, and max()/min()
+        aggregates over an annotation key computed across the candidates).
+        Prints the selected object hashes as a JSON result line.
+        """
         def _eval_node(node, annotations, agg_values):
             if isinstance(node, self.ast.Expression):
                 return _eval_node(node.body, annotations, agg_values)
@@ -544,6 +570,7 @@ class ElephantLab_tree:
         print(f"ELEPHANT_LAB_RESULT_KEY:{self.json.dumps(selected_ids)}")
 
     def create_tree(self):
+        """Creates and displays the empty HTML widget that the neo tree is rendered into."""
         self._tree_widget = self.widgets.HTML(value='')
         self._tree_widget.layout.width = '100%'
         ElephantLab_tree.display(self._tree_widget)
