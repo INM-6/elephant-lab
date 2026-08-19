@@ -659,68 +659,85 @@ class ElephantLabExtension {
 	}
 
 	public create_tree_filter(session: ISessionContext, tree_widget: Panel) {
-		const neo_obj_filter_dict = {
-			"block": "cube",
-			"segment": "columns",
-			"spiketrain": "braille",
-			"analogsignal": "water",
-			"epoch": "hourglass",
-			"channelview": "eye",
-			"group": "object-group",
-			"irregularlysampledsignal": "wave-square",
-			"event": "map-marker",
-			"imagesequence": "images",
-			"circularregionofinterest": "circle",
-			"polygonregionofinterest": "draw-polygon",
-			"rectangularregionofinterest": "square",
-			"open_all": "check",
-		}
+		const neoObjFilterGroups: [string, string][][] = [
+			[
+				["block", "cube"],
+				["segment", "columns"],
+				["group", "object-group"],
+				["channelview", "eye"],
+			],
+			[
+				["spiketrain", "braille"],
+				["analogsignal", "water"],
+				["imagesequence", "images"],
+				["irregularlysampledsignal", "wave-square"],
+			],
+			[
+				["epoch", "hourglass"],
+				["event", "map-marker"],
+			],
+			[
+				["circularregionofinterest", "circle"],
+				["polygonregionofinterest", "draw-polygon"],
+				["rectangularregionofinterest", "square"],
+			],
+			[
+				["open_all", "check"],
+			],
+		];
 		const currentFilterStates = this.getFilterStates();
 
 		const filterContainer = document.createElement('div');
 		filterContainer.className = 'neo-filter-container';
 		filterContainer.textContent = " Filter  ";
 
-		Object.keys(neo_obj_filter_dict).forEach(key => {
-			const iconName = neo_obj_filter_dict[key as keyof typeof neo_obj_filter_dict];
-			const label = document.createElement("label");
-			label.dataset.key = key;
+		neoObjFilterGroups.forEach((group, groupIndex) => {
+			if (groupIndex > 0) {
+				const groupSeparator = document.createElement('span');
+				groupSeparator.className = 'neo-filter-group-separator';
+				filterContainer.appendChild(groupSeparator);
+			}
 
-			const defaultState = (key === "open_all") ? false : true;
-			const isChecked = currentFilterStates[key] ?? defaultState;
+			group.forEach(([key, iconName]) => {
+				const label = document.createElement("label");
+				label.dataset.key = key;
 
-			label.dataset.checked = isChecked ? "true" : "false";
-			label.classList.add(isChecked ? 'checked-label' : 'unchecked-label');
+				const defaultState = (key === "open_all") ? false : true;
+				const isChecked = currentFilterStates[key] ?? defaultState;
 
-
-			const icon = document.createElement("i");
-			icon.className = `fa fa-${iconName}`
-			icon.setAttribute("aria-hidden", "true");
-			label.prepend(icon);
-			label.appendChild(document.createTextNode(`  `));
-			label.onclick = () => {
-				const isCurrentlyChecked = label.dataset.checked === "true";
-				const isNowChecked = !isCurrentlyChecked;
-				label.dataset.checked = isNowChecked ? "true" : "false";
-
-				if (isNowChecked) {
-					label.classList.replace('unchecked-label', 'checked-label');
-				} else {
-					label.classList.replace('checked-label', 'unchecked-label');
-				}
-
-				this.saveFilterState(key, isNowChecked);
-
-				key === "open_all"
-					? this.neo_tree_expand(isNowChecked, session)
-					: this.neo_tree_filter(label.dataset.key!, session);
-
-			};
-
-			key == "open_all" ? label.title = `Expand all containers` : label.title = `Hide/Show ${key.charAt(0).toUpperCase() + key.slice(1)}(s)`;
+				label.dataset.checked = isChecked ? "true" : "false";
+				label.classList.add(isChecked ? 'checked-label' : 'unchecked-label');
 
 
-			filterContainer.appendChild(label);
+				const icon = document.createElement("i");
+				icon.className = `fa fa-${iconName}`
+				icon.setAttribute("aria-hidden", "true");
+				label.prepend(icon);
+				label.appendChild(document.createTextNode(`  `));
+				label.onclick = () => {
+					const isCurrentlyChecked = label.dataset.checked === "true";
+					const isNowChecked = !isCurrentlyChecked;
+					label.dataset.checked = isNowChecked ? "true" : "false";
+
+					if (isNowChecked) {
+						label.classList.replace('unchecked-label', 'checked-label');
+					} else {
+						label.classList.replace('checked-label', 'unchecked-label');
+					}
+
+					this.saveFilterState(key, isNowChecked);
+
+					key === "open_all"
+						? this.neo_tree_expand(isNowChecked, session)
+						: this.neo_tree_filter(label.dataset.key!, session);
+
+				};
+
+				key == "open_all" ? label.title = `Expand all containers` : label.title = `Hide/Show ${key.charAt(0).toUpperCase() + key.slice(1)}(s)`;
+
+
+				filterContainer.appendChild(label);
+			});
 		});
 
 		const flexBreak = document.createElement('div');
@@ -1435,7 +1452,7 @@ class ElephantLabExtension {
 	}
 
 	public async createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
-		// NEO TREE 
+		// NEO TREE
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
 		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
