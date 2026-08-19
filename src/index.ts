@@ -139,6 +139,9 @@ class ElephantLabExtension {
 			} else if (msg.type === 'before-hide' || msg.type === 'before-detach') {
 				this.topBar?.hide();
 				this.toolbarButtons.forEach(b => b.node.classList.remove('elephant-lab-open'));
+				if (msg.type === 'before-detach') {
+					this.clearActiveNotebookBadge();
+				}
 			}
 			return true;
 		});
@@ -267,6 +270,15 @@ class ElephantLabExtension {
 		});
 	} // end of registerToolbarButton()
 
+	private clearActiveNotebookBadge() {
+		this.notebook_tracker.forEach(notebookWidget => {
+			if (notebookWidget.title.className.includes('elephant-lab-active-notebook')) {
+				notebookWidget.title.className = notebookWidget.title.className
+					.replace('elephant-lab-active-notebook', '')
+					.trim();
+			}
+		});
+	}
 
 	// Function to react on command 'Elephant Lab'
 	// Called only after the command is clicked from CommandPalette
@@ -292,13 +304,7 @@ class ElephantLabExtension {
 			console.error("Elephant Lab: No active notebook found.");
 			return;
 		}
-		this.notebook_tracker.forEach(notebookWidget => {
-			if (notebookWidget.title.className.includes('elephant-lab-active-notebook')) {
-				notebookWidget.title.className = notebookWidget.title.className
-					.replace('elephant-lab-active-notebook', '')
-					.trim();
-			}
-		});
+		this.clearActiveNotebookBadge();
 
 		newPanel.title.className += ' elephant-lab-active-notebook';
 
