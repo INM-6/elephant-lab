@@ -1,9 +1,9 @@
-![Elephant Lab Logo](./doc/Elephant-Lab-Logo.png)
+<img src="./doc/Elephant-Lab-Logo.png" alt="drawing" width="200"/>
 
 # Elephant Lab
 
 
-***Explore, Visualize, and Analyze Electrophysiology Data — Right in JupyterLab***
+***Explore, Visualize, and Analyze Electrophysiology Data - Right in JupyterLab***
 
 Elephant Lab is a JupyterLab extension that brings interactive data exploration to your electrophysiology workflow. It reads datasets in any file format supported by [Neo](https://neo-python.readthedocs.io/) and displays them as an interactive object tree, so you can browse signals, spike trains, and events without writing a single line of code.
 
@@ -11,23 +11,23 @@ Select any object in the tree to inspect its metadata in the **Details panel** o
 
 ## Features
 
-- **Interactive Neo object tree** — browse the full hierarchy of your dataset (Block → Segment → AnalogSignal, SpikeTrain, Event, …)
-- **Info panel** — inspect metadata and annotations for any selected object
-- **Explore Paneld** — visualize signals (time series), spike trains (raster, ISI, IFR), and events interactively using [Plotly](https://plotly.com/python/)
-- **Multi-selection** — select several objects at once to compare them side by side
-- **Overview plots** — rasterplot (SpikeTrains) and LFP overview (AnalogSignals)
-- **Load File button** — open any Neo-compatible file (`.nix`, Blackrock, …) directly from the JupyterLab file browser
-- **Insert Code button** — extract variables from the current selection and insert them into your notebook cell — ready to be analyzed 
-- **Live kernel sync** — objects you create or modify in the notebook appear in the tree automatically
+- **Interactive Neo object tree**: browse the full hierarchy of your dataset (Block → Segment → AnalogSignal, SpikeTrain, Event, ...)
+- **Info panel**: inspect metadata and annotations for any selected object
+- **Explore Panel**: visualize signals (time series), spike trains (raster, ISI, IFR), and events interactively using [Plotly](https://plotly.com/python/)
+- **Multi-selection**: select several objects at once to compare them side by side
+- **Overview plots**: rasterplot (SpikeTrains) and LFP overview (AnalogSignals)
+- **Load button**: open any Neo-compatible file (`.nix`, Blackrock, ...) directly from the JupyterLab file browser
+- **Insert Code button**: extract variables from the current selection and insert them into your notebook cell so they are ready to be analyzed 
+- **Live kernel sync**: objects you create or modify in the notebook appear in the tree automatically
 
 ## Requirements
 
 - Python >= 3.8
 - JupyterLab >= 4.0
-- [Neo](https://neo-python.readthedocs.io/) — electrophysiology data model
-- [Elephant](https://elephant.readthedocs.io/) — electrophysiology analysis library
-- [Plotly](https://plotly.com/python/) — interactive visualizations
-- [nixio](https://github.com/G-Node/nixpy) — required for loading `.nix` files
+- [Neo](https://neo-python.readthedocs.io/): electrophysiology data model
+- [Elephant](https://elephant.readthedocs.io/): electrophysiology analysis library
+- [Plotly](https://plotly.com/python/): interactive visualizations
+- [nixio](https://github.com/G-Node/nixpy): required for loading `.nix` files
 
 All Python dependencies are installed automatically (see [Installation](#installation)).
 
@@ -49,7 +49,10 @@ pip uninstall elephant-lab
 
 ## Quick Start
 
-1. Install Elephant Lab (see [Development Install](#development-install) for now).
+1. Install Elephant Lab 
+   ```bash 
+   pip install elephant-lab
+   ```
 2. Launch JupyterLab:
    ```bash
    jupyter lab
@@ -58,11 +61,9 @@ pip uninstall elephant-lab
 4. Click the **Load** button and select a Neo-compatible dataset (e.g. a `.nix` file).
 5. Browse the object tree, click nodes to inspect them, and use **Insert Code** to use them in your Code.
 
-For a step-by-step walkthrough, open the demo notebook:
+## Demo Notebook
 
-```
-examples/Elephant_Lab_Demo.ipynb
-```
+For a step-by-step walkthrough, open the demo notebook: [examples/Elephant_Lab_Demo.ipynb](examples/Elephant_Lab_Demo.ipynb)
 
 ## Development Install
 
@@ -90,10 +91,10 @@ jlpm build
 For live reloading during development, run JupyterLab and the TypeScript watcher in two separate terminals:
 
 ```bash
-# Terminal 1 — watch and rebuild TypeScript automatically
+# Terminal 1: watch and rebuild TypeScript automatically
 jlpm watch
 
-# Terminal 2 — run JupyterLab
+# Terminal 2: run JupyterLab
 jupyter lab --watch --ServerApp.iopub_msg_rate_limit=1.0e7
 ```
 
@@ -129,3 +130,5 @@ Would you like to fix a problem or add a feature? Please open a [pull request](h
 Elephant Lab builds on the [Neo](https://neo-python.readthedocs.io/) electrophysiology data framework and the [Elephant](https://elephant.readthedocs.io/) analysis library.
 
 This project was developed at the [Institute for Advanced Simulation, Computational and Systems Neuroscience (IAS-6)](https://www.fz-juelich.de/en/inm/inm-6), Forschungszentrum Jülich.
+
+This project was supported by the Ministry of Culture and Science of the State of North Rhine-Westphalia, Germany (NRW-network 'iBehave', grant number: NW21-049) and by the European Union's Horizon Europe Programme under the Specific Grant Agreement No. 101147319 (EBRAINS 2.0 Project).
