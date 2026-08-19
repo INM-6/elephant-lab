@@ -135,21 +135,21 @@ export class ElephantLabNode extends LGraphNode {
             if (ElephantLabNode.showExecPins) {
                 this.addInput("exec in", "jupy_exec");
             }
-            this.addInput("List", "");
+            this.addInput("List", "", { shape: LiteGraph.BOX_SHAPE });
 
             if (ElephantLabNode.showExecPins) {
                 this.addOutput("after loop", "jupy_exec");
                 this.addOutput("loop body", "jupy_exec");
             }
-            this.addOutput("item", "");
-            this.addOutput("index", "number");
+            this.addOutput("item", "", { shape: LiteGraph.BOX_SHAPE });
+            this.addOutput("index", "number", { shape: LiteGraph.BOX_SHAPE });
             return;
         } else if (this.properties.item?.code === '__UTIL_IF__') {
             this.title = "If/Else";
             if (ElephantLabNode.showExecPins) {
                 this.addInput("exec in", "jupy_exec");
             }
-            this.addInput("condition", "");
+            this.addInput("condition", "", { shape: LiteGraph.BOX_SHAPE });
 
             if (ElephantLabNode.showExecPins) {
                 this.addOutput("after if/else", "jupy_exec");
@@ -189,7 +189,7 @@ export class ElephantLabNode extends LGraphNode {
                     this.properties[propName] = defaultValue;
                 }
 
-                this.addInput(param.name, -1, { label: param.name });
+                this.addInput(param.name, -1, { label: param.name, shape: LiteGraph.BOX_SHAPE });
 
                 if (param.name !== "__self__") {
                     const widget = this.addWidget("text", param.name, this.properties[propName], (value: string) => {
@@ -224,7 +224,7 @@ export class ElephantLabNode extends LGraphNode {
                 }
             });
         }
-        this.addOutput("result", -1);
+        this.addOutput("result", -1, { shape: LiteGraph.BOX_SHAPE });
     }
 
     getExtraMenuOptions(): any[] | null {
