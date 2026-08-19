@@ -78,10 +78,10 @@ except NameError:
                     const from_slot = this.outputs[link.origin_slot];
                     const to_slot = target_node.inputs[link.target_slot];
                     const exec_out_names = ['exec out', 'after loop', 'loop body', 'after if/else', 'if body', 'else body'];
-                    if (from_slot && 
-                        to_slot && 
-                        from_slot.type === LiteGraph.EVENT && 
-                        to_slot.type === LiteGraph.EVENT &&
+                    if (from_slot &&
+                        to_slot &&
+                        from_slot.type === 'jupy_exec' &&
+                        to_slot.type === 'jupy_exec' &&
                         exec_out_names.includes(from_slot.name) &&
                         to_slot.name === 'exec in') {
                         link.color = "#0004ff";
