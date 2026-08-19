@@ -94,11 +94,7 @@ export class ElephantLabNode extends LGraphNode {
 
     private rebuildNode() {
         this.inputs.length = 0;
-        if ((this as any).widgets) {
-            while ((this as any).widgets.length > 0) {
-                (this as any).removeWidget(0);
-            }
-        }
+        (this as any).widgets = [];
         this.outputs.length = 0;
 
         if (this.properties.item?.code === '__UTIL_LOOP__') {
