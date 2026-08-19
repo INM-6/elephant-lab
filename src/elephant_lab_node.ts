@@ -83,41 +83,12 @@ export class ElephantLabNode extends LGraphNode {
     // Method used to set up input for classes / functions 
     public setupInputs(): void {
         if (ElephantLabNode.showExecPins) {
-            if (this.inputs.find(i => i.name === 'exec in')) { return; }
-            if (this.properties.item?.code === '__UTIL_LOOP__') {
-                this.addInput("exec in", "jupy_exec");
-                this.addOutput("after loop", "jupy_exec");
-                this.addOutput("loop body", "jupy_exec");
-            } else if (this.properties.item?.code === '__UTIL_IF__') {
-                this.addInput("exec in", "jupy_exec");
-                this.addOutput("after if/else", "jupy_exec");
-                this.addOutput("if body", "jupy_exec");
-                this.addOutput("else body", "jupy_exec");
-            } else if (this._isProcessingNode()) {
-                this.addInput("exec in", "jupy_exec");
+            if (this._isProcessingNode() && !this.outputs.find(o => o.name === 'exec out')) {
                 this.addOutput("exec out", "jupy_exec");
             }
         } else {
-            const execIn = this.inputs.findIndex(i => i.name === 'exec in');
-            if (execIn !== -1) { this.removeInput(execIn); }
-
             const execOut = this.outputs.findIndex(o => o.name === 'exec out');
             if (execOut !== -1) { this.removeOutput(execOut); }
-
-            const afterLoop = this.outputs.findIndex(o => o.name === 'after loop');
-            if (afterLoop !== -1) { this.removeOutput(afterLoop); }
-
-            const loopBody = this.outputs.findIndex(o => o.name === 'loop body');
-            if (loopBody !== -1) { this.removeOutput(loopBody); }
-
-            const afterIf = this.outputs.findIndex(o => o.name === 'after if/else');
-            if (afterIf !== -1) { this.removeOutput(afterIf); }
-
-            const ifBody = this.outputs.findIndex(o => o.name === 'if body');
-            if (ifBody !== -1) { this.removeOutput(ifBody); }
-
-            const elseBody = this.outputs.findIndex(o => o.name === 'else body');
-            if (elseBody !== -1) { this.removeOutput(elseBody); }
         }
     }
 
@@ -132,38 +103,30 @@ export class ElephantLabNode extends LGraphNode {
 
         if (this.properties.item?.code === '__UTIL_LOOP__') {
             this.title = "For Loop";
-            if (ElephantLabNode.showExecPins) {
-                this.addInput("exec in", "jupy_exec");
-            }
+            this.addInput("exec in", "jupy_exec");
             this.addInput("List", "", { shape: LiteGraph.BOX_SHAPE });
 
-            if (ElephantLabNode.showExecPins) {
-                this.addOutput("after loop", "jupy_exec");
-                this.addOutput("loop body", "jupy_exec");
-            }
+            this.addOutput("after loop", "jupy_exec");
+            this.addOutput("loop body", "jupy_exec");
             this.addOutput("item", "", { shape: LiteGraph.BOX_SHAPE });
             this.addOutput("index", "number", { shape: LiteGraph.BOX_SHAPE });
             return;
         } else if (this.properties.item?.code === '__UTIL_IF__') {
             this.title = "If/Else";
-            if (ElephantLabNode.showExecPins) {
-                this.addInput("exec in", "jupy_exec");
-            }
+            this.addInput("exec in", "jupy_exec");
             this.addInput("condition", "", { shape: LiteGraph.BOX_SHAPE });
 
-            if (ElephantLabNode.showExecPins) {
-                this.addOutput("after if/else", "jupy_exec");
-                this.addOutput("if body", "jupy_exec");
-                this.addOutput("else body", "jupy_exec");
-            }
+            this.addOutput("after if/else", "jupy_exec");
+            this.addOutput("if body", "jupy_exec");
+            this.addOutput("else body", "jupy_exec");
             return;
         }
 
         const isProcessingNode = this._isProcessingNode()
 
         if (isProcessingNode) {
+            this.addInput("exec in", "jupy_exec");
             if (ElephantLabNode.showExecPins) {
-                this.addInput("exec in", "jupy_exec");
                 this.addOutput("exec out", "jupy_exec");
             }
         }
