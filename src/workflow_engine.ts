@@ -31,6 +31,7 @@ except NameError:
                     resolved = elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(obj_hash)
                     if resolved is not None:
                         return resolved
+                raise ValueError(f"Elephant Lab: referenced object '{arg_str}' is no longer available in this kernel session (likely because the kernel was restarted). Re-run or re-select the node that produced it.")
             try: return eval(arg_str)
             except: return arg_str
         return arg_str`;
