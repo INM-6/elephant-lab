@@ -109,7 +109,7 @@ export class ElephantLabNode extends LGraphNode {
             this.addOutput("after loop", "jupy_exec");
             this.addOutput("loop body", "jupy_exec");
             this.addOutput("item", "", { shape: LiteGraph.BOX_SHAPE });
-            this.addOutput("index", "number", { shape: LiteGraph.BOX_SHAPE });
+            this.addOutput("index", "", { shape: LiteGraph.BOX_SHAPE });
             return;
         } else if (this.properties.item?.code === '__UTIL_IF__') {
             this.title = "If/Else";

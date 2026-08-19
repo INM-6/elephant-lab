@@ -759,15 +759,8 @@ except NameError:
                 executed_nodes.set(elephant_labNode, null);
                 return null;
             }
-            const loopBodyStartLink = this.graph!.links[loopBodyExecOutput.links[0]];
-            const loopBodyStartNode = this.graph!.getNodeById(loopBodyStartLink.target_id);
 
-            if (!loopBodyStartNode) {
-                executed_nodes.set(elephant_labNode, null);
-                return null;
-            }
-
-            const loopBodyNodes = this._getSubgraphExecutionOrder(loopBodyStartNode);
+            const loopBodyNodes = this._getBodyNodesFromOutput(loopBodyExecOutput);
 
             let loopBodyCode = "";
             const loopScopeExecutedNodes = new Map<LGraphNode, string | null>();
@@ -883,17 +876,10 @@ if _is_true:
             
             const branch = conditionIsTrue ? 'if body' : 'else body';
             const bodyExecOutput = elephant_labNode.outputs.find(o => o.name === branch);
-            
-            if (bodyExecOutput && bodyExecOutput.links && bodyExecOutput.links.length > 0) {
-                const bodyStartLink = this.graph!.links[bodyExecOutput.links[0]];
-                const bodyStartNode = this.graph!.getNodeById(bodyStartLink.target_id);
 
-                if (bodyStartNode) {
-                    const bodyNodes = this._getSubgraphExecutionOrder(bodyStartNode);
-                    for (const bodyNode of bodyNodes) {
-                        await this.executeNode(bodyNode, executed_nodes, outputArea, collected_outputs);
-                    }
-                }
+            const bodyNodes = this._getBodyNodesFromOutput(bodyExecOutput);
+            for (const bodyNode of bodyNodes) {
+                await this.executeNode(bodyNode, executed_nodes, outputArea, collected_outputs);
             }
 
             executed_nodes.set(elephant_labNode, null); 
@@ -1267,6 +1253,28 @@ except Exception as e:
         return sortedList;
     }
 
+    // A body output (e.g. "loop body") can have several nodes wired to it directly (parallel
+    // branches, not a single chain), so this walks every link out of it, not just the first.
+    private _getBodyNodesFromOutput(output: { links?: number[] | null } | undefined): LGraphNode[] {
+        if (!this.graph || !output || !output.links) { return []; }
+
+        const nodes: LGraphNode[] = [];
+        const seen = new Set<LGraphNode>();
+        for (const linkId of output.links) {
+            const link = this.graph.links[linkId];
+            if (!link) { continue; }
+            const branchStartNode = this.graph.getNodeById(link.target_id);
+            if (!branchStartNode) { continue; }
+            for (const n of this._getSubgraphExecutionOrder(branchStartNode)) {
+                if (!seen.has(n)) {
+                    seen.add(n);
+                    nodes.push(n);
+                }
+            }
+        }
+        return nodes;
+    }
+
     // Helper function to get Text-OutputArea of Elephant Lab (for Plot you may use another one)
     private _getWorkflowOutputArea(): OutputArea | null {
         try {
@@ -1372,12 +1380,9 @@ except Exception as e:
                     const loopBodyExecOutput = elephant_labNode.outputs.find(o => o.name === 'loop body');
                     if (!loopBodyExecOutput || !loopBodyExecOutput.links || !loopBodyExecOutput.links.length) return;
 
-                    const loopBodyStartLink = this.graph!.links[loopBodyExecOutput.links[0]];
-                    const loopBodyStartNode = this.graph!.getNodeById(loopBodyStartLink.target_id);
+                    const loopBodyNodes = this._getBodyNodesFromOutput(loopBodyExecOutput);
 
-                    if (loopBodyStartNode) {
-                        const loopBodyNodes = this._getSubgraphExecutionOrder(loopBodyStartNode);
-
+                    if (loopBodyNodes.length > 0) {
                         codeLines.push(indent + `for elephant_lab_loop_index, elephant_lab_loop_item in enumerate(${listVarName}):`);
 
                         for (const bodyNode of loopBodyNodes) {
@@ -1404,31 +1409,25 @@ except Exception as e:
                     codeLines.push(indent + `if ${conditionVarName}:`);
 
                     const ifBodyExecOutput = elephant_labNode.outputs.find(o => o.name === 'if body');
-                    if (ifBodyExecOutput && ifBodyExecOutput.links && ifBodyExecOutput.links.length > 0) {
-                        const ifBodyStartLink = this.graph!.links[ifBodyExecOutput.links[0]];
-                        const ifBodyStartNode = this.graph!.getNodeById(ifBodyStartLink.target_id);
-                        if (ifBodyStartNode) {
-                            const ifBodyNodes = this._getSubgraphExecutionOrder(ifBodyStartNode);
-                            for (const bodyNode of ifBodyNodes) {
-                                if (bodyNode instanceof ElephantLabNode) {
-                                    generateCodeForNode(bodyNode, indent + "    ");
-                                }
+                    const ifBodyNodes = this._getBodyNodesFromOutput(ifBodyExecOutput);
+                    if (ifBodyNodes.length > 0) {
+                        for (const bodyNode of ifBodyNodes) {
+                            if (bodyNode instanceof ElephantLabNode) {
+                                generateCodeForNode(bodyNode, indent + "    ");
                             }
                         }
+                    } else {
+                        codeLines.push(indent + "    pass");
                     }
 
                     codeLines.push(indent + `else:`);
 
                     const elseBodyExecOutput = elephant_labNode.outputs.find(o => o.name === 'else body');
-                    if (elseBodyExecOutput && elseBodyExecOutput.links && elseBodyExecOutput.links.length > 0) {
-                        const elseBodyStartLink = this.graph!.links[elseBodyExecOutput.links[0]];
-                        const elseBodyStartNode = this.graph!.getNodeById(elseBodyStartLink.target_id);
-                        if (elseBodyStartNode) {
-                            const elseBodyNodes = this._getSubgraphExecutionOrder(elseBodyStartNode);
-                            for (const bodyNode of elseBodyNodes) {
-                                if (bodyNode instanceof ElephantLabNode) {
-                                    generateCodeForNode(bodyNode, indent + "    ");
-                                }
+                    const elseBodyNodes = this._getBodyNodesFromOutput(elseBodyExecOutput);
+                    if (elseBodyNodes.length > 0) {
+                        for (const bodyNode of elseBodyNodes) {
+                            if (bodyNode instanceof ElephantLabNode) {
+                                generateCodeForNode(bodyNode, indent + "    ");
                             }
                         }
                     } else {
