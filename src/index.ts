@@ -124,28 +124,51 @@ class ElephantLabExtension {
 		// Store references to all tabs created by this extension
 		this.myVisTabs = [];
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
-		this.widget = new DockPanel({ tabsMovable: false });
+		this.widget = this.createWidget();
 		this.outarea_nodeexplorer_info = null;
 		this.outarea_nodeexplorer_raw = null;
 		this.outarea_neo_tree = null;
 		this.output_tabs = null;
 		this.kernelBridge = null;
 		this.plotlyFrontend = null;
+	}; // end of constructor()
 
-		MessageLoop.installMessageHook(this.widget, (_handler, msg) => {
+	private createWidget(): DockPanel {
+		const widget = new DockPanel({ tabsMovable: false });
+
+		MessageLoop.installMessageHook(widget, (_handler, msg) => {
 			if (msg.type === 'after-show') {
 				this.topBar?.show();
 				this.toolbarButtons.forEach(b => b.node.classList.add('elephant-lab-open'));
 			} else if (msg.type === 'before-hide' || msg.type === 'before-detach') {
 				this.topBar?.hide();
 				this.toolbarButtons.forEach(b => b.node.classList.remove('elephant-lab-open'));
-				if (msg.type === 'before-detach') {
-					this.clearActiveNotebookBadge();
-				}
+			} else if (msg.type === 'close-request') {
+				void this.confirmAndCloseWidget(widget);
+				return false;
 			}
 			return true;
 		});
-	}; // end of constructor()
+
+		widget.disposed.connect(() => {
+			this.clearActiveNotebookBadge();
+		});
+
+		return widget;
+	} // end of createWidget()
+
+	private async confirmAndCloseWidget(widget: DockPanel) {
+		const result = await showDialog({
+			title: 'Close Elephant Lab',
+			body: 'Are you sure you want to close Elephant Lab? This will stop the '
+				+ 'running Elephant Lab instance. If you only want to hide Elephant Lab, '
+				+ 'you can instead hide it by clicking its tab in the sidebar.',
+			buttons: [Dialog.cancelButton(), Dialog.warnButton({ label: 'Close' })]
+		});
+		if (result.button.accept) {
+			widget.dispose();
+		}
+	}
 
 	private async initializeSettings() {
 		const settings = await this.settingRegistry.load('elephant-lab:plugin');
@@ -237,18 +260,11 @@ class ElephantLabExtension {
 				const button = new ToolbarButton({
 					iconClass: 'elephant-lab-toolbar-icon',
 					tooltip: 'Open Elephant Lab',
-					onClick: async () => {
+					onClick: () => {
 						if (this.widget.isAttached && this.widget.isVisible) {
-							const result = await showDialog({
-								title: 'Close Elephant Lab',
-								body: 'Are you sure you want to close Elephant Lab? This will stop the '
-									+ 'running Elephant Lab instance. If you only want to hide Elephant Lab, '
-									+ 'you can instead hide it by clicking its tab in the sidebar.',
-								buttons: [Dialog.cancelButton(), Dialog.warnButton({ label: 'Close' })]
-							});
-							if (result.button.accept) {
-								this.widget.close();
-							}
+							// close() sends a close-request, which our message hook
+							// in createWidget() intercepts to confirm and dispose.
+							this.widget.close();
 							return;
 						}
 						this.app.shell.activateById(panel.id);
@@ -304,6 +320,10 @@ class ElephantLabExtension {
 			console.error("Elephant Lab: No active notebook found.");
 			return;
 		}
+		if (this.widget.isDisposed) {
+			this.widget = this.createWidget();
+		}
+
 		this.clearActiveNotebookBadge();
 
 		newPanel.title.className += ' elephant-lab-active-notebook';
