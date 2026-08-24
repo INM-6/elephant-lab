@@ -21,6 +21,7 @@ class ElephantLab_tree:
     import json
     import ast
     import re
+    import html as _html
 
 
     from typing import TYPE_CHECKING
@@ -177,6 +178,14 @@ class ElephantLab_tree:
         self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[hash_id] = neo_obj
         self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash[hash_id] = hash_id
 
+        obj_path = self.elephant_lab_entity._get_obj_path(neo_obj, variable_name)
+
+        obj_source = None
+        if obj_path:
+            root_match = self.re.match(r'^[A-Za-z_][A-Za-z0-9_]*', obj_path)
+            if root_match:
+                obj_source = self.elephant_lab_entity.elephant_lab_util.map_var_name_to_source.get(root_match.group(0))
+
         class_name = neo_obj.__class__.__name__
         icon = self.NEO_ABBREVIATIONS.get(class_name, {}).get('icon', 'circle')
 
@@ -218,8 +227,12 @@ class ElephantLab_tree:
             toggle = '<span class="jup-toggle-empty"></span>'
             children_div = ''
 
+        path_attr = f' data-path="{self._html.escape(obj_path)}"' if obj_path else ''
+        source_attr = ''
+        if obj_source:
+            source_attr = f' data-source-file="{self._html.escape(obj_source["filename"])}" data-source-io-class="{self._html.escape(obj_source["io_class"] or "")}"'
         html = f'''<div class="jup-node">
-            <div class="jup-row" data-node-id="{hash_id}">
+            <div class="jup-row" data-node-id="{hash_id}"{path_attr}{source_attr}>
                 {toggle}
                 <i class="fa fa-{icon}"></i>
                 {label}

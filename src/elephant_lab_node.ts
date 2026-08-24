@@ -12,6 +12,8 @@ export type DraggableItem = {
     parameters: { name: string, default: string }[];
     type?: string;
     variable_name?: string;
+    source_file?: string;
+    source_io_class?: string;
 };
 
 export type ElephantLabNodeProperties = {

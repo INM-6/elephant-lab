@@ -12,6 +12,7 @@ class ElephantLab_util:
             -all logic that does not work with the elephant_lab_entity and just has to be executed
         Is a Class to minimize the amount of name clutter in the notebook
         """
+        self.map_var_name_to_source = {}
 
     def version(self):
         print(self.__version__)
@@ -23,6 +24,7 @@ class ElephantLab_util:
         io_class = getattr(self.neo.io, ioClass)
         reader = io_class(filename=filePath)
         self.__main__.__dict__[varName] = reader.read_block()
+        self.map_var_name_to_source[varName] = {'io_class': ioClass, 'filename': filePath}
 
     def setVarNameNotIOClass(self, filePath, varName):
         var = self.neo.get_io(filePath).read()
@@ -31,6 +33,7 @@ class ElephantLab_util:
         elif (isinstance(var, dict)):
             var = var['blocks'][0]
         self.__main__.__dict__[varName] = var
+        self.map_var_name_to_source[varName] = {'io_class': None, 'filename': filePath}
         print(var, type(var))
 
     def getNeoIOClass(self, filename):

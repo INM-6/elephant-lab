@@ -1483,7 +1483,10 @@ class ElephantLabExtension {
 										name: (el.textContent || "").trim().replace(/\s+/g, ' '),
 										code: el.dataset.nodeId,
 										is_class: false,
-										parameters: []
+										parameters: [],
+										variable_name: el.dataset.path || undefined,
+										source_file: el.dataset.sourceFile || undefined,
+										source_io_class: el.dataset.sourceIoClass || undefined
 									}));
 
 									event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'multi', items }));
@@ -1506,7 +1509,10 @@ class ElephantLabExtension {
 										name: (el.textContent || "").trim().replace(/\s+/g, ' '),
 										code: el.dataset.nodeId,
 										is_class: false,
-										parameters: []
+										parameters: [],
+										variable_name: el.dataset.path || undefined,
+										source_file: el.dataset.sourceFile || undefined,
+										source_io_class: el.dataset.sourceIoClass || undefined
 									}));
 
 									event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'multi', items }));
@@ -1524,7 +1530,10 @@ class ElephantLabExtension {
 								name: nodeName,
 								code: nodeId,
 								is_class: false,
-								parameters: []
+								parameters: [],
+								variable_name: htmlElement.dataset.path || undefined,
+								source_file: htmlElement.dataset.sourceFile || undefined,
+								source_io_class: htmlElement.dataset.sourceIoClass || undefined
 							};
 
 							// Set the drag data

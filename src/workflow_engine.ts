@@ -1179,7 +1179,45 @@ except Exception as e:
     print(f"Error running ${item.name} (name): {e}", file=sys.stderr)`;
         }
 
+        else if (item.variable_name && item.variable_name !== "" && item.source_file) {
+            console.log("...using SELF-CONTAINED PATH (reload + navigate) execution logic");
+            const path = item.variable_name;
+            const rootVarMatch = path.match(/^[A-Za-z_][A-Za-z0-9_]*/);
+            const rootVar = rootVarMatch ? rootVarMatch[0] : 'elephant_lab_loaded_root';
+            const filename = item.source_file;
+            const ioClassName = item.source_io_class;
+            const readerExpr = (ioClassName && ioClassName !== "")
+                ? `getattr(neo.io, "${ioClassName}")(filename="${filename}")`
+                : `neo.get_io("${filename}")`;
+            codeToExecute = `try:
+    import neo
+    _elephant_lab_reader = ${readerExpr}
+    _elephant_lab_blocks = _elephant_lab_reader.read()
+    ${rootVar} = _elephant_lab_blocks[0] if _elephant_lab_blocks else None
+    if ${rootVar} is None:
+        raise ValueError(f"Elephant Lab: could not load any data from '${filename}'.")
+    elephant_lab_result = ${path}
+    ${resultsDictName}["${resultId}"] = elephant_lab_result
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
+except (NameError, AttributeError, IndexError, KeyError) as e:
+    print(f"Error: Elephant Lab: could not resolve '${path}' after reloading '${filename}' ({type(e).__name__}: {e}).", file=sys.stderr)
+except Exception as e:
+    print(f"Error loading/resolving '${path}': {e}", file=sys.stderr)`;
+        }
+
         // Get Object by variable name from notebook scope
+        else if (item.variable_name && item.variable_name !== "") {
+            console.log("...using PATH EXPRESSION (neo) execution logic");
+            const path = item.variable_name;
+            codeToExecute = `try:
+    elephant_lab_result = ${path}
+    ${resultsDictName}["${resultId}"] = elephant_lab_result
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
+except (NameError, AttributeError, IndexError, KeyError) as e:
+    print(f"Error: Elephant Lab: could not resolve '${path}' ({type(e).__name__}: {e}). Make sure the cell that defines it has been (re-)run.", file=sys.stderr)
+except Exception as e:
+    print(f"Error getting object for '${path}': {e}", file=sys.stderr)`;
+        }
         else {
             console.log("...using VARIABLE NAME (neo) execution logic");
             const varName = item.code;
@@ -1197,7 +1235,7 @@ except Exception as e:
         else:
             elephant_lab_result = None
             print(f"Error: Variable or node id '{node_id}' not found.", file=sys.stderr)
-    
+
     if elephant_lab_result is not None:
         ${resultsDictName}["${resultId}"] = elephant_lab_result
         print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
@@ -1323,6 +1361,7 @@ except Exception as e:
         const generatedNodes = new Set<LGraphNode>();
         const usedResultNames = new Set<string>();
         const neoResolveCommands: string[] = [];
+        const loadedSourceRoots = new Set<string>();
 
         const isUnusable = (s: string) => !s || s === 'list' || s === 'print' || s === 'neo';
 
@@ -1355,6 +1394,25 @@ except Exception as e:
             const item = elephant_labNode.properties.item;
 
             if (item.variable_name && item.variable_name !== "") {
+                if (item.source_file) {
+                    const rootMatch = item.variable_name.match(/^[A-Za-z_][A-Za-z0-9_]*/);
+                    const rootVar = rootMatch ? rootMatch[0] : `elephant_lab_loaded_root_${varCounter++}`;
+                    if (!loadedSourceRoots.has(rootVar)) {
+                        loadedSourceRoots.add(rootVar);
+                        imports.add('import neo');
+                        const readerVar = `reader_${varCounter++}`;
+                        const blocksVar = `_blocks_${rootVar}`;
+                        const readerLine = item.source_io_class
+                            ? `${readerVar} = getattr(neo.io, '${item.source_io_class}')(filename='${item.source_file}')`
+                            : `${readerVar} = neo.get_io('${item.source_file}')`;
+                        const block = [
+                            readerLine,
+                            `${blocksVar} = ${readerVar}.read()`,
+                            `${rootVar} = ${blocksVar}[0] if ${blocksVar} else None`
+                        ];
+                        codeLines.push(indent + block.join(`\n${indent}`));
+                    }
+                }
                 nodeResultNames.set(elephant_labNode, item.variable_name);
                 generatedNodes.add(elephant_labNode);
                 return;

@@ -111,7 +111,7 @@ class ElephantLab:
         if hasattr(curr, 'segment') and curr.segment is not None:
             segment = curr.segment
             found_in_segment = False
-            for attr in ('analogsignals', 'spiketrains', 'events', 'epochs', 'irregularlysampledsignals', 'imagesequences'):
+            for attr in ('analogsignals', 'spiketrains', 'events', 'epochs', 'irregularlysampledsignals', 'imagesequences', 'channel_indexes'):
                 if hasattr(segment, attr):
                     container = getattr(segment, attr)
                     for i, item in enumerate(container):
