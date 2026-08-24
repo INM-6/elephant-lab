@@ -601,6 +601,29 @@ except NameError:
     // Main function to execute the workflow
     // TODO: maybe split this function a bit into parts
     public async execute_workflow() {
+        const runButton = document.getElementById('workflow-run-button') as HTMLButtonElement | null;
+        if (runButton?.disabled) {
+            // Already running, ignore the click because a new run would clear the output
+            return;
+        }
+        if (runButton) {
+            runButton.disabled = true;
+            runButton.textContent = '⏳ Running...';
+            runButton.style.backgroundColor = '#7d7c84';
+        }
+        try {
+            await this._execute_workflow_inner();
+        } finally {
+            if (runButton) {
+                runButton.disabled = false;
+                runButton.textContent = '▶ Run Workflow';
+                // Restores the toolbar's own styling
+                runButton.style.backgroundColor = '';
+            }
+        }
+    }
+
+    private async _execute_workflow_inner() {
         console.log("1. Workflow execution started.");
         const outputArea = this._getWorkflowOutputArea();
         if (!outputArea) {

@@ -14,6 +14,7 @@ const header = document.createElement('h3');
         buttonContainer.className = 'workflow-button-container';
 
         const runWorkflowButton = document.createElement('button');
+        runWorkflowButton.id = 'workflow-run-button';
         runWorkflowButton.textContent = '▶ Run Workflow';
         runWorkflowButton.title = 'Execute the entire workflow';
         runWorkflowButton.className = 'workflow-button';
