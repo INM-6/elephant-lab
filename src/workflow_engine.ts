@@ -192,6 +192,8 @@ except NameError:
             };
             this.graphCanvas = new LGraphCanvas(this.canvasElement, this.graph);
             this.graphCanvas.always_render_background = true;
+            // Disable litegraph's default near-black tile; _syncCanvasThemeColors() replaces it with a theme-aware grid once attached.
+            (this.graphCanvas as any).background_image = null;
             /*
             This prevents the default right click behavior of the lightgraph Canvas
             One may want to change this behavior but to prevent improper inputs, this will be prevented for now
@@ -241,6 +243,7 @@ except NameError:
         if (this.graph) { this.graph.start(); }
         this.onResize(Widget.ResizeMessage.UnknownSize);
         this._startMinimapLoop();
+        this._syncCanvasThemeColors();
     }
     // Dynamically resizing is important to keep the hitboxes of the Nodes correct
     protected onResize(msg: Widget.ResizeMessage): void {
@@ -259,6 +262,43 @@ except NameError:
         if (this.graph) { this.graph.start(); }
         this.onResize(Widget.ResizeMessage.UnknownSize);
         this._startMinimapLoop();
+        this._syncCanvasThemeColors();
+    }
+
+    // Syncs the canvas fill and grid to the current JupyterLab theme colors
+    private _syncCanvasThemeColors(): void {
+        if (!this.graphCanvas || !this.node.isConnected) { return; }
+        const styles = getComputedStyle(this.node);
+        const themeColor = styles.getPropertyValue('--jp-layout-color0').trim();
+        if (themeColor) {
+            (this.graphCanvas as any).clear_background_color = themeColor;
+        }
+        const gridColor = styles.getPropertyValue('--jp-border-color2').trim();
+        if (gridColor) {
+            (this.graphCanvas as any).background_image = this._buildGridPatternTile(gridColor);
+            // litegraph caches its pattern and never invalidates it when background_image changes, so force a rebuild here.
+            (this.graphCanvas as any)._pattern = null;
+        }
+        if (this.graph) { this.graph.setDirtyCanvas(true, true); }
+    }
+
+    // Draws a small tileable grid-line pattern
+    private _buildGridPatternTile(lineColor: string): string {
+        const size = 50;
+        const tile = document.createElement('canvas');
+        tile.width = size;
+        tile.height = size;
+        const ctx = tile.getContext('2d');
+        if (!ctx) { return ''; }
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0.5, 0);
+        ctx.lineTo(0.5, size);
+        ctx.moveTo(0, 0.5);
+        ctx.lineTo(size, 0.5);
+        ctx.stroke();
+        return tile.toDataURL();
     }
 
     private _startMinimapLoop(): void {
