@@ -1587,14 +1587,13 @@ class ElephantLabExtension {
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
 		this.widget.addWidget(workflow_output_widget, { mode: 'tab-after', ref: explorer_widget_raw_plot });
 
-		// WORKFLOW ENGINE (split side-by-side with the notebook).
+		// WORKFLOW ENGINE (its own tab in the main area, next to the notebook)
 		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker, rendermime, this.docManager);
 		const workflowMain = new MainAreaWidget({ content: this.workflowEngine });
 		workflowMain.id = 'elephant-lab-workflow-main-widget';
 		workflowMain.title.label = 'Elephant Lab Workflow';
 		workflowMain.title.closable = true;
-		const notebookWidget = this.notebook_tracker.currentWidget;
-		this.app.shell.add(workflowMain, 'main', notebookWidget ? { mode: 'split-right', ref: notebookWidget.id } : undefined);
+		this.app.shell.add(workflowMain, 'main');
 		this.app.shell.activateById(workflowMain.id);
 	}
 
