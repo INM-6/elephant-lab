@@ -277,12 +277,15 @@ export class KernelBridge {
 
     // Extract Docstring of passed code. Restored from the legacy workflow engine
     // and ported to the current `elephant_lab` backend.
-    public async getDocstring(code: string): Promise<string | null> {
+    public async getDocstring(code: string, variableName?: string, sourceFile?: string, sourceIoClass?: string): Promise<string | null> {
         if (!this.session || !this.session.session) { return null; }
         const pythonCode = `
-        import inspect, json, sys, pprint
+        import inspect, json, sys, pprint, re
 
         target_id_str = "${code}"
+        _elephant_lab_path = ${variableName ? `"${variableName}"` : 'None'}
+        _elephant_lab_source_file = ${sourceFile ? `"${sourceFile}"` : 'None'}
+        _elephant_lab_source_io_class = ${sourceIoClass ? `"${sourceIoClass}"` : 'None'}
 
         # Manual docstrings for utility nodes
         util_docstrings = {
@@ -318,14 +321,30 @@ export class KernelBridge {
             md_output = []
 
             try:
-                if target_id_str.startswith("result_"):
+                if _elephant_lab_path:
+                    try:
+                        _root_match = re.match(r'^[A-Za-z_][A-Za-z0-9_]*', _elephant_lab_path)
+                        _root_var = _root_match.group(0) if _root_match else None
+                        if _elephant_lab_source_file and _root_var and (_root_var not in globals() or globals()[_root_var] is None):
+                            import neo
+                            if _elephant_lab_source_io_class:
+                                _reader = getattr(neo.io, _elephant_lab_source_io_class)(filename=_elephant_lab_source_file)
+                            else:
+                                _reader = neo.get_io(_elephant_lab_source_file)
+                            _blocks = _reader.read()
+                            globals()[_root_var] = _blocks[0] if _blocks else None
+                        target_obj = eval(_elephant_lab_path)
+                    except Exception:
+                        target_obj = None
+
+                if target_obj is None and target_id_str.startswith("result_"):
                     global workflow_results
                     if 'workflow_results' in globals() and target_id_str in workflow_results:
                         target_obj = workflow_results[target_id_str]
                     else:
                         md_output.append(f"Info: Workflow not run, cannot inspect result key {target_id_str}")
 
-                elif "." in target_id_str:
+                if target_obj is None and "." in target_id_str:
                     try:
                         parts = target_id_str.split('.')
                         func_name = parts.pop()

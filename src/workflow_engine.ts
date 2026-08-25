@@ -219,13 +219,16 @@ except NameError:
             name: `List (${items.length} items)`,
             code: "__UTIL_LIST__",
             is_class: false,
-            parameters: items.map((item, index) => ({ name: `item ${index}`, default: item.code }))
+            parameters: items.map((item, index) => ({ name: `item ${index}`, default: item.variable_name || item.code }))
         };
         const listNode = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
         listNode.docManager = this.docManager;
         listNode.properties.item = listItem;
         listNode.setProperty("item", listItem);
         listNode.properties['item_labels'] = items.map(i => i.name);
+        listNode.properties['item_source_files'] = items.map(i => i.source_file || null);
+        listNode.properties['item_source_io_classes'] = items.map(i => i.source_io_class || null);
+        listNode.properties['item_is_reference'] = items.map(i => !!i.variable_name);
         listNode.pos = dropPos;
         this.graph.add(listNode);
     }
@@ -974,6 +977,26 @@ if _is_true:
         }
     }
 
+    private _buildNeoReloadSnippet(
+        rootVar: string,
+        sourceFile: string,
+        sourceIoClass: string | undefined,
+        indent: string,
+        readerVar: string = '_elephant_lab_reader',
+        blocksVar: string = '_elephant_lab_blocks'
+    ): string {
+        const readerExpr = (sourceIoClass && sourceIoClass !== "")
+            ? `getattr(neo.io, "${sourceIoClass}")(filename="${sourceFile}")`
+            : `neo.get_io("${sourceFile}")`;
+        const lines = [
+            `if '${rootVar}' not in globals() or ${rootVar} is None:`,
+            `    ${readerVar} = ${readerExpr}`,
+            `    ${blocksVar} = ${readerVar}.read()`,
+            `    ${rootVar} = ${blocksVar}[0] if ${blocksVar} else None`
+        ];
+        return lines.map(l => indent + l).join('\n');
+    }
+
     private _generatePythonCodeForNode(node: ElephantLabNode, args: (string | null)[], resultId: string): string {
         const item = node.properties.item;
         const args_json_string = JSON.stringify(args);
@@ -995,15 +1018,31 @@ except Exception as e:
         // Code logic for a list
         else if (item.code === "__UTIL_LIST__") {
             console.log("...using UTILITY (List) execution logic");
+
+            const sourceFiles = (node.properties['item_source_files'] as (string | null)[]) || [];
+            const sourceIoClasses = (node.properties['item_source_io_classes'] as (string | null)[]) || [];
+            const reloadedRoots = new Set<string>();
+            const reloadSnippets: string[] = [];
+            (item.parameters || []).forEach((param, i) => {
+                const sourceFile = sourceFiles[i];
+                if (!sourceFile) { return; }
+                const rootMatch = (param.default || '').match(/^[A-Za-z_][A-Za-z0-9_]*/);
+                const rootVar = rootMatch ? rootMatch[0] : null;
+                if (!rootVar || reloadedRoots.has(rootVar)) { return; }
+                reloadedRoots.add(rootVar);
+                reloadSnippets.push(this._buildNeoReloadSnippet(rootVar, sourceFile, sourceIoClasses[i] || undefined, '    '));
+            });
+            const reloadCode = reloadSnippets.length > 0 ? `    import neo\n${reloadSnippets.join('\n')}\n` : '';
+
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 
 try:
-    raw_args = json.loads('''${args_json_string}''')
+${reloadCode}    raw_args = json.loads('''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     final_list = [arg for arg in processed_args if arg is not None]
-    
+
     ${resultsDictName}["${resultId}"] = final_list
-    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 
 except Exception as e:
     print(f"Error creating list: {e}", file=sys.stderr)`;
@@ -1209,14 +1248,10 @@ except Exception as e:
             const rootVar = rootVarMatch ? rootVarMatch[0] : 'elephant_lab_loaded_root';
             const filename = item.source_file;
             const ioClassName = item.source_io_class;
-            const readerExpr = (ioClassName && ioClassName !== "")
-                ? `getattr(neo.io, "${ioClassName}")(filename="${filename}")`
-                : `neo.get_io("${filename}")`;
+            const reloadSnippet = this._buildNeoReloadSnippet(rootVar, filename, ioClassName, '    ');
             codeToExecute = `try:
     import neo
-    _elephant_lab_reader = ${readerExpr}
-    _elephant_lab_blocks = _elephant_lab_reader.read()
-    ${rootVar} = _elephant_lab_blocks[0] if _elephant_lab_blocks else None
+${reloadSnippet}
     if ${rootVar} is None:
         raise ValueError(f"Elephant Lab: could not load any data from '${filename}'.")
     elephant_lab_result = ${path}
@@ -1425,15 +1460,7 @@ except Exception as e:
                         imports.add('import neo');
                         const readerVar = `reader_${varCounter++}`;
                         const blocksVar = `_blocks_${rootVar}`;
-                        const readerLine = item.source_io_class
-                            ? `${readerVar} = getattr(neo.io, '${item.source_io_class}')(filename='${item.source_file}')`
-                            : `${readerVar} = neo.get_io('${item.source_file}')`;
-                        const block = [
-                            readerLine,
-                            `${blocksVar} = ${readerVar}.read()`,
-                            `${rootVar} = ${blocksVar}[0] if ${blocksVar} else None`
-                        ];
-                        codeLines.push(indent + block.join(`\n${indent}`));
+                        codeLines.push(this._buildNeoReloadSnippet(rootVar, item.source_file, item.source_io_class, indent, readerVar, blocksVar));
                     }
                 }
                 nodeResultNames.set(elephant_labNode, item.variable_name);
@@ -1547,6 +1574,7 @@ except Exception as e:
 
             const processedArgs: { name: string, value: string, isSelf: boolean }[] = [];
             if (item.parameters) {
+                let paramIndex = 0;
                 for (const param of item.parameters) {
                     const propName = `param_${param.name}`;
                     let argumentValue: string;
@@ -1591,6 +1619,20 @@ except Exception as e:
                             const neoVarName = `elephant_lab_neo_${varCounter++}`;
                             neoResolveCommands.push(`${neoVarName} = elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get('${value}'))`);
                             argumentValue = neoVarName;
+                        } else if (
+                            (elephant_labNode.properties['item_is_reference'] as boolean[] | undefined)?.[paramIndex] &&
+                            /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*$/.test(value)
+                        ) {
+                            const rootMatch = value.match(/^[A-Za-z_][A-Za-z0-9_]*/);
+                            const rootVar = rootMatch ? rootMatch[0] : null;
+                            const sourceFile = (elephant_labNode.properties['item_source_files'] as (string | null)[] | undefined)?.[paramIndex];
+                            if (rootVar && sourceFile && !loadedSourceRoots.has(rootVar)) {
+                                loadedSourceRoots.add(rootVar);
+                                imports.add('import neo');
+                                const sourceIoClass = (elephant_labNode.properties['item_source_io_classes'] as (string | null)[] | undefined)?.[paramIndex];
+                                codeLines.push(this._buildNeoReloadSnippet(rootVar, sourceFile, sourceIoClass || undefined, indent));
+                            }
+                            argumentValue = value;
                         } else {
                             argumentValue = `'${value.replace(/'/g, "\\'")}'`;
                         }
@@ -1601,6 +1643,7 @@ except Exception as e:
                         value: argumentValue,
                         isSelf: param.name === '__self__'
                     });
+                    paramIndex++;
                 }
             }
 
@@ -1725,8 +1768,9 @@ except Exception as e:
 
     // Create docstring for given Node and display it
     public async showNodeInfo(node: ElephantLabNode) {
-        const code = node.properties.item.code;
-        const docstring = await this.kernelBridge.getDocstring(code);
+        const item = node.properties.item;
+        const code = item.code;
+        const docstring = await this.kernelBridge.getDocstring(code, item.variable_name, item.source_file, item.source_io_class);
 
         const mimeType = 'text/markdown';
         const model = new MimeModel({
