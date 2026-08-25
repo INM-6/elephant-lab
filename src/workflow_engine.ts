@@ -94,6 +94,20 @@ except NameError:
             return link;
         }
 
+        const original_renderLink = (LGraphCanvas.prototype as any).renderLink;
+        (LGraphCanvas.prototype as any).renderLink = function (this: LGraphCanvas, ctx: CanvasRenderingContext2D, ...rest: any[]) {
+            const link = rest[2];
+            const isExecLink = link && link.color === "#0004ff";
+            if (isExecLink) {
+                ctx.setLineDash([6, 6]);
+                ctx.lineDashOffset = -(Date.now() / 30) % 12;
+            }
+            original_renderLink.call(this, ctx, ...rest);
+            if (isExecLink) {
+                ctx.setLineDash([]);
+            }
+        };
+
         const original_getGroupMenuOptions = (LGraphCanvas.prototype as any).getGroupMenuOptions;
         (LGraphCanvas.prototype as any).getGroupMenuOptions = function (this: LGraphCanvas, group: LGraphGroup): any[] {
             const options: any[] = original_getGroupMenuOptions.call(this, group);
