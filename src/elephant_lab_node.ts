@@ -62,6 +62,9 @@ export class ElephantLabNode extends LGraphNode {
         if (itemCode.startsWith('elephant.')) {
             return true;
         }
+        if (itemCode.startsWith('__NEO_')) {
+            return true;
+        }
         return false;
     }
 

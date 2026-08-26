@@ -1209,6 +1209,51 @@ try:
 
 except Exception as e:
     print(f"Error in ${item.name} node: {e}", file=sys.stderr)`;
+        } else if (item.code === '__NEO_FILTER__') {
+            console.log(`...using NEO FILTER execution logic`);
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+import ast
+try:
+    raw_args = json.loads('''${args_json_string}''')
+    processed_args = [_prepare_arg(arg) for arg in raw_args]
+
+    elephant_lab_neo_object = processed_args[0]
+    criteria_str = processed_args[1] if len(processed_args) > 1 else ""
+
+    if elephant_lab_neo_object is None:
+        raise ValueError("Input 'neo_object' is not connected or is None.")
+
+    filter_kwargs = {}
+    criteria_str = str(criteria_str).strip()
+    if criteria_str:
+        # Accept a dict-literal ('sua': True, 'name': 'Vm') as well as kwargs-style (sua=True / sua==True)
+        # ast.literal_eval only accepts literal constants (no arbitrary code)
+        try:
+            parsed = ast.literal_eval("{" + criteria_str + "}")
+            if not isinstance(parsed, dict):
+                raise ValueError("criteria did not evaluate to a dict")
+            filter_kwargs = parsed
+        except Exception:
+            for part in criteria_str.split(','):
+                part = part.strip()
+                if not part:
+                    continue
+                if '=' not in part:
+                    print(f"Warning: skipping filter criterion '{part}' (expected key=value)", file=sys.stderr)
+                    continue
+                key, _, value = part.replace('==', '=').partition('=')
+                try:
+                    filter_kwargs[key.strip()] = ast.literal_eval(value.strip())
+                except Exception as parse_error:
+                    print(f"Warning: skipping filter criterion '{part}': {parse_error}", file=sys.stderr)
+
+    elephant_lab_result = elephant_lab_neo_object.filter(**filter_kwargs)
+
+    ${resultsDictName}["${resultId}"] = elephant_lab_result
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
+
+except Exception as e:
+    print(f"Error in ${item.name} node: {e}", file=sys.stderr)`;
         } else if (item.code === '__UTIL_IF__') {
             return "";
         }
@@ -2070,7 +2115,29 @@ except Exception as e:
                                         this.graph.add(node);
                                     }
                                 }
-                            }
+                            }, 
+                            {
+                                content: "neo.filter",
+                                callback: (value: any, options: any, event: any, parentMenu: any) => {
+                                    const item: DraggableItem = {
+                                        id: "neo/",
+                                        name: "neo.filter",
+                                        code: "__NEO_FILTER__",
+                                        is_class: true,
+                                        parameters: [
+                                            { name: "neo_object", default: "__REQUIRED__" },
+                                            { name: "criteria", default: "" },
+                                        ]
+                                    };
+                                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
+                                    if (this.graph && this.graphCanvas) {
+                                        node.properties.item = item;
+                                        node.setProperty("item", item);
+                                        node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
+                                        this.graph.add(node);
+                                    }
+                                }
+                            }  
                         ]
                     }
                 },

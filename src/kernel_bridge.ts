@@ -299,7 +299,8 @@ export class KernelBridge {
             'NEO_GET_ANALOGSIGNALS': '### Get Analogsignals\\n\\nExtracts analogsignals from a neo object.',
             'NEO_GET_EVENTS': '### Get Events\\n\\nExtracts events from a neo object.',
             'NEO_GET_EPOCHS': '### Get Epochs\\n\\nExtracts epochs from a neo object.',
-            'NEO_GET_SEGMENTS': '### Get Segments\\n\\nExtracts segments from a neo object.'
+            'NEO_GET_SEGMENTS': '### Get Segments\\n\\nExtracts segments from a neo object.',
+            'NEO_FILTER': '### Apply Filter on Neo Object\\n\\nApplies filter with arguments on a neo object.'
         }
 
         util_docstrings['__UTIL_LOOP__'] = util_docstrings['UTIL_LOOP']
@@ -313,6 +314,7 @@ export class KernelBridge {
         util_docstrings['__NEO_GET_EVENTS__'] = util_docstrings['NEO_GET_EVENTS']
         util_docstrings['__NEO_GET_EPOCHS__'] = util_docstrings['NEO_GET_EPOCHS']
         util_docstrings['__NEO_GET_SEGMENTS__'] = util_docstrings['NEO_GET_SEGMENTS']
+        util_docstrings['__NEO_FILTER__'] = util_docstrings['NEO_FILTER']
 
         if target_id_str in util_docstrings:
             print(json.dumps(util_docstrings[target_id_str]))
