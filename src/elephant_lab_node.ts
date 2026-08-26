@@ -21,6 +21,20 @@ export type ElephantLabNodeProperties = {
     [key: string]: any;
 }
 
+function toKernelRelativePath(notebookDir: string, fileServerPath: string): string {
+    const fromParts = notebookDir.split('/').filter(p => p.length > 0);
+    const toParts = fileServerPath.split('/').filter(p => p.length > 0);
+
+    let i = 0;
+    while (i < fromParts.length && i < toParts.length && fromParts[i] === toParts[i]) {
+        i++;
+    }
+
+    const upCount = fromParts.length - i;
+    const relativeParts = new Array(upCount).fill('..').concat(toParts.slice(i));
+    return relativeParts.length > 0 ? relativeParts.join('/') : '.';
+}
+
 function deriveItemLabel(rawLabel: string | undefined, index: number): string {
     const isUnusable = (s: string) => !s || s === 'list' || s === 'print' || s === 'neo';
     if (rawLabel) {
@@ -172,7 +186,14 @@ export class ElephantLabNode extends LGraphNode {
                                 }).then(result => {
                                     if (result.button.accept && result.value && result.value.length > 0) {
                                         const selectedFile = result.value[0];
-                                        const filePath = selectedFile.path;
+                                        let filePath = selectedFile.path;
+
+                                        const notebookPath = ((this.graph as any)?.widget as WorkflowEngineWidget)?.session?.path;
+                                        if (notebookPath) {
+                                            const notebookDir = notebookPath.includes('/') ? notebookPath.slice(0, notebookPath.lastIndexOf('/')) : '';
+                                            filePath = toKernelRelativePath(notebookDir, filePath);
+                                        }
+
                                         widget.value = filePath;
                                         this.properties['param_filename'] = filePath;
                                         if (this.graph) {
