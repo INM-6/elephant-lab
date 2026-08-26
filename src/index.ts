@@ -93,6 +93,7 @@ class ElephantLabExtension {
 	private outarea_neo_tree: OutputArea | null;
 	private outarea_workflow: OutputArea | null;
 	private workflowEngine: WorkflowEngineWidget | null;
+	private workflowMain: MainAreaWidget<WorkflowEngineWidget> | null = null;
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
 	private settingRegistry: ISettingRegistry;
@@ -615,6 +616,15 @@ class ElephantLabExtension {
 		}
 
 		const currentFilename = session.path.split('/').pop() || "Unknown Notebook";
+		
+		const toggleWorkflowButton = document.createElement("button");
+		toggleWorkflowButton.innerHTML = `<i class="fa fa-sitemap" aria-hidden="true"></i> Toggle Workflow`;
+		toggleWorkflowButton.title = 'Show / Hide Elephant Lab Workflow';
+		toggleWorkflowButton.className = 'workflow-button workflow-button-io';
+		toggleWorkflowButton.style.marginRight = '5px';
+		toggleWorkflowButton.onclick = () => {
+			this._toggleWorkflowTab();
+		};
 
 		const switchNotebookButton = document.createElement('button');
 		switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${currentFilename}`;
@@ -661,6 +671,7 @@ class ElephantLabExtension {
 		container.style.display = 'flex';
 		container.style.alignItems = 'center';
 		container.style.padding = '2px';
+		container.appendChild(toggleWorkflowButton);
 		container.appendChild(switchNotebookButton);
 		container.appendChild(infoButton);
 
@@ -1589,12 +1600,33 @@ class ElephantLabExtension {
 
 		// WORKFLOW ENGINE (its own tab in the main area, next to the notebook)
 		this.workflowEngine = new WorkflowEngineWidget(session, this.outarea_workflow!, this.notebook_tracker, rendermime, this.docManager);
-		const workflowMain = new MainAreaWidget({ content: this.workflowEngine });
-		workflowMain.id = 'elephant-lab-workflow-main-widget';
-		workflowMain.title.label = 'Elephant Lab Workflow';
-		workflowMain.title.closable = true;
-		this.app.shell.add(workflowMain, 'main');
-		this.app.shell.activateById(workflowMain.id);
+		this.workflowMain = new MainAreaWidget({ content: this.workflowEngine });
+		this.workflowMain.id = 'elephant-lab-workflow-main-widget';
+		this.workflowMain.title.label = 'Elephant Lab Workflow';
+		this.workflowMain.title.closable = true;
+		(this.workflowMain as any).onCloseRequest = () => {
+			this._hideWorkflowTab();
+		};
+		this.app.shell.add(this.workflowMain, 'main');
+		this.app.shell.activateById(this.workflowMain.id);
+	}
+
+	// Hides the workflow tab without disposing it, so its graph survives being closed and reopened
+	private _hideWorkflowTab(): void {
+		if (!this.workflowMain || !this.workflowEngine) { return; }
+		this.workflowEngine.hide();
+		this.workflowMain.parent = null;
+	}
+
+	private _toggleWorkflowTab(): void {
+		if (!this.workflowMain || !this.workflowEngine) { return; }
+		if (this.workflowMain.isAttached) {
+			this._hideWorkflowTab();
+		} else {
+			this.app.shell.add(this.workflowMain, 'main');
+			this.app.shell.activateById(this.workflowMain.id);
+			this.workflowEngine.show();
+		}
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
