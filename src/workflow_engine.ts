@@ -46,6 +46,7 @@ except NameError:
     private _historyIndex: number = -1;
     private _isRestoringHistory: boolean = false;
     private _historySaveTimeout: number | null = null;
+    private _isImportingWorkflow: boolean = false;
     private outputArea: OutputArea;
     private notebook_tracker: INotebookTracker; // Current active Notebook -> used for Cell Injection
     public session: ISessionContext | null; // used to execute Python Code in same session as Elephant Lab 
@@ -201,6 +202,7 @@ except NameError:
             this.graph = new LGraph();
             (this.graph as any).widget = this;
             this.graph.change = () => {
+                if (this._isImportingWorkflow) { return; }
                 this._saveWorkflowToLocalStorage();
                 this._scheduleHistorySnapshot();
             };
@@ -2583,58 +2585,63 @@ except Exception as e:
                 checkbox.checked = true;
             }
 
-            this.graph.clear();
+            this._isImportingWorkflow = true;
+            try {
+                this.graph.clear();
 
-            if (data.nodes) {
-                for (const node_info of data.nodes) {
-                    if (!LiteGraph.registered_node_types[node_info.type]) {
-                        console.error("Node type not found: " + node_info.type);
-                        continue;
-                    }
-                    const node = LiteGraph.createNode(node_info.type) as ElephantLabNode;
-                    if (node) {
-                        node.id = node_info.id;
-                        node.pos = node_info.pos;
-                        if (node_info.size) node.size = node_info.size;
+                if (data.nodes) {
+                    for (const node_info of data.nodes) {
+                        if (!LiteGraph.registered_node_types[node_info.type]) {
+                            console.error("Node type not found: " + node_info.type);
+                            continue;
+                        }
+                        const node = LiteGraph.createNode(node_info.type) as ElephantLabNode;
+                        if (node) {
+                            node.id = node_info.id;
+                            node.pos = node_info.pos;
+                            if (node_info.size) node.size = node_info.size;
 
-                        if (node_info.properties) {
-                            node.properties = Object.assign({}, node.properties, node_info.properties);
+                            if (node_info.properties) {
+                                node.properties = Object.assign({}, node.properties, node_info.properties);
 
-                            if (node.properties.item) {
-                                node.setProperty("item", node.properties.item);
+                                if (node.properties.item) {
+                                    node.setProperty("item", node.properties.item);
+                                }
                             }
-                        }
 
-                        if (node_info.flags) {
-                            node.flags = Object.assign({}, node.flags, node_info.flags);
-                        }
+                            if (node_info.flags) {
+                                node.flags = Object.assign({}, node.flags, node_info.flags);
+                            }
 
-                        this.graph.add(node);
+                            this.graph.add(node);
+                        }
                     }
                 }
-            }
 
-            if (data.links) {
-                for (const link_info of data.links) {
-                    const origin_node = this.graph.getNodeById(link_info[1]);
-                    const target_node = this.graph.getNodeById(link_info[3]);
-                    if (origin_node && target_node) {
-                        const link = origin_node.connect(link_info[2], target_node, link_info[4]);
-                        if (link) {
-                            link.id = link_info[0];
+                if (data.links) {
+                    for (const link_info of data.links) {
+                        const origin_node = this.graph.getNodeById(link_info[1]);
+                        const target_node = this.graph.getNodeById(link_info[3]);
+                        if (origin_node && target_node) {
+                            const link = origin_node.connect(link_info[2], target_node, link_info[4]);
+                            if (link) {
+                                link.id = link_info[0];
+                            }
+                        } else {
+                            console.warn("Could not find nodes for link:", link_info);
                         }
-                    } else {
-                        console.warn("Could not find nodes for link:", link_info);
                     }
                 }
-            }
 
-            if (data.groups) {
-                for (const group_info of data.groups) {
-                    const group = new (LGraphGroup as any)() as LGraphGroup;
-                    (group as any).configure(group_info);
-                    (this.graph as any).add(group);
+                if (data.groups) {
+                    for (const group_info of data.groups) {
+                        const group = new (LGraphGroup as any)() as LGraphGroup;
+                        (group as any).configure(group_info);
+                        (this.graph as any).add(group);
+                    }
                 }
+            } finally {
+                this._isImportingWorkflow = false;
             }
 
             this.graph.setDirtyCanvas(true, true);
