@@ -181,9 +181,34 @@ export class ElephantLabNode extends LGraphNode {
                             }
 
                             if (this.docManager) {
-                                FileDialog.getOpenFiles({
+                                const dialogPromise = FileDialog.getOpenFiles({
                                     manager: this.docManager
-                                }).then(result => {
+                                });
+
+                                // Prevent double-click from triggering JupyterLab's file-open handler
+                                let dialogNode: Element | null = null;
+                                const stopDblClick = (e: Event) => {
+                                    const item = (e.target as Element).closest('.jp-DirListing-item');
+                                    // Allow double-click on folders so navigation still works
+                                    if (item?.getAttribute('data-isdir') === 'true') {
+                                        return;
+                                    }
+                                    e.stopImmediatePropagation();
+                                    e.stopPropagation();
+                                    const acceptBtn = dialogNode?.querySelector('.jp-Dialog-button.jp-mod-accept') as HTMLElement | null;
+                                    acceptBtn?.click();
+                                };
+                                setTimeout(() => {
+                                    dialogNode = document.querySelector('.jp-Dialog');
+                                    if (dialogNode) {
+                                        dialogNode.addEventListener('dblclick', stopDblClick, true);
+                                    }
+                                }, 0);
+
+                                dialogPromise.then(result => {
+                                    if (dialogNode) {
+                                        (dialogNode as Element).removeEventListener('dblclick', stopDblClick, true);
+                                    }
                                     if (result.button.accept && result.value && result.value.length > 0) {
                                         const selectedFile = result.value[0];
                                         let filePath = selectedFile.path;
