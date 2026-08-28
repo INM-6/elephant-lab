@@ -246,31 +246,32 @@ export class ElephantLabNode extends LGraphNode {
 
     // Fetches the notebook's own top-level functions and adds a dropdown to pick one
     private _addNotebookFunctionSelector(): void {
-        const widget = (this.graph as any)?.widget as WorkflowEngineWidget | undefined;
-        const kernelBridge = widget && (widget as any).kernelBridge;
+        const graphWidget = (this.graph as any)?.widget as WorkflowEngineWidget | undefined;
+        const kernelBridge = graphWidget && (graphWidget as any).kernelBridge;
         if (!kernelBridge) { return; }
 
-        kernelBridge.getNotebookFunctions().then((functions: DraggableItem[] | null) => {
-            if (!functions || !this.graph) { return; }
+        const isPlaceholder = this.properties.item?.code === '__NOTEBOOK_FUNC__';
+        const label = isPlaceholder ? "+ select function" : (this.properties.item?.name || "+ select function");
 
-            const isPlaceholder = this.properties.item?.code === '__NOTEBOOK_FUNC__';
-            const currentValue = isPlaceholder ? "+ select function" : (this.properties.item?.name || "+ select function");
-
-            this.addWidget(
-                "combo",
-                "Select Function",
-                currentValue,
-                (funcName: string) => {
-                    if (funcName === "+ select function") { return; }
-                    const selected = functions.find(f => f.name === funcName);
-                    if (selected) {
-                        this.setProperty("item", selected);
-                    }
-                },
-                { values: ["+ select function", ...functions.map(f => f.name)] }
-            );
-            (this.graph as any).setDirtyCanvas(true, true);
-        });
+        this.addWidget(
+            "button",
+            label,
+            "",
+            (widgetInstance: any, graphCanvasInstance: any, node: LGraphNode, pos: any, event: MouseEvent | undefined) => {
+                kernelBridge.getNotebookFunctions().then((functions: DraggableItem[] | null) => {
+                    if (!functions || !this.graph) { return; }
+                    new (LiteGraph as any).ContextMenu(functions.map((f: DraggableItem) => f.name), {
+                        event,
+                        callback: (selectedName: string) => {
+                            const selected = functions.find(f => f.name === selectedName);
+                            if (selected) {
+                                this.setProperty("item", selected);
+                            }
+                        }
+                    });
+                });
+            }
+        );
     }
 
     getExtraMenuOptions(): any[] | null {
