@@ -1,3 +1,8 @@
+"""
+Specific implementations of the Blueprints of PlotlyGraphContainer
+for Neo data
+"""
+
 from .PlotlyGraphContainer import PlotlyGraphDataType, PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
 
 class SpikeTrainRasterPlot(PlotlyGraphDataType):

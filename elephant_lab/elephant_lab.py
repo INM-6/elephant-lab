@@ -1,4 +1,18 @@
+"""
+Core entity of elephant lab. Tracks the neo objects and lists currently
+defined in the notebook kernel, identifies them with stable hashes, and
+coordinates the tree, info, and plot panels around the current selection.
+"""
+
 class ElephantLab:
+    """
+    Central state holder for elephant lab, instantiated once per notebook.
+
+    Scans the kernel namespace for neo objects, keeps a selection of tree
+    nodes, and exposes the tree/info/plot sub-components (elephant_lab_tree,
+    elephant_lab_info, elephant_lab_plot) that render around that state.
+    """
+
     # All imports are hidden inside the class in order not to pollute the
     # Python kernel's namespace used by the user of the notebook
     from .elephant_lab_util import ElephantLab_util
@@ -51,12 +65,10 @@ class ElephantLab:
                 fn()
 
     def __init__(self):
-        """   # TODO: rewrite docstring
-        Constructor of ElephantLabVisualization
-        Called upon activation of the extension.
-        Initializes some persistent variables that store references to the current neo objects
-        and plots.
-        They are used to check for changes in neo objects and to display the current structure.
+        """
+        Called on extension activation. Initializes the persistent state used
+        to track neo objects in the notebook and their selection, and creates
+        the tree/info/plot sub-components.
         """
 
         self.neo_objs_and_lists_of_neo_objs_with_var_name = {}
@@ -75,10 +87,12 @@ class ElephantLab:
         self.elephant_lab_plot: ElephantLab.ElephantLab_plot = self.ElephantLab_plot(self)
 
     def set_panel_visibility(self, explore_active: bool, details_active: bool):
+        """Propagates whether the explore (plot) and details (info) panels are currently visible."""
         self.elephant_lab_plot.set_explore_panel_active(explore_active)
         self.elephant_lab_info.set_details_panel_active(details_active)
 
     def get_selected_neo_ids(self):
+        """Returns the stable hash IDs of the currently selected neo objects."""
         selected_ids = [
             self.map_ipytree_node_id_to_neo_obj_hash[node._id]
             for node in self.selected_neo_objects
@@ -87,18 +101,22 @@ class ElephantLab:
         return selected_ids
     
     def get_object_of_ids(self):
+        """Returns the actual neo object(s) currently selected, resolved from their hash IDs."""
         selected_ids = self.get_selected_neo_ids()
         if (isinstance(selected_ids, list)):
             return [self.map_neo_obj_hash_to_neo_obj[selected_id] for selected_id in selected_ids]
         return self.map_neo_obj_hash_to_neo_obj[selected_ids]
         
     def get_neo_obj_from_id(self, obj_id):
+        """Looks up a neo object by its stable hash ID."""
         return self.map_neo_obj_hash_to_neo_obj[obj_id]
 
     def get_neo_to_hash_dict(self):
+        """Returns the mapping of hash ID to neo object for all currently tracked objects."""
         return self.map_neo_obj_hash_to_neo_obj
 
     def names_for(self, obj):
+        """Returns the notebook variable name bound to obj, or an empty string if none is found."""
         for key, value in self.neo_objs_and_lists_of_neo_objs_with_var_name.items():
             if obj is value:
                 return key
@@ -263,6 +281,12 @@ class ElephantLab:
         self.filter_changed = False
         
     def save_selected_neo_objects(self, filepath="output_file.nix"):
+        """
+        Writes the currently selected neo objects to a NIX file at filepath.
+        Blocks are written as-is, segments are collected into an export
+        block, and spike trains/analog signals are copied into a single
+        export segment.
+        """
         if not filepath.endswith('.nix'):
             filepath += '.nix'
         
@@ -297,6 +321,12 @@ class ElephantLab:
             nix_io.write_all_blocks(blocks_to_write)
     
     def insert_selected_neo_objects(self):
+        """
+        Builds Python code referencing the currently selected neo objects by
+        their notebook path, for insertion into a cell. If several objects
+        are selected, they are collected into a new list variable. Prints
+        the result (or an error) as a JSON object.
+        """
         try:
             selected_nodes = self.selected_neo_objects
             
