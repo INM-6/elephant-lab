@@ -57,7 +57,7 @@ pip uninstall elephant-lab
    ```bash
    jupyter lab
    ```
-3. Open the **Command Palette** (`View -> Active Command Palette` or `Ctrl+Shift+C`) and search for **Elephant Lab**. Click it to open the panel.
+3. Open a notebook and click the **Elephant icon** in the notebook's toolbar. Alternatively, open the **Command Palette** (`View -> Activate Command Palette` or `Ctrl+Shift+C`), search for **Elephant Lab**, and click it to open the panel.
 4. Click the **Load** button and select a Neo-compatible dataset (e.g. a `.nix` file).
 5. Browse the object tree, click nodes to inspect them, and use **Insert Code** to use them in your Code.
 
