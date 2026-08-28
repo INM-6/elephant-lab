@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
-    "composite": true,
+    "composite": false,
     "declaration": true,
     "esModuleInterop": true,
     "incremental": true,
@@ -17,8 +17,18 @@
     "rootDir": "src",
     "strict": true,
     "strictNullChecks": true,
-    "target": "es2017",
-    "types": ["jest"]
+    "target": "es2020",
+    "types": [
+      "node"
+    ],
+    "skipLibCheck": true,
   },
-  "include": ["src/*"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "lib",
+    "src/__tests__"
+  ]
 }

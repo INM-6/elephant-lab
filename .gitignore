@@ -6,8 +6,18 @@ node_modules/
 *.egg-info/
 .ipynb_checkpoints
 *.tsbuildinfo
-jupyphant/labextension
-
+elephant_lab/labextension
+*.zip
+*.html
+*.png
+*.js
+*.css
+*.info
+*.gz
+*.ipynb
+*.map
+.venv
+*ipynb
 # Integration tests
 ui-tests/test-results/
 ui-tests/playwright-report/
@@ -119,3 +129,10 @@ dmypy.json
 
 # IDE
 .idea/
+
+.yarnrc.yml
+yarn.lock
+
+.vscode/
+
+uv.lock

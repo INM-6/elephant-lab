@@ -4,18 +4,482 @@
     https://jupyterlab.readthedocs.io/en/stable/developer/css.html
 */
 
-/* Basic style of the Jupyphant-tab */
-.my-jupyphantWidget {
+/* Basic style of the Elephant Lab tab */
+.my-elephant-lab-widget {
   display: flex;
   flex-direction: column;
   align-items: center;
   overflow: auto;
 }
 
-.my-jupyphantWidget .p-SplitPanel-handle {
-	background-color: darkgrey;
+.my-elephant-lab-widget .p-SplitPanel-handle {
+  background-color: darkgrey;
 }
 
-.p-SplitPanel-child .my-outarea-class *{
-	overflow: auto;
+.p-SplitPanel-child .my-outarea-class * {
+  overflow: auto;
+}
+
+.sticky-filter {
+  position: sticky;
+  top: 0;
+  background-color: var(--jp-layout-color1);
+  z-index: 10;
+  padding: 8px;
+  border-bottom: 1px solid var(--jp-border-color1);
+}
+
+/* Button text styling */
+.plotly .updatemenu-button text {
+  fill: var(--jp-ui-font-color1) !important;
+  transform: translateX(-1%);
+  font-size: 14px !important;
+  /* Bigger text */
+  font-weight: 600 !important;
+  /* Slightly bolder */
+}
+
+/* Button background */
+.plotly .updatemenu-button rect {
+  fill: var(--jp-layout-color2) !important;
+  transform: scaleX(1.175) translateX(-0.75%);
+  stroke: var(--jp-border-color2) !important;
+  stroke-width: 1.5px !important;
+  rx: 6px !important;
+  /* Rounded corners */
+}
+
+/* Hover effect */
+.plotly .updatemenu-button:hover rect {
+  fill: var(--jp-layout-color3) !important;
+  stroke: var(--jp-border-color1) !important;
+  cursor: pointer;
+}
+
+/* Active/pressed effect */
+.plotly .updatemenu-button:active rect {
+  fill: var(--jp-brand-color1) !important;
+  stroke: var(--jp-brand-color0) !important;
+}
+
+/* Optional: smooth transitions */
+.plotly .updatemenu-button rect,
+.plotly .updatemenu-button text {
+  transition: all 0.2s ease;
+}
+
+.jp-rawplot-label {
+  color: var(--jp-ui-font-color1);
+  font-size: var(--jp-ui-font-size1);
+  opacity: 0.85;
+}
+
+.neo-filter-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.unchecked-label,
+.checked-label,
+.workflow-button,
+.jp-rawplot-toggle {
+  cursor: pointer;
+  padding: 4px 6px;
+  user-select: none;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: inherit;
+  color: var(--jp-ui-font-color1);
+}
+
+.lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabIcon::after,
+.elephant-trunk-icon {
+  background-image: url('../doc/elephant_trunk.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabIcon {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+}
+
+.lm-TabBar-tab.elephant-lab-active-notebook .lm-TabBar-tabIcon::after {
+  content: '';
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  position: relative;
+  top: 1px;
+}
+
+.elephant-trunk-icon {
+  background-position: center;
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  transform: rotate(90deg);
+  position: relative;
+  top: -8px;
+  right: -6px;
+}
+
+.jp-mod-left .elephant-trunk-icon {
+  transform: rotate(270deg) scaleX(-1);
+}
+
+.elephant-lab-toolbar-icon {
+  background-image: url('../doc/elephant_trunk.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  position: relative;
+}
+
+/* Play/stop badge overlaid on the trunk icon */
+.elephant-lab-toolbar-icon::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 6px 0 6px 9px;
+  border-color: transparent transparent transparent var(--jp-success-color1, #2ecc71);
+  filter: drop-shadow(0 0 1px var(--jp-layout-color0, #000));
+}
+
+.elephant-lab-open .elephant-lab-toolbar-icon::after {
+  width: 7px;
+  height: 7px;
+  border-width: 0;
+  border-radius: 1px;
+  background: var(--jp-error-color1, #e74c3c);
+  box-shadow: 0 0 0 1px var(--jp-layout-color0, #000);
+}
+
+.unchecked-label:hover,
+.workflow-button:hover,
+.checked-label:hover,
+.jp-rawplot-toggle:hover {
+  background: var(--jp-layout-color2);
+}
+
+.unchecked-label:active,
+.workflow-button:active,
+.checked-label:active,
+.jp-rawplot-toggle:active {
+  background: var(--jp-layout-color3);
+}
+
+.checked-label,
+.jp-rawplot-toggle[aria-pressed="true"] {
+  font-weight: bold;
+  background: var(--jp-layout-color3);
+  border: 1px solid var(--jp-border-color2);
+}
+
+.jp-rawplot-button-container {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 6px 12px;
+}
+
+.jp-rawplot-options-modal {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 6px;
+  background: var(--jp-layout-color1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  width: max-content;
+  min-width: 220px;
+}
+
+.jp-rawplot-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jp-rawplot-input {
+  width: 100px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--jp-border-color2);
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  outline: none;
+}
+
+.jp-rawplot-input:focus:not(.anno-filter-no-match) {
+  border-color: var(--jp-brand-color1);
+  box-shadow: 0 0 0 1px var(--jp-brand-color1);
+}
+
+@keyframes anno-filter-shake {
+  0% {
+    border-color: var(--jp-error-color1);
+    box-shadow: 0 0 0 1px var(--jp-error-color1);
+  }
+
+  25% {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  50% {
+    border-color: var(--jp-error-color1);
+    box-shadow: 0 0 0 1px var(--jp-error-color1);
+  }
+
+  75% {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  100% {
+    border-color: var(--jp-error-color1);
+    box-shadow: 0 0 0 1px var(--jp-error-color1);
+  }
+}
+
+.anno-filter-no-match {
+  border-color: var(--jp-error-color1) !important;
+  outline: none;
+  box-shadow: 0 0 0 1px var(--jp-error-color1);
+  animation: anno-filter-shake 0.4s ease;
+}
+
+.jp-rawplot-select {
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--jp-border-color2);
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  cursor: pointer;
+}
+
+/* Focus / active (JupyterLab-style highlight) */
+.jp-rawplot-select:focus {
+  outline: none;
+  border-color: var(--jp-brand-color1);
+  box-shadow: 0 0 0 1px var(--jp-brand-color1);
+}
+
+/* Optional: hover consistency with your custom dropdown */
+.jp-rawplot-select:hover {
+  background: var(--jp-layout-color2);
+}
+
+.jp-rawplot-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--jp-layout-color1);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--jp-border-color2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.jp-visible {
+  display: flex !important;
+}
+
+.my-slider.noUi-target {
+  background: #124c7a;
+  border: none;
+}
+
+.my-slider .noUi-connect {
+  background: #1e7fcc;
+  border: none;
+}
+
+.my-slider .noUi-handle {
+  background: #ffffff;
+  border: none;
+}
+
+.jp-collapsible-select {
+  position: relative;
+
+  /* don't stretch */
+  width: auto;
+
+  /* behaves more like native select */
+  display: inline-block;
+}
+
+/* Main button */
+.jp-collapsible-select-button {
+
+  /* no forced full width */
+  min-width: 120px;
+  max-width: 180px;
+
+  padding: 2px 20px 2px 6px;
+
+  border-radius: 4px;
+  border: 1px solid var(--jp-border-color2);
+
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+
+  font: inherit;
+  text-align: left;
+
+  cursor: pointer;
+
+  position: relative;
+
+  min-height: 24px;
+}
+
+/* Dropdown arrow */
+.jp-collapsible-select-button::after {
+  content: "\2304";
+
+  position: absolute;
+
+  right: 6px;
+  top: 50%;
+
+  transform: translateY(-90%);
+
+  font-size: 22px;
+
+  pointer-events: none;
+}
+
+/* Hover */
+.jp-collapsible-select-button:hover {
+  background: var(--jp-layout-color2);
+}
+
+/* Focus */
+.jp-collapsible-select-button:focus {
+  outline: none;
+
+  border-color: var(--jp-brand-color1);
+
+  box-shadow: 0 0 0 1px var(--jp-brand-color1);
+}
+
+/* Dropdown panel */
+.jp-collapsible-select-panel {
+  position: absolute;
+
+  top: calc(100% + 2px);
+  left: 0;
+
+  min-width: 100%;
+
+  background: var(--jp-layout-color1);
+
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 4px;
+
+  z-index: 1000;
+
+  max-height: 320px;
+  overflow-y: auto;
+
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+  padding: 4px;
+}
+
+/* Groups */
+.jp-collapsible-select-panel details {
+  margin-bottom: 2px;
+}
+
+/* Group header */
+.jp-collapsible-select-panel summary {
+
+  cursor: pointer;
+
+  padding: 4px 6px;
+
+  border-radius: 4px;
+
+  color: var(--jp-ui-font-color1);
+
+  user-select: none;
+
+  list-style: none;
+}
+
+/* Remove native marker */
+.jp-collapsible-select-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Hollow expand arrow */
+.jp-collapsible-select-panel summary::before {
+
+  content: "▶";
+
+  display: inline-block;
+
+  width: 10px;
+
+  margin-right: 4px;
+
+  font-size: 11px;
+
+  transition: transform 0.15s ease;
+}
+
+/* Rotate when open */
+.jp-collapsible-select-panel details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+/* Hover */
+.jp-collapsible-select-panel summary:hover {
+  background: var(--jp-layout-color2);
+}
+
+/* Items */
+.jp-collapsible-select-item {
+
+  padding: 4px 8px 4px 20px;
+
+  cursor: pointer;
+
+  border-radius: 4px;
+
+  color: var(--jp-ui-font-color1);
+
+  user-select: none;
+}
+
+/* Hover */
+.jp-collapsible-select-item:hover {
+  background: var(--jp-layout-color2);
+}
+
+/* Active */
+.jp-collapsible-select-item:active {
+  background: var(--jp-layout-color3);
 }

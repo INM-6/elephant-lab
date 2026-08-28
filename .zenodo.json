@@ -1,0 +1,39 @@
+{
+    "creators": [
+        {
+            "orcid": "0009-0007-8222-0929",
+            "affiliation": "Institute for Advanced Simulation (IAS-6), Jülich Research Centre, Jülich, Germany",
+            "name": "Michels, Tobias"
+        },
+        {
+            "orcid": "0009-0004-8647-1061",
+            "affiliation": "Institute for Advanced Simulation (IAS-6), Jülich Research Centre, Jülich, Germany",
+            "name": "Nolten, Jan"
+        },
+        {
+            "orcid": "0000-0003-1255-7300",
+            "affiliation": "Institute for Advanced Simulation (IAS-6), Jülich Research Centre, Jülich, Germany",
+            "name": "Denker, Michael"
+        }
+    ],
+
+    "title": "Elephant Lab 0.1.0",
+
+    "keywords": [
+    "neuroscience",
+    "neurophysiology",
+    "electrophysiology",
+    "statistics",
+    "data-analysis"
+    ],
+
+    "license": {
+      "id": "BSD-3-Clause"
+    },
+
+    "grants": [
+        {"id": "101147319"}
+    ],
+
+    "upload_type": "software"
+}
