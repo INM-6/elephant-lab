@@ -72,7 +72,19 @@ export class KernelBridge {
                     default_val = param.default
                     if default_val is inspect.Parameter.empty:
                         default_val = "__REQUIRED__"
-                    param_list_for_json.append({"name": param.name, "default": str(default_val)})
+                    else:
+                        try:
+                            import quantities as pq
+                            if isinstance(default_val, pq.Quantity):
+                                _mag = default_val.magnitude
+                                if hasattr(_mag, 'ndim') and _mag.ndim == 0:
+                                    _mag = _mag.item()
+                                default_val = f"{_mag!r} * pq.{default_val.dimensionality.string}"
+                            else:
+                                default_val = str(default_val)
+                        except Exception:
+                            default_val = str(default_val)
+                    param_list_for_json.append({"name": param.name, "default": default_val})
             return param_list_for_json
         try:
             fqn = "${fqn}"; parts = fqn.split('.')
@@ -135,7 +147,19 @@ export class KernelBridge {
                     default_val = param.default
                     if default_val is inspect.Parameter.empty:
                         default_val = "__REQUIRED__"
-                    param_list_for_json.append({"name": param.name, "default": str(default_val)})
+                    else:
+                        try:
+                            import quantities as pq
+                            if isinstance(default_val, pq.Quantity):
+                                _mag = default_val.magnitude
+                                if hasattr(_mag, 'ndim') and _mag.ndim == 0:
+                                    _mag = _mag.item()
+                                default_val = f"{_mag!r} * pq.{default_val.dimensionality.string}"
+                            else:
+                                default_val = str(default_val)
+                        except Exception:
+                            default_val = str(default_val)
+                    param_list_for_json.append({"name": param.name, "default": default_val})
             return param_list_for_json
 
         item_list = []
@@ -236,7 +260,19 @@ export class KernelBridge {
                     default_val = param.default
                     if default_val is inspect.Parameter.empty:
                         default_val = "__REQUIRED__"
-                    param_list_for_json.append({"name": param.name, "default": str(default_val)})
+                    else:
+                        try:
+                            import quantities as pq
+                            if isinstance(default_val, pq.Quantity):
+                                _mag = default_val.magnitude
+                                if hasattr(_mag, 'ndim') and _mag.ndim == 0:
+                                    _mag = _mag.item()
+                                default_val = f"{_mag!r} * pq.{default_val.dimensionality.string}"
+                            else:
+                                default_val = str(default_val)
+                        except Exception:
+                            default_val = str(default_val)
+                    param_list_for_json.append({"name": param.name, "default": default_val})
             return param_list_for_json
 
         item_list = []
