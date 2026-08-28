@@ -6,6 +6,8 @@ for Neo data
 from .PlotlyGraphContainer import PlotlyGraphDataType, PlotlyGraphDataTypeList, PlotlyGraphAnnotations, PlotlyGraphAnnotationIntervals
 
 class SpikeTrainRasterPlot(PlotlyGraphDataType):
+    """A raster-plot trace (tick marks at spike times) for a single neo SpikeTrain."""
+
     import numpy as np
 
     def extract_data(self, spiketrain):
@@ -28,7 +30,11 @@ class SpikeTrainRasterPlot(PlotlyGraphDataType):
         self.use_name_as_ticklabels = True
 
 class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
+    """A trace per channel across a list of neo AnalogSignals (LFPs), one PlotlyGraphDataType each."""
+
     class AnalogSignalChannelLFPPlot(PlotlyGraphDataType):
+        """A line trace for a single channel of a single AnalogSignal."""
+
         def extract_data(self, dict_with_signal_info):
             """Extracts AnalogSignalChannelLFPPlot from a dict containing info about an AnalogSignal"""
             self.name = dict_with_signal_info.get('name')
@@ -61,7 +67,11 @@ class AnalogSignalLFPPlotList(PlotlyGraphDataTypeList):
                 self.data_list.append(self.AnalogSignalChannelLFPPlot({ 'x': lfp.times.magnitude, 'y': channel_data, 'name': channel_name, 'units_x': lfp.times.units, 'units_y': lfp.units}))
 
 class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
+    """A trace per neo IrregularlySampledSignal in a list, one PlotlyGraphDataType each."""
+
     class IrregularlySampledSignalPlot(PlotlyGraphDataType):
+        """A markers+lines trace for a single IrregularlySampledSignal."""
+
         def extract_data(self, irregular_signal):
             """Extracts IrregularlySampledSignalPlotData from a IrregularlySampledSignal"""
             self.name = getattr(irregular_signal,'name', None)
@@ -79,6 +89,8 @@ class IrregularlySampledSignalPlotList(PlotlyGraphDataTypeList):
 
 
 class EventAnnotations(PlotlyGraphAnnotations):
+    """Point annotations built from a list of neo Events, one label per event time."""
+
     import numpy as np
 
     def __init__(self, events):
@@ -95,6 +107,8 @@ class EventAnnotations(PlotlyGraphAnnotations):
         super().__init__(self.np.concatenate(x), self.np.concatenate(text), self.np.concatenate(unit_indice), units)
 
 class EpochIntervals(PlotlyGraphAnnotationIntervals):
+    """Interval annotations built from a list of neo Epochs, one labeled x0-x1 span per epoch entry."""
+
     import numpy as np
 
     def __init__(self, epochs):

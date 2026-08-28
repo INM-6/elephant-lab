@@ -30,7 +30,12 @@ class PlotlyGraphDataType:
             setattr(self, key, value)
 
     def extract_data(self, data):
-        """Generic extraction of x, y, mode, and name from various simple data types."""
+        """
+        Generic extraction of x, y, mode, and name from various simple data types.
+
+        Args:
+            data: source to extract from; supports objects with x/y attributes, dicts with x/y keys, a list of (x, y) point tuples, a pandas DataFrame/Series, or None
+        """
         self.x = None
         self.y = None
         if hasattr(data, 'name'):
@@ -99,6 +104,13 @@ class PlotlyGraphDataTypeList():
         self.extract_data(data, name_fallback)
 
     def extract_data(self, data, name_fallback):
+        """
+        Builds self.data_list of PlotlyGraphDataType traces from data, whether it's a single trace or a list of traces.
+
+        Args:
+            data: None, a single trace (points, dict, object, etc.), or a list of such traces
+            name_fallback: name (or callable producing a name) used for traces that don't already have one
+        """
         if data is None:
             self.is_empty = True
             self.data_list = [PlotlyGraphDataType(None, name_fallback)]
@@ -153,6 +165,14 @@ class PlotlyGraphDataTypeList():
         Filters out all points outside of x_range if x_range is not None
         Decreases number of points if there are to many
         sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY, is_default_zero_based, nGraphs, compress, is_empty, is_default_normalized_y
+
+        Args:
+            x_range: (min, max) tuple to filter points to, or None to keep all points
+            offset_traces_on_compress: if True and traces are compressed (>10 graphs), offset each trace's y-values so they stack instead of overlap
+            shift_to_0: if True, shifts each trace's x-values so it starts at 0
+            max_points: max total points across all traces before downsampling kicks in; -1 disables downsampling
+            normalize_y_values: if True, normalizes each trace's y-values
+            normalization_method: method used to normalize y-values when normalize_y_values is True
         """
         #set default
         self.common_units_x = None

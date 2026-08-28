@@ -48,6 +48,8 @@ class ElephantLab:
     import hashlib as _hashlib
 
     class SimpleEvent:
+        """Minimal observer pattern: holds a list of callbacks and fires them all on demand."""
+
         def __init__(self):
             self._listeners = []
 
@@ -123,6 +125,17 @@ class ElephantLab:
         return ""
 
     def _get_obj_path(self, obj, variable_name=''):
+        """
+        Builds a Python expression string (e.g. 'block.segments[0].spiketrains[1]') that locates obj within its parent segment/block, 
+        or as an item in a known variable/list.
+
+        Args:
+            obj: neo object to find a path for
+            variable_name: name to use as the path root; if empty, it's looked up via names_for()
+
+        Returns:
+            str path expression, or None if obj could not be located
+        """
         path = []
         curr = obj
 
