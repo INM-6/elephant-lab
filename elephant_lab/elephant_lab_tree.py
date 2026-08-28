@@ -5,7 +5,7 @@ selecting nodes by statistic value or annotation expression.
 """
 
 class SimpleNode:
-    # Node class which represents a node in the neo tree
+   """Node class which represents a node in the neo tree"""
     def __init__(self, node_id, name='', metadata=None):
         self._id = node_id
         self.name = name
