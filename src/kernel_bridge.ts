@@ -217,6 +217,66 @@ export class KernelBridge {
         }
     }
 
+    // Scans the kernel's __main__ namespace for user-defined functions
+    public async getNotebookFunctions(): Promise<DraggableItem[] | null> {
+        if (!this.session || !this.session.session) { return null; }
+
+        const code = `
+        import inspect, json, sys, __main__
+
+        def _get_params_for_obj(obj):
+            param_list_for_json = []
+            try:
+                sig = inspect.signature(obj)
+                params = sig.parameters.values()
+            except (ValueError, TypeError):
+                return []
+            for param in params:
+                if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
+                    default_val = param.default
+                    if default_val is inspect.Parameter.empty:
+                        default_val = "__REQUIRED__"
+                    param_list_for_json.append({"name": param.name, "default": str(default_val)})
+            return param_list_for_json
+
+        item_list = []
+        try:
+            for name, obj in list(vars(__main__).items()):
+                if name.startswith("_"):
+                    continue
+                if inspect.isfunction(obj) and getattr(obj, '__module__', None) == '__main__':
+                    code_str = f"__NOTEBOOK_FUNC__{name}"
+                    item_list.append({
+                        "id": code_str,
+                        "name": name,
+                        "is_class": False,
+                        "code": code_str,
+                        "parameters": _get_params_for_obj(obj)
+                    })
+            print(json.dumps(item_list))
+        except Exception as e:
+            print(f"Error scanning notebook functions: {e}", file=sys.stderr)
+            print(json.dumps([]))
+        `;
+
+        let msg_content: string = "";
+        const future = this.session.session.kernel!.requestExecute({ code });
+        future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+            if (KernelMessage.isStreamMsg(msg) && msg.content.name === 'stdout') {
+                msg_content += msg.content.text;
+            } else if (KernelMessage.isStreamMsg(msg)) {
+                console.warn("Kernel STDERR:", msg.content.text);
+            }
+        };
+        await future.done;
+        try {
+            return JSON.parse(msg_content.trim());
+        } catch (e) {
+            console.error("Failed to parse notebook function list from kernel:", e, msg_content);
+            return null;
+        }
+    }
+
     // Get all available elephant modules + functions using the Python kernel.
     // Restored from the legacy workflow engine.
     public async getElephantMembers(): Promise<{ [moduleName: string]: { name: string, is_class: boolean }[] } | null> {
@@ -315,9 +375,11 @@ export class KernelBridge {
         util_docstrings['__NEO_GET_EPOCHS__'] = util_docstrings['NEO_GET_EPOCHS']
         util_docstrings['__NEO_GET_SEGMENTS__'] = util_docstrings['NEO_GET_SEGMENTS']
         util_docstrings['__NEO_FILTER__'] = util_docstrings['NEO_FILTER']
-
         if target_id_str in util_docstrings:
             print(json.dumps(util_docstrings[target_id_str]))
+        elif target_id_str.startswith('__NOTEBOOK_FUNC__'):
+            _func_name = target_id_str.replace('__NOTEBOOK_FUNC__', '')
+            print(json.dumps(f"### {_func_name}\\n\\nCalls the notebook-defined function \`{_func_name}\`."))
         else:
             target_obj = None
             md_output = []

@@ -1342,6 +1342,30 @@ except Exception as e:
     print(f"Error running ${item.name} (name): {e}", file=sys.stderr)`;
         }
 
+        else if (item.code.startsWith('__NOTEBOOK_FUNC__')) {
+            console.log("...using NOTEBOOK FUNCTION execution logic");
+            const functionName = item.code.replace('__NOTEBOOK_FUNC__', '');
+            const paramNames = item.parameters.map(p => p.name);
+            const paramNamesJson = JSON.stringify(paramNames);
+
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+try:
+    if "${functionName}" not in globals():
+        raise NameError("Notebook function '${functionName}' not found. Make sure the cell that defines it has been (re-)run.")
+
+    raw_args = json.loads('''${args_json_string}''')
+    param_names = json.loads('''${paramNamesJson}''')
+    processed_args = [_prepare_arg(arg) for arg in raw_args]
+
+    kwargs = dict(zip(param_names, processed_args))
+    elephant_lab_result = globals()["${functionName}"](**kwargs)
+
+    ${resultsDictName}["${resultId}"] = elephant_lab_result
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
+except Exception as e:
+    print(f"Error calling notebook function ${functionName}: {e}", file=sys.stderr)`;
+        }
+
         else if (item.variable_name && item.variable_name !== "" && item.source_file) {
             console.log("...using SELF-CONTAINED PATH (reload + navigate) execution logic");
             const path = item.variable_name;
@@ -1818,6 +1842,17 @@ except Exception as e:
                     .join(', ');
 
                 lineOfCode = `${resultVarName} = ${self_arg}.${methodName}(${method_args})`;
+            } else if (item.code.startsWith('__NOTEBOOK_FUNC__')) {
+                const functionName = item.code.replace('__NOTEBOOK_FUNC__', '');
+                const processed_args = processedArgs
+                    .filter(arg => arg.value !== 'None')
+                    .map(arg => `${arg.name}=${arg.value}`)
+                    .join(', ');
+                let block: string[] = [];
+                block.push(`if "${functionName}" not in globals():`);
+                block.push(`    raise NameError("Notebook function '${functionName}' not found. Make sure the cell that defines it has been (re-)run.")`);
+                block.push(`${resultVarName} = ${functionName}(${processed_args})`);
+                lineOfCode = block.join(`\n${indent}`);
             } else if (item.code.includes(".")) {
                 const fqn = item.code;
                 const parts = fqn.split('.');
@@ -2064,7 +2099,26 @@ except Exception as e:
                                     }
                                 }
                             },
-
+                            {
+                                content: "Notebook function",
+                                callback: (value: any, options: any, event: any, parentMenu: any) => {
+                                    const item: DraggableItem = {
+                                        id: "__NOTEBOOK_FUNC__",
+                                        name: "Notebook Function",
+                                        code: "__NOTEBOOK_FUNC__",
+                                        is_class: false,
+                                        parameters: []
+                                    };
+                                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
+                                    if (this.graph && this.graphCanvas) {
+                                        node.docManager = this.docManager;
+                                        node.properties.item = item;
+                                        node.setProperty("item", item);
+                                        node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
+                                        this.graph.add(node);
+                                    }
+                                }
+                            },
                         ]
                     }
                 },

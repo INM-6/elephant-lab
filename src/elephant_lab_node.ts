@@ -79,6 +79,9 @@ export class ElephantLabNode extends LGraphNode {
         if (itemCode.startsWith('__NEO_')) {
             return true;
         }
+        if (itemCode.startsWith('__NOTEBOOK_FUNC__')) {
+            return true;
+        }
         return false;
     }
 
@@ -235,6 +238,39 @@ export class ElephantLabNode extends LGraphNode {
             });
         }
         this.addOutput("result", -1, { shape: LiteGraph.BOX_SHAPE });
+
+        if (this.properties.item?.code?.startsWith('__NOTEBOOK_FUNC__')) {
+            this._addNotebookFunctionSelector();
+        }
+    }
+
+    // Fetches the notebook's own top-level functions and adds a dropdown to pick one
+    private _addNotebookFunctionSelector(): void {
+        const widget = (this.graph as any)?.widget as WorkflowEngineWidget | undefined;
+        const kernelBridge = widget && (widget as any).kernelBridge;
+        if (!kernelBridge) { return; }
+
+        kernelBridge.getNotebookFunctions().then((functions: DraggableItem[] | null) => {
+            if (!functions || !this.graph) { return; }
+
+            const isPlaceholder = this.properties.item?.code === '__NOTEBOOK_FUNC__';
+            const currentValue = isPlaceholder ? "+ select function" : (this.properties.item?.name || "+ select function");
+
+            this.addWidget(
+                "combo",
+                "Select Function",
+                currentValue,
+                (funcName: string) => {
+                    if (funcName === "+ select function") { return; }
+                    const selected = functions.find(f => f.name === funcName);
+                    if (selected) {
+                        this.setProperty("item", selected);
+                    }
+                },
+                { values: ["+ select function", ...functions.map(f => f.name)] }
+            );
+            (this.graph as any).setDirtyCanvas(true, true);
+        });
     }
 
     getExtraMenuOptions(): any[] | null {
