@@ -578,7 +578,7 @@ except NameError:
         // Find all nodes within subgraphs (if/else/loop bodies)
         for (const node of nodes) {
             if (node instanceof ElephantLabNode) {
-                if (node.properties.item.code === '__UTIL_IF__' || node.properties.item.code === '__UTIL_LOOP__') {
+                if (node.properties.item.code === '__UTIL_IF__' || node.properties.item.code === '__UTIL_LOOP__' || node.properties.item.code === '__UTIL_REPEAT_LOOP__') {
                     const bodyOutputs = node.outputs.filter(o => o.name === 'if body' || o.name === 'else body' || o.name === 'loop body');
                     for (const output of bodyOutputs) {
                         if (output.links) {
@@ -604,7 +604,7 @@ except NameError:
         // Find all nodes that are starting points of execution chains
         const startNodes = nodes.filter(node => {
             // A node is a start node if its 'exec in' slot is not connected
-            const execInput = node.inputs.find(input => input.type === -1);
+            const execInput = node.inputs.find(input => input.type === 'jupy_exec');
             return (!execInput || execInput.link === null) && !subgraphNodes.has(node);
         });
 
@@ -627,12 +627,12 @@ except NameError:
 
             // Find the 'exec out' slot and see what it's connected to
             let execOutput;
-            if ((currentNode as ElephantLabNode).properties?.item.code === '__UTIL_LOOP__') {
+            if ((currentNode as ElephantLabNode).properties?.item.code === '__UTIL_LOOP__' || (currentNode as ElephantLabNode).properties?.item.code === '__UTIL_REPEAT_LOOP__') {
                 execOutput = currentNode.outputs.find(output => output.name === 'after loop');
             } else if ((currentNode as ElephantLabNode).properties?.item.code === '__UTIL_IF__') {
                 execOutput = currentNode.outputs.find(output => output.name === 'after if/else');
             } else {
-                execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'loop body');
+                execOutput = currentNode.outputs.find(output => output.type === 'jupy_exec' && output.name !== 'loop body');
             }
             if (execOutput && execOutput.links) {
                 for (const linkId of execOutput.links) {
@@ -740,7 +740,7 @@ except NameError:
 
             const item = node.properties.item;
             if (!item || !item.code || !this.session || !this.session.session ||
-                item.code === '__UTIL_LOOP__' || item.code === '__UTIL_IF__') {
+                item.code === '__UTIL_LOOP__' || item.code === '__UTIL_IF__' || item.code === '__UTIL_REPEAT_LOOP__') {
                 await flushBatch();
                 await this.executeNode(node, executed_nodes, outputArea, collected_outputs);
                 continue;
@@ -844,6 +844,7 @@ except NameError:
             }
 
             const loopBodyNodes = this._getBodyNodesFromOutput(loopBodyExecOutput);
+            const resultsDictName = "workflow_results";
 
             let loopBodyCode = "";
             const loopScopeExecutedNodes = new Map<LGraphNode, string | null>();
@@ -895,9 +896,21 @@ except NameError:
                 loopScopeExecutedNodes.set(bodyNode, bodyNodeResultId);
             }
 
-            const resultsDictName = "workflow_results";
+            let collectResultId: string | null = null;
+            const collectInput = elephant_labNode.inputs.find(i => i.name === 'item to collect');
+            if (collectInput && collectInput.link !== null) {
+                const collectLink = this.graph!.links[collectInput.link];
+                const collectOriginNode = collectLink ? this.graph!.getNodeById(collectLink.origin_id) : null;
+                const collectSourceId = collectOriginNode ? loopScopeExecutedNodes.get(collectOriginNode) : null;
+                if (collectSourceId) {
+                    collectResultId = `result_${crypto.randomUUID().replace(/-/g, '_')}`;
+                    loopBodyCode += `    ${resultsDictName}['${collectResultId}'].append(${resultsDictName}['${collectSourceId}'])\n`;
+                }
+            }
+            const collectInitLine = collectResultId ? `${resultsDictName}['${collectResultId}'] = []\n` : '';
+
             const codeToExecute = `
-_list = ${resultsDictName}['${listKey}']
+${collectInitLine}_list = ${resultsDictName}['${listKey}']
 for __elephant_lab_loop_index__, __elephant_lab_loop_item__ in enumerate(_list):
     ${resultsDictName}['__elephant_lab_loop_item__'] = __elephant_lab_loop_item__
     ${resultsDictName}['__elephant_lab_loop_index__'] = __elephant_lab_loop_index__
@@ -914,8 +927,122 @@ ${loopBodyCode}
                 }
             }
 
-            executed_nodes.set(elephant_labNode, null); // Loop node itself has no result
-            return null;
+            // "collected" is the Loop node's only resolvable output for anything wired after the loop
+            if (collectResultId) {
+                const collectedOutputIndex = elephant_labNode.outputs.findIndex(o => o.name === 'collected');
+                if (collectedOutputIndex !== -1) {
+                    elephant_labNode.setOutputData(collectedOutputIndex, collectResultId);
+                }
+            }
+            executed_nodes.set(elephant_labNode, collectResultId);
+            return collectResultId;
+        } else if (item.code === '__UTIL_REPEAT_LOOP__') {
+            const resultsDictName = "workflow_results";
+
+            const countInput = elephant_labNode.inputs.find(i => i.name === 'count');
+            let countExpr = '0';
+            if (countInput && countInput.link !== null) {
+                const countLink = this.graph!.links[countInput.link];
+                const countOriginNode = countLink ? this.graph!.getNodeById(countLink.origin_id) : null;
+                if (countOriginNode) {
+                    const countKey = await this.executeNode(countOriginNode, executed_nodes, outputArea, collected_outputs);
+                    countExpr = countKey ? `${resultsDictName}['${countKey}']` : '0';
+                }
+            } else {
+                countExpr = (elephant_labNode.properties['param_count'] as string) || '0';
+            }
+
+            const loopBodyExecOutput = elephant_labNode.outputs.find(o => o.name === 'loop body');
+            if (!loopBodyExecOutput || !loopBodyExecOutput.links || loopBodyExecOutput.links.length === 0) {
+                executed_nodes.set(elephant_labNode, null);
+                return null;
+            }
+
+            const loopBodyNodes = this._getBodyNodesFromOutput(loopBodyExecOutput);
+
+            let loopBodyCode = "";
+            const loopScopeExecutedNodes = new Map<LGraphNode, string | null>();
+
+            for (const bodyNode of loopBodyNodes) {
+                if (!(bodyNode instanceof ElephantLabNode)) continue;
+
+                const bodyNodeItem = bodyNode.properties.item;
+                const bodyNodeArgs: (string | null)[] = [];
+
+                if (bodyNodeItem.parameters) {
+                    for (const param of bodyNodeItem.parameters) {
+                        const inputIndex = bodyNode.inputs.findIndex(i => i.name === param.name);
+                        let value: string | null = null;
+
+                        if (inputIndex !== -1 && bodyNode.inputs[inputIndex].link !== null) {
+                            const linkInfo = this.graph!.links[bodyNode.inputs[inputIndex].link!];
+                            const originNode = this.graph!.getNodeById(linkInfo.origin_id);
+
+                            if (originNode) {
+                                if (originNode === elephant_labNode) {
+                                    const outputSlot = elephant_labNode.outputs[linkInfo.origin_slot];
+                                    if (outputSlot.name === 'index') {
+                                        value = '__elephant_lab_loop_index__';
+                                    }
+                                } else if (loopScopeExecutedNodes.has(originNode)) {
+                                    value = loopScopeExecutedNodes.get(originNode)!;
+                                } else if (executed_nodes.has(originNode)) {
+                                    value = executed_nodes.get(originNode)!;
+                                } else {
+                                    value = await this.executeNode(originNode, executed_nodes, outputArea, collected_outputs);
+                                }
+                            }
+                        } else {
+                            const propName = `param_${param.name}`;
+                            value = (bodyNode.properties[propName] as string) || null;
+                        }
+                        bodyNodeArgs.push(value);
+                    }
+                }
+                const bodyNodeResultId = `result_${crypto.randomUUID().replace(/-/g, '_')}`;
+                const nodeCode = this._generatePythonCodeForNode(bodyNode as ElephantLabNode, bodyNodeArgs, bodyNodeResultId);
+                if (nodeCode) {
+                    const indentedCode = nodeCode.split('\n').map(line => "    " + line).join('\n');
+                    loopBodyCode += indentedCode + "\n";
+                }
+                loopScopeExecutedNodes.set(bodyNode, bodyNodeResultId);
+            }
+
+            let collectResultId: string | null = null;
+            if (loopBodyNodes.length > 0) {
+                const lastBodyNode = loopBodyNodes[loopBodyNodes.length - 1];
+                const collectSourceId = loopScopeExecutedNodes.get(lastBodyNode);
+                if (collectSourceId) {
+                    collectResultId = `result_${crypto.randomUUID().replace(/-/g, '_')}`;
+                    loopBodyCode += `    ${resultsDictName}['${collectResultId}'].append(${resultsDictName}['${collectSourceId}'])\n`;
+                }
+            }
+            const collectInitLine = collectResultId ? `${resultsDictName}['${collectResultId}'] = []\n` : '';
+
+            const codeToExecute = `
+${collectInitLine}for __elephant_lab_loop_index__ in range(int(${countExpr})):
+    ${resultsDictName}['__elephant_lab_loop_index__'] = __elephant_lab_loop_index__
+${loopBodyCode}
+`;
+
+            console.log("Executing repeat loop code:\n", codeToExecute);
+            const loopResult = await this.kernelBridge.executeCode(codeToExecute);
+            if (loopResult) {
+                if (collected_outputs) {
+                    collected_outputs.push(...loopResult.outputs);
+                } else {
+                    this.handleOutputs(loopResult.outputs, outputArea);
+                }
+            }
+
+            if (collectResultId) {
+                const collectedOutputIndex = elephant_labNode.outputs.findIndex(o => o.name === 'collected');
+                if (collectedOutputIndex !== -1) {
+                    elephant_labNode.setOutputData(collectedOutputIndex, collectResultId);
+                }
+            }
+            executed_nodes.set(elephant_labNode, collectResultId);
+            return collectResultId;
         } else if (item.code === '__UTIL_IF__') {
             const conditionInput = elephant_labNode.inputs.find(i => i.name === 'condition');
             if (!conditionInput || conditionInput.link === null) {
@@ -1133,6 +1260,20 @@ try:
 
 except Exception as e:
     print(f"Error in Get Item node: {e}", file=sys.stderr)`;
+        } else if (item.code === '__UTIL_RANGE__') {
+            console.log("...using UTILITY (Range) execution logic");
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+try:
+    raw_args = json.loads('''${args_json_string}''')
+    processed_args = [_prepare_arg(arg) for arg in raw_args]
+
+    elephant_lab_result = list(range(int(processed_args[0])))
+
+    ${resultsDictName}["${resultId}"] = elephant_lab_result
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
+
+except Exception as e:
+    print(f"Error in Range node: {e}", file=sys.stderr)`;
         } else if (item.code === '__UTIL_PRINT__') {
             console.log("...using UTILITY (Print) execution logic");
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
@@ -1363,7 +1504,9 @@ try:
     ${resultsDictName}["${resultId}"] = elephant_lab_result
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
-    print(f"Error calling notebook function ${functionName}: {e}", file=sys.stderr)`;
+    import traceback
+    print(f"Error calling notebook function ${functionName}: {e}", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)`;
         }
 
         else if (item.variable_name && item.variable_name !== "" && item.source_file) {
@@ -1451,12 +1594,12 @@ except Exception as e:
             sortedList.push(currentNode);
 
             let execOutput;
-            if ((currentNode as ElephantLabNode).properties?.item.code === '__UTIL_LOOP__') {
+            if ((currentNode as ElephantLabNode).properties?.item.code === '__UTIL_LOOP__' || (currentNode as ElephantLabNode).properties?.item.code === '__UTIL_REPEAT_LOOP__') {
                 execOutput = currentNode.outputs.find(output => output.name === 'after loop');
             } else if ((currentNode as ElephantLabNode).properties?.item.code === '__UTIL_IF__') {
-                execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'if body' && output.name !== 'else body');
+                execOutput = currentNode.outputs.find(output => output.type === 'jupy_exec' && output.name !== 'if body' && output.name !== 'else body');
             } else {
-                execOutput = currentNode.outputs.find(output => output.type === -1 && output.name !== 'loop body');
+                execOutput = currentNode.outputs.find(output => output.type === 'jupy_exec' && output.name !== 'loop body');
             }
 
             if (execOutput && execOutput.links) {
@@ -1617,12 +1760,89 @@ except Exception as e:
                     const loopBodyNodes = this._getBodyNodesFromOutput(loopBodyExecOutput);
 
                     if (loopBodyNodes.length > 0) {
+                        let collectVarName: string | null = null;
+                        const collectInput = elephant_labNode.inputs.find(i => i.name === 'item to collect');
+                        let collectOriginNode: LGraphNode | null = null;
+                        if (collectInput && collectInput.link !== null) {
+                            const collectLink = this.graph!.links[collectInput.link];
+                            collectOriginNode = collectLink ? (this.graph!.getNodeById(collectLink.origin_id) ?? null) : null;
+                        }
+
+                        if (collectOriginNode) {
+                            collectVarName = 'elephant_lab_loop_collected';
+                            let collectCounter = 1;
+                            while (usedResultNames.has(collectVarName)) {
+                                collectVarName = `elephant_lab_loop_collected_${collectCounter++}`;
+                            }
+                            usedResultNames.add(collectVarName);
+                            nodeResultNames.set(elephant_labNode, collectVarName);
+                            codeLines.push(indent + `${collectVarName} = []`);
+                        }
+
                         codeLines.push(indent + `for elephant_lab_loop_index, elephant_lab_loop_item in enumerate(${listVarName}):`);
 
                         for (const bodyNode of loopBodyNodes) {
                             if (bodyNode instanceof ElephantLabNode) {
                                 generateCodeForNode(bodyNode, indent + "    ");
                             }
+                        }
+
+                        if (collectVarName && collectOriginNode) {
+                            const collectSourceVarName = nodeResultNames.get(collectOriginNode);
+                            if (collectSourceVarName) {
+                                codeLines.push(indent + `    ${collectVarName}.append(${collectSourceVarName})`);
+                            }
+                        }
+                    }
+                }
+                return;
+            } else if (item.code === '__UTIL_REPEAT_LOOP__') {
+                generatedNodes.add(elephant_labNode);
+
+                const countInput = elephant_labNode.inputs.find(i => i.name === 'count');
+                let countExpr = '0';
+                if (countInput && countInput.link !== null) {
+                    const countLink = this.graph!.links[countInput.link];
+                    const countOriginNode = countLink ? this.graph!.getNodeById(countLink.origin_id) : null;
+                    if (countOriginNode instanceof ElephantLabNode) {
+                        generateCodeForNode(countOriginNode, indent);
+                        countExpr = nodeResultNames.get(countOriginNode) || '0';
+                    }
+                } else {
+                    countExpr = (elephant_labNode.properties['param_count'] as string) || '0';
+                }
+
+                const loopBodyExecOutput = elephant_labNode.outputs.find(o => o.name === 'loop body');
+                if (!loopBodyExecOutput || !loopBodyExecOutput.links || !loopBodyExecOutput.links.length) return;
+
+                const loopBodyNodes = this._getBodyNodesFromOutput(loopBodyExecOutput);
+
+                if (loopBodyNodes.length > 0) {
+                    const lastBodyNode = loopBodyNodes[loopBodyNodes.length - 1];
+                    let collectVarName: string | null = null;
+                    if (lastBodyNode instanceof ElephantLabNode) {
+                        collectVarName = 'elephant_lab_loop_collected';
+                        let collectCounter = 1;
+                        while (usedResultNames.has(collectVarName)) {
+                            collectVarName = `elephant_lab_loop_collected_${collectCounter++}`;
+                        }
+                        usedResultNames.add(collectVarName);
+                        nodeResultNames.set(elephant_labNode, collectVarName);
+                        codeLines.push(indent + `${collectVarName} = []`);
+                    }
+
+                    codeLines.push(indent + `for elephant_lab_loop_index in range(int(${countExpr})):`);
+
+                    for (const bodyNode of loopBodyNodes) {
+                        if (bodyNode instanceof ElephantLabNode) {
+                            generateCodeForNode(bodyNode, indent + "    ");
+                        }
+                    }
+
+                    if (collectVarName) {
+                        const collectSourceVarName = nodeResultNames.get(lastBodyNode);
+                        if (collectSourceVarName) {
+                            codeLines.push(indent + `    ${collectVarName}.append(${collectSourceVarName})`);
                         }
                     }
                 }
@@ -1710,12 +1930,14 @@ except Exception as e:
                         const linkInfo = this.graph!.links[input.link];
                         if (linkInfo) {
                             const originNode = this.graph!.getNodeById(linkInfo.origin_id);
-                            if (originNode && (originNode as ElephantLabNode).properties.item.code === '__UTIL_LOOP__') {
+                            if (originNode && ((originNode as ElephantLabNode).properties.item.code === '__UTIL_LOOP__' || (originNode as ElephantLabNode).properties.item.code === '__UTIL_REPEAT_LOOP__')) {
                                 const outputSlot = originNode.outputs[linkInfo.origin_slot];
                                 if (outputSlot.name === 'item') {
                                     argumentValue = 'elephant_lab_loop_item';
                                 } else if (outputSlot.name === 'index') {
                                     argumentValue = 'elephant_lab_loop_index';
+                                } else if (outputSlot.name === 'collected' && nodeResultNames.has(originNode)) {
+                                    argumentValue = nodeResultNames.get(originNode)!;
                                 } else {
                                     argumentValue = 'None';
                                 }
@@ -1826,6 +2048,9 @@ except Exception as e:
                 if (list_arg && list_arg !== 'None' && index_arg && index_arg !== 'None') {
                     lineOfCode = `${resultVarName} = ${list_arg}[int(${index_arg})]`;
                 }
+            } else if (item.code === '__UTIL_RANGE__') {
+                const count_arg = processedArgs.find(p => p.name === 'count')?.value;
+                lineOfCode = `${resultVarName} = list(range(int(${count_arg || '0'})))`;
             } else if (item.name.startsWith(".")) {
                 const methodName = item.name.substring(1).replace('()', '');
                 const self_arg = processedArgs.find(arg => arg.isSelf)?.value;
@@ -1975,6 +2200,27 @@ except Exception as e:
                                                     this.graph.add(node);
                                                 }
                                             }
+                                        },
+                                        {
+                                            content: "Repeat Loop",
+                                            callback: (value: any, options: any, event: any, parentMenu: any) => {
+                                                const item: DraggableItem = {
+                                                    id: "util/repeat_loop",
+                                                    name: "Repeat Loop",
+                                                    code: "__UTIL_REPEAT_LOOP__",
+                                                    is_class: false,
+                                                    parameters: [
+                                                    ]
+                                                };
+                                                const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
+                                                if (this.graph && this.graphCanvas) {
+                                                    node.docManager = this.docManager;
+                                                    node.properties.item = item;
+                                                    node.setProperty("item", item);
+                                                    node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
+                                                    this.graph.add(node);
+                                                }
+                                            }
                                         }
                                     ]
                                 }
@@ -2088,6 +2334,27 @@ except Exception as e:
                                         parameters: [
                                             { name: "list", default: "__REQUIRED__" },
                                             { name: "index", default: "0" },
+                                        ]
+                                    };
+                                    const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
+                                    if (this.graph && this.graphCanvas) {
+                                        node.properties.item = item;
+                                        node.setProperty("item", item);
+                                        node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
+                                        this.graph.add(node);
+                                    }
+                                }
+                            },
+                            {
+                                content: "Range",
+                                callback: (value: any, options: any, event: any, parentMenu: any) => {
+                                    const item: DraggableItem = {
+                                        id: "util/range",
+                                        name: "Range",
+                                        code: "__UTIL_RANGE__",
+                                        is_class: false,
+                                        parameters: [
+                                            { name: "count", default: "10" },
                                         ]
                                     };
                                     const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;

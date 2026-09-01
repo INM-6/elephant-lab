@@ -123,11 +123,29 @@ export class ElephantLabNode extends LGraphNode {
             this.title = "For Loop";
             this.addInput("exec in", "jupy_exec");
             this.addInput("List", "", { shape: LiteGraph.BOX_SHAPE });
+            this.addInput("item to collect", "", { shape: LiteGraph.BOX_SHAPE });
 
             this.addOutput("after loop", "jupy_exec");
             this.addOutput("loop body", "jupy_exec");
             this.addOutput("item", "", { shape: LiteGraph.BOX_SHAPE });
             this.addOutput("index", "", { shape: LiteGraph.BOX_SHAPE });
+            this.addOutput("collected", "", { shape: LiteGraph.BOX_SHAPE });
+            return;
+        } else if (this.properties.item?.code === '__UTIL_REPEAT_LOOP__') {
+            this.title = "Repeat Loop";
+            this.addInput("exec in", "jupy_exec");
+            this.addInput("count", -1, { label: "count", shape: LiteGraph.BOX_SHAPE });
+            if (this.properties['param_count'] === undefined) {
+                this.properties['param_count'] = "10";
+            }
+            this.addWidget("text", "count", this.properties['param_count'], (value: string) => {
+                this.properties['param_count'] = value;
+            }, {});
+
+            this.addOutput("after loop", "jupy_exec");
+            this.addOutput("loop body", "jupy_exec");
+            this.addOutput("index", "", { shape: LiteGraph.BOX_SHAPE });
+            this.addOutput("collected", "", { shape: LiteGraph.BOX_SHAPE });
             return;
         } else if (this.properties.item?.code === '__UTIL_IF__') {
             this.title = "If/Else";

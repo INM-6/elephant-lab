@@ -396,12 +396,16 @@ export class KernelBridge {
             'NEO_GET_EVENTS': '### Get Events\\n\\nExtracts events from a neo object.',
             'NEO_GET_EPOCHS': '### Get Epochs\\n\\nExtracts epochs from a neo object.',
             'NEO_GET_SEGMENTS': '### Get Segments\\n\\nExtracts segments from a neo object.',
-            'NEO_FILTER': '### Apply Filter on Neo Object\\n\\nApplies filter with arguments on a neo object.'
+            'NEO_FILTER': '### Apply Filter on Neo Object\\n\\nApplies filter with arguments on a neo object.',
+            'UTIL_RANGE': '### Range\\n\\nProduces list(range(count)) - wire into a For Loop\\'s List input to run its body a fixed number of times with nothing real to iterate over.',
+            'UTIL_REPEAT_LOOP': '### Repeat Loop\\n\\nRuns its body a fixed number of times and automatically collects the result.\\n\\n**Inputs:**\\n- \`exec in\`: Execution input\\n- \`count\`: How many times to run (wireable, or just type a number).\\n\\n**Outputs:**\\n- \`after loop\`: Execution output after the loop is finished\\n- \`loop body\`: Execution path for each iteration\\n- \`index\`: The current iteration number\\n- \`collected\`: A list of the last loop-body node\\'s result from every iteration - no separate wiring needed.'
         }
 
         util_docstrings['__UTIL_LOOP__'] = util_docstrings['UTIL_LOOP']
         util_docstrings['__UTIL_IF__'] = util_docstrings['UTIL_IF']
         util_docstrings['__UTIL_LIST__'] = util_docstrings['UTIL_LIST']
+        util_docstrings['__UTIL_RANGE__'] = util_docstrings['UTIL_RANGE']
+        util_docstrings['__UTIL_REPEAT_LOOP__'] = util_docstrings['UTIL_REPEAT_LOOP']
         util_docstrings['__UTIL_PRINT__'] = util_docstrings['UTIL_PRINT']
         util_docstrings['__NEO_READ_FILE__'] = util_docstrings['NEO_READ_FILE']
         util_docstrings['__UTIL_GETITEM__'] = util_docstrings['UTIL_GETITEM']
