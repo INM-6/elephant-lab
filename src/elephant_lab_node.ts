@@ -530,6 +530,24 @@ export class ElephantLabNode extends LGraphNode {
         ctx.textBaseline = "middle";
         ctx.fillText("i", info_x + icon_size / 2, y + icon_size / 2);
         ctx.restore();
+
+        // Refresh icon - Notebook Function nodes only, since it re-fetches that function's
+        // current signature (in case it was edited after this node was configured).
+        if (this.properties.item?.code?.startsWith('__NOTEBOOK_FUNC__')) {
+            const refresh_x = this.size[0] - (icon_size + margin) * 3;
+            ctx.save();
+            ctx.fillStyle = "#3DBE6C";
+            ctx.beginPath();
+            ctx.arc(refresh_x + icon_size / 2, y + icon_size / 2, icon_size / 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = "white";
+            ctx.font = "bold 12px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("↻", refresh_x + icon_size / 2, y + icon_size / 2);
+            ctx.restore();
+        }
     };
 
     override onMouseDown(e: MouseEvent, local_pos: [number, number], graphcanvas: LGraphCanvas): boolean {
@@ -553,8 +571,36 @@ export class ElephantLabNode extends LGraphNode {
             widget.showNodeInfo(this);
             return true;
         }
+
+        if (this.properties.item?.code?.startsWith('__NOTEBOOK_FUNC__')) {
+            const refresh_x = this.size[0] - (icon_size + margin) * 3;
+            if (local_pos[0] >= refresh_x && local_pos[0] <= refresh_x + icon_size &&
+                local_pos[1] >= y && local_pos[1] <= y + icon_size) {
+                this._refreshNotebookFunction();
+                return true;
+            }
+        }
         return false;
 
+    }
+
+    // Re-fetches this node's own function from the notebook and reconfigures the node if its
+    // signature changed (params added/removed/renamed) - without needing to reselect it from
+    // the dropdown
+    private _refreshNotebookFunction(): void {
+        const graphWidget = (this.graph as any)?.widget as WorkflowEngineWidget | undefined;
+        const kernelBridge = graphWidget && (graphWidget as any).kernelBridge;
+        const currentName = this.properties.item?.name;
+        if (!kernelBridge || !currentName) { return; }
+
+        kernelBridge.getNotebookFunctions().then((functions: DraggableItem[] | null) => {
+            const refreshed = functions?.find(f => f.name === currentName);
+            if (refreshed) {
+                this.setProperty("item", refreshed);
+            } else {
+                console.warn(`Elephant Lab: could not refresh '${currentName}' - it no longer appears to be defined in the notebook.`);
+            }
+        });
     }
 }
 LiteGraph.registerNodeType("workflow/elephant_lab_node", ElephantLabNode);
