@@ -1973,7 +1973,9 @@ except Exception:
                 }
             }
 
-            let resultVarName = item.code === '__NEO_READ_FILE__' ? 'neo_data' : sanitizeVarName(item.name);
+            let resultVarName = item.code === '__NEO_READ_FILE__' ? 'neo_data'
+                : item.code.startsWith('__NOTEBOOK_FUNC__') ? `${sanitizeVarName(item.name)}_result`
+                : sanitizeVarName(item.name);
             const originalName = resultVarName;
             let counter = 1;
             while (usedResultNames.has(resultVarName)) {

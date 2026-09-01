@@ -115,6 +115,45 @@ export class ElephantLabNode extends LGraphNode {
     }
 
     private rebuildNode() {
+        const graph = this.graph;
+        const preservedInputs: { name: string; originNode: LGraphNode; originSlot: number }[] = [];
+        if (graph && this.inputs) {
+            for (const inp of this.inputs) {
+                if (!inp || inp.link == null) { continue; }
+                const link = graph.links[inp.link];
+                if (!link) { continue; }
+                const originNode = graph.getNodeById(link.origin_id);
+                if (originNode) { preservedInputs.push({ name: inp.name, originNode, originSlot: link.origin_slot }); }
+            }
+        }
+        const preservedOutputs: { name: string; targetNode: LGraphNode; targetSlot: number }[] = [];
+        if (graph && this.outputs) {
+            for (const out of this.outputs) {
+                if (!out || !out.links) { continue; }
+                for (const linkId of out.links) {
+                    const link = graph.links[linkId];
+                    if (!link) { continue; }
+                    const targetNode = graph.getNodeById(link.target_id);
+                    if (targetNode) { preservedOutputs.push({ name: out.name, targetNode, targetSlot: link.target_slot }); }
+                }
+            }
+        }
+
+        this._rebuildNodePins();
+
+        if (graph) {
+            for (const p of preservedInputs) {
+                const slot = this.inputs.findIndex(i => i.name === p.name);
+                if (slot !== -1) { p.originNode.connect(p.originSlot, this, slot); }
+            }
+            for (const p of preservedOutputs) {
+                const slot = this.outputs.findIndex(o => o.name === p.name);
+                if (slot !== -1) { this.connect(slot, p.targetNode, p.targetSlot); }
+            }
+        }
+    }
+
+    private _rebuildNodePins() {
         this.inputs.length = 0;
         (this as any).widgets = [];
         this.outputs.length = 0;
