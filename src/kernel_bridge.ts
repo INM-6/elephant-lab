@@ -387,7 +387,8 @@ export class KernelBridge {
         util_docstrings = {
             'UTIL_LOOP': '### For Loop\\n\\nIterates over a list of items.\\n\\n**Inputs:**\\n- \`exec in\`: Execution input\\n- \`List\`: The list to iterate over\\n\\n**Outputs:**\\n- \`after loop\`: Execution output after the loop is finished\\n- \`loop body\`: Execution path for each iteration\\n- \`item\`: The current item in the iteration\\n- \`index\`: The index of the current item.',
             'UTIL_IF': '### If/Else\\n\\nExecutes one of two branches based on a condition.\\n\\n**Inputs:**\\n- \`exec in\`: Execution input\\n- \`condition\`: The boolean condition to evaluate.\\n\\n**Outputs:**\\n- \`if body\`: Execution path if the condition is true.\\n- \`else body\`: Execution path if the condition is false.\\n- \`after if/else\`: Execution output after either branch is finished.',
-            'UTIL_PRINT': '### Print Node\\n\\nPrints the string representation of the input value.',
+            'UTIL_PRINT': '### Print Node\\n\\nPrints the string representation of the input value. Figures are skipped here - use a Plot node to display those instead.',
+            'UTIL_PLOT': '### Plot Node\\n\\nDisplays the input value as rich output (e.g. a matplotlib figure), instead of printing its text representation.',
             'UTIL_LIST': '### List Node\\n\\nCreates a Python list from the inputs.',
             'NEO_READ_FILE': '### Neo File Reader\\n\\nReads a neo-supported file and provides the content as a neo object.',
             'UTIL_GETITEM': '### Get Item\\n\\nGets an item from an iterable at a specified index.',
@@ -407,6 +408,7 @@ export class KernelBridge {
         util_docstrings['__UTIL_RANGE__'] = util_docstrings['UTIL_RANGE']
         util_docstrings['__UTIL_REPEAT_LOOP__'] = util_docstrings['UTIL_REPEAT_LOOP']
         util_docstrings['__UTIL_PRINT__'] = util_docstrings['UTIL_PRINT']
+        util_docstrings['__UTIL_PLOT__'] = util_docstrings['UTIL_PLOT']
         util_docstrings['__NEO_READ_FILE__'] = util_docstrings['NEO_READ_FILE']
         util_docstrings['__UTIL_GETITEM__'] = util_docstrings['UTIL_GETITEM']
         util_docstrings['__NEO_GET_SPIKETRAINS__'] = util_docstrings['NEO_GET_SPIKETRAINS']

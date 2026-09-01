@@ -36,6 +36,21 @@ except NameError:
             except: return arg_str
         return arg_str`;
 
+    // Resolves a value to its displayable matplotlib Figure, if it looks plot-like at all:
+    // a Figure itself, a single Axes (via .figure), or a list/tuple of Axes (e.g. what
+    // plot_patterns_hypergraph returns)
+    private static readonly RESOLVE_FIGURE_SNIPPET = `try:
+    _elephant_lab_resolve_figure
+except NameError:
+    def _elephant_lab_resolve_figure(val):
+        if hasattr(val, 'savefig'):
+            return val
+        if hasattr(val, 'figure'):
+            return val.figure
+        if isinstance(val, (list, tuple)) and len(val) > 0 and hasattr(val[0], 'figure'):
+            return val[0].figure
+        return None`;
+
     private graph: LGraph | null;
     private graphCanvas: LGraphCanvas | null;
     private kernelBridge: KernelBridge;
@@ -1277,16 +1292,43 @@ except Exception as e:
         } else if (item.code === '__UTIL_PRINT__') {
             console.log("...using UTILITY (Print) execution logic");
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.RESOLVE_FIGURE_SNIPPET}
 try:
     raw_args = json.loads('''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     printed_results = [arg for arg in processed_args if arg is not None]
     for elephant_lab_res in printed_results:
-        print(elephant_lab_res)
+        # A figure (or Axes, or list/tuple of Axes) printed via print() just shows its repr
+        if _elephant_lab_resolve_figure(elephant_lab_res) is not None:
+            print("Skipped printing a Figure object - use a Plot node to display it.")
+        else:
+            print(elephant_lab_res)
     ${resultsDictName}["${resultId}"] = printed_results
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error in Print node: {e}", file=sys.stderr)`;
+        } else if (item.code === '__UTIL_PLOT__') {
+            console.log("...using UTILITY (Plot) execution logic");
+            codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.RESOLVE_FIGURE_SNIPPET}
+try:
+    from IPython.display import display
+    raw_args = json.loads('''${args_json_string}''')
+    processed_args = [_prepare_arg(arg) for arg in raw_args]
+    for elephant_lab_res in processed_args:
+        if elephant_lab_res is None:
+            continue
+        _elephant_lab_fig = _elephant_lab_resolve_figure(elephant_lab_res)
+        display(_elephant_lab_fig if _elephant_lab_fig is not None else elephant_lab_res)
+        if _elephant_lab_fig is not None:
+            # Close it once explicitly displayed, so Jupyter's own end-of-cell auto-display
+            # doesn't also render the same still-open figure a second time
+            import matplotlib.pyplot as plt
+            plt.close(_elephant_lab_fig)
+    ${resultsDictName}["${resultId}"] = None
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
+except Exception as e:
+    print(f"Error in Plot node: {e}", file=sys.stderr)`;
         } else if (item.code === '__NEO_READ_FILE__') {
             console.log("...using NEO IO execution logic");
 
@@ -1567,6 +1609,29 @@ except Exception as e:
         print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
     print(f"Error getting object for variable '${varName}': {e}", file=sys.stderr)`;
+        }
+
+        if (codeToExecute) {
+            codeToExecute = `_elephant_lab_figs_before = []
+try:
+    import sys as _elephant_lab_sys
+    if 'matplotlib.pyplot' in _elephant_lab_sys.modules:
+        _elephant_lab_figs_before = list(_elephant_lab_sys.modules['matplotlib.pyplot'].get_fignums())
+except Exception:
+    pass
+
+${codeToExecute}
+
+try:
+    import sys as _elephant_lab_sys
+    if 'matplotlib.pyplot' in _elephant_lab_sys.modules:
+        _elephant_lab_plt = _elephant_lab_sys.modules['matplotlib.pyplot']
+        for _elephant_lab_fignum in list(_elephant_lab_plt.get_fignums()):
+            if _elephant_lab_fignum not in _elephant_lab_figs_before:
+                _elephant_lab_plt.close(_elephant_lab_fignum)
+except Exception:
+    pass
+`;
         }
         return codeToExecute
     }
@@ -2003,10 +2068,33 @@ except Exception as e:
             } else if (item.code === "__UTIL_INTEGER__") {
                 const intValue = processedArgs.length > 0 ? processedArgs[0].value : "0";
                 lineOfCode = `${resultVarName} = ${intValue}`;
-            } else if (item.code === '__UTIL_PRINT__') {
-                const arg_to_print = processedArgs.length > 0 ? processedArgs[0].value : "''";
-                if (arg_to_print !== 'None') {
-                    lineOfCode = `print(${arg_to_print})`;
+            } else if (item.code === '__UTIL_PRINT__' || item.code === '__UTIL_PLOT__') {
+                // Resolves a value to its displayable Figure: the Figure itself, a single Axes
+                // (via .figure), or a list/tuple of Axes (e.g. what plot_patterns_hypergraph
+                // returns) - or None if it isn't plot-like at all
+                imports.add(`def _elephant_lab_resolve_figure(val):
+    if hasattr(val, 'savefig'):
+        return val
+    if hasattr(val, 'figure'):
+        return val.figure
+    if isinstance(val, (list, tuple)) and len(val) > 0 and hasattr(val[0], 'figure'):
+        return val[0].figure
+    return None
+`);
+
+                if (item.code === '__UTIL_PRINT__') {
+                    const arg_to_print = processedArgs.length > 0 ? processedArgs[0].value : "''";
+                    if (arg_to_print !== 'None') {
+                        // A figure printed via print() just shows its repr on top of whatever
+                        // auto-display Jupyter already does for it - use a Plot node instead.
+                        lineOfCode = `print("Skipped printing a Figure object - use a Plot node to display it.") if _elephant_lab_resolve_figure(${arg_to_print}) is not None else print(${arg_to_print})`;
+                    }
+                } else {
+                    imports.add('from IPython.display import display');
+                    const arg_to_plot = processedArgs.length > 0 ? processedArgs[0].value : "''";
+                    if (arg_to_plot !== 'None') {
+                        lineOfCode = `display(_elephant_lab_resolve_figure(${arg_to_plot}) or ${arg_to_plot})`;
+                    }
                 }
             } else if (item.code === '__NEO_READ_FILE__') {
                 imports.add('import neo');
