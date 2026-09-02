@@ -32,7 +32,8 @@ except NameError:
                     if resolved is not None:
                         return resolved
                 raise ValueError(f"Elephant Lab: referenced object '{arg_str}' is no longer available in this kernel session (likely because the kernel was restarted). Re-run or re-select the node that produced it.")
-            try: return eval(arg_str)
+            try:
+                return eval(arg_str, {**globals(), 'inf': float('inf'), 'nan': float('nan')})
             except: return arg_str
         return arg_str`;
 
@@ -1235,7 +1236,7 @@ except Exception as e:
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 
 try:
-${reloadCode}    raw_args = json.loads('''${args_json_string}''')
+${reloadCode}    raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     final_list = [arg for arg in processed_args if arg is not None]
 
@@ -1248,7 +1249,7 @@ except Exception as e:
             console.log("...using UTILITY (Integer) execution logic");
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 try:
-    raw_args = json.loads('''${args_json_string}''')
+    raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     integer_value = int(processed_args[0])
     ${resultsDictName}["${resultId}"] = integer_value
@@ -1259,7 +1260,7 @@ except Exception as e:
             console.log("...using UTILITY (Get Item) execution logic");
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 try:
-    raw_args = json.loads('''${args_json_string}''')
+    raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
 
     elephant_lab_target_list = processed_args[0]
@@ -1279,7 +1280,7 @@ except Exception as e:
             console.log("...using UTILITY (Range) execution logic");
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 try:
-    raw_args = json.loads('''${args_json_string}''')
+    raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
 
     elephant_lab_result = list(range(int(processed_args[0])))
@@ -1294,7 +1295,7 @@ except Exception as e:
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 ${WorkflowEngineWidget.RESOLVE_FIGURE_SNIPPET}
 try:
-    raw_args = json.loads('''${args_json_string}''')
+    raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     printed_results = [arg for arg in processed_args if arg is not None]
     for elephant_lab_res in printed_results:
@@ -1313,7 +1314,7 @@ except Exception as e:
 ${WorkflowEngineWidget.RESOLVE_FIGURE_SNIPPET}
 try:
     from IPython.display import display
-    raw_args = json.loads('''${args_json_string}''')
+    raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     for elephant_lab_res in processed_args:
         if elephant_lab_res is None:
@@ -1336,7 +1337,7 @@ except Exception as e:
 
 try:
     import neo
-    raw_args = json.loads('''${args_json_string}''')
+    raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     
     io_class_name = processed_args[0]
@@ -1379,7 +1380,7 @@ except Exception as e:
             console.log(`...using NEO GET (${neoClassName}) execution logic`);
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 try:
-    raw_args = json.loads('''${args_json_string}''')
+    raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
 
     elephant_lab_neo_object = processed_args[0]
@@ -1399,7 +1400,7 @@ except Exception as e:
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 import ast
 try:
-    raw_args = json.loads('''${args_json_string}''')
+    raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
 
     elephant_lab_neo_object = processed_args[0]
@@ -1454,7 +1455,7 @@ except Exception as e:
 
 try:
     target_obj = None
-    raw_args = json.loads('''${args_json_string}''')
+    raw_args = json.loads(r'''${args_json_string}''')
     self_id = raw_args[0] if len(raw_args) > 0 else None
 
     target_obj = _prepare_arg(self_id)
@@ -1468,9 +1469,11 @@ try:
     processed_args = [_prepare_arg(arg) for arg in method_args]
 
     elephant_lab_result = method_to_run(*processed_args)
-        
+    if elephant_lab_result is None:
+        elephant_lab_result = target_obj
+
     ${resultsDictName}["${resultId}"] = elephant_lab_result
-    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 
 except Exception as e:
     print(f"Error running method ${item.name}: {e}", file=sys.stderr)`;
@@ -1506,8 +1509,8 @@ ${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 try:
     if module_obj:
         method_to_run = getattr(module_obj, "${functionName}")
-        raw_args = json.loads('''${args_json_string}''')
-        param_names = json.loads('''${paramNamesJson}''')
+        raw_args = json.loads(r'''${args_json_string}''')
+        param_names = json.loads(r'''${paramNamesJson}''')
         processed_args = [_prepare_arg(arg) for arg in raw_args]
 
         kwargs = dict(zip(param_names, processed_args))
@@ -1536,8 +1539,8 @@ try:
     if "${functionName}" not in globals():
         raise NameError("Notebook function '${functionName}' not found. Make sure the cell that defines it has been (re-)run.")
 
-    raw_args = json.loads('''${args_json_string}''')
-    param_names = json.loads('''${paramNamesJson}''')
+    raw_args = json.loads(r'''${args_json_string}''')
+    param_names = json.loads(r'''${paramNamesJson}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
 
     kwargs = dict(zip(param_names, processed_args))
@@ -2022,6 +2025,8 @@ except Exception:
                             argumentValue = "None";
                         } else if (value === "None" || value === "True" || value === "False") {
                             argumentValue = value;
+                        } else if (value === "inf" || value === "-inf" || value === "nan") {
+                            argumentValue = `float('${value}')`;
                         } else if (!isNaN(parseFloat(value)) && isFinite(Number(value))) {
                             argumentValue = value;
                         } else if (value.startsWith("[") && value.endsWith("]")) {
@@ -2156,7 +2161,11 @@ except Exception:
                     .map(arg => `${arg.name}=${arg.value}`)
                     .join(', ');
 
-                lineOfCode = `${resultVarName} = ${self_arg}.${methodName}(${method_args})`;
+                lineOfCode = [
+                    `${resultVarName} = ${self_arg}.${methodName}(${method_args})`,
+                    `if ${resultVarName} is None:`,
+                    `    ${resultVarName} = ${self_arg}`
+                ].join(`\n${indent}`);
             } else if (item.code.startsWith('__NOTEBOOK_FUNC__')) {
                 const functionName = item.code.replace('__NOTEBOOK_FUNC__', '');
                 const processed_args = processedArgs
