@@ -63,6 +63,8 @@ except NameError:
     private _isRestoringHistory: boolean = false;
     private _historySaveTimeout: number | null = null;
     private _isImportingWorkflow: boolean = false;
+    private _pendingBatchCode: string[] = [];
+    private _pendingBatchNodes: { node: ElephantLabNode; resultId: string }[] = [];
     private outputArea: OutputArea;
     private notebook_tracker: INotebookTracker; // Current active Notebook -> used for Cell Injection
     public session: ISessionContext | null; // used to execute Python Code in same session as Elephant Lab 
@@ -723,28 +725,8 @@ except NameError:
 
         const executed_nodes = new Map<LGraphNode, string | null>();
 
-        let pendingCode: string[] = [];
-        let pendingNodes: { node: ElephantLabNode; resultId: string }[] = [];
-
-        const flushBatch = async () => {
-            if (pendingCode.length === 0) { return; }
-            const batchResult = await this.kernelBridge.executeCode(pendingCode.join('\n\n'));
-            if (batchResult) {
-                collected_outputs.push(...batchResult.outputs);
-                const foundKeys = new Set(batchResult.resultKeys);
-                for (const { node, resultId } of pendingNodes) {
-                    if (foundKeys.has(resultId)) {
-                        const dataOutputIndex = node.outputs.findIndex(o => o.name === 'result');
-                        if (dataOutputIndex !== -1) { node.setOutputData(dataOutputIndex, resultId); }
-                        executed_nodes.set(node, resultId);
-                    } else {
-                        executed_nodes.set(node, null);
-                    }
-                }
-            }
-            pendingCode = [];
-            pendingNodes = [];
-        };
+        this._pendingBatchCode = [];
+        this._pendingBatchNodes = [];
 
         for (const node of executionOrder) {
             if (executed_nodes.has(node)) { continue; }
@@ -757,7 +739,7 @@ except NameError:
             const item = node.properties.item;
             if (!item || !item.code || !this.session || !this.session.session ||
                 item.code === '__UTIL_LOOP__' || item.code === '__UTIL_IF__' || item.code === '__UTIL_REPEAT_LOOP__') {
-                await flushBatch();
+                await this._flushPendingBatch(executed_nodes, collected_outputs);
                 await this.executeNode(node, executed_nodes, outputArea, collected_outputs);
                 continue;
             }
@@ -792,12 +774,12 @@ except NameError:
                 continue;
             }
 
-            pendingCode.push(codeToExecute);
-            pendingNodes.push({ node, resultId });
+            this._pendingBatchCode.push(codeToExecute);
+            this._pendingBatchNodes.push({ node, resultId });
             executed_nodes.set(node, resultId);
         }
 
-        await flushBatch();
+        await this._flushPendingBatch(executed_nodes, collected_outputs);
 
         this.handleOutputs(collected_outputs, outputArea);
 
@@ -810,6 +792,33 @@ except NameError:
             console.log(`8. Workflow finished. The last result is stored in key: ${last_result_key}`);
         } else {
             console.log("8. Workflow finished. No final result key was captured.");
+        }
+    }
+
+    private async _flushPendingBatch(executed_nodes: Map<LGraphNode, string | null>, collected_outputs?: any[], outputArea?: OutputArea): Promise<void> {
+        if (this._pendingBatchCode.length === 0) { return; }
+        const code = this._pendingBatchCode;
+        const nodes = this._pendingBatchNodes;
+        this._pendingBatchCode = [];
+        this._pendingBatchNodes = [];
+
+        const batchResult = await this.kernelBridge.executeCode(code.join('\n\n'));
+        if (batchResult) {
+            if (collected_outputs) {
+                collected_outputs.push(...batchResult.outputs);
+            } else if (outputArea) {
+                this.handleOutputs(batchResult.outputs, outputArea);
+            }
+            const foundKeys = new Set(batchResult.resultKeys);
+            for (const { node, resultId } of nodes) {
+                if (foundKeys.has(resultId)) {
+                    const dataOutputIndex = node.outputs.findIndex(o => o.name === 'result');
+                    if (dataOutputIndex !== -1) { node.setOutputData(dataOutputIndex, resultId); }
+                    executed_nodes.set(node, resultId);
+                } else {
+                    executed_nodes.set(node, null);
+                }
+            }
         }
     }
 
@@ -834,6 +843,8 @@ except NameError:
         }
 
         console.log("4. Processing node:", item.name);
+
+        await this._flushPendingBatch(executed_nodes, collected_outputs, outputArea);
 
         if (item.code === '__UTIL_LOOP__') {
             const listInput = elephant_labNode.inputs.find(i => i.name === 'List');
