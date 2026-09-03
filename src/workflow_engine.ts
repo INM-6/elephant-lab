@@ -1277,8 +1277,8 @@ try:
     elephant_lab_target_list = processed_args[0]
     index = int(processed_args[1])
 
-    if not isinstance(elephant_lab_target_list, list):
-        raise TypeError("Input 'list' must be a list.")
+    if not isinstance(elephant_lab_target_list, (list, tuple, dict)):
+        raise TypeError(f"Input 'list' must be a list, tuple, or dict (got {type(elephant_lab_target_list).__name__}).")
 
     elephant_lab_result = elephant_lab_target_list[index]
     
