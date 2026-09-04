@@ -48,6 +48,9 @@ except NameError:
                     if resolved is not None:
                         return resolved
                 raise ValueError(f"Elephant Lab: referenced object '{arg_str}' is no longer available in this kernel session (likely because the kernel was restarted). Re-run or re-select the node that produced it.")
+            import re
+            if re.fullmatch(r'result_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}', arg_str):
+                raise ValueError(f"Elephant Lab: referenced result '{arg_str}' is no longer available in this kernel session (its node didn't run, or the kernel was restarted). Re-run the workflow.")
             try:
                 return eval(arg_str, {**globals(), 'inf': float('inf'), 'nan': float('nan')})
             except: return arg_str
