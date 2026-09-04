@@ -2695,11 +2695,44 @@ except Exception:
         }
     }
 
+    // Groups elephant's own modules into the 3 broad categories used here, inspired from
+    // elephant's own docs (https://elephant.readthedocs.io/en/latest/modules.html
+    private static readonly ELEPHANT_CATEGORIES: { [category: string]: string[] } = {
+        "Spike Train Analysis": [
+            "statistics", "spike_train_correlation", "spike_train_dissimilarity",
+            "spike_train_synchrony", "cell_assembly_detection", "unitary_event_analysis",
+            "asset", "spade", "spade_src", "cubic", "functional_connectivity",
+            "change_point_detection", "gpfa", "spike_train_surrogates",
+            "spike_train_generation", "kernels",
+        ],
+        "Signal & LFP Analysis": [
+            "signal_processing", "spectral", "causality", "current_source_density",
+            "current_source_density_src", "sta", "phase_analysis",
+        ],
+        "Data & Utilities": [
+            "conversion", "trials", "waveform_features", "neo_tools", "utils",
+            "parallel", "datasets",
+        ],
+    };
+
+    // Modules not present above (e.g. a future elephant release) fall back to this category
+    private static readonly ELEPHANT_FALLBACK_CATEGORY = "Data & Utilities";
+
+    private _categoryForModule(moduleName: string): string {
+        const topLevel = moduleName.split('.')[1] ?? moduleName;
+        for (const [category, modules] of Object.entries(WorkflowEngineWidget.ELEPHANT_CATEGORIES)) {
+            if (modules.includes(topLevel)) { return category; }
+        }
+        return WorkflowEngineWidget.ELEPHANT_FALLBACK_CATEGORY;
+    }
+
     // Automatically create nodes for every elephant module and function
     private _createElephantMenu(elephantData: { [moduleName: string]: { name: string, is_class: boolean }[] }): any {
-        const moduleOptions: any[] = [];
-
         const sortedModuleNames = Object.keys(elephantData).sort();
+        const categoryOptions: { [category: string]: any[] } = {};
+        for (const category of Object.keys(WorkflowEngineWidget.ELEPHANT_CATEGORIES)) {
+            categoryOptions[category] = [];
+        }
 
         for (const moduleName of sortedModuleNames) {
             const members = elephantData[moduleName];
@@ -2774,8 +2807,9 @@ except Exception:
             }
 
             const displayModuleName = moduleName.split('.').pop();
+            const category = this._categoryForModule(moduleName);
 
-            moduleOptions.push({
+            categoryOptions[category].push({
                 content: displayModuleName,
                 submenu: {
                     options: functionOptions
@@ -2783,10 +2817,19 @@ except Exception:
             });
         }
 
+        const topLevelOptions = Object.keys(WorkflowEngineWidget.ELEPHANT_CATEGORIES)
+            .filter(category => categoryOptions[category].length > 0)
+            .map(category => ({
+                content: category,
+                submenu: {
+                    options: categoryOptions[category]
+                }
+            }));
+
         return {
             content: "Elephant",
             submenu: {
-                options: moduleOptions
+                options: topLevelOptions
             }
         };
     }

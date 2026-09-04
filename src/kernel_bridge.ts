@@ -328,7 +328,11 @@ export class KernelBridge {
         try:
             library = importlib.import_module("elephant")
             library_path = library.__path__
-            for _, module_name, _ in pkgutil.iter_modules(library_path, prefix=library.__name__ + '.'):
+            for _, module_name, _ in pkgutil.walk_packages(
+                library_path, prefix=library.__name__ + '.', onerror=lambda name: None
+            ):
+                if module_name.startswith("elephant.test"):
+                    continue
                 try:
                     module = importlib.import_module(module_name)
                     for name, func in (inspect.getmembers(module, inspect.isfunction) +
