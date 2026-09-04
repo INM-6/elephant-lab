@@ -52,6 +52,71 @@ except NameError:
             return val[0].figure
         return None`;
 
+    // Group and color differents nodes outputs, so they can be better distinguished and look visually more appealing
+    private static readonly DISPLAY_CARD_SNIPPET = `try:
+    _elephant_lab_error_card
+except NameError:
+    def _elephant_lab_card_html(kind, label, body_html):
+        import html
+        from IPython.display import HTML
+        theme = {
+            "error": ("#e24a4a", "ERROR"),
+            "print": ("#4a90e2", "PRINT"),
+        }
+        color, title = theme.get(kind, ("#888888", kind.upper()))
+        return HTML(
+            f'<div style="border:1px solid {color}66;border-radius:8px;'
+            f'margin:6px 2px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.12);'
+            f'font-family:var(--jp-ui-font-family, sans-serif);">'
+            f'<div style="background:{color}22;color:{color};padding:4px 10px;'
+            f'font-size:12px;font-weight:600;letter-spacing:.02em;'
+            f'border-bottom:1px solid {color}66;">{title} · '
+            f'{html.escape(str(label))}</div>'
+            f'<div style="padding:8px 10px;">{body_html}</div></div>'
+        )
+
+    def _elephant_lab_error_card(label, err):
+        import html
+        from IPython.display import display
+        body = (
+            '<pre style="margin:0;white-space:pre-wrap;word-break:break-word;'
+            f'color:#c0392b;">{html.escape(str(err))}</pre>'
+        )
+        display(_elephant_lab_card_html("error", label, body))
+
+    def _elephant_lab_print_card(label, values):
+        import html
+        from IPython.display import display
+        rows = "".join(
+            '<pre style="margin:0 0 4px 0;white-space:pre-wrap;word-break:break-word;">'
+            f'{html.escape(str(v))}</pre>'
+            for v in values
+        )
+        display(_elephant_lab_card_html("print", label, rows or '<i style="opacity:.6;">(nothing to print)</i>'))
+
+    def _elephant_lab_plot_card_open(label):
+        import html
+        from IPython.display import display, HTML
+        color = "#3dbe6c"
+        display(HTML(
+            f'<div style="border:1px solid {color}66;border-bottom:none;'
+            f'border-top-left-radius:8px;border-top-right-radius:8px;'
+            f'background:{color}22;color:{color};padding:4px 10px;font-size:12px;'
+            f'font-weight:600;letter-spacing:.02em;margin:6px 2px 0 2px;'
+            f'font-family:var(--jp-ui-font-family, sans-serif);">'
+            f'PLOT · {html.escape(str(label))}</div>'
+        ))
+
+    def _elephant_lab_plot_card_close():
+        from IPython.display import display, HTML
+        color = "#3dbe6c"
+        display(HTML(
+            f'<div style="border:1px solid {color}66;border-top:none;'
+            f'border-bottom-left-radius:8px;border-bottom-right-radius:8px;'
+            f'height:6px;margin:0 2px 6px 2px;'
+            f'box-shadow:0 1px 3px rgba(0,0,0,.12);"></div>'
+        ))`;
+
     private graph: LGraph | null;
     private graphCanvas: LGraphCanvas | null;
     private kernelBridge: KernelBridge;
@@ -1216,13 +1281,14 @@ if _is_true:
         // Code is pickled python code
         if (item.code.startsWith("b'")) {
             console.log("...using INSTANCE (pickle) execution logic");
-            codeToExecute = `try:
+            codeToExecute = `${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
+try:
     data = pickle.loads(${item.code})
     elephant_lab_result = data[0]
     ${resultsDictName}["${resultId}"] = elephant_lab_result
-    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
-    print(f"Error loading instance ${item.name}: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         }
 
         // Code logic for a list
@@ -1245,6 +1311,7 @@ except Exception as e:
             const reloadCode = reloadSnippets.length > 0 ? `    import neo\n${reloadSnippets.join('\n')}\n` : '';
 
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 
 try:
 ${reloadCode}    raw_args = json.loads(r'''${args_json_string}''')
@@ -1255,10 +1322,11 @@ ${reloadCode}    raw_args = json.loads(r'''${args_json_string}''')
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 
 except Exception as e:
-    print(f"Error creating list: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         } else if (item.code === '__UTIL_INTEGER__') {
             console.log("...using UTILITY (Integer) execution logic");
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 try:
     raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
@@ -1266,10 +1334,11 @@ try:
     ${resultsDictName}["${resultId}"] = integer_value
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
-    print(f"Error in Integer node: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         } else if (item.code === '__UTIL_GETITEM__') {
             console.log("...using UTILITY (Get Item) execution logic");
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 try:
     raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
@@ -1281,15 +1350,16 @@ try:
         raise TypeError(f"Input 'list' must be a list, tuple, or dict (got {type(elephant_lab_target_list).__name__}).")
 
     elephant_lab_result = elephant_lab_target_list[index]
-    
+
     ${resultsDictName}["${resultId}"] = elephant_lab_result
-    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 
 except Exception as e:
-    print(f"Error in Get Item node: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         } else if (item.code === '__UTIL_RANGE__') {
             console.log("...using UTILITY (Range) execution logic");
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 try:
     raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
@@ -1300,29 +1370,33 @@ try:
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 
 except Exception as e:
-    print(f"Error in Range node: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         } else if (item.code === '__UTIL_PRINT__') {
             console.log("...using UTILITY (Print) execution logic");
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 ${WorkflowEngineWidget.RESOLVE_FIGURE_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 try:
     raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
     printed_results = [arg for arg in processed_args if arg is not None]
+    printable_values = []
     for elephant_lab_res in printed_results:
-        # A figure (or Axes, or list/tuple of Axes) printed via print() just shows its repr
+        # A figure (or Axes, or list/tuple of Axes) is shown via a Plot node instead
         if _elephant_lab_resolve_figure(elephant_lab_res) is not None:
-            print("Skipped printing a Figure object - use a Plot node to display it.")
+            printable_values.append("(Figure - use a Plot node to display it)")
         else:
-            print(elephant_lab_res)
+            printable_values.append(elephant_lab_res)
+    _elephant_lab_print_card("${item.name}", printable_values)
     ${resultsDictName}["${resultId}"] = printed_results
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
-    print(f"Error in Print node: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         } else if (item.code === '__UTIL_PLOT__') {
             console.log("...using UTILITY (Plot) execution logic");
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
 ${WorkflowEngineWidget.RESOLVE_FIGURE_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 try:
     from IPython.display import display
     raw_args = json.loads(r'''${args_json_string}''')
@@ -1331,7 +1405,9 @@ try:
         if elephant_lab_res is None:
             continue
         _elephant_lab_fig = _elephant_lab_resolve_figure(elephant_lab_res)
+        _elephant_lab_plot_card_open("${item.name}")
         display(_elephant_lab_fig if _elephant_lab_fig is not None else elephant_lab_res)
+        _elephant_lab_plot_card_close()
         if _elephant_lab_fig is not None:
             # Close it once explicitly displayed, so Jupyter's own end-of-cell auto-display
             # doesn't also render the same still-open figure a second time
@@ -1340,17 +1416,18 @@ try:
     ${resultsDictName}["${resultId}"] = None
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
-    print(f"Error in Plot node: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         } else if (item.code === '__NEO_READ_FILE__') {
             console.log("...using NEO IO execution logic");
 
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 
 try:
     import neo
     raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
-    
+
     io_class_name = processed_args[0]
     filename = processed_args[1]
 
@@ -1366,12 +1443,12 @@ try:
 
     blocks = reader.read()
     elephant_lab_result = blocks[0] if blocks else None
-    
+
     ${resultsDictName}["${resultId}"] = elephant_lab_result
-    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 
 except Exception as e:
-    print(f"Error in Neo File Reader: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         } else if (item.code.startsWith('__NEO_GET_')) {
             const type = item.code.replace('__NEO_GET_', '').slice(0, -2);
             const neoClassNameMap: { [key: string]: string } = {
@@ -1382,33 +1459,35 @@ except Exception as e:
                 'EPOCHS': 'Epoch'
             };
             const neoClassName = neoClassNameMap[type];
-        
+
             if (!neoClassName) {
                 console.error(`Invalid NEO_GET type: ${type}`);
                 return "";
             }
-            
+
             console.log(`...using NEO GET (${neoClassName}) execution logic`);
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 try:
     raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
 
     elephant_lab_neo_object = processed_args[0]
-    
+
     if elephant_lab_neo_object is None:
         raise ValueError("Input 'elephant_lab_neo_object' is not connected or is None.")
 
     elephant_lab_result = elephant_lab_neo_object.list_children_by_class('${neoClassName}')
-    
+
     ${resultsDictName}["${resultId}"] = elephant_lab_result
-    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
+    print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 
 except Exception as e:
-    print(f"Error in ${item.name} node: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         } else if (item.code === '__NEO_FILTER__') {
             console.log(`...using NEO FILTER execution logic`);
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 import ast
 try:
     raw_args = json.loads(r'''${args_json_string}''')
@@ -1450,7 +1529,7 @@ try:
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 
 except Exception as e:
-    print(f"Error in ${item.name} node: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         } else if (item.code === '__UTIL_IF__') {
             return "";
         }
@@ -1463,6 +1542,7 @@ except Exception as e:
             const method_name = parts.pop();
 
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 
 try:
     target_obj = None
@@ -1487,7 +1567,7 @@ try:
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 
 except Exception as e:
-    print(f"Error running method ${item.name}: {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         }
 
         else if (item.code.includes(".")) {
@@ -1507,12 +1587,13 @@ except Exception as e:
             codeToExecute = `import elephant.statistics, neo
 import quantities as pq
 import numpy as np
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 
 try:
     __import__("${modulePath}")
     module_obj = sys.modules["${modulePath}"]
-except ImportError:
-    print(f"Error: Could not import module ${modulePath}", file=sys.stderr)
+except ImportError as e:
+    _elephant_lab_error_card("${item.name}", f"Could not import module ${modulePath}: {e}")
     module_obj = None
 
 ${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
@@ -1532,11 +1613,11 @@ try:
         elephant_lab_result = method_to_run(**kwargs)
 
         ${resultsDictName}["${resultId}"] = elephant_lab_result
-        print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}") 
+        print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
     else:
-        print(f"Error: Module ${modulePath} not loaded.", file=sys.stderr)
+        _elephant_lab_error_card("${item.name}", f"Module ${modulePath} not loaded.")
 except Exception as e:
-    print(f"Error running ${item.name} (name): {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         }
 
         else if (item.code.startsWith('__NOTEBOOK_FUNC__')) {
@@ -1546,6 +1627,7 @@ except Exception as e:
             const paramNamesJson = JSON.stringify(paramNames);
 
             codeToExecute = `${WorkflowEngineWidget.PREPARE_ARG_SNIPPET}
+${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
 try:
     if "${functionName}" not in globals():
         raise NameError("Notebook function '${functionName}' not found. Make sure the cell that defines it has been (re-)run.")
@@ -1561,7 +1643,7 @@ try:
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
     import traceback
-    print(f"Error calling notebook function ${functionName}: {e}", file=sys.stderr)
+    _elephant_lab_error_card("${item.name}", e)
     traceback.print_exc(file=sys.stderr)`;
         }
 
@@ -1573,7 +1655,8 @@ except Exception as e:
             const filename = item.source_file;
             const ioClassName = item.source_io_class;
             const reloadSnippet = this._buildNeoReloadSnippet(rootVar, filename, ioClassName, '    ');
-            codeToExecute = `try:
+            codeToExecute = `${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
+try:
     import neo
 ${reloadSnippet}
     if ${rootVar} is None:
@@ -1582,28 +1665,30 @@ ${reloadSnippet}
     ${resultsDictName}["${resultId}"] = elephant_lab_result
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except (NameError, AttributeError, IndexError, KeyError) as e:
-    print(f"Error: Elephant Lab: could not resolve '${path}' after reloading '${filename}' ({type(e).__name__}: {e}).", file=sys.stderr)
+    _elephant_lab_error_card("${item.name}", f"could not resolve '${path}' after reloading '${filename}' ({type(e).__name__}: {e}).")
 except Exception as e:
-    print(f"Error loading/resolving '${path}': {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         }
 
         // Get Object by variable name from notebook scope
         else if (item.variable_name && item.variable_name !== "") {
             console.log("...using PATH EXPRESSION (neo) execution logic");
             const path = item.variable_name;
-            codeToExecute = `try:
+            codeToExecute = `${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
+try:
     elephant_lab_result = ${path}
     ${resultsDictName}["${resultId}"] = elephant_lab_result
     print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except (NameError, AttributeError, IndexError, KeyError) as e:
-    print(f"Error: Elephant Lab: could not resolve '${path}' ({type(e).__name__}: {e}). Make sure the cell that defines it has been (re-)run.", file=sys.stderr)
+    _elephant_lab_error_card("${item.name}", f"could not resolve '${path}' ({type(e).__name__}: {e}). Make sure the cell that defines it has been (re-)run.")
 except Exception as e:
-    print(f"Error getting object for '${path}': {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         }
         else {
             console.log("...using VARIABLE NAME (neo) execution logic");
             const varName = item.code;
-            codeToExecute = `try:
+            codeToExecute = `${WorkflowEngineWidget.DISPLAY_CARD_SNIPPET}
+try:
     node_id = "${varName}"
     elephant_lab_result = None
     if 'elephant_lab_entity' in globals() and hasattr(elephant_lab_entity, 'map_ipytree_node_id_to_neo_obj_hash'):
@@ -1616,13 +1701,13 @@ except Exception as e:
             elephant_lab_result = globals()[node_id]
         else:
             elephant_lab_result = None
-            print(f"Error: Variable or node id '{node_id}' not found.", file=sys.stderr)
+            _elephant_lab_error_card("${item.name}", f"Variable or node id '{node_id}' not found.")
 
     if elephant_lab_result is not None:
         ${resultsDictName}["${resultId}"] = elephant_lab_result
         print(f"ELEPHANT_LAB_RESULT_KEY:${resultId}")
 except Exception as e:
-    print(f"Error getting object for variable '${varName}': {e}", file=sys.stderr)`;
+    _elephant_lab_error_card("${item.name}", e)`;
         }
 
         if (codeToExecute) {
