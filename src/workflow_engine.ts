@@ -1,4 +1,4 @@
-import { ISessionContext, showDialog, Dialog } from '@jupyterlab/apputils';
+import { ISessionContext, showDialog, Dialog, InputDialog, Notification } from '@jupyterlab/apputils';
 import { FileDialog } from '@jupyterlab/filebrowser';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { Widget } from '@lumino/widgets';
@@ -9,7 +9,7 @@ import { INotebookTracker, NotebookActions } from '@jupyterlab/notebook';
 import { IRenderMimeRegistry, MimeModel } from '@jupyterlab/rendermime';
 import { ElephantLabNode, DraggableItem } from './elephant_lab_node';
 import { createWorkflowToolbar } from './workflowEngine_toolbar';
-import { KernelBridge } from './kernel_bridge';
+import { KernelBridge, ModuleMemberMap } from './kernel_bridge';
 import 'litegraph.js/css/litegraph.css';
 import '../style/workflow_engine.css';
 
@@ -25,6 +25,22 @@ except NameError:
         if isinstance(arg_str, str):
             if arg_str in workflow_results: return workflow_results[arg_str]
             if arg_str == "" or arg_str == "__REQUIRED__": return None
+            if arg_str.startswith("__CALLABLE_DEFAULT__"):
+                import importlib
+                dotted = arg_str[len("__CALLABLE_DEFAULT__"):]
+                parts = dotted.split(".")
+                for i in range(len(parts), 0, -1):
+                    try:
+                        resolved = importlib.import_module(".".join(parts[:i]))
+                    except ImportError:
+                        continue
+                    try:
+                        for attr in parts[i:]:
+                            resolved = getattr(resolved, attr)
+                        return resolved
+                    except AttributeError:
+                        break
+                return arg_str
             if len(arg_str) == 40 and all(c in "0123456789abcdef" for c in arg_str):
                 if 'elephant_lab_entity' in globals():
                     obj_hash = elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.get(arg_str, arg_str)
@@ -2681,7 +2697,19 @@ except Exception:
                         }
                     }
                 },
-                this.elephantMenu
+                this.elephantMenu,
+                {
+                    content: "Custom Libraries",
+                    submenu: {
+                        options: [
+                            {
+                                content: "+ Add Library...",
+                                callback: () => { this._addCustomLibrary(); }
+                            },
+                            ...this.customLibraryMenus.values()
+                        ]
+                    }
+                }
             ].filter(Boolean);
         };
     }
@@ -2726,16 +2754,22 @@ except Exception:
         return WorkflowEngineWidget.ELEPHANT_FALLBACK_CATEGORY;
     }
 
-    // Automatically create nodes for every elephant module and function
-    private _createElephantMenu(elephantData: { [moduleName: string]: { name: string, is_class: boolean }[] }): any {
-        const sortedModuleNames = Object.keys(elephantData).sort();
-        const categoryOptions: { [category: string]: any[] } = {};
-        for (const category of Object.keys(WorkflowEngineWidget.ELEPHANT_CATEGORIES)) {
-            categoryOptions[category] = [];
-        }
+    // Builds one "module -> its functions/classes" submenu entry per module in moduleData,
+    // each function/class entry creating a node the same way regardless of which library it
+    // came from
+    private _buildModuleOptions(moduleData: ModuleMemberMap): any[] {
+        // Sort by the displayed segment, not the full dotted path. Otherwise
+        // e.g. "numpy.lib" (shown as "lib") sorts ahead of "numpy.lib.array_utils" (shown
+        // as "array_utils") since the full paths compare that way, even though the menu
+        // itself shows "lib" after "array_utils" alphabetically
+        const sortedModuleNames = Object.keys(moduleData)
+            .map(moduleName => ({ moduleName, display: moduleName.split('.').pop() as string }))
+            .sort((a, b) => a.display.localeCompare(b.display))
+            .map(({ moduleName }) => moduleName);
+        const moduleOptions: any[] = [];
 
         for (const moduleName of sortedModuleNames) {
-            const members = elephantData[moduleName];
+            const members = moduleData[moduleName];
             const functionOptions: any[] = [];
 
             const sortedMembers = members.sort((a, b) => a.name.localeCompare(b.name));
@@ -2754,7 +2788,7 @@ except Exception:
                                 node.pos = this.graphCanvas.convertEventToCanvasOffset(event);
                                 this.graph.add(node);
                                 if (node.properties.item.is_class) {
-                                    // Add DropDown for methods (if existing) 
+                                    // Add DropDown for methods (if existing)
                                     const methods = await this.kernelBridge.getMethodsFromTarget(node.properties.item.code);
                                     if (methods && methods.length > 0) {
                                         const methodNames = methods.map(m => m.name);
@@ -2807,9 +2841,7 @@ except Exception:
             }
 
             const displayModuleName = moduleName.split('.').pop();
-            const category = this._categoryForModule(moduleName);
-
-            categoryOptions[category].push({
+            moduleOptions.push({
                 content: displayModuleName,
                 submenu: {
                     options: functionOptions
@@ -2817,12 +2849,25 @@ except Exception:
             });
         }
 
+        return moduleOptions;
+    }
+
+    // Automatically create nodes for every elephant module and function
+    private _createElephantMenu(elephantData: ModuleMemberMap): any {
+        const categoryData: { [category: string]: ModuleMemberMap } = {};
+        for (const category of Object.keys(WorkflowEngineWidget.ELEPHANT_CATEGORIES)) {
+            categoryData[category] = {};
+        }
+        for (const moduleName of Object.keys(elephantData)) {
+            categoryData[this._categoryForModule(moduleName)][moduleName] = elephantData[moduleName];
+        }
+
         const topLevelOptions = Object.keys(WorkflowEngineWidget.ELEPHANT_CATEGORIES)
-            .filter(category => categoryOptions[category].length > 0)
+            .filter(category => Object.keys(categoryData[category]).length > 0)
             .map(category => ({
                 content: category,
                 submenu: {
-                    options: categoryOptions[category]
+                    options: this._buildModuleOptions(categoryData[category])
                 }
             }));
 
@@ -2832,6 +2877,69 @@ except Exception:
                 options: topLevelOptions
             }
         };
+    }
+
+    private _createLibraryMenu(libraryName: string, libraryData: ModuleMemberMap): any {
+        return {
+            content: libraryName,
+            submenu: {
+                options: this._buildModuleOptions(libraryData)
+            }
+        };
+    }
+
+   
+    private customLibraryMenus: Map<string, any> = new Map();
+
+    // Prompts for a library name, imports+introspects it in the kernel the same way
+    // getElephantMembers() does for elephant itself, and adds it to the canvas menu.
+    private async _addCustomLibrary(): Promise<void> {
+        const result = await InputDialog.getText({
+            title: 'Add Library',
+            label: 'Python module to import (must already be installed in this kernel)',
+            placeholder: 'e.g. viziphant',
+            pattern: '^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$'
+        });
+        if (!result.button.accept || !result.value) { return; }
+        const libraryName = result.value.trim();
+        if (!libraryName) { return; }
+
+        const importPromise = this.kernelBridge.getLibraryMembers(libraryName).then(data => {
+            if (!data) {
+                throw new Error(`Could not import or introspect '${libraryName}'. Make sure it's installed in this kernel's environment, then check the browser console for details.`);
+            }
+            return data;
+        });
+
+        Notification.promise(importPromise, {
+            pending: {
+                message: `Importing '${libraryName}'...`,
+                options: { autoClose: false }
+            },
+            success: {
+                message: (data: unknown) => {
+                    const libraryData = data as ModuleMemberMap;
+                    const moduleCount = Object.keys(libraryData).length;
+                    const memberCount = Object.values(libraryData).reduce((sum, members) => sum + members.length, 0);
+                    return `Added '${libraryName}' - ${memberCount} function${memberCount === 1 ? '' : 's'}/class${memberCount === 1 ? '' : 'es'} across ${moduleCount} module${moduleCount === 1 ? '' : 's'}.`;
+                },
+                options: { autoClose: 5000 }
+            },
+            error: {
+                message: (reason: unknown) => (reason instanceof Error ? reason.message : String(reason)),
+                options: { autoClose: 8000 }
+            }
+        });
+
+        try {
+            const libraryData = await importPromise;
+            this.customLibraryMenus.set(libraryName, this._createLibraryMenu(libraryName, libraryData));
+            this.customLibraryMenus = new Map(
+                [...this.customLibraryMenus.entries()].sort(([a], [b]) => a.localeCompare(b))
+            );
+            this.graphCanvas?.draw(true, true);
+        } catch {
+        }
     }
 
     public clearGraph(): void {

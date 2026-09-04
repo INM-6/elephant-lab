@@ -19,12 +19,33 @@ export interface IExecutionResult {
     outputs: any[];
 }
 
+export type ModuleMemberMap = { [moduleName: string]: { name: string, is_class: boolean }[] };
+
 export class KernelBridge {
     private session: ISessionContext;
 
     constructor(session: ISessionContext) {
         this.session = session;
     }
+
+    // Turns a signature param's default into workflow-node text
+    private static readonly DEFAULT_VALUE_SNIPPET =
+        `if default_val is inspect.Parameter.empty:
+                        default_val = "__REQUIRED__"
+                    elif callable(default_val) and hasattr(default_val, "__module__") and hasattr(default_val, "__qualname__"):
+                        default_val = f"__CALLABLE_DEFAULT__{default_val.__module__}.{default_val.__qualname__}"
+                    else:
+                        try:
+                            import quantities as pq
+                            if isinstance(default_val, pq.Quantity):
+                                _mag = default_val.magnitude
+                                if hasattr(_mag, 'ndim') and _mag.ndim == 0:
+                                    _mag = _mag.item()
+                                default_val = f"{_mag!r} * pq.{default_val.dimensionality.string}"
+                            else:
+                                default_val = str(default_val)
+                        except Exception:
+                            default_val = str(default_val)`;
 
     public async getNeoIOClass(filename: string): Promise<string | null> {
         if (!this.session || !this.session.session) { return null; }
@@ -70,20 +91,7 @@ export class KernelBridge {
             for param in params:
                 if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
                     default_val = param.default
-                    if default_val is inspect.Parameter.empty:
-                        default_val = "__REQUIRED__"
-                    else:
-                        try:
-                            import quantities as pq
-                            if isinstance(default_val, pq.Quantity):
-                                _mag = default_val.magnitude
-                                if hasattr(_mag, 'ndim') and _mag.ndim == 0:
-                                    _mag = _mag.item()
-                                default_val = f"{_mag!r} * pq.{default_val.dimensionality.string}"
-                            else:
-                                default_val = str(default_val)
-                        except Exception:
-                            default_val = str(default_val)
+                    ${KernelBridge.DEFAULT_VALUE_SNIPPET}
                     param_list_for_json.append({"name": param.name, "default": default_val})
             return param_list_for_json
         try:
@@ -145,20 +153,7 @@ export class KernelBridge {
                     continue
                 if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
                     default_val = param.default
-                    if default_val is inspect.Parameter.empty:
-                        default_val = "__REQUIRED__"
-                    else:
-                        try:
-                            import quantities as pq
-                            if isinstance(default_val, pq.Quantity):
-                                _mag = default_val.magnitude
-                                if hasattr(_mag, 'ndim') and _mag.ndim == 0:
-                                    _mag = _mag.item()
-                                default_val = f"{_mag!r} * pq.{default_val.dimensionality.string}"
-                            else:
-                                default_val = str(default_val)
-                        except Exception:
-                            default_val = str(default_val)
+                    ${KernelBridge.DEFAULT_VALUE_SNIPPET}
                     param_list_for_json.append({"name": param.name, "default": default_val})
             return param_list_for_json
 
@@ -258,20 +253,7 @@ export class KernelBridge {
             for param in params:
                 if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
                     default_val = param.default
-                    if default_val is inspect.Parameter.empty:
-                        default_val = "__REQUIRED__"
-                    else:
-                        try:
-                            import quantities as pq
-                            if isinstance(default_val, pq.Quantity):
-                                _mag = default_val.magnitude
-                                if hasattr(_mag, 'ndim') and _mag.ndim == 0:
-                                    _mag = _mag.item()
-                                default_val = f"{_mag!r} * pq.{default_val.dimensionality.string}"
-                            else:
-                                default_val = str(default_val)
-                        except Exception:
-                            default_val = str(default_val)
+                    ${KernelBridge.DEFAULT_VALUE_SNIPPET}
                     param_list_for_json.append({"name": param.name, "default": default_val})
             return param_list_for_json
 
@@ -313,46 +295,64 @@ export class KernelBridge {
         }
     }
 
-    // Get all available elephant modules + functions using the Python kernel.
-    // Restored from the legacy workflow engine.
-    public async getElephantMembers(): Promise<{ [moduleName: string]: { name: string, is_class: boolean }[] } | null> {
-        let code = `
+    // Since elephant is also just an importable library the shared helper is used here
+    // However elephant is a special case thus is loaded by default
+    public async getElephantMembers(): Promise<ModuleMemberMap | null> {
+        return this.getLibraryMembers("elephant");
+    }
+
+    // Recursively introspects an importable library's modules/functions/classes for the
+    // node-creation menu
+    public async getLibraryMembers(libraryName: string): Promise<ModuleMemberMap | null> {
+        // libraryName is free text the user typed, its validated before it ever reaches 
+        // an f-string sent to the kernel
+        if (!/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(libraryName)) {
+            console.error("Invalid library name:", libraryName);
+            return null;
+        }
+        if (!this.session || !this.session.session) { return null; }
+        const marker = "ELEPHANT_LAB_LIBRARY_MEMBERS:";
+        const code = `
         import inspect
         import pkgutil
         import json
-        import elephant
         import importlib
         import sys
 
-        elephant_module_func_dict = {}
+        _elephant_lab_module_func_dict = {}
         try:
-            library = importlib.import_module("elephant")
-            library_path = library.__path__
-            for _, module_name, _ in pkgutil.walk_packages(
-                library_path, prefix=library.__name__ + '.', onerror=lambda name: None
-            ):
-                if module_name.startswith("elephant.test"):
-                    continue
-                try:
-                    module = importlib.import_module(module_name)
-                    for name, func in (inspect.getmembers(module, inspect.isfunction) +
-                                    inspect.getmembers(module, inspect.isclass)):
-                        if func.__module__ == module_name:
-                            if not func.__name__.startswith("_"):
-                                is_class = inspect.isclass(func)
-                                elephant_module_func_dict.setdefault(module_name, []).append(
-                                    {"name": func.__name__, "is_class": is_class}
-                                )
-                except Exception as e:
-                    print(f"An error occurred while processing {module_name}: {e}", file=sys.stderr)
-            print(json.dumps(elephant_module_func_dict))
-        except ImportError:
-            print("Elephant not found!", file=sys.stderr)
+            library = importlib.import_module("${libraryName}")
+            modules_to_scan = [("${libraryName}", library)]
+            library_path = getattr(library, "__path__", None)
+            if library_path is not None:
+                for _, module_name, _ in pkgutil.walk_packages(
+                    library_path, prefix=library.__name__ + '.', onerror=lambda name: None
+                ):
+                    parts = module_name.split('.')[1:]
+                    if any(p in ("test", "tests") or p.startswith("_") for p in parts):
+                        continue
+                    try:
+                        modules_to_scan.append((module_name, importlib.import_module(module_name)))
+                    except BaseException as e:
+                        print(f"An error occurred while processing {module_name}: {e}", file=sys.stderr)
+            for module_name, module in modules_to_scan:
+                for name, func in (inspect.getmembers(module, inspect.isfunction) +
+                                inspect.getmembers(module, inspect.isclass)):
+                    if func.__module__ == module_name:
+                        if not func.__name__.startswith("_"):
+                            is_class = inspect.isclass(func)
+                            _elephant_lab_module_func_dict.setdefault(module_name, []).append(
+                                {"name": func.__name__, "is_class": is_class}
+                            )
+            print("${marker}" + json.dumps(_elephant_lab_module_func_dict))
+        except ImportError as e:
+            print(f"Library '${libraryName}' not found or failed to import: {e}", file=sys.stderr)
+            print("${marker}" + json.dumps(None))
         except Exception as e:
             print(f"An error occurred: {e}", file=sys.stderr)
+            print("${marker}" + json.dumps(None))
         `
         let msg_content: string = "";
-        if (!this.session || !this.session.session) { return null; }
         let future = this.session!.session!.kernel!.requestExecute({ code });
         future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
             if (KernelMessage.isStreamMsg(msg) && msg.content.name === 'stdout') {
@@ -362,15 +362,22 @@ export class KernelBridge {
             }
         };
         await future.done;
+        // Importing a library (or one of its submodules) can print its own banner/warning to
+        // stdout ahead of our JSON - only trust what comes after our own marker
+        const markerIndex = msg_content.lastIndexOf(marker);
+        if (markerIndex === -1) {
+            console.error(`No result marker found for ${libraryName} members:`, msg_content);
+            return null;
+        }
         try {
-            const result = JSON.parse(msg_content.trim());
-            if (Object.keys(result).length === 0) {
+            const result = JSON.parse(msg_content.slice(markerIndex + marker.length).trim());
+            if (!result || Object.keys(result).length === 0) {
                 return null;
             }
             return result;
         }
         catch (e) {
-            console.error("Failed to parse elephant members from kernel:", e, msg_content);
+            console.error(`Failed to parse ${libraryName} members from kernel:`, e, msg_content);
             return null;
         }
     }
