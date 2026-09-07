@@ -7,9 +7,7 @@ export interface FigureDict {
 
 export interface PlotResponse {
     plotly_graph_data_list: PlotlyGraphData[];
-    plotly_graph_data_list_changed: boolean;
     annotation_list: AnnotationListDict | null;
-    annotation_list_changed: boolean;
 
     compress: boolean;
     nGraphs: number;
@@ -21,8 +19,6 @@ export interface PlotResponse {
     minY: number;
     maxX: number;
     maxY: number;
-    extended_minY: number;
-    extended_maxY: number;
 }
 
 export interface AnnotationListDict {
@@ -47,13 +43,29 @@ export interface PlotlyGraphData {
 
     units_x?: string;
     units_y?: string;
-    use_name_as_ticklabels?: boolean;
+    use_name_as_ticklabels: boolean;
 
-    minX?: number;
-    maxX?: number;
-    minY?: number;
-    maxY?: number;
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
 
+    temp: PlotlyGraphDataTemp | undefined;
+}
+
+export interface ResampleResponse {
+    x_y_values_list: XYValues[];
+    x_y_values_list_changed: boolean;
+    annotation_list: AnnotationListDict | null;
+    annotation_list_changed: boolean;
+}
+
+export interface XYValues {
+    index: number;
+    temp: PlotlyGraphDataTemp;
+}
+
+export interface PlotlyGraphDataTemp {
     x: number[];
     y: number[];
 }

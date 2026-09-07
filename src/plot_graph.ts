@@ -5,11 +5,9 @@ import {
     getPythonCode
 } from './kernelcode';
 import { PlotContainer } from './plot_container';
-import { FigureDict, PlotResponse } from './plot_graph_interfaces';
+import { FigureDict, ResampleResponse, AnnotationListDict } from './plot_graph_interfaces';
 
 export class PlotGraph extends PlotContainer {
-
-    //private static readonly vertical_spacing = 0.075
 
     private slider?: HTMLElement;
 
@@ -19,11 +17,102 @@ export class PlotGraph extends PlotContainer {
     private data: Plotly.Data[] = [];
     private layout: Partial<Plotly.Layout> = {};
     private hasCustomTickLabels = false;
+    private hasRelativeMarkerSizes = false;
+    private relativeMarkerTraceIndices: number[] = [];
+    private hasAnnotations = false;
     private height: number = 0;
     private ticktext: string[] = [];
     private hideLegend?: boolean;
     private lastSampledXRange?: [number, number];
     private relayoutTimeout: ReturnType<typeof setTimeout> | null = null;
+    private relativeMarkerSizeTimeout: ReturnType<typeof setTimeout> | null = null;
+    private annotationDurations: number[] = [];
+
+    private firstExtendTraceIndex(): number {
+        return this.figureDict.data_bundle.nGraphs;
+    }
+
+    // @ts-ignore
+    private extendTraceIndices(): number[] {
+        if (this.isSinglePlot()) {
+            return [this.firstExtendTraceIndex()];
+        } else {
+            return Array.from({ length: this.figureDict.data_bundle.nGraphs }, (_, i) => this.firstExtendTraceIndex() + i);
+        }
+    }
+
+    private firstAnnotationTraceIndex(): number {
+        return this.figureDict.data_bundle.nGraphs + (this.isSinglePlot() ? 1 : this.figureDict.data_bundle.nGraphs);
+    }
+
+    private annotationTraceIndices(): number[] {
+        if (this.isSinglePlot()) {
+            return [this.firstAnnotationTraceIndex()];
+        } else {
+            return Array.from({ length: this.figureDict.data_bundle.nGraphs }, (_, i) => this.firstAnnotationTraceIndex() + i);
+        }
+    }
+
+    private calcWidthsForAnnotations(durations: number[]): number[] {
+        const minX = this.lastSampledXRange ? this.lastSampledXRange[0] : this.figureDict.data_bundle.minX;
+        const maxX = this.lastSampledXRange ? this.lastSampledXRange[1] : this.figureDict.data_bundle.maxX;
+        const range = maxX - minX;
+        const minAnnotationWidth = range / 300;
+        return durations.map((duration) =>
+            duration < minAnnotationWidth ? minAnnotationWidth : duration
+        );
+    }
+
+    private calcTransformedBarAnnotationData(annotation_list: AnnotationListDict): [number[], number[], string[]] {
+        const xs = annotation_list.xs;
+        const texts = annotation_list.texts;
+        const durations = annotation_list.durations;
+        const x = xs.map((x, i) => x + durations[i] / 2);
+        this.annotationDurations = durations;
+        const width = this.calcWidthsForAnnotations(durations);
+        const hovertemplate = durations.map((duration, i) =>
+            duration === 0
+                ? `<b>${texts[i]}</b><br>` +
+                `Time&nbsp;&nbsp;&nbsp; <b>${xs[i].toPrecision(6)}</b>` +
+                `<extra></extra>`
+                : `<b>${texts[i]}</b><br>` +
+                `Start&nbsp;&nbsp; ${xs[i].toPrecision(6)}<br>` +
+                `End&nbsp;&nbsp;&nbsp;&nbsp; ${(xs[i] + duration).toPrecision(6)}` +
+                `<extra></extra>`
+        );
+        return [x, width, hovertemplate];
+    }
+
+    private calcExtendedAnnotationYRange(yRange: [number, number]): [number, number] {
+        if (!this.hasAnnotations) {
+            return yRange;
+        }
+        const [minY, maxY] = yRange;
+        const span = maxY - minY;
+        if (span < 1e-6) {
+            return [-1, 1];
+        }
+        return [minY, maxY + 0.05 * span]
+    }
+
+    private getAnnotationYRanges(): Array<[number, number]> {
+        if (this.isSinglePlot()) {
+            return [
+                this.calcExtendedAnnotationYRange([
+                    this.figureDict.data_bundle.minY,
+                    this.figureDict.data_bundle.maxY,
+                ]),
+            ];
+        }
+
+        return this.figureDict.data_bundle.plotly_graph_data_list.map(
+            (graphData) =>
+                this.calcExtendedAnnotationYRange([
+                    graphData.minY,
+                    graphData.maxY,
+                ])
+        );
+    }
 
 
     public render(figDict: any, is_plot_theme_dark: boolean) {
@@ -39,7 +128,7 @@ export class PlotGraph extends PlotContainer {
         this.hideLegend = undefined;
         this.lastSampledXRange = undefined;
 
-        if (this.hasSameY() && (this.figureDict.data_bundle.nGraphs == 1 || this.shouldOverlap())) {
+        if (this.hasSameY() && (this.figureDict.data_bundle.nGraphs <= 1 || this.shouldOverlap())) {
             this.height = 200;
         } else if (this.figureDict.data_bundle.nGraphs > 2 && !this.shouldOverlap()) {
             this.height = 800;
@@ -53,6 +142,7 @@ export class PlotGraph extends PlotContainer {
                 roworder: "bottom to top"
             };
         }
+        this.hasAnnotations = this.figureDict.data_bundle.annotation_list !== null && this.figureDict.data_bundle.annotation_list.xs.length > 0;
 
         this.addData();
 
@@ -69,6 +159,7 @@ export class PlotGraph extends PlotContainer {
         this.manageLegend();
         this.manageAxisUnits();
         this.createXSlider();
+        this.addAnnotationEvents();
         /*for (let i = 1; i <= this.figureDict.data_bundle.nGraphs; i++) {
             this.updateLayoutAxis(`xaxis${i}`, {
                 range: [this.figureDict.data_bundle.minX, this.figureDict.data_bundle.maxX],
@@ -113,6 +204,17 @@ export class PlotGraph extends PlotContainer {
 
                     this.kernelBridge.executeCode(code);
 
+                    if (this.annotationDurations.length > 0) {
+                        Plotly.restyle(
+                            this.container,
+                            {
+                                // @ts-ignore
+                                width: Array(this.figureDict.data_bundle.nGraphs).fill(this.calcWidthsForAnnotations(this.annotationDurations)),
+                            },
+                            this.annotationTraceIndices()
+                        );
+                    }
+
                     this.relayoutTimeout = null;
                 }, 75); // delay
             });
@@ -125,28 +227,78 @@ export class PlotGraph extends PlotContainer {
         });
     }
 
-    public resample(dataBundle: PlotResponse) {
-        if (dataBundle.plotly_graph_data_list_changed) {
+    public resample(resampleResponse: ResampleResponse) {
+        if (resampleResponse.x_y_values_list_changed) {
             const indices = [];
             const x = [];
             const y = [];
-            for (const plotGraphData of dataBundle.plotly_graph_data_list) {
-                indices.push(plotGraphData.index);
-                const currentPlotGraphData = this.figureDict.data_bundle.plotly_graph_data_list[plotGraphData.index];
-                currentPlotGraphData.x = plotGraphData.x;
-                currentPlotGraphData.y = plotGraphData.y;
-                x.push(plotGraphData.x);
-                y.push(plotGraphData.y);
+            for (const xYValues of resampleResponse.x_y_values_list) {
+                indices.push(xYValues.index);
+                x.push(xYValues.temp.x);
+                y.push(xYValues.temp.y);
             }
             Plotly.restyle(
                 this.container,
-                { x, y },
+                { x: x, y: y },
+                indices
+            );
+        }
+        if (resampleResponse.annotation_list_changed && resampleResponse.annotation_list !== null) {
+            const [x, width, hovertemplate] = this.calcTransformedBarAnnotationData(resampleResponse.annotation_list);
+            const yRanges = this.getAnnotationYRanges();
+
+            const indices = this.annotationTraceIndices();
+
+            const nRanges = yRanges.length;
+            const xs = Array(nRanges).fill(x);
+            const widths = Array(nRanges).fill(width);
+            const hovertemplates = Array(nRanges).fill(hovertemplate);
+
+            const ys = yRanges.map(([minY, maxY]) =>
+                Array(x.length).fill(maxY - minY)
+            );
+
+            const bases = yRanges.map(([minY]) =>
+                Array(x.length).fill(minY)
+            );
+
+            Plotly.restyle(
+                this.container,
+                {
+                    x: xs,
+                    // @ts-ignore
+                    width: widths,
+                    y: ys,
+                    base: bases,
+                    // @ts-ignore
+                    hovertemplate: hovertemplates,
+                },
                 indices
             );
         }
     }
 
+    private createExtentTrace(minX: number, minY: number, maxX: number, maxY: number, yaxis: string | undefined = undefined): Partial<Plotly.PlotData> {
+        const extentTrace: Partial<Plotly.PlotData> = {
+            type: "scatter",
+            mode: "markers",
+            x: [minX, maxX],
+            y: this.calcExtendedAnnotationYRange([minY, maxY]),
+            marker: {
+                size: 0,
+                opacity: 0
+            },
+            showlegend: false,
+            hoverinfo: "skip"
+        };
+        if (yaxis !== undefined) {
+            extentTrace.yaxis = yaxis;
+        }
+        return extentTrace;
+    }
+
     private addData(): void {
+        const subplotHeight = this.getSubplotHeight();
         for (let i = 0; i < this.figureDict.data_bundle.plotly_graph_data_list.length; i++) {
             const graphData = this.figureDict.data_bundle.plotly_graph_data_list[i];
 
@@ -158,16 +310,23 @@ export class PlotGraph extends PlotContainer {
             }
 
             const marker_settings = graphData.marker ? { ...default_marker, ...graphData.marker } : default_marker;
+            // negative size means use abs(size) as a percentage of the subplot height
+            if (marker_settings.size !== undefined && marker_settings.size < 0) {
+                this.hasRelativeMarkerSizes = true;
+                this.relativeMarkerTraceIndices.push(i);
+                marker_settings.size = Math.max(1, subplotHeight * Math.abs(marker_settings.size) / 100);
+            }
             const line_settings = graphData.line ? { ...default_line, ...graphData.line } : default_line;
             let trace: Partial<Plotly.ScatterData> = {
                 type: "scattergl",
-                x: graphData.x,
-                y: graphData.y,
+                x: graphData.temp!.x,
+                y: graphData.temp!.y,
                 name: graphData.name,
                 mode: graphData.mode as any,
                 marker: marker_settings,
                 line: line_settings
             };
+            graphData.temp = undefined; // free memory
             const global_index = graphData.index;
             if (this.isSinglePlot()) {
                 if (this.canHaveCustomTickLabels() && graphData.use_name_as_ticklabels) {
@@ -215,25 +374,70 @@ export class PlotGraph extends PlotContainer {
             this.data.push(trace);
         }
         // add a trace with (minX, minY) and (maxX, maxY), so the view does not change after using the sliders
-        let extentTrace: Partial<Plotly.PlotData> = {
-            type: "scatter",
-            mode: "markers",
-            x: [this.figureDict.data_bundle.minX, this.figureDict.data_bundle.maxX],
-            y: [this.figureDict.data_bundle.extended_minY, this.figureDict.data_bundle.extended_maxY],
-            marker: {
-                size: 0,
-                opacity: 0
-            },
-            showlegend: false,
-            hoverinfo: "skip"
-        };
-        if (!this.isSinglePlot()) {
-            extentTrace = {
-                ...extentTrace,
-                yaxis: `y1`,
-            };
+        if (this.isSinglePlot()) {
+            const extentTrace = this.createExtentTrace(
+                this.figureDict.data_bundle.minX,
+                this.figureDict.data_bundle.minY,
+                this.figureDict.data_bundle.maxX,
+                this.figureDict.data_bundle.maxY
+            );
+            this.data.push(extentTrace);
+        } else {
+            for (let i = 0; i < this.figureDict.data_bundle.plotly_graph_data_list.length; i++) {
+                const graphData = this.figureDict.data_bundle.plotly_graph_data_list[i];
+                const extentTrace = this.createExtentTrace(
+                    this.figureDict.data_bundle.minX,
+                    graphData.minY,
+                    this.figureDict.data_bundle.maxX,
+                    graphData.maxY,
+                    `y${graphData.index + 1}`
+                );
+                this.data.push(extentTrace);
+            }
         }
-        this.data.push(extentTrace);
+    }
+
+    private addAnnotationEvents(): void {
+        if (!this.hasAnnotations) {
+            return
+        }
+        const annotation_list = this.figureDict.data_bundle.annotation_list;
+
+        const [x, width, hovertemplate] = this.calcTransformedBarAnnotationData(annotation_list!);
+
+        const yRanges = this.getAnnotationYRanges();
+
+        for (const [i, [minY, maxY]] of yRanges.entries()) {
+            const trace = {
+                type: "bar",
+                x: x,
+                width: width,
+                y: Array(x.length).fill(maxY - minY),
+                // @ts-ignore
+                base: Array(x.length).fill(minY),
+                hovertemplate: hovertemplate,
+                hoverlabel: {
+                    bgcolor: '#222',
+                    bordercolor: '#444',
+                    font: {
+                        color: '#fff'
+                    }
+                },
+                marker: {
+                    color: "red",
+                },
+                opacity: 0.3,
+                showlegend: false,
+            } as Partial<Plotly.PlotData>;
+
+            if (!this.isSinglePlot()) {
+                trace.yaxis = `y${i + 1}`;
+            }
+
+            this.data.push(trace);
+        }
+
+        this.figureDict.data_bundle.annotation_list = null; // free memory
     }
 
     private manageTickLabels(): void {
@@ -289,7 +493,7 @@ export class PlotGraph extends PlotContainer {
     }
 
     private manageLegend(): void {
-        if (this.figureDict.data_bundle.nGraphs === 1) {
+        if (this.figureDict.data_bundle.nGraphs <= 1) {
             this.layout.showlegend = false;
             return;
         }
@@ -349,8 +553,9 @@ export class PlotGraph extends PlotContainer {
     private addYRangeSlider() {
         let sliderInstance;
 
-        let minY = this.figureDict.data_bundle.extended_minY;
-        let maxY = this.figureDict.data_bundle.extended_maxY;
+        const extendedYRange = this.calcExtendedAnnotationYRange([this.figureDict.data_bundle.minY, this.figureDict.data_bundle.maxY]);
+        let minY = extendedYRange[0];
+        let maxY = extendedYRange[1];
         // If slider already exists → reuse it
         if (this.slider) {
             sliderInstance = (this.slider as any).noUiSlider;
@@ -404,23 +609,76 @@ export class PlotGraph extends PlotContainer {
 
             sliderInstance.on('update', (values) => {
                 const gd = this.container as any;
-                if (!gd || !gd.data) return;
+                if (!gd?.data) return;
 
                 const min = Number(values[0]);
                 const max = Number(values[1]);
 
                 const yaxis = gd.layout.yaxis;
-                yaxis.range = [min, max];
-                yaxis.autorange = false;
+                Object.assign(yaxis, {
+                    range: [min, max],
+                    autorange: false,
+                });
 
                 if (this.hasCustomTickLabels) {
                     const showticklabels = 26 > max - min;
-                    yaxis.showticklabels = showticklabels;
-                    yaxis.zeroline = showticklabels;
-                    yaxis.showgrid = showticklabels;
+
+                    Object.assign(yaxis, {
+                        showticklabels,
+                        zeroline: showticklabels,
+                        showgrid: showticklabels,
+                    });
                 }
 
-                Plotly.relayout(this.container, { yaxis });
+                // One restyle call for all traces whose marker size is relative.
+                if (this.hasRelativeMarkerSizes) {
+                    // Cancel any pending update
+                    if (this.relativeMarkerSizeTimeout) {
+                        clearTimeout(this.relativeMarkerSizeTimeout);
+                    }
+
+                    // Schedule a new one
+                    this.relativeMarkerSizeTimeout = setTimeout(() => {
+                        const traceIndices: number[] = [];
+                        const markerSizes: number[] = [];
+
+                        const dataBundle = this.figureDict.data_bundle.plotly_graph_data_list;
+                        const height = max - min;
+                        const maxZoomedInSuplotHeightForRelativeSize = 100;
+                        const zoomedInSubplotHeight = (height < 1e-6) ? maxZoomedInSuplotHeightForRelativeSize : Math.min(maxZoomedInSuplotHeightForRelativeSize, (this.height - 150) / (this.figureDict.data_bundle.nGraphs * (height / (this.figureDict.data_bundle.maxY - this.figureDict.data_bundle.minY))));
+
+                        for (const traceIndex of this.relativeMarkerTraceIndices) {
+                            const originalSize = dataBundle[traceIndex]?.marker?.size;
+
+                            if (typeof originalSize !== 'number' || originalSize >= 0) {
+                                continue;
+                            }
+
+                            traceIndices.push(traceIndex);
+                            markerSizes.push(
+                                Math.max(
+                                    1,
+                                    zoomedInSubplotHeight * Math.abs(originalSize) / 100
+                                )
+                            );
+                        }
+
+                        if (traceIndices.length > 0) {
+                            Plotly.restyle(
+                                this.container,
+                                { 'marker.size': markerSizes },
+                                traceIndices
+                            );
+                        }
+
+                        this.relativeMarkerSizeTimeout = null;
+                    }, 225); // delay
+                }
+
+                // One relayout call.
+                Plotly.relayout(this.container, {
+                    yaxis: yaxis,
+                });
             });
 
             this.slider = slider;
@@ -458,7 +716,7 @@ export class PlotGraph extends PlotContainer {
     }
 
     private shouldHaveYSlider(): boolean {
-        return (this.figureDict.overlapping || this.figureDict.data_bundle.compress) && this.figureDict.data_bundle.nGraphs > 1;
+        return this.isSinglePlot() && !this.hasSameY();
     }
 
     private hasSameY(): boolean {
@@ -466,27 +724,20 @@ export class PlotGraph extends PlotContainer {
     }
 
     private isSinglePlot(): boolean {
-        return this.figureDict.overlapping || this.figureDict.data_bundle.compress || this.figureDict.data_bundle.nGraphs === 1;
+        return this.figureDict.overlapping || this.figureDict.data_bundle.compress || this.figureDict.data_bundle.nGraphs <= 1;
     }
 
     private canHaveCustomTickLabels(): boolean {
         return !this.shouldOverlap();
     }
 
-    /*
-    private getSubplotHeight(height: number | null = null): number {
+    private getSubplotHeight(): number {
         if (this.figureDict.data_bundle.nGraphs === 0) {
             return 0;
         }
-        if (height === null) {
-            height = this.height;
-        }
-        const total_gap = PlotGraph.vertical_spacing * (this.figureDict.data_bundle.nGraphs - 1);
-        const subplot_height = (height - total_gap) / this.figureDict.data_bundle.nGraphs;
-        if (this.figureDict.data_bundle.compress) {
-            return subplot_height / 3.;
-        }
+        const heightOfNonCoordinateSystem = 150;
+        const subplot_height = (this.height - heightOfNonCoordinateSystem) / this.figureDict.data_bundle.nGraphs;
         return subplot_height;
-    }*/
+    }
 
 }

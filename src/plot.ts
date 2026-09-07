@@ -5,8 +5,9 @@ import {
 import 'nouislider/dist/nouislider.css';
 import { PlotContainer } from './plot_container';
 import { PlotGraph } from './plot_graph';
+import { PlotImageSequence } from './plot_image_sequence';
 import { KernelBridge } from './kernel_bridge';
-import { PlotResponse } from './plot_graph_interfaces';
+import { ResampleResponse } from './plot_graph_interfaces';
 
 export class PlotlyFrontend {
     private session: Session.ISessionConnection;
@@ -44,19 +45,23 @@ export class PlotlyFrontend {
 
         switch (data.type) {
             case 'plots_remove':
-                const plotsRaw1 = data.plots as unknown[];
+                const plotKeysRaw1 = data.plot_keys as unknown[];
                 // filter only strings
-                const plots1: string[] = Array.isArray(plotsRaw1)
-                    ? plotsRaw1.filter((x): x is string => typeof x === 'string')
+                const plotKeys1: string[] = Array.isArray(plotKeysRaw1)
+                    ? plotKeysRaw1.filter((x): x is string => typeof x === 'string')
                     : [];
-                this.handleRemove(plots1);
+                this.handleRemove(plotKeys1);
                 break;
             case 'plots_loading':
-                const plotsRaw2 = data.plots as unknown[];
-                const plots2: string[] = Array.isArray(plotsRaw2)
-                    ? plotsRaw2.filter((x): x is string => typeof x === 'string')
+                const plotKeysRaw2 = data.plot_keys as unknown[];
+                const plotKeys2: string[] = Array.isArray(plotKeysRaw2)
+                    ? plotKeysRaw2.filter((x): x is string => typeof x === 'string')
                     : [];
-                await this.handleLoading(plots2);
+                const plotTypesRaw = data.plot_types as unknown[];
+                const plotTypes: string[] = Array.isArray(plotTypesRaw)
+                    ? plotTypesRaw.filter((x): x is string => typeof x === 'string')
+                    : [];
+                await this.handleLoading(plotKeys2, plotTypes);
                 break;
             case 'plots_update':
                 const figs = (data.plots as Record<string, any>) ?? {};
@@ -64,8 +69,8 @@ export class PlotlyFrontend {
                 break;
             case 'plot_resample':
                 const plotKey = data.plot_key as string;
-                const dataBundle = data.data_bundle as unknown as PlotResponse;
-                this.handleResample(plotKey, dataBundle);
+                const resampleResponse = data.resample_response as unknown as ResampleResponse;
+                this.handleResample(plotKey, resampleResponse);
                 break;
             default:
                 console.warn('Unknown plot message type', data.type, data.message);
@@ -82,32 +87,55 @@ export class PlotlyFrontend {
         });
     }
 
-    private async handleLoading(plotKeys: string[]) {
-        await Promise.all(plotKeys.map(async (key) => {
+    private async handleLoading(plotKeys: string[], plotTypes: string[]) {
+
+        await Promise.all(plotKeys.map(async (key, index) => {
+
             let state = this.plots.get(key);
+
             if (!state) {
-                state = new PlotGraph(key, this.kernelBridge, this.outputWidget);
-                this.plots.set(key, state);
+
+                const plotType = plotTypes[index];
+
+                if (plotType === "graph") {
+                    state = new PlotGraph(
+                        key,
+                        this.kernelBridge,
+                        this.outputWidget
+                    );
+                } else if (plotType === "image_sequence") {
+                    state = new PlotImageSequence(
+                        key,
+                        this.kernelBridge,
+                        this.outputWidget
+                    );
+                } else {
+                    throw new Error(`Unknown plot type: ${plotType}`);
+                }
+
+                this.plots.set(key, state!);
             }
-            state.startLoading();
+
+            state!.startLoading();
+
         }));
+
     }
 
     private handleUpdate(figs: Record<string, any>) {
         Object.entries(figs).forEach(([key, figDict]) => {
             let state = this.plots.get(key);
             if (!state) {
-                state = new PlotGraph(key, this.kernelBridge, this.outputWidget);
-                this.plots.set(key, state);
+                throw new Error(`state does not exist for ${key}`);
             }
             state.render(figDict, this.is_plot_theme_dark)
         });
     }
 
-    private handleResample(plotKey: string, dataBundle: PlotResponse) {
+    private handleResample(plotKey: string, resampleResponse: ResampleResponse) {
         let state = this.plots.get(plotKey) as PlotGraph;
         if (state) {
-            state.resample(dataBundle);
+            state.resample(resampleResponse);
         }
     }
 

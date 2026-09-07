@@ -1,7 +1,8 @@
 class ElephantLab_plot:
-    from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
     from .PlotlyGraphDatas import SpikeTrainRasterPlot, AnalogSignalLFPPlotList, EventAnnotation, EpochAnnotation, IrregularlySampledSignalPlotList
+    from .PlotlyImageSequenceDatas import ImageSequencePlot
     from .PlotlyGraphContainer import PlotlyGraphDataBundle
+    from .PlotlyImageSequenceContainer import PlotlyImageSequenceDataList
 
     from neo import SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence
     from enum import Enum
@@ -103,21 +104,25 @@ class ElephantLab_plot:
     def _plot_configs(self, plot_key=None):
         configs = {
             self.RawPlotKey.RAW_ST: (
+                "graph",
                 self._create_rasterplot,
                 [self.NeoKey.spiketrain],
                 [self.NeoKey.event, self.NeoKey.epoch],
             ),
             self.RawPlotKey.RAW_ANASIG: (
+                "graph",
                 self._create_lfpplot,
                 [self.NeoKey.analogsignal, self.NeoKey.irregularsignal],
                 [self.NeoKey.event, self.NeoKey.epoch],
             ),
             self.PLOT_IMGSEQUENCE: (
+                "image_sequence",
                 self._create_image_sequence,
                 [self.NeoKey.imagesequence],
                 [],
             ),
             self.RawPlotKey.RAW_EVENT: (
+                "graph",
                 self._create_annotation_plot,
                 [self.NeoKey.event, self.NeoKey.epoch],
                 self._keys_that_also_display_events(),
@@ -197,9 +202,9 @@ class ElephantLab_plot:
 
         plot_configs = self._plot_configs()
 
-        for plot_key, (method, primary_keys, secondary_keys) in plot_configs.items():
+        for plot_key, (type, method, primary_keys, secondary_keys) in plot_configs.items():
             if should_update(plot_key, primary_keys, secondary_keys):
-                plots_to_update.append((plot_key, method, primary_keys, secondary_keys))
+                plots_to_update.append((plot_key, type, method, primary_keys, secondary_keys))
 
         # -------- only remove the ones that are already plotted --------
         filtered_plots_to_remove = set()
@@ -215,19 +220,20 @@ class ElephantLab_plot:
         if plots_to_remove:
             self.comm.send({
                 "type": "plots_remove",
-                "plots": [self._string_key(plot_key) for plot_key in plots_to_remove]
+                "plot_keys": [self._string_key(plot_key) for plot_key in plots_to_remove]
             })
 
         if plots_to_update:
             self.comm.send({
                 "type": "plots_loading",
-                "plots": [self._string_key(plot_key)  for plot_key, *_ in plots_to_update]
+                "plot_keys": [self._string_key(plot_key)  for plot_key, *_ in plots_to_update],
+                "plot_types": [type  for plot_key, type, *_ in plots_to_update],
             })
 
         # -------- compute --------
         updated_figs = {}
 
-        for plot_key, method, primary_keys, secondary_keys in plots_to_update:
+        for plot_key, type, method, primary_keys, secondary_keys in plots_to_update:
             plot_dict = self.plots[plot_key]
 
             all_keys = primary_keys + secondary_keys
@@ -273,9 +279,9 @@ class ElephantLab_plot:
             plot_dict = self.plots[self._enum_key(plot_key)]
             data_bundle = plot_dict['data_bundle']
             if data_bundle is not None and self.comm:
-                normalized_data = data_bundle.get_normalized_data_for_x_range(x_range=x_range)
-                if normalized_data['plotly_graph_data_list_changed'] or normalized_data['annotation_list_changed']:
-                    self.comm.send({"type": "plot_resample", "plot_key": plot_key, "data_bundle": normalized_data})
+                normalized_x_y_values = data_bundle.get_normalized_data_for_x_range(x_range=x_range)
+                if normalized_x_y_values['x_y_values_list_changed'] or normalized_x_y_values['annotation_list_changed']:
+                    self.comm.send({"type": "plot_resample", "plot_key": plot_key, "resample_response": normalized_x_y_values})
 
     def update_settings(self, **settings):
         overlap = settings.get("overlap")
@@ -364,7 +370,7 @@ class ElephantLab_plot:
             "title": title,
             "overlapping": overlapping,
             "changes_on_overlap": changes_on_overlap,
-            "data_bundle": data_bundle.get_normalized_data_for_x_range(setup=True),
+            "data_bundle": data_bundle.to_dict(),
         }
 
         plot_dict['changes_on_overlap'] = changes_on_overlap
@@ -405,4 +411,11 @@ class ElephantLab_plot:
     def _create_image_sequence(self, imagesequence=None):
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         color_grade = plot_dict['color_grade']
-        return self.PlotlyImageSequenceFigure(image_sequences=imagesequence, color_scale=color_grade, name_fallback=self.elephant_lab_entity.names_for)
+        data_list = self.PlotlyImageSequenceDataList([self.ImageSequencePlot(seq, name_fallback=self.elephant_lab_entity.names_for) for seq in imagesequence])
+        data_list.normalize()
+        fig_dict = {
+            "title": "Image Sequences",
+            "color_grade": color_grade,
+            "data_list": data_list.to_dict()
+        }
+        return fig_dict

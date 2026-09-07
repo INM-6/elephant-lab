@@ -4,6 +4,15 @@ class PlotlyGraphData:
     import numpy as np
 
     def __init__(self, data, name_fallback='Trace', **kwargs):
+        self.x = None
+        self.y = None
+        self.name = None
+        self.mode = None
+        self.marker = None
+        self.line = None
+        self.units_x = None
+        self.units_y = None
+        self.use_name_as_ticklabels = False
         self.unit_x_conversion_factor = 1
         self.unit_y_conversion_factor = 1
         self.shift_x_to_0 = 0
@@ -12,13 +21,13 @@ class PlotlyGraphData:
         self.constant_sampling_rate = False
         self.last_full_sampled_x_range = None
         if data is None:
-            self.x = [0]
-            self.y = [0]
+            self.x = []
+            self.y = []
             self.name = 'nothing'
             self.mode = 'markers'
         else:
             self.extract_data(data)
-            if not hasattr(self, 'name') or self.name is None:
+            if self.name is None:
                 if callable(name_fallback):
                     self.name = name_fallback(data)
                 else:
@@ -42,8 +51,6 @@ class PlotlyGraphData:
 
     def extract_data(self, data):
         """Generic extraction of x, y, mode, and name from various simple data types."""
-        self.x = None
-        self.y = None
         if hasattr(data, 'name'):
             self.name = data.name
         if hasattr(data, 'mode'):
@@ -119,29 +126,7 @@ class PlotlyGraphData:
             x_values -= self.shift_x_to_0
         return x_values
 
-    def to_dict(self, min_max_lttb_downsampler, x_range, max_points, common_units_x_label=None, common_units_y_label=None, setup = False):
-        """name, mode, marker, x, y, (unit_x, unit_y)"""
-        data_dict = {}
-        if setup:
-            data_dict['name'] = self.name
-            data_dict['mode'] = self.mode
-            if hasattr(self, "marker"):
-                data_dict['marker'] = self.marker
-            if hasattr(self, "units_x"):
-                data_dict['units_x'] = self.OutputUtils.convert_unit_to_label(self.units_x) if common_units_x_label is None else common_units_x_label
-            if hasattr(self, "units_y"):
-                data_dict['units_y'] = self.OutputUtils.convert_unit_to_label(self.units_y) if common_units_y_label is None else common_units_y_label
-            if hasattr(self, "use_name_as_ticklabels"):
-                data_dict['use_name_as_ticklabels'] = self.use_name_as_ticklabels
-            if hasattr(self, "minX"):
-                data_dict['minX'] = self.minX
-            if hasattr(self, "minY"):
-                data_dict['minY'] = self.minY
-            if hasattr(self, "maxX"):
-                data_dict['maxX'] = self.maxX
-            if hasattr(self, "maxY"):
-                data_dict['maxY'] = self.maxY
-
+    def get_normalized_x_y_values(self, min_max_lttb_downsampler, x_range, max_points):
         x_values = self.x
         y_values = self.y
 
@@ -176,8 +161,34 @@ class PlotlyGraphData:
 
         x_values = self.normalize_x(x_values)
         y_values = self.normalize_y(y_values)
-        data_dict['x'] = x_values.tolist()
-        data_dict['y'] = y_values.tolist()
+
+        return x_values, y_values
+
+    def to_dict(self, min_max_lttb_downsampler, max_points, common_units_x_label=None, common_units_y_label=None):
+        """name, mode, marker, x, y, (unit_x, unit_y)"""
+        data_dict = {
+            'name': self.name,
+            'mode': self.mode,
+            'minX': self.minX,
+            'minY': self.minY,
+            'maxX': self.maxX,
+            'maxY': self.maxY,
+            'use_name_as_ticklabels': self.use_name_as_ticklabels
+        }
+        if self.marker is not None:
+            data_dict['marker'] = self.marker
+        if self.line is not None:
+            data_dict['line'] = self.line
+        if self.units_x is not None:
+            data_dict['units_x'] = self.OutputUtils.convert_unit_to_label(self.units_x) if common_units_x_label is None else common_units_x_label
+        if self.units_y is not None:
+            data_dict['units_y'] = self.OutputUtils.convert_unit_to_label(self.units_y) if common_units_y_label is None else common_units_y_label
+
+        x_values, y_values = self.get_normalized_x_y_values(min_max_lttb_downsampler, None, max_points)
+        data_dict['temp'] = {
+            'x': x_values.tolist(),
+            'y': y_values.tolist()
+        }
 
         return data_dict
 
@@ -186,13 +197,11 @@ class PlotlyGraphDataList:
 
     def __init__(self, data, name_fallback='Trace'):
         self.datas = []
-        self.is_empty = False
         self.extract_data(data, name_fallback)
 
     def extract_data(self, data, name_fallback):
         if data is None:
-            self.is_empty = True
-            self.datas = [PlotlyGraphData(None, name_fallback)]
+            self.datas = []
         elif isinstance(data, list) and self.is_trace_list(data):
             for d in data:
                 try:
@@ -234,17 +243,14 @@ class PlotlyGraphDataList:
         return False
     
     def concat(self, plotlyGraphDataList):
-        self.is_empty = self.is_empty and plotlyGraphDataList.is_empty
         self.datas += plotlyGraphDataList.data_list
 
 class PlotlyGraphAnnotation:
-    import numpy as np
-
     def __init__(self, xs, texts, unit, durations=None):
         self.xs = xs
         self.texts = texts
         self.unit = unit
-        self.durations = durations if durations is not None else self.np.zeros(xs.shape)
+        self.durations = durations
         self.unit_x_conversion_factor = 1
 
 class PlotlyGraphDataBundle:
@@ -254,6 +260,7 @@ class PlotlyGraphDataBundle:
     from tsdownsample import MinMaxLTTBDownsampler
 
     def __init__(self, data_list, annotation_list=None):
+        self.last_full_sampled_x_range = None
         if isinstance(data_list, PlotlyGraphDataBundle):
             self.data_list = data_list.data_list
             self.annotation_list = data_list.annotation_list
@@ -271,11 +278,7 @@ class PlotlyGraphDataBundle:
 
     @property
     def is_data_empty(self):
-        return self.data_list.is_empty
-
-    @is_data_empty.setter
-    def is_data_empty(self, is_empty):
-        self.data_list.is_empty = is_empty
+        return len(self.data_list.datas) == 0
 
     @property
     def is_annotation_empty(self):
@@ -314,7 +317,7 @@ class PlotlyGraphDataBundle:
         self.annotation_minX = None
         self.annotation_maxX = None
         self.compress = False
-        self.nGraphs = 1
+        self.nGraphs = 0
         self.is_default_zero_based = True
         self.is_default_normalized_y = True
 
@@ -324,69 +327,69 @@ class PlotlyGraphDataBundle:
         Handles Complex, inf and nan values properly.
         Ensures x values are ordered (ASC).
         """
-        if self.is_data_empty:
-            return
+        if not self.is_data_empty:
+            np = self.np
 
-        np = self.np
+            filtered = []
 
-        filtered = []
+            i = 0
+            n_datas = len(self.datas)
+            while i < n_datas:
+                data = self.datas[i]
+                x_values = np.asarray(data.x)
+                y_values = np.asarray(data.y)
+                x_length = len(x_values)
+                y_length = len(y_values)
 
-        i = 0
-        n_datas = len(self.datas)
-        while i < n_datas:
-            data = self.datas[i]
-            x_values = np.asarray(data.x)
-            y_values = np.asarray(data.y)
-            x_length = len(x_values)
-            y_length = len(y_values)
+                if x_values is None or y_values is None or x_length != y_length:
+                    self.OutputUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
+                    continue
 
-            if x_values is None or y_values is None or x_length != y_length:
-                self.OutputUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
-                continue
+                if np.iscomplexobj(x_values):
+                    x_values = np.abs(x_values)
+                if np.iscomplexobj(y_values):
+                    name = data.name
+                    data.name = f"{name} (imag)"
+                    imag_data = PlotlyGraphData(data)
+                    imag_data.name = f"{name} (imag)"
+                    imag_data.y = np.imag(y_values)
+                    self.datas.insert(i+1, imag_data)
+                    n_datas += 1
+                    y_values = np.real(y_values)
+                    y_values = y_values
+                    data.name = f"{name} (real)"
+                i+=1
+                finite_mask = np.isfinite(x_values)
 
-            if np.iscomplexobj(x_values):
-                x_values = np.abs(x_values)
-            if np.iscomplexobj(y_values):
-                name = data.name
-                data.name = f"{name} (imag)"
-                imag_data = PlotlyGraphData(data)
-                imag_data.name = f"{name} (imag)"
-                imag_data.y = np.imag(y_values)
-                self.datas.insert(i+1, imag_data)
-                n_datas += 1
-                y_values = np.real(y_values)
-                y_values = y_values
-                data.name = f"{name} (real)"
-            i+=1
-            finite_mask = np.isfinite(x_values)
+                if not np.all(finite_mask):
+                    x_values = x_values[finite_mask]
+                    y_values = y_values[finite_mask]
 
-            if not np.all(finite_mask):
-                x_values = x_values[finite_mask]
-                y_values = y_values[finite_mask]
+                if np.issubdtype(y_values.dtype, np.floating) and np.any(np.isinf(y_values)):
+                    y_values[np.isinf(y_values)] = np.nan
 
-            if np.issubdtype(y_values.dtype, np.floating) and np.any(np.isinf(y_values)):
-                y_values[np.isinf(y_values)] = np.nan
+                # Check if x and y are valid
+                x_length = len(x_values)
+                y_length = len(y_values)
+                if x_length == 0 or y_length == 0:
+                    self.OutputUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing")
+                    continue
 
-            # Check if x and y are valid
-            x_length = len(x_values)
-            y_length = len(y_values)
-            if x_length == 0 or y_length == 0:
-                self.OutputUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing")
-                continue
+                if np.any(x_values[1:] < x_values[:-1]):
+                    order = np.argsort(x_values)
+                    x_values = x_values[order]
+                    y_values = y_values[order]
 
-            if np.any(x_values[1:] < x_values[:-1]):
-                order = np.argsort(x_values)
-                x_values = x_values[order]
-                y_values = y_values[order]
+                data.x = x_values
+                data.y = y_values
+                filtered.append(data)
 
-            data.x = x_values
-            data.y = y_values
-            filtered.append(data)
-
-        self.nGraphs = len(filtered)
-        self.compress = self.nGraphs > 10
-        self.is_data_empty == self.nGraphs == 0
-        self.data_list.datas = filtered
+            self.nGraphs = len(filtered)
+            self.compress = self.nGraphs > 10
+            self.data_list.datas = filtered
+            
+        if not self.is_annotation_empty:
+            self.annotation_list = [annotation for annotation in self.annotation_list if annotation.xs.size > 0]
 
     def _normalize_units(self, y_instead_of_x = False):
         """
@@ -416,7 +419,8 @@ class PlotlyGraphDataBundle:
 
         if not self.is_data_empty:
             for data in self.datas:
-                if hasattr(data, units_string):
+                unit = getattr(data, units_string)
+                if unit is not None:
                     handle_unit(getattr(data, units_string), data)
                 else:
                     return
@@ -535,12 +539,13 @@ class PlotlyGraphDataBundle:
         if not self.is_annotation_empty:
             self.annotation_minX = min([np.nanmin(annotation.xs) * annotation.unit_x_conversion_factor for annotation in self.annotation_list])
             self.annotation_maxX = max([np.nanmax(annotation.xs) * annotation.unit_x_conversion_factor for annotation in self.annotation_list])
-    
+
     def normalize(self, offset_traces_on_compress, shift_to_0, normalize_y_values, normalization_method):
         """
         Does the normalization steps and sets:
         common_units_x, common_units_y(They are None if no common units for x or y could be found), data_minX, annotation_minX, minY, data_maxX, annotation_maxX, maxY, is_default_zero_based, nGraphs, compress, is_data_empty, is_annotation_empty, is_default_normalized_y
         """
+        self._min_max_lttb_downsampler = self.MinMaxLTTBDownsampler()
         normalization_steps = [
             self._set_default_attributes_for_normalization, 
             self._filter_empty_and_normalize_complex,
@@ -554,47 +559,200 @@ class PlotlyGraphDataBundle:
             if self.is_empty:
                 return
             normalization_step()
-        self._min_max_lttb_downsampler = self.MinMaxLTTBDownsampler()
 
-    def get_normalized_data_for_x_range(self, x_range=None, max_points=100000, setup = False):
+    def get_normalized_annotations(self, x_range, max_annotations=100):
+        if self.is_annotation_empty:
+            return None
+        if x_range is not None:
+            minX, maxX = x_range
+            if self.last_full_sampled_x_range is not None:
+                last_minX, last_maxX = self.last_full_sampled_x_range
+                if last_minX <= minX <= maxX <= last_maxX:
+                    return None
+                self.last_full_sampled_x_range = None
         np = self.np
+        js = []
+        for annotation in self.annotation_list:
+            xs = annotation.xs
+            if x_range is not None:
+                unnormalized_minX = x_range[0] / annotation.unit_x_conversion_factor
+                unnormalized_maxX = x_range[1] / annotation.unit_x_conversion_factor
+                j0 = np.searchsorted(xs, unnormalized_minX, side="left")
+                j1 = np.searchsorted(xs+annotation.durations if annotation.durations is not None else xs, unnormalized_maxX, side="right")
+                js.append((j0, j1))
+            else:
+                js.append((0, len(xs)))
 
-        max_points_per_data = int(max_points / len(self.datas))
-        annotation_list_dict = {
-            'xs': np.concatenate([annotation.xs * annotation.unit_x_conversion_factor for annotation in self.annotation_list]),
-            'texts':  np.concatenate([annotation.texts for annotation in self.annotation_list]),
-            'durations': np.concatenate([annotation.durations * annotation.unit_x_conversion_factor for annotation in self.annotation_list])
-        } if not self.is_annotation_empty else None
-        data_bundle_dict = {}
+        def normalize_xs(xs, unit_x_conversion_factor):
+            if unit_x_conversion_factor != 1:
+                return xs * unit_x_conversion_factor
+            return xs
+        
+        xs = np.concatenate([
+            normalize_xs(
+                annotation.xs[j0:j1],
+                annotation.unit_x_conversion_factor
+            )
+            for annotation, (j0, j1) in zip(self.annotation_list, js)
+        ])
+
+        texts = np.concatenate([
+            annotation.texts[j0:j1]
+            for annotation, (j0, j1) in zip(self.annotation_list, js)
+        ])
+
+        durations = np.concatenate([
+            normalize_xs(
+                annotation.durations[j0:j1],
+                annotation.unit_x_conversion_factor
+            )
+            if annotation.durations is not None
+            else np.zeros(j1 - j0)
+            for annotation, (j0, j1) in zip(self.annotation_list, js)
+        ])
+
+        n = xs.size
+        if n == 0:
+            return None
+
+        max_texts_joined = 5
+
+        order = np.argsort(xs)
+        xs = xs[order]
+        texts = texts[order]
+        durations = durations[order]
+
+
+        def format_text(group_texts):
+            if len(group_texts) > max_texts_joined:
+                return (
+                    "<br>".join(group_texts[:max_texts_joined])
+                    + f"<br>...<br>(+{len(group_texts) - max_texts_joined} more)"
+                )
+            return "<br>".join(group_texts)
+
+
+        # First group annotations with the same x and duration.
+        groups = []
+
+        start = 0
+        for i in range(1, n + 1):
+            same_annotation = (
+                i < n
+                and np.isclose(xs[i], xs[start], rtol=1e-9, atol=1e-12)
+                and np.isclose(durations[i], durations[start], rtol=1e-9, atol=1e-12)
+            )
+
+            if not same_annotation:
+                groups.append({
+                    "x": xs[start],
+                    "duration": durations[start],
+                    "texts": texts[start:i],
+                })
+                start = i
+
+        n = len(groups)
+
+        # If there are still too many groups, combine them by x.
+        if n > max_annotations:
+            group_xs = np.asarray([group["x"] for group in groups])
+            gaps = np.diff(group_xs)
+
+            separators = np.argpartition(
+                gaps,
+                -(max_annotations - 1)
+            )[-(max_annotations - 1):]
+            separators.sort()
+
+            ranges = []
+            start = 0
+
+            for sep in separators:
+                ranges.append((start, sep + 1))
+                start = sep + 1
+
+            ranges.append((start, n))
+
+            new_groups = []
+
+            for start, end in ranges:
+                merged = groups[start:end]
+
+                left = merged[0]["x"]
+                right = max(
+                    group["x"] + group["duration"]
+                    for group in merged
+                )
+
+                new_groups.append({
+                    "x": left,
+                    "duration": right - left,
+                    "texts": np.concatenate([
+                        group["texts"]
+                        for group in merged
+                    ]),
+                })
+
+            groups = new_groups
+            n = len(groups)
+        else:
+            self.last_full_sampled_x_range = x_range
+
+        # Convert groups to the final arrays.
+        xs = np.asarray([group["x"] for group in groups])
+        durations = np.asarray([group["duration"] for group in groups])
+        texts = np.asarray([
+            format_text(group["texts"])
+            for group in groups
+        ], dtype=object)
+
+        return {
+            'xs': xs,
+            'texts':  texts,
+            'durations': durations,
+        }
+
+    def get_normalized_data_for_x_range(self, x_range, max_points=100000):
+        max_points_per_data = 0 if self.is_data_empty else int(max_points / len(self.datas)) 
+
+        x_y_values_list = [
+            {'index': i, 'temp': { 'x': d[0].tolist(), 'y': d[1].tolist() }}
+            for i, data in enumerate(self.datas)
+            if (d := data.get_normalized_x_y_values(self._min_max_lttb_downsampler, x_range, max_points_per_data))
+        ]
+        annotation_list = self.get_normalized_annotations(x_range=x_range)
+        return {
+            'x_y_values_list': x_y_values_list,
+            'x_y_values_list_changed': len(x_y_values_list) > 0,
+            'annotation_list': annotation_list,
+            'annotation_list_changed': annotation_list is not None
+        }
+
+    def to_dict(self, max_points=100000):
+        max_points_per_data = 0 if self.is_data_empty else int(max_points / len(self.datas)) 
+
+        data_bundle_dict = {
+            "compress": self.compress,
+            "nGraphs": self.nGraphs,
+            "minX": self.minX,
+            "minY": self.minY,
+            "maxX": self.maxX,
+            "maxY": self.maxY,
+        }
         common_units_x_label = None
         common_units_y_label = None
-        if setup:
-            if self.common_units_x is not None:
-                common_units_x_label = self.OutputUtils.convert_unit_to_label(self.common_units_x)
-                data_bundle_dict['common_units_x'] = common_units_x_label
-            if self.common_units_y is not None:
-                common_units_y_label = self.OutputUtils.convert_unit_to_label(self.common_units_y)
-                data_bundle_dict['common_units_y'] = common_units_y_label
+        if self.common_units_x is not None:
+            common_units_x_label = self.OutputUtils.convert_unit_to_label(self.common_units_x)
+            data_bundle_dict['common_units_x'] = common_units_x_label
+        if self.common_units_y is not None:
+            common_units_y_label = self.OutputUtils.convert_unit_to_label(self.common_units_y)
+            data_bundle_dict['common_units_y'] = common_units_y_label
         plotly_graph_data_list = [
-            {**d, "index": i}
+            { **data.to_dict(self._min_max_lttb_downsampler, max_points_per_data, common_units_x_label, common_units_y_label), "index": i }
             for i, data in enumerate(self.datas)
-            if (d := data.to_dict(self._min_max_lttb_downsampler, x_range, max_points_per_data, common_units_x_label, common_units_y_label, setup))
         ]
         data_bundle_dict.update({
             'plotly_graph_data_list': plotly_graph_data_list,
-            'plotly_graph_data_list_changed': len(plotly_graph_data_list) > 0,
-            'annotation_list': annotation_list_dict,
-            'annotation_list_changed': False,
+            'annotation_list': self.get_normalized_annotations(x_range=None),
         })
-        if setup:
-            data_bundle_dict.update({
-                "compress": self.compress,
-                "nGraphs": self.nGraphs,
-                "minX": self.minX,
-                "minY": self.minY,
-                "maxX": self.maxX,
-                "maxY": self.maxY,
-                "extended_minY": self.minY,
-                "extended_maxY": self.maxY
-            })
         return data_bundle_dict
