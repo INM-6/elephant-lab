@@ -5,6 +5,11 @@ import {
 import { KernelBridge } from './kernel_bridge';
 
 export abstract class PlotContainer {
+    /**
+     * Creates a fitting container for the plots and
+     * all its accessories like loading text
+     *
+     */
     protected plotKey: string;
     protected kernelBridge: KernelBridge;
     protected wrapper: HTMLDivElement;

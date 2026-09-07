@@ -1,4 +1,14 @@
+"""
+Blueprints for the PlotlyGraphFigure compatible data objects
+
+And Normalization for them
+"""
+
 class PlotlyGraphData:
+
+    """
+    Blueprint for the standard data, that will be displayed as a single trace
+    """
 
     from .utils import OutputUtils
     import numpy as np
@@ -50,7 +60,12 @@ class PlotlyGraphData:
             setattr(self, key, value)
 
     def extract_data(self, data):
-        """Generic extraction of x, y, mode, and name from various simple data types."""
+        """
+        Generic extraction of x, y, mode, and name from various simple data types.
+
+        Args:
+            data: source to extract from; supports objects with x/y attributes, dicts with x/y keys, a list of (x, y) point tuples, a pandas DataFrame/Series, or None
+        """
         if hasattr(data, 'name'):
             self.name = data.name
         if hasattr(data, 'mode'):
@@ -200,6 +215,13 @@ class PlotlyGraphDataList:
         self.extract_data(data, name_fallback)
 
     def extract_data(self, data, name_fallback):
+        """
+        Builds self.data_list of PlotlyGraphDataType traces from data, whether it's a single trace or a list of traces.
+
+        Args:
+            data: None, a single trace (points, dict, object, etc.), or a list of such traces
+            name_fallback: name (or callable producing a name) used for traces that don't already have one
+        """
         if data is None:
             self.datas = []
         elif isinstance(data, list) and self.is_trace_list(data):

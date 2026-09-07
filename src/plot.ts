@@ -10,6 +10,10 @@ import { KernelBridge } from './kernel_bridge';
 import { ResampleResponse } from './plot_graph_interfaces';
 
 export class PlotlyFrontend {
+    /**
+     * Manages the creation and insertion of Plot Containers.
+     *
+     */
     private session: Session.ISessionConnection;
     private kernelBridge: KernelBridge;
     private plots: Map<string, PlotContainer> = new Map();

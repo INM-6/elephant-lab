@@ -49,12 +49,12 @@ def test_plotlyUtils_convert_to_other_units():
     assert np.isclose(OutputUtils.convert_to_other_units(1000, pq.ms, pq.s), 1)
 
 def test_height(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
-    assert none_plotlyGraphFigure.fig.layout.height == 600
+    assert none_plotlyGraphFigure.fig.layout.height == 200
     assert three_spikeTrainRasterPlots.fig.layout.height == 800
     spikeTrainRasterPlot1 = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     spikeTrainRasterPlot2 = SpikeTrainRasterPlot(neo.SpikeTrain([0.5,1.5,2.5,3.5,6.5] * pq.s, t_stop=10 * pq.s))
     spikeTrainRasterPlot3 = SpikeTrainRasterPlot(neo.SpikeTrain([0.25,1.25,2.25,3.25,6.25] * pq.s, t_stop=10 * pq.s))
-    assert PlotlyGraphFigure([spikeTrainRasterPlot1, spikeTrainRasterPlot2, spikeTrainRasterPlot3], overlap_on_compress=False, overlapping=True).fig.layout.height == 600
+    assert PlotlyGraphFigure([spikeTrainRasterPlot1, spikeTrainRasterPlot2, spikeTrainRasterPlot3], overlap_on_compress=False, overlapping=True).fig.layout.height == 200
 
 def test_None_data(none_plotlyGraphFigure):
     assert isinstance(none_plotlyGraphFigure.data, PlotlyGraphDataList)
