@@ -7,6 +7,16 @@ import {
 import { PlotContainer } from './plot_container';
 import { FigureDict, ResampleResponse, AnnotationListDict } from './plot_graph_interfaces';
 
+/**
+ * PlotGraph renders time-series plots using Plotly with support for:
+ * - multiple subplots (grid layout)
+ * - annotations rendered as translucent bars
+ * - an X range slider and optional Y-range slider per subplot
+ * - relative marker sizing and efficient resampling updates
+ *
+ * Extends `PlotContainer` and expects a `FigureDict` produced by the
+ * Python kernel bridge.
+ */
 export class PlotGraph extends PlotContainer {
 
     private slider?: HTMLElement;
@@ -115,6 +125,14 @@ export class PlotGraph extends PlotContainer {
     }
 
 
+    /**
+     * Render the provided `FigureDict` into the container using Plotly.
+     * This sets up traces, layout, sliders, annotation traces and event
+     * handlers required for interactive behaviors.
+     *
+     * @param figDict - Serialized `FigureDict` coming from the kernel.
+     * @param is_plot_theme_dark - Whether a dark plot theme should be applied.
+     */
     public render(figDict: any, is_plot_theme_dark: boolean) {
         const gd = this.container as any;
         if (!gd) return;
@@ -228,6 +246,13 @@ export class PlotGraph extends PlotContainer {
     }
 
     public resample(resampleResponse: ResampleResponse) {
+        /**
+         * Apply resampled data to existing traces and update annotation traces.
+         * The `resampleResponse` may include updated x/y arrays for traces and
+         * an updated annotation list.
+         *
+         * @param resampleResponse - Response containing updated trace/annotation data.
+         */
         if (resampleResponse.x_y_values_list_changed) {
             const indices = [];
             const x = [];
@@ -279,6 +304,11 @@ export class PlotGraph extends PlotContainer {
     }
 
     private createExtentTrace(minX: number, minY: number, maxX: number, maxY: number, yaxis: string | undefined = undefined): Partial<Plotly.PlotData> {
+        /**
+         * Create an invisible scatter trace used to fix the plot extents so that
+         * slider interactions do not collapse the visible range. The trace is
+         * rendered with zero-size markers and skipped hoverinfo.
+         */
         const extentTrace: Partial<Plotly.PlotData> = {
             type: "scatter",
             mode: "markers",
@@ -298,6 +328,12 @@ export class PlotGraph extends PlotContainer {
     }
 
     private addData(): void {
+        /**
+         * Build and push data traces to `this.data` for every graph in the
+         * `figureDict.data_bundle.plotly_graph_data_list`. Handles per-trace
+         * marker/line defaults, relative marker sizing, and per-subplot axis
+         * configuration.
+         */
         const subplotHeight = this.getSubplotHeight();
         for (let i = 0; i < this.figureDict.data_bundle.plotly_graph_data_list.length; i++) {
             const graphData = this.figureDict.data_bundle.plotly_graph_data_list[i];
@@ -398,6 +434,10 @@ export class PlotGraph extends PlotContainer {
     }
 
     private addAnnotationEvents(): void {
+        /**
+         * Convert the stored annotation list into Plotly bar traces placed
+         * behind the plotted data and with appropriate hovertemplates.
+         */
         if (!this.hasAnnotations) {
             return
         }
@@ -536,6 +576,10 @@ export class PlotGraph extends PlotContainer {
     }
 
     private createXSlider(): void {
+        /**
+         * Add a horizontal X-axis range slider to the layout. The slider is
+         * always visible and sized relative to the overall plot height.
+         */
         const xBgColor = "#1e7fcc";
         const pixels = 25;
         const xHeight = Math.max(0.02, pixels / this.height);
@@ -551,6 +595,11 @@ export class PlotGraph extends PlotContainer {
     }
 
     private addYRangeSlider() {
+        /**
+         * Create or update a vertical Y-range slider used for zooming in the
+         * single-plot (non-shared Y) case. The slider uses noUiSlider and
+         * updates Plotly via `relayout`/`restyle` calls.
+         */
         let sliderInstance;
 
         const extendedYRange = this.calcExtendedAnnotationYRange([this.figureDict.data_bundle.minY, this.figureDict.data_bundle.maxY]);

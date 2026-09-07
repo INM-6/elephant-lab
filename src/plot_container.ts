@@ -68,6 +68,10 @@ export abstract class PlotContainer {
     }
 
     public startLoading() {
+        /**
+         * Displays a loading box
+         *
+         */
         const gd = this.container as any;
         if (!gd || !gd.data || gd.data.length === 0) {
             // Get the current JupyterLab theme background color
@@ -91,6 +95,10 @@ export abstract class PlotContainer {
         this.loading.style.pointerEvents = 'none';
     }
 
+    /**
+     * Renders the figure out of the figDict
+     *
+     */
     public abstract render(figDict: any, is_plot_theme_dark: boolean): void;
 
     public resize() {

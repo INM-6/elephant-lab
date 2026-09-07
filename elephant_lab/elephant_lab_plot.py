@@ -297,12 +297,12 @@ class ElephantLab_plot:
         self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
 
     def get_normalized_data_for_plot_with_x_range(self, plot_key, x_range=None):
-            plot_dict = self.plots[self._enum_key(plot_key)]
-            data_bundle = plot_dict['data_bundle']
-            if data_bundle is not None and self.comm:
-                normalized_x_y_values = data_bundle.get_normalized_data_for_x_range(x_range=x_range)
-                if normalized_x_y_values['x_y_values_list_changed'] or normalized_x_y_values['annotation_list_changed']:
-                    self.comm.send({"type": "plot_resample", "plot_key": plot_key, "resample_response": normalized_x_y_values})
+        plot_dict = self.plots[self._enum_key(plot_key)]
+        data_bundle = plot_dict['data_bundle']
+        if data_bundle is not None and self.comm:
+            normalized_x_y_values = data_bundle.get_normalized_data_for_x_range(x_range=x_range)
+            if normalized_x_y_values['x_y_values_list_changed'] or normalized_x_y_values['annotation_list_changed']:
+                self.comm.send({"type": "plot_resample", "plot_key": plot_key, "resample_response": normalized_x_y_values})
 
     def update_settings(self, **settings):
         """
@@ -384,6 +384,12 @@ class ElephantLab_plot:
             self._raw_plot()
 
     def _create_graph_plot(self, plot_key, data_list, annotation_list, title, overlap_on_compress=True):
+        """
+        Loads the fitting metadata for the plot_key out of the corresponding plot_dict
+        and creates and normalizes the plot data with it.
+        It then saves the resulting metadata regarding the plot and returns a dictionary
+        that stores the plots data.
+        """
         plot_dict = self.plots[plot_key]
         overlapping = plot_dict['overlapping']
         shift_to_0 = plot_dict['zero_based']
@@ -436,6 +442,12 @@ class ElephantLab_plot:
         return self._create_graph_plot(self.RawPlotKey.RAW_EVENT, None, annotation_list, title="Plotted Events and Epochs", overlap_on_compress=False)
 
     def _create_image_sequence(self, imagesequence=None):
+        """
+        Loads the fitting metadata for the imagesequence
+        and creates and normalizes the plot data with it.
+        It then returns a dictionary
+        that stores the plots data.
+        """
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         color_grade = plot_dict['color_grade']
         data_list = self.PlotlyImageSequenceDataList([self.ImageSequencePlot(seq, name_fallback=self.elephant_lab_entity.names_for) for seq in imagesequence])

@@ -1,5 +1,9 @@
 class PlotlyImageSequenceData:
 
+    """
+    Blueprint for the standard data, that will be displayed as a heatmap with traces
+    """
+
     from .utils import OutputUtils
 
     def __init__(self, data, name_fallback='Trace'):
@@ -20,6 +24,9 @@ class PlotlyImageSequenceData:
         pass
 
     def to_dict(self):
+        """
+        Converts the object into a json serializable dict storing all important information to plot it
+        """
         plotly_image_sequence_dict = {
             'n_frames': self.n_frames,
             'name': self.name,
@@ -37,6 +44,10 @@ class PlotlyImageSequenceData:
         return plotly_image_sequence_dict
 
 class PlotlyImageSequenceDataList:
+
+    """
+    Collection of PlotlyImageSequenceData, that has the ability to normalize them
+    """
 
     from .utils import OutputUtils
     import numpy as np
@@ -65,6 +76,10 @@ class PlotlyImageSequenceDataList:
                 self.OutputUtils.print_warning(f"Failed to convert data to PlotlyImageSequenceData: {e}")
 
     def normalize(self):
+        """
+        Takes the abs value of complex numbers and turns inf to nan, calculates the min and max
+        and creates the fitting unit string that can be displayed over the color bar.
+        """
         for imagesequence_data in self.datas:
             images = imagesequence_data.images
             images = self.np.where(self.np.isinf(images), self.np.nan, images)
@@ -84,6 +99,9 @@ class PlotlyImageSequenceDataList:
             imagesequence_data.zmax = zmax
 
     def to_dict(self):
+        """
+        Converts the object into a json serializable dict storing all important information to plot it
+        """
         return {
             'plotly_imagesequence_data_list': [plotly_image_sequence_data.to_dict() for plotly_image_sequence_data in self.datas],
         }

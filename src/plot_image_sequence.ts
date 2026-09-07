@@ -3,6 +3,17 @@ import { PlotContainer } from './plot_container';
 import { ImageSequenceFigureDict, ImageSequenceData } from './plot_image_sequence_interfaces';
 
 export class PlotImageSequence extends PlotContainer {
+    /**
+     * PlotImageSequence renders one or more image sequences as Plotly heatmaps
+     * and sets up animation frames and play buttons.
+     *
+     * The component expects a `figureDict` with `data_list.plotly_imagesequence_data_list`
+     * containing `ImageSequenceData` objects. For each sequence it creates a
+     * heatmap trace, animation frames and a control button.
+     *
+     * @param figDict - Serialized ImageSequenceFigureDict from the kernel.
+     * @param is_plot_theme_dark - Whether to apply dark theme styling.
+     */
     public render(figDict: any, is_plot_theme_dark: boolean) {
         const figureDict = figDict as ImageSequenceFigureDict;
         const sequences = figureDict?.data_list?.plotly_imagesequence_data_list ?? [];

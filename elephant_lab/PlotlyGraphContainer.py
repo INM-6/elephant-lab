@@ -118,6 +118,10 @@ class PlotlyGraphData:
             self.x, self.y = None, None
 
     def normalize_x(self, x_values):
+        """
+        Applies the normalization to the values in-place
+        if the normalization would change something
+        """
         if self.shift_x_to_0 != 0:
             x_values += self.shift_x_to_0
         if self.unit_x_conversion_factor != 1:
@@ -125,6 +129,10 @@ class PlotlyGraphData:
         return x_values
 
     def normalize_y(self, y_values):
+        """
+        Applies the normalization to the values in-place
+        if the normalization would change something
+        """
         if self.y_normalization_method:
             y_values = self.y_normalization_method(y_values)
         else:
@@ -135,6 +143,10 @@ class PlotlyGraphData:
         return y_values
 
     def un_normalize_x(self, x_values):
+        """
+        Un normalizes the values in-place
+        if the normalization would change something
+        """
         if self.unit_x_conversion_factor != 1:
             x_values /= self.unit_x_conversion_factor
         if self.shift_x_to_0 != 0:
@@ -142,6 +154,11 @@ class PlotlyGraphData:
         return x_values
 
     def get_normalized_x_y_values(self, min_max_lttb_downsampler, x_range, max_points):
+        """
+        1. Filters the values corresponding to the x_range,
+        2. Then downsamples them to the max_points limit
+        3. Applies the normalization to the remaining values
+        """
         x_values = self.x
         y_values = self.y
 
@@ -180,7 +197,9 @@ class PlotlyGraphData:
         return x_values, y_values
 
     def to_dict(self, min_max_lttb_downsampler, max_points, common_units_x_label=None, common_units_y_label=None):
-        """name, mode, marker, x, y, (unit_x, unit_y)"""
+        """
+        Converts the object into a json serializable dict storing all important information to plot it
+        """
         data_dict = {
             'name': self.name,
             'mode': self.mode,
@@ -276,6 +295,11 @@ class PlotlyGraphAnnotation:
         self.unit_x_conversion_factor = 1
 
 class PlotlyGraphDataBundle:
+    """
+    A object that bundles the data of traces and annotations and
+    has the ability to normalize them together regarding aspects units.
+    """
+
 
     import numpy as np
     from .utils import OutputUtils
@@ -583,6 +607,12 @@ class PlotlyGraphDataBundle:
             normalization_step()
 
     def get_normalized_annotations(self, x_range, max_annotations=100):
+        """
+        1. Filters out all off the annotations outside the x_range
+        2. Groups annotations with same x and duration
+        3. Groups annotations until there are no more groups than max_annotations
+        (Grouping concatenates the names until there are to many than it just says (+X more))
+        """
         if self.is_annotation_empty:
             return None
         if x_range is not None:
@@ -735,6 +765,9 @@ class PlotlyGraphDataBundle:
         }
 
     def get_normalized_data_for_x_range(self, x_range, max_points=100000):
+        """
+        Returns the normalized data for for that x_range that actually can change with a different x_range
+        """
         max_points_per_data = 0 if self.is_data_empty else int(max_points / len(self.datas)) 
 
         x_y_values_list = [
@@ -751,6 +784,9 @@ class PlotlyGraphDataBundle:
         }
 
     def to_dict(self, max_points=100000):
+        """
+        Converts the object into a json serializable dict storing all important information to plot it
+        """
         max_points_per_data = 0 if self.is_data_empty else int(max_points / len(self.datas)) 
 
         data_bundle_dict = {
