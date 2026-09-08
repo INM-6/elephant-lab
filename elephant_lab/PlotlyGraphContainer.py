@@ -66,18 +66,19 @@ class PlotlyGraphData:
         Args:
             data: source to extract from; supports objects with x/y attributes, dicts with x/y keys, a list of (x, y) point tuples, a pandas DataFrame/Series, or None
         """
-        if hasattr(data, 'name'):
-            self.name = data.name
-        if hasattr(data, 'mode'):
-            self.mode = data.mode
-        if hasattr(data, 'marker'):
-            self.marker = data.marker
-        if hasattr(data, 'line'):
-            self.line = data.line
-        if hasattr(data, 'units_x'):
-            self.units_x = data.units_x
-        if hasattr(data, 'units_y'):
-            self.units_y = data.units_y
+
+        def get_value(data, key):
+            if isinstance(data, dict):
+                return data.get(key)
+            return getattr(data, key, None)
+
+
+        self.name = get_value(data, "name")
+        self.mode = get_value(data, "mode")
+        self.marker = get_value(data, "marker")
+        self.line = get_value(data, "line")
+        self.units_x = get_value(data, "units_x")
+        self.units_y = get_value(data, "units_y")
 
         try:
             # Objects with x/y attributes
@@ -284,7 +285,7 @@ class PlotlyGraphDataList:
         return False
     
     def concat(self, plotlyGraphDataList):
-        self.datas += plotlyGraphDataList.data_list
+        self.datas += plotlyGraphDataList.datas
 
 class PlotlyGraphAnnotation:
     def __init__(self, xs, texts, unit, durations=None):
@@ -517,7 +518,7 @@ class PlotlyGraphDataBundle:
         is_default_normalized_y = True
         for data in self.datas:
             y_values = data.y
-            if np.all(np.abs(y_values) <= np.finfo(y_values.dtype).eps):
+            if np.all(np.abs(y_values) <= 1e-6):
                 continue
             is_default_normalized_y = False
             if normalize_y_values:

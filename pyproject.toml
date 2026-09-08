@@ -67,7 +67,10 @@ include = [
     "README.md",
     "LICENSE"
 ]
-exclude = [".github"]
+exclude = [
+    ".github",
+    "doc/adr"
+]
 
 [tool.hatch.build]
 artifacts = ["elephant_lab/labextension"]

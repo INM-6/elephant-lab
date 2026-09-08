@@ -58,8 +58,6 @@ export abstract class PlotContainer {
 
         if (outputWidget) {
             outputWidget.node.appendChild(wrapper);
-        } else {
-            document.body.appendChild(wrapper);
         }
 
         this.wrapper = wrapper;
