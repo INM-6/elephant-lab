@@ -135,8 +135,6 @@ class ElephantLabExtension {
 	// registerKernelRestartListener() for whatever kernel Elephant Lab is
 	// currently attached to. Re-set on every attach (see disposePickedKernelConnection()).
 	private kernelRestartListenerCleanup: (() => void) | null = null;
-	// Guards recoverFromLostKernelState() against overlapping re-init calls.
-	private isRecoveringKernelState = false;
 	private _lastClickedNode: string | null = null;
 	private _explorerWidget: Panel | null = null;
 	private _detailsWidget: Panel | null = null;
@@ -243,7 +241,10 @@ class ElephantLabExtension {
 	// Create OutputAreas where Python-Code can be executed
 	private async initializeKernelState(session: IElephantSession) {
 		console.log("Elephant Lab: Initializing kernel state...");
-		this.kernelBridge = new KernelBridge(session, () => this.recoverFromLostKernelState(session));
+		this.kernelBridge = new KernelBridge(session, () => {
+			console.log("Elephant Lab: Kernel state was lost (likely restarted by another client); re-initializing automatically.");
+			return this.reinitializeKernelState(session);
+		});
 		this.attachedKernelId = session.session?.kernel?.id ?? null;
 		this.attachedKernelName = session.session?.kernel?.name ?? null;
 		// WidgetTracker only captures getRestoreArgs() once, when a widget is
@@ -262,6 +263,13 @@ class ElephantLabExtension {
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
+			// Re-initializing (e.g. after a kernel restart) constructs a fresh
+			// PlotlyFrontend against the same, still-live outputArea - dispose
+			// the previous one first so its plots (DOM nodes it appended
+			// directly into outputArea.node, outside the OutputAreaModel that
+			// executeCode()'s own outputArea.model.clear() knows how to clear)
+			// and its ResizeObserver don't linger as stale, orphaned graphics.
+			this.plotlyFrontend?.dispose();
 			this.plotlyFrontend = new PlotlyFrontend(session.session!.kernel!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
 			// Notify backend of initial panel active state
@@ -278,21 +286,35 @@ class ElephantLabExtension {
 		}
 	}
 
-	// Called by KernelBridge (see kernel_bridge.ts) the first time it notices
-	// the kernel's Python state is gone - i.e. an external restart happened
-	// that nothing else here observed. Guarded against overlap: several
-	// in-flight executeCode() calls can all notice this around the same
-	// time, but only the first should trigger a re-init.
-	private async recoverFromLostKernelState(session: IElephantSession) {
-		if (this.isRecoveringKernelState) {
+	// Guarded wrapper around initializeKernelState(), shared by every trigger
+	// that can decide a restart happened and Elephant Lab needs to re-sync:
+	// KernelBridge's onKernelStateLost callback (kernel_bridge.ts - a restart
+	// nothing else here observed), registerKernelRestartListener's
+	// statusChanged 'idle' handler, and sessionContext.kernelChanged below.
+	// Confirmed via live testing that for a single plain in-place kernel
+	// restart (Kernel > Restart Kernel), the statusChanged 'idle' transition
+	// AND kernelChanged both fire - contrary to kernelChanged's own doc
+	// suggesting it's only for a wholesale kernel replacement - which without
+	// this guard ran initializeKernelState() twice concurrently against the
+	// same kernel (visible as a duplicated "Initializing kernel state..." /
+	// "Environment setup complete." pair in the console for one restart).
+	// That, in turn, is what left stale plot graphics behind and could hang
+	// the next execution: two racing SetupEnv/CreateTree/.../CreateExplorerRaw
+	// sequences interleaving their requestExecute calls against one kernel.
+	// A trigger that arrives while another is already in flight is simply
+	// skipped - the in-flight run already re-syncs everything a skipped one
+	// would have.
+	private isReinitializingKernelState = false;
+
+	private async reinitializeKernelState(session: IElephantSession) {
+		if (this.isReinitializingKernelState) {
 			return;
 		}
-		this.isRecoveringKernelState = true;
+		this.isReinitializingKernelState = true;
 		try {
-			console.log("Elephant Lab: Kernel state was lost (likely restarted by another client); re-initializing automatically.");
 			await this.initializeKernelState(session);
 		} finally {
-			this.isRecoveringKernelState = false;
+			this.isReinitializingKernelState = false;
 		}
 	}
 
@@ -502,11 +524,17 @@ class ElephantLabExtension {
 			}, 500);
 		});
 
-		// Listener for a wholesale kernel change (e.g. Change Kernel, or a
-		// session reconnecting to a brand new kernel after the old one died -
-		// as opposed to an in-place restart of the *same* kernel id, which
-		// registerKernelRestartListener() above already handles). Waits for
-		// the new kernel to be ready, then re-initializes against it.
+		// Listener for a wholesale kernel change (e.g. Change Kernel). Also
+		// fires for a plain in-place restart of the *same* kernel id
+		// (confirmed via live testing - the doc on registerKernelRestartListener()
+		// used to assume otherwise), alongside that listener's own
+		// statusChanged-based detection; reinitializeKernelState()'s guard is
+		// what keeps those two triggers from racing each other for one
+		// restart. Waits for the new kernel to be ready, then re-initializes
+		// against it. registerKernelRestartListener() is called unconditionally
+		// (not gated by that guard) since it's idempotent - safe, and
+		// necessary, to re-run every time in case `newKernel` is a genuinely
+		// different connection than the one it was last attached to.
 		newPanel.sessionContext.kernelChanged.connect(async (sender, args) => {
 			console.log("Elephant Lab: Kernel has changed.");
 			const newKernel = args.newValue;
@@ -526,8 +554,8 @@ class ElephantLabExtension {
 				});
 				await waitForIdle;
 				console.log("Elephant Lab: New kernel is idle and ready; re-initializing state.");
-				await this.initializeKernelState(initialSession);
 				this.registerKernelRestartListener(newKernel, initialSession);
+				await this.reinitializeKernelState(initialSession);
 			}
 		});
 
@@ -786,8 +814,10 @@ class ElephantLabExtension {
 	// restart wipes the kernel's Python state - elephant_lab_entity and
 	// everything else SetupEnv defined - and without this, Elephant Lab kept
 	// showing stale tree/details/explore state until the user re-attached by
-	// hand. Re-running initializeKernelState() puts it back in sync
-	// automatically, the same way switching away and back already did.
+	// hand. Re-running initializeKernelState() (via reinitializeKernelState(),
+	// which also guards against sessionContext.kernelChanged firing for the
+	// very same restart - see its doc) puts it back in sync automatically,
+	// the same way switching away and back already did.
 	// Handles the case where the SAME connection we're watching is the one
 	// that requested the restart (KernelConnection.restart() sets its own
 	// status to 'restarting' synchronously), or a genuine crash-triggered
@@ -798,7 +828,15 @@ class ElephantLabExtension {
 	// connection sees no status or connection-status change at all in that
 	// case, so initializeKernelState()'s self-healing check in KernelBridge
 	// (see kernel_bridge.ts) is what actually covers that scenario.
+	//
+	// Idempotent: always detaches whatever listener it last attached before
+	// attaching a new one, so calling it again for a kernel already being
+	// watched (e.g. from sessionContext.kernelChanged, which fires on every
+	// restart alongside this listener's own statusChanged - see there) can't
+	// accumulate duplicate listeners that would each independently trigger a
+	// re-init on the next restart.
 	private registerKernelRestartListener(kernel: Kernel.IKernelConnection, session: IElephantSession) {
+		this.kernelRestartListenerCleanup?.();
 		let sawRestart = false;
 		const onStatusChanged = (_kernel: Kernel.IKernelConnection, status: KernelMessage.Status) => {
 			if (status === 'restarting' || status === 'autorestarting') {
@@ -807,7 +845,7 @@ class ElephantLabExtension {
 			} else if (status === 'idle' && sawRestart) {
 				sawRestart = false;
 				console.log("Elephant Lab: Kernel restart complete; re-initializing Elephant Lab state.");
-				void this.initializeKernelState(session);
+				void this.reinitializeKernelState(session);
 			} else if (status === 'dead') {
 				sawRestart = false;
 			}
