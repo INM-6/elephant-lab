@@ -122,6 +122,21 @@ class ElephantLabExtension {
 	// clone (not this.rendermime) is what gets passed to initializeTab() in
 	// attachToKernel().
 	private pickedWidgetManager: IAttachedWidgetManager | null = null;
+	// A kernel attached via the picker has no notebook tab, so there's no
+	// NotebookActions.executed signal to refresh the tree on (that's how the
+	// quick-action/local-notebook flow stays live). This timer calls the same
+	// UpdateTree used there, just on a clock instead of on cell execution -
+	// which doubles as a periodic health check: it's what makes
+	// KernelBridge's kernel-state-lost detection (see kernel_bridge.ts) fire
+	// on its own after an external restart, not only on the next manual
+	// interaction.
+	private pickedKernelSyncTimer: number | null = null;
+	// Disconnects the kernel-restart listener registered by
+	// registerKernelRestartListener() for whatever kernel Elephant Lab is
+	// currently attached to. Re-set on every attach (see disposePickedKernelConnection()).
+	private kernelRestartListenerCleanup: (() => void) | null = null;
+	// Guards recoverFromLostKernelState() against overlapping re-init calls.
+	private isRecoveringKernelState = false;
 	private _lastClickedNode: string | null = null;
 	private _explorerWidget: Panel | null = null;
 	private _detailsWidget: Panel | null = null;
@@ -228,7 +243,7 @@ class ElephantLabExtension {
 	// Create OutputAreas where Python-Code can be executed
 	private async initializeKernelState(session: IElephantSession) {
 		console.log("Elephant Lab: Initializing kernel state...");
-		this.kernelBridge = new KernelBridge(session);
+		this.kernelBridge = new KernelBridge(session, () => this.recoverFromLostKernelState(session));
 		this.attachedKernelId = session.session?.kernel?.id ?? null;
 		this.attachedKernelName = session.session?.kernel?.name ?? null;
 		// WidgetTracker only captures getRestoreArgs() once, when a widget is
@@ -262,6 +277,25 @@ class ElephantLabExtension {
 			console.error("Elephant Lab: FAILED to initialize kernel state:", error);
 		}
 	}
+
+	// Called by KernelBridge (see kernel_bridge.ts) the first time it notices
+	// the kernel's Python state is gone - i.e. an external restart happened
+	// that nothing else here observed. Guarded against overlap: several
+	// in-flight executeCode() calls can all notice this around the same
+	// time, but only the first should trigger a re-init.
+	private async recoverFromLostKernelState(session: IElephantSession) {
+		if (this.isRecoveringKernelState) {
+			return;
+		}
+		this.isRecoveringKernelState = true;
+		try {
+			console.log("Elephant Lab: Kernel state was lost (likely restarted by another client); re-initializing automatically.");
+			await this.initializeKernelState(session);
+		} finally {
+			this.isRecoveringKernelState = false;
+		}
+	}
+
 	// Command on which to execute Elephant Lab
 	public createCommand(command: string) {
 		/**
@@ -372,9 +406,7 @@ class ElephantLabExtension {
 			return;
 		}
 
-		await this.app.serviceManager.kernels.ready;
-		await this.app.serviceManager.kernels.refreshRunning();
-		const entries = listKernelEntries(this.app.serviceManager, this.notebook_tracker);
+		const entries = await listKernelEntries(this.app.serviceManager, this.notebook_tracker);
 		const entry = entries.find(e => e.id === kernelId);
 		if (entry) {
 			await this.attachToKernel(entry);
@@ -445,6 +477,9 @@ class ElephantLabExtension {
 
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
+		if (initialSession.session?.kernel) {
+			this.registerKernelRestartListener(initialSession.session.kernel, initialSession);
+		}
 
 		this.registerTabSyncListener();
 		this.registerTreeInteractionListeners();
@@ -467,9 +502,13 @@ class ElephantLabExtension {
 			}, 500);
 		});
 
-		// Listener for changed Kernel, waits for Kernel to be ready
+		// Listener for a wholesale kernel change (e.g. Change Kernel, or a
+		// session reconnecting to a brand new kernel after the old one died -
+		// as opposed to an in-place restart of the *same* kernel id, which
+		// registerKernelRestartListener() above already handles). Waits for
+		// the new kernel to be ready, then re-initializes against it.
 		newPanel.sessionContext.kernelChanged.connect(async (sender, args) => {
-			console.log("Elephant Lab: Kernel has changed (restarted).");
+			console.log("Elephant Lab: Kernel has changed.");
 			const newKernel = args.newValue;
 			if (newKernel) {
 				const waitForIdle = new Promise<void>(resolve => {
@@ -486,7 +525,9 @@ class ElephantLabExtension {
 					newKernel.statusChanged.connect(listener);
 				});
 				await waitForIdle;
-				console.log("Elephant Lab: New kernel is idle and ready. Re-initializing state.");
+				console.log("Elephant Lab: New kernel is idle and ready; re-initializing state.");
+				await this.initializeKernelState(initialSession);
+				this.registerKernelRestartListener(newKernel, initialSession);
 			}
 		});
 
@@ -721,6 +762,12 @@ class ElephantLabExtension {
 	// kernel, or back to a notebook via the quick action) so repeated
 	// switches don't leave one open websocket per kernel ever visited.
 	private disposePickedKernelConnection() {
+		this.kernelRestartListenerCleanup?.();
+		this.kernelRestartListenerCleanup = null;
+		if (this.pickedKernelSyncTimer !== null) {
+			window.clearInterval(this.pickedKernelSyncTimer);
+			this.pickedKernelSyncTimer = null;
+		}
 		if (this.pickedWidgetManager) {
 			this.pickedWidgetManager.dispose();
 			this.pickedWidgetManager = null;
@@ -729,6 +776,46 @@ class ElephantLabExtension {
 			this.pickedKernelConnection.dispose();
 		}
 		this.pickedKernelConnection = null;
+	}
+
+	// Recognizes a same-id kernel restart (Kernel > Restart Kernel, or an
+	// autorestart after a crash): the connection's status walks
+	// 'restarting'/'autorestarting' then back to 'idle', with no change to
+	// the kernel id itself, so nothing else here (attachedKernelId, the
+	// notebook's own sessionContext) ever notices anything happened. But the
+	// restart wipes the kernel's Python state - elephant_lab_entity and
+	// everything else SetupEnv defined - and without this, Elephant Lab kept
+	// showing stale tree/details/explore state until the user re-attached by
+	// hand. Re-running initializeKernelState() puts it back in sync
+	// automatically, the same way switching away and back already did.
+	// Handles the case where the SAME connection we're watching is the one
+	// that requested the restart (KernelConnection.restart() sets its own
+	// status to 'restarting' synchronously), or a genuine crash-triggered
+	// autorestart (the kernel itself broadcasts an 'autorestarting' status
+	// over iopub to every connected client). Confirmed by testing that this
+	// does NOT fire for a restart requested by a *different* client (e.g.
+	// VS Code/PyCharm calling POST /api/kernels/<id>/restart directly) - our
+	// connection sees no status or connection-status change at all in that
+	// case, so initializeKernelState()'s self-healing check in KernelBridge
+	// (see kernel_bridge.ts) is what actually covers that scenario.
+	private registerKernelRestartListener(kernel: Kernel.IKernelConnection, session: IElephantSession) {
+		let sawRestart = false;
+		const onStatusChanged = (_kernel: Kernel.IKernelConnection, status: KernelMessage.Status) => {
+			if (status === 'restarting' || status === 'autorestarting') {
+				sawRestart = true;
+				console.log("Elephant Lab: Kernel is restarting.");
+			} else if (status === 'idle' && sawRestart) {
+				sawRestart = false;
+				console.log("Elephant Lab: Kernel restart complete; re-initializing Elephant Lab state.");
+				void this.initializeKernelState(session);
+			} else if (status === 'dead') {
+				sawRestart = false;
+			}
+		};
+		kernel.statusChanged.connect(onStatusChanged);
+		this.kernelRestartListenerCleanup = () => {
+			kernel.statusChanged.disconnect(onStatusChanged);
+		};
 	}
 
 	public async attachToKernel(entry: IKernelEntry) {
@@ -773,6 +860,10 @@ class ElephantLabExtension {
 		this.attachTab();
 
 		await this.initializeKernelState(session);
+		this.registerKernelRestartListener(kernel, session);
+		this.pickedKernelSyncTimer = window.setInterval(() => {
+			void this.kernelBridge?.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, session);
+		}, 5000);
 
 		this.registerTabSyncListener();
 		this.registerTreeInteractionListeners();

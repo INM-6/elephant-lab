@@ -32,9 +32,27 @@ export interface IElephantSession {
 
 export class KernelBridge {
     private session: IElephantSession;
+    private onKernelStateLost?: () => void;
+    private notifiedKernelStateLost = false;
 
-    constructor(session: IElephantSession) {
+    /**
+     * @param onKernelStateLost Called (at most once per KernelBridge
+     * instance) if a call to executeCode() comes back with a NameError for
+     * `elephant_lab_entity` - the object SetupEnv defines, and everything
+     * else here depends on. That specific error means the kernel's Python
+     * state was wiped since we last ran SetupEnv, almost always because the
+     * kernel was restarted. We can't rely on detecting a restart proactively
+     * for a kernel someone else (VS Code, PyCharm, a console) restarted:
+     * `Kernel.IKernelConnection.statusChanged` only reports 'restarting' for
+     * a restart *this* connection itself requested, or a crash-triggered
+     * autorestart the kernel broadcasts to everyone - a plain
+     * `POST /api/kernels/<id>/restart` from another client produces no
+     * signal at all on a passive connection like this one. Detecting the
+     * resulting NameError here instead works regardless of what caused it.
+     */
+    constructor(session: IElephantSession, onKernelStateLost?: () => void) {
         this.session = session;
+        this.onKernelStateLost = onKernelStateLost;
     }
 
     public async getNeoIOClass(filename: string): Promise<string | null> {
@@ -138,7 +156,30 @@ export class KernelBridge {
             this.handleOutputs(result.outputs, outputArea, showOutput);
         }
 
+        if (pythonCode !== PythonCodeKey.SetupEnv && this.indicatesKernelStateLost(outputs)) {
+            this.notifyKernelStateLost();
+        }
+
         return result;
+    }
+
+    /** True if `outputs` contains the NameError SetupEnv's absence produces. */
+    private indicatesKernelStateLost(outputs: any[]): boolean {
+        return outputs.some(
+            output =>
+                output.output_type === 'error' &&
+                output.ename === 'NameError' &&
+                typeof output.evalue === 'string' &&
+                output.evalue.includes('elephant_lab_entity')
+        );
+    }
+
+    private notifyKernelStateLost() {
+        if (this.notifiedKernelStateLost) {
+            return;
+        }
+        this.notifiedKernelStateLost = true;
+        this.onKernelStateLost?.();
     }
 
     private handleOutputs(outputs: any[], outputArea: OutputArea | null, showOutput: boolean) {
