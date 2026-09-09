@@ -795,13 +795,14 @@ class ElephantLabExtension {
 			}
 		});
 
-		// Always names the notebook currently focused in JupyterLab, since
-		// that - not whatever Elephant Lab happens to be attached to - is
-		// what clicking this button switches Elephant Lab to.
+		// Split button: the wide part is the quick action (always names the
+		// notebook currently focused in JupyterLab, since that - not
+		// whatever Elephant Lab happens to be attached to - is what clicking
+		// it switches Elephant Lab to); the narrow caret opens the full
+		// kernel picker. Joined into one control to save toolbar space.
 		const switchNotebookButton = document.createElement('button');
 		switchNotebookButton.title = 'Switch Elephant Lab to current active notebook';
-		switchNotebookButton.className = 'workflow-button workflow-button-io';
-		switchNotebookButton.style.marginRight = '5px';
+		switchNotebookButton.className = 'workflow-button workflow-button-io elephant-lab-split-main';
 		const setSwitchButtonLabel = () => {
 			const activeName = this.notebook_tracker.currentWidget?.sessionContext.path.split('/').pop();
 			switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${activeName ?? 'Active Notebook'}`;
@@ -813,17 +814,21 @@ class ElephantLabExtension {
 		};
 
 		const browseKernelsButton = document.createElement('button');
-		browseKernelsButton.innerHTML = '<i class="fa fa-server" aria-hidden="true"></i> Kernels...';
+		browseKernelsButton.innerHTML = '<i class="fa fa-caret-down" aria-hidden="true"></i>';
 		browseKernelsButton.title = 'Attach Elephant Lab to any kernel running on this Jupyter server '
 			+ '(including ones opened from VS Code, PyCharm, or another external client)';
-		browseKernelsButton.className = 'workflow-button workflow-button-io';
-		browseKernelsButton.style.marginRight = '5px';
+		browseKernelsButton.className = 'workflow-button workflow-button-io elephant-lab-split-arrow';
 		browseKernelsButton.onclick = async () => {
 			const entry = await openKernelPicker(this.app.serviceManager);
 			if (entry) {
 				await this.attachToKernel(entry);
 			}
 		};
+
+		const switcherContainer = document.createElement('div');
+		switcherContainer.className = 'elephant-lab-split-button';
+		switcherContainer.appendChild(switchNotebookButton);
+		switcherContainer.appendChild(browseKernelsButton);
 
 		const infoButton = document.createElement('button');
 		infoButton.innerHTML = '<i class="fa fa-info-circle" aria-hidden="true"></i> Elephant Lab';
@@ -855,8 +860,7 @@ class ElephantLabExtension {
 		container.style.alignItems = 'center';
 		container.style.padding = '2px';
 		container.appendChild(attachedLabel);
-		container.appendChild(switchNotebookButton);
-		container.appendChild(browseKernelsButton);
+		container.appendChild(switcherContainer);
 		container.appendChild(infoButton);
 
 		this.topBar = new Widget();

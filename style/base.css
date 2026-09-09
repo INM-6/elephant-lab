@@ -190,6 +190,31 @@
   border: 1px solid var(--jp-border-color2);
 }
 
+/* Split button: quick "switch to active notebook" action on the left,
+   narrow caret on the right opens the full kernel picker. Styled as one
+   joined control since .workflow-button has no visible border of its own. */
+.elephant-lab-split-button {
+  display: inline-flex;
+  align-items: stretch;
+  margin-right: 5px;
+}
+
+.elephant-lab-split-button .workflow-button {
+  margin-right: 0;
+  border-radius: 0;
+}
+
+.elephant-lab-split-button .elephant-lab-split-main {
+  border-radius: 4px 0 0 4px;
+  border-right: 1px solid var(--jp-border-color2);
+}
+
+.elephant-lab-split-button .elephant-lab-split-arrow {
+  border-radius: 0 4px 4px 0;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
 .jp-rawplot-button-container {
   display: flex;
   gap: 8px;
