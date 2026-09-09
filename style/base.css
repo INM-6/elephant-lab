@@ -215,6 +215,102 @@
   padding-right: 5px;
 }
 
+/* Kernel picker dialog: a scrollable list of rows (label + kernel name/id +
+   an origin badge) rather than a cramped native <select>. */
+.elephant-lab-kernel-picker {
+  display: flex;
+  flex-direction: column;
+  width: 480px;
+  max-width: 80vw;
+}
+
+.elephant-lab-kernel-picker-info {
+  margin-bottom: 6px;
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size1);
+}
+
+.elephant-lab-kernel-list {
+  flex-shrink: 0;
+  height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 4px;
+  background: var(--jp-layout-color0);
+}
+
+.elephant-lab-kernel-list:focus {
+  outline: 1px solid var(--jp-brand-color1);
+  outline-offset: -1px;
+}
+
+.elephant-lab-kernel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--jp-border-color3);
+}
+
+.elephant-lab-kernel-row:last-child {
+  border-bottom: none;
+}
+
+.elephant-lab-kernel-row:hover {
+  background: var(--jp-layout-color2);
+}
+
+.elephant-lab-kernel-row-selected,
+.elephant-lab-kernel-row-selected:hover {
+  background: var(--jp-brand-color3);
+}
+
+.elephant-lab-kernel-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.elephant-lab-kernel-row-label {
+  font-weight: 600;
+  color: var(--jp-ui-font-color1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.elephant-lab-kernel-row-sub {
+  font-size: var(--jp-ui-font-size0);
+  color: var(--jp-ui-font-color2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.elephant-lab-kernel-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: var(--jp-ui-font-size0);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.elephant-lab-kernel-badge-local {
+  background: var(--jp-success-color3, #d5f5e3);
+  color: var(--jp-success-color0, #145a32);
+}
+
+.elephant-lab-kernel-badge-external {
+  background: var(--jp-warn-color3, #fdebd0);
+  color: var(--jp-warn-color0, #7e5109);
+}
+
+.elephant-lab-kernel-badge-kernel-only {
+  background: var(--jp-layout-color3);
+  color: var(--jp-ui-font-color2);
+}
+
 .jp-rawplot-button-container {
   display: flex;
   gap: 8px;
