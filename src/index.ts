@@ -7,7 +7,6 @@ import {
 
 import {
 	ICommandPalette,
-	ISessionContext,
 	WidgetTracker,
 	showDialog,
 	Dialog
@@ -71,9 +70,10 @@ import {
 import '../style/index.css';
 import '../style/base.css'
 import '../style/sidebar.css';
-import { KernelBridge } from './kernel_bridge';
+import { KernelBridge, IElephantSession } from './kernel_bridge';
 import { PlotlyFrontend } from './plot';
 import { PlotSettings } from './plot_settings';
+import { AttachedKernelSession, IKernelEntry, openKernelPicker } from './kernel_picker';
 import elephantLabLogo from '../doc/Elephant-Lab-Logo.png';
 
 type PlotSettingsKey = keyof PlotSettings;
@@ -99,9 +99,21 @@ class ElephantLabExtension {
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
 	private settingRegistry: ISettingRegistry;
+	private rendermime: IRenderMimeRegistry;
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
 	private plotlyFrontend: PlotlyFrontend | null;
+	// The kernel id Elephant Lab is currently attached to, however it got
+	// there (the active-notebook quick action or the kernel picker). Used to
+	// tell whether the notebook currently in the foreground is the one
+	// Elephant Lab is watching.
+	private attachedKernelId: string | null = null;
+	// The Kernel.IKernelConnection attachToKernel() opened via
+	// serviceManager.kernels.connectTo(). Unlike a notebook's kernel
+	// connection (owned by its NotebookPanel/sessionContext), this one is
+	// ours alone - disposed on the next switch so we don't accumulate one
+	// open websocket per kernel the picker was ever pointed at.
+	private pickedKernelConnection: Kernel.IKernelConnection | null = null;
 	private _lastClickedNode: string | null = null;
 	private _explorerWidget: Panel | null = null;
 	private _detailsWidget: Panel | null = null;
@@ -119,6 +131,7 @@ class ElephantLabExtension {
 		this.widget_tracker = widget_tracker;
 		this.docManager = docManager;
 		this.settingRegistry = settingRegistry;
+		this.rendermime = rendermime;
 		// Store references to all tabs containing notebooks
 		this.myPanels = [];
 		// Store references to all tabs created by this extension
@@ -205,9 +218,10 @@ class ElephantLabExtension {
 	// Define utility functions
 	/******************************************************************************************************************/
 	// Create OutputAreas where Python-Code can be executed
-	private async initializeKernelState(session: ISessionContext) {
+	private async initializeKernelState(session: IElephantSession) {
 		console.log("Elephant Lab: Initializing kernel state...");
 		this.kernelBridge = new KernelBridge(session);
+		this.attachedKernelId = session.session?.kernel?.id ?? null;
 
 		await this.kernelBridge.executeCode(PythonCodeKey.SetupEnv);
 
@@ -217,7 +231,7 @@ class ElephantLabExtension {
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
-			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
+			this.plotlyFrontend = new PlotlyFrontend(session.session!.kernel!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
 			// Notify backend of initial panel active state
 			await this.kernelBridge.executeCode(
@@ -336,6 +350,8 @@ class ElephantLabExtension {
 
 		console.log("Elephant Lab: Creating new Elephant Lab instance.");
 
+		this.disposePickedKernelConnection();
+
 		// Clear the panel before adding new widgets
 		const oldWidgets = Array.from(this.widget.widgets());
 		for (const w of oldWidgets) {
@@ -346,16 +362,67 @@ class ElephantLabExtension {
 			this.output_tabs = null;
 		}
 
-		await this.initializeTab(newPanel.content.rendermime as any);
+		const initialSession = newPanel.sessionContext;
+		await this.initializeTab(newPanel.content.rendermime as any, initialSession);
 		this.myVisTabs.push(this.widget);
 		this.myPanels.push(newPanel);
 		this.attachTab();
 
-		const initialSession = newPanel.sessionContext;
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
 
-		// Keep backend in sync when the user switches between Details and Explore tabs
+		this.registerTabSyncListener();
+		this.registerTreeInteractionListeners();
+
+		// Listener for cell execution
+		NotebookActions.executed.connect((sender, exec_data) => {
+			if (exec_data.notebook !== newPanel.content) {
+				return;
+			}
+			console.log("Elephant Lab: Cell executed, updating plots.");
+
+			if (this._updateTimer) {
+				window.clearTimeout(this._updateTimer);
+			}
+
+			this._updateTimer = window.setTimeout(async () => {
+				await Promise.all([
+					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, initialSession),
+				]);
+			}, 500);
+		});
+
+		// Listener for changed Kernel, waits for Kernel to be ready
+		newPanel.sessionContext.kernelChanged.connect(async (sender, args) => {
+			console.log("Elephant Lab: Kernel has changed (restarted).");
+			const newKernel = args.newValue;
+			if (newKernel) {
+				const waitForIdle = new Promise<void>(resolve => {
+					if (newKernel.status === 'idle') {
+						resolve();
+						return;
+					}
+					const listener = (kernel: Kernel.IKernelConnection, status: KernelMessage.Status) => {
+						if (status === 'idle') {
+							newKernel.statusChanged.disconnect(listener);
+							resolve();
+						}
+					};
+					newKernel.statusChanged.connect(listener);
+				});
+				await waitForIdle;
+				console.log("Elephant Lab: New kernel is idle and ready. Re-initializing state.");
+			}
+		});
+
+		console.log("Elephant Lab: Event listeners registered.");
+	}
+
+	// Keeps the backend in sync when the user switches between the Details
+	// and Explore tabs. Shared by newTab() and attachToKernel() since neither
+	// this nor its captured state (this.kernelBridge, this._detailsWidget,
+	// this._explorerWidget) depends on how Elephant Lab got attached to a kernel.
+	private registerTabSyncListener() {
 		for (const tabBar of this.widget.tabBars()) {
 			const hasOurPanels = Array.from(tabBar.titles).some(
 				t => t.owner === this._detailsWidget || t.owner === this._explorerWidget
@@ -373,8 +440,14 @@ class ElephantLabExtension {
 				break;
 			}
 		}
+	}
 
-		// Handle HTML tree interactions (expand/collapse + selection)
+	// Handle HTML tree interactions (expand/collapse + selection) and Details
+	// panel stat clicks. Shared by newTab() and attachToKernel() - purely a
+	// function of this.outarea_neo_tree / this.outarea_nodeexplorer_info /
+	// this.kernelBridge, none of which depend on how Elephant Lab got
+	// attached to a kernel.
+	private registerTreeInteractionListeners() {
 		// All clicks go through a 250ms timer so dblclick can cancel before any Python call fires.
 		this.outarea_neo_tree!.node.addEventListener('click', (e) => {
 			const target = e.target as HTMLElement;
@@ -550,52 +623,75 @@ class ElephantLabExtension {
 				const result = await this.kernelBridge!.executeCode(code, null, false);
 				this._applyTreeSelection(result);
 			}
-
 		});
+	}
 
+	/**
+	 * Attaches Elephant Lab to an arbitrary kernel running on the Jupyter
+	 * server, selected via the kernel picker - as opposed to newTab(), which
+	 * always attaches to the currently focused notebook widget. This covers
+	 * kernels that JupyterLab itself never opened as a notebook tab, e.g. a
+	 * notebook opened against the same jupyter_server from VS Code or
+	 * PyCharm, or a kernel started directly against /api/kernels.
+	 *
+	 * Cell-execution auto-refresh and kernel-restart recovery (registered in
+	 * newTab() via NotebookActions.executed / sessionContext.kernelChanged)
+	 * are notebook-tab features and are intentionally not replicated here:
+	 * JupyterLab has no visibility into cells executed by another client, so
+	 * there is nothing for it to listen to. The tree still refreshes on the
+	 * next explicit interaction (e.g. reopening Elephant Lab).
+	 */
+	// Disposes the kernel connection opened by a previous attachToKernel()
+	// call, if any. Called before switching to a new target (another picked
+	// kernel, or back to a notebook via the quick action) so repeated
+	// switches don't leave one open websocket per kernel ever visited.
+	private disposePickedKernelConnection() {
+		if (this.pickedKernelConnection && !this.pickedKernelConnection.isDisposed) {
+			this.pickedKernelConnection.dispose();
+		}
+		this.pickedKernelConnection = null;
+	}
 
-		// Listener for cell execution
-		NotebookActions.executed.connect((sender, exec_data) => {
-			if (exec_data.notebook !== newPanel.content) {
-				return;
-			}
-			console.log("Elephant Lab: Cell executed, updating plots.");
+	public async attachToKernel(entry: IKernelEntry) {
+		if (this.widget.isDisposed) {
+			this.widget = this.createWidget();
+		}
 
-			if (this._updateTimer) {
-				window.clearTimeout(this._updateTimer);
-			}
-
-			this._updateTimer = window.setTimeout(async () => {
-				await Promise.all([
-					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, initialSession),
-				]);
-			}, 500);
-		});
-
-		// Listener for changed Kernel, waits for Kernel to be ready
-		newPanel.sessionContext.kernelChanged.connect(async (sender, args) => {
-			console.log("Elephant Lab: Kernel has changed (restarted).");
-			const newKernel = args.newValue;
-			if (newKernel) {
-				const waitForIdle = new Promise<void>(resolve => {
-					if (newKernel.status === 'idle') {
-						resolve();
-						return;
-					}
-					const listener = (kernel: Kernel.IKernelConnection, status: KernelMessage.Status) => {
-						if (status === 'idle') {
-							newKernel.statusChanged.disconnect(listener);
-							resolve();
-						}
-					};
-					newKernel.statusChanged.connect(listener);
-				});
-				await waitForIdle;
-				console.log("Elephant Lab: New kernel is idle and ready. Re-initializing state.");
+		this.clearActiveNotebookBadge();
+		// If the picked kernel also happens to back a notebook tab that's
+		// open locally, badge it too, consistent with the quick-action flow.
+		this.notebook_tracker.forEach(notebookWidget => {
+			if (notebookWidget.sessionContext.session?.kernel?.id === entry.id) {
+				notebookWidget.title.className += ' elephant-lab-active-notebook';
 			}
 		});
 
-		console.log("Elephant Lab: Event listeners registered.");
+		this.disposePickedKernelConnection();
+
+		// Clear the panel before adding new widgets
+		const oldWidgets = Array.from(this.widget.widgets());
+		for (const w of oldWidgets) {
+			w.dispose();
+		}
+		if (this.output_tabs) {
+			this.output_tabs.dispose();
+			this.output_tabs = null;
+		}
+
+		const kernel = this.app.serviceManager.kernels.connectTo({ model: { id: entry.id, name: entry.name } });
+		this.pickedKernelConnection = kernel;
+		const session = new AttachedKernelSession(kernel, entry.label);
+
+		await this.initializeTab(this.rendermime, session);
+		this.myVisTabs.push(this.widget);
+		this.attachTab();
+
+		await this.initializeKernelState(session);
+
+		this.registerTabSyncListener();
+		this.registerTreeInteractionListeners();
+
+		console.log(`Elephant Lab: Attached to kernel ${entry.id} (${entry.label}).`);
 	}
 
 	private _applyTreeSelection(result: any) {
@@ -647,7 +743,7 @@ class ElephantLabExtension {
 		this.app.shell.activateById(this.widget.id);
 	} // end of attachTab()
 
-	public async initializeTab(rendermime: IRenderMimeRegistry) {
+	public async initializeTab(rendermime: IRenderMimeRegistry, session: IElephantSession) {
 		/**
 		  * Initialize a new tab for this extension.
 		  */
@@ -660,11 +756,6 @@ class ElephantLabExtension {
 		this.widget.title.iconClass = 'elephant-trunk-icon';
 		// Adds the x to close the tab?
 		this.widget.title.closable = true;
-		const session = this.notebook_tracker.currentWidget?.sessionContext;
-		if (!session) {
-			console.error("Elephant Lab: No notebook session found during UI initialization!");
-			return;
-		}
 
 		await this.createWidgets(rendermime, session);
 
@@ -681,28 +772,58 @@ class ElephantLabExtension {
 		sessionStorage.setItem('elephant-lab-filter-states', JSON.stringify(states));
 	}
 
-	public createTopBar(session: ISessionContext) {
+	public createTopBar(session: IElephantSession) {
 		if (this.topBar) {
 			this.topBar.dispose();
 		}
 
-		const currentFilename = session.path.split('/').pop() || "Unknown Notebook";
+		// What Elephant Lab is actually attached to right now - a notebook
+		// path when reached via the quick action (or a kernel-picker entry
+		// that resolved to a session path), or a kernel id/name fallback when
+		// attached via the picker to a kernel with no matching session.
+		const attachedLabel = document.createElement('span');
+		attachedLabel.className = 'elephant-lab-attached-label';
+		attachedLabel.style.marginRight = '8px';
+		attachedLabel.title = 'The kernel Elephant Lab is currently attached to';
+		const setAttachedLabel = (path: string) => {
+			attachedLabel.innerHTML = `<i class="fa fa-link" aria-hidden="true"></i> ${path.split('/').pop() || path}`;
+		};
+		setAttachedLabel(session.path);
+		session.propertyChanged.connect((sender, prop) => {
+			if (prop === 'path') {
+				setAttachedLabel(sender.path);
+			}
+		});
 
+		// Always names the notebook currently focused in JupyterLab, since
+		// that - not whatever Elephant Lab happens to be attached to - is
+		// what clicking this button switches Elephant Lab to.
 		const switchNotebookButton = document.createElement('button');
-		switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${currentFilename}`;
 		switchNotebookButton.title = 'Switch Elephant Lab to current active notebook';
 		switchNotebookButton.className = 'workflow-button workflow-button-io';
 		switchNotebookButton.style.marginRight = '5px';
+		const setSwitchButtonLabel = () => {
+			const activeName = this.notebook_tracker.currentWidget?.sessionContext.path.split('/').pop();
+			switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${activeName ?? 'Active Notebook'}`;
+		};
+		setSwitchButtonLabel();
+		this.notebook_tracker.currentChanged.connect(setSwitchButtonLabel);
 		switchNotebookButton.onclick = () => {
 			this.newTab(true);
 		};
 
-		session.propertyChanged.connect((sender, prop) => {
-			if (prop === 'path') {
-				const newFilename = sender.path.split('/').pop() || "Unknown Notebook";
-				switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${newFilename}`;
+		const browseKernelsButton = document.createElement('button');
+		browseKernelsButton.innerHTML = '<i class="fa fa-server" aria-hidden="true"></i> Kernels...';
+		browseKernelsButton.title = 'Attach Elephant Lab to any kernel running on this Jupyter server '
+			+ '(including ones opened from VS Code, PyCharm, or another external client)';
+		browseKernelsButton.className = 'workflow-button workflow-button-io';
+		browseKernelsButton.style.marginRight = '5px';
+		browseKernelsButton.onclick = async () => {
+			const entry = await openKernelPicker(this.app.serviceManager);
+			if (entry) {
+				await this.attachToKernel(entry);
 			}
-		});
+		};
 
 		const infoButton = document.createElement('button');
 		infoButton.innerHTML = '<i class="fa fa-info-circle" aria-hidden="true"></i> Elephant Lab';
@@ -733,7 +854,9 @@ class ElephantLabExtension {
 		container.style.display = 'flex';
 		container.style.alignItems = 'center';
 		container.style.padding = '2px';
+		container.appendChild(attachedLabel);
 		container.appendChild(switchNotebookButton);
+		container.appendChild(browseKernelsButton);
 		container.appendChild(infoButton);
 
 		this.topBar = new Widget();
@@ -747,7 +870,7 @@ class ElephantLabExtension {
 		}
 	}
 
-	public create_tree_filter(session: ISessionContext, tree_widget: Panel) {
+	public create_tree_filter(session: IElephantSession, tree_widget: Panel) {
 		const neo_obj_filter_dict = {
 			"block": "cube",
 			"segment": "columns",
@@ -972,8 +1095,13 @@ class ElephantLabExtension {
 		insertCodeButton.title = 'Insert selected neo objects into current notebook';
 		insertCodeButton.className = 'workflow-button workflow-button-io';
 		insertCodeButton.onclick = async () => {
+			// Compare kernel ids rather than session paths: when Elephant Lab
+			// is attached via the kernel picker there may be no local
+			// notebook path to compare against at all, but the check still
+			// needs to hold - inserting code only makes sense into a notebook
+			// tab that is actually backed by the kernel we're attached to.
 			const currentNotebook = this.notebook_tracker.currentWidget;
-			if (!currentNotebook || currentNotebook.sessionContext.path !== session.path) {
+			if (!currentNotebook || currentNotebook.sessionContext.session?.kernel?.id !== this.attachedKernelId) {
 				showDialog({
 					title: 'Incorrect Notebook',
 					body: 'Elephant Lab is not connected to this notebook. Please switch to the notebook Elephant Lab is attached to.',
@@ -1085,7 +1213,7 @@ class ElephantLabExtension {
 		tree_widget.node.prepend(filterContainer);
 	}
 
-	public async create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+	public async create_raw_plot_options(session: IElephantSession, raw_plot_widget: Panel) {
 		const settings = await this.settingRegistry.load('elephant-lab:plugin');
 
 		const buttonContainer = document.createElement("div");
@@ -1523,7 +1651,7 @@ class ElephantLabExtension {
 		raw_plot_widget.node.prepend(toolbarContainer);
 	}
 
-	public async createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
+	public async createWidgets(rendermime: IRenderMimeRegistry, session: IElephantSession) {
 		// NEO TREE 
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
@@ -1552,17 +1680,17 @@ class ElephantLabExtension {
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
 	}
 
-	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
+	public neo_tree_filter(checkbox_id: string, session: IElephantSession) {
 		let code = getPythonCode(PythonCodeKey.ToggleNeoTreeFilter, checkbox_id);
 		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 	}
 
-	public neo_tree_expand(checked: boolean, session: ISessionContext) {
+	public neo_tree_expand(checked: boolean, session: IElephantSession) {
 		let code = getPythonCode(PythonCodeKey.ExpandNeoTree, checked);
 		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 	}
 
-	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext): OutputArea {
+	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: IElephantSession): OutputArea {
 		/**
 		  * Creates an OutputArea inside 'tab', in which the output of executed pythonCode will displayed
 		  *

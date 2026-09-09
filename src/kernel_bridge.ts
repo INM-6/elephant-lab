@@ -1,5 +1,5 @@
-import { ISessionContext } from '@jupyterlab/apputils';
-import { KernelMessage } from '@jupyterlab/services';
+import { Kernel, KernelMessage } from '@jupyterlab/services';
+import { ISignal } from '@lumino/signaling';
 
 // Python Code to execute in the kernel
 import {
@@ -16,10 +16,24 @@ export interface IExecutionResult {
     outputs: any[];
 }
 
-export class KernelBridge {
-    private session: ISessionContext;
+/**
+ * The subset of `ISessionContext` that `KernelBridge` (and the rest of the
+ * Elephant Lab UI) actually relies on. A real notebook `ISessionContext`
+ * satisfies this structurally, but so does a lightweight wrapper around a
+ * `Kernel.IKernelConnection` obtained for a kernel that was never opened as
+ * a notebook tab in JupyterLab (e.g. one picked via the kernel picker).
+ */
+export interface IElephantSession {
+    readonly session: { kernel: Kernel.IKernelConnection | null | undefined } | null;
+    readonly path: string;
+    readonly ready: Promise<void>;
+    readonly propertyChanged: ISignal<any, 'path' | 'name' | 'type'>;
+}
 
-    constructor(session: ISessionContext) {
+export class KernelBridge {
+    private session: IElephantSession;
+
+    constructor(session: IElephantSession) {
         this.session = session;
     }
 
@@ -49,7 +63,7 @@ export class KernelBridge {
      * @returns A promise that resolves to an IExecutionResult object, containing the result key
      * and an array of output messages. Returns null if the session is not available.
      */
-    public async executeCode(pythonCode: PythonCodeKey | string, outputArea: OutputArea | null = null, showOutput = true, executeCode = true, session: ISessionContext | null = null): Promise<IExecutionResult | null> {
+    public async executeCode(pythonCode: PythonCodeKey | string, outputArea: OutputArea | null = null, showOutput = true, executeCode = true, session: IElephantSession | null = null): Promise<IExecutionResult | null> {
         if (!session) {
             session = this.session;
         }
