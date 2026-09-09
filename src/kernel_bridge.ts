@@ -30,6 +30,28 @@ export interface IElephantSession {
     readonly propertyChanged: ISignal<any, 'path' | 'name' | 'type'>;
 }
 
+/**
+ * True if `outputs` (in the shape `KernelBridge.executeCode()` collects
+ * them) contains the NameError that a wiped kernel Python state produces -
+ * i.e. `elephant_lab_entity`, the object `SetupEnv` defines and everything
+ * else depends on, is undefined. See `KernelBridge`'s constructor doc for
+ * why this - not a proactive status signal - is how an externally-triggered
+ * kernel restart gets detected at all.
+ *
+ * Pure and standalone (not a method) so it can be unit tested against plain
+ * fixture output arrays, without constructing a `KernelBridge` or a fake
+ * kernel connection.
+ */
+export function indicatesKernelStateLost(outputs: any[]): boolean {
+    return outputs.some(
+        output =>
+            output.output_type === 'error' &&
+            output.ename === 'NameError' &&
+            typeof output.evalue === 'string' &&
+            output.evalue.includes('elephant_lab_entity')
+    );
+}
+
 export class KernelBridge {
     private session: IElephantSession;
     private onKernelStateLost?: () => void;
@@ -156,22 +178,11 @@ export class KernelBridge {
             this.handleOutputs(result.outputs, outputArea, showOutput);
         }
 
-        if (pythonCode !== PythonCodeKey.SetupEnv && this.indicatesKernelStateLost(outputs)) {
+        if (pythonCode !== PythonCodeKey.SetupEnv && indicatesKernelStateLost(outputs)) {
             this.notifyKernelStateLost();
         }
 
         return result;
-    }
-
-    /** True if `outputs` contains the NameError SetupEnv's absence produces. */
-    private indicatesKernelStateLost(outputs: any[]): boolean {
-        return outputs.some(
-            output =>
-                output.output_type === 'error' &&
-                output.ename === 'NameError' &&
-                typeof output.evalue === 'string' &&
-                output.evalue.includes('elephant_lab_entity')
-        );
     }
 
     private notifyKernelStateLost() {
