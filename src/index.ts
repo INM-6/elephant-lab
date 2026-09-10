@@ -856,6 +856,40 @@ class ElephantLabExtension {
 		};
 	}
 
+	// Attaches to an entry picked interactively from the kernel picker,
+	// routing a 'local' entry through the plain newTab() quick-action path
+	// instead of attachToKernel() below.
+	//
+	// A local notebook already has its own ipywidgets manager - registered
+	// by @jupyter-widgets/jupyterlab-manager against that notebook's own
+	// rendermime, the same one newTab() passes to initializeTab(). But
+	// attachToKernel() always builds a second, independent manager via
+	// createAttachedWidgetManager() (see ipywidgets_support.ts), meant for
+	// kernels that have no notebook and therefore no existing manager to
+	// reuse. Attaching to a *local* entry through attachToKernel() left two
+	// managers both listening for the same kernel's widget comms, and
+	// whichever one didn't end up owning a given widget's model rendered
+	// "Error displaying widget: model not found" for it - confirmed by
+	// testing that reattaching to the very same notebook immediately after
+	// "fixed" it, consistent with a registration-order race between the two
+	// managers rather than a real, permanent failure.
+	//
+	// Only used here, for an interactive click: restoreAttachment() has its
+	// own documented reason (see there) for deliberately not activating a
+	// not-necessarily-ready local panel during page restoration, so it
+	// always goes through attachToKernel() even for a local entry.
+	private async attachToPickedEntry(entry: IKernelEntry) {
+		if (entry.origin === 'local') {
+			const panel = this.notebook_tracker.find(p => p.sessionContext.session?.kernel?.id === entry.id);
+			if (panel) {
+				this.app.shell.activateById(panel.id);
+				await this.newTab(true);
+				return;
+			}
+		}
+		await this.attachToKernel(entry);
+	}
+
 	public async attachToKernel(entry: IKernelEntry) {
 		if (this.widget.isDisposed) {
 			this.widget = this.createWidget();
@@ -1059,20 +1093,18 @@ class ElephantLabExtension {
 			}
 		});
 
-		// Split button: the wide part is the quick action (always names the
-		// notebook currently focused in JupyterLab, since that - not
-		// whatever Elephant Lab happens to be attached to - is what clicking
-		// it switches Elephant Lab to); the narrow caret opens the full
-		// kernel picker. Joined into one control to save toolbar space.
+		// Split button: the wide part is the quick action (attaches to
+		// whatever notebook is currently focused in JupyterLab); the narrow
+		// caret opens the full kernel picker. Joined into one control to
+		// save toolbar space. The label is a constant "Attach to" rather
+		// than naming a notebook - it used to name whichever notebook was
+		// currently focused, which read as a *state* (easily mistaken for
+		// "this is what Elephant Lab is attached to", i.e. confusable with
+		// attachedLabel above) rather than the *action* clicking it performs.
 		const switchNotebookButton = document.createElement('button');
-		switchNotebookButton.title = 'Switch Elephant Lab to current active notebook';
-		switchNotebookButton.className = 'workflow-button workflow-button-io elephant-lab-split-main';
-		const setSwitchButtonLabel = () => {
-			const activeName = this.notebook_tracker.currentWidget?.sessionContext.path.split('/').pop();
-			switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${activeName ?? 'Active Notebook'}`;
-		};
-		setSwitchButtonLabel();
-		this.notebook_tracker.currentChanged.connect(setSwitchButtonLabel);
+		switchNotebookButton.innerHTML = '<i class="fa fa-exchange" aria-hidden="true"></i> Attach to';
+		switchNotebookButton.title = 'Attach Elephant Lab to the currently active notebook';
+		switchNotebookButton.className = 'workflow-button workflow-button-io elephant-lab-topbar-button elephant-lab-split-main';
 		switchNotebookButton.onclick = () => {
 			this.newTab(true);
 		};
@@ -1081,11 +1113,11 @@ class ElephantLabExtension {
 		browseKernelsButton.innerHTML = '<i class="fa fa-caret-down" aria-hidden="true"></i>';
 		browseKernelsButton.title = 'Attach Elephant Lab to any kernel running on this Jupyter server '
 			+ '(including ones opened from VS Code, PyCharm, or another external client)';
-		browseKernelsButton.className = 'workflow-button workflow-button-io elephant-lab-split-arrow';
+		browseKernelsButton.className = 'workflow-button workflow-button-io elephant-lab-topbar-button elephant-lab-split-arrow';
 		browseKernelsButton.onclick = async () => {
 			const entry = await openKernelPicker(this.app.serviceManager, this.notebook_tracker);
 			if (entry) {
-				await this.attachToKernel(entry);
+				await this.attachToPickedEntry(entry);
 			}
 		};
 
@@ -1097,7 +1129,7 @@ class ElephantLabExtension {
 		const infoButton = document.createElement('button');
 		infoButton.innerHTML = '<i class="fa fa-info-circle" aria-hidden="true"></i> Elephant Lab';
 		infoButton.title = 'About Elephant Lab';
-		infoButton.className = 'workflow-button workflow-button-io';
+		infoButton.className = 'workflow-button workflow-button-io elephant-lab-topbar-button';
 		infoButton.onclick = async () => {
 			const result = await this.kernelBridge!.executeCode(PythonCodeKey.Version);
 
