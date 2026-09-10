@@ -1500,7 +1500,7 @@ class ElephantLabExtension {
 							await navigator.clipboard.writeText(codeToCopy);
 							Notification.success(
 								'Elephant Lab is attached to an external notebook and cannot insert code directly. '
-								+ 'The code has been copied to your clipboard - paste it into your notebook.',
+								+ 'The code has been copied to your clipboard.',
 								{ autoClose: 5000 }
 							);
 							return;
