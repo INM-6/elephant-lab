@@ -814,6 +814,14 @@ class ElephantLabExtension {
 	// call, if any. Called before switching to a new target (another picked
 	// kernel, or back to a notebook via the quick action) so repeated
 	// switches don't leave one open websocket per kernel ever visited.
+	//
+	// Also disposes the previous attachment's PlotlyFrontend here (not just
+	// on a same-kernel restart - see initializeKernelState(), which needed
+	// its own dispose() call for that case). Switching kernels doesn't show
+	// stale plots the way a restart did, since the old Explore panel's DOM
+	// is thrown away right after this runs anyway - but PlotlyFrontend's
+	// ResizeObserver keeps observing that now-detached DOM node until
+	// something disconnects it, which without this call was never anything.
 	private disposePickedKernelConnection() {
 		this.kernelRestartListenerCleanup?.();
 		this.kernelRestartListenerCleanup = null;
@@ -829,6 +837,8 @@ class ElephantLabExtension {
 			this.pickedKernelConnection.dispose();
 		}
 		this.pickedKernelConnection = null;
+		this.plotlyFrontend?.dispose();
+		this.plotlyFrontend = null;
 	}
 
 	// Recognizes a same-id kernel restart (Kernel > Restart Kernel, or an
