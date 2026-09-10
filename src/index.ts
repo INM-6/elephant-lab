@@ -124,12 +124,12 @@ class ElephantLabExtension {
 	private pickedWidgetManager: IAttachedWidgetManager | null = null;
 	// A kernel attached via the picker has no notebook tab, so there's no
 	// NotebookActions.executed signal to refresh the tree on (that's how the
-	// quick-action/local-notebook flow stays live). This timer calls the same
-	// UpdateTree used there, just on a clock instead of on cell execution -
-	// which doubles as a periodic health check: it's what makes
-	// KernelBridge's kernel-state-lost detection (see kernel_bridge.ts) fire
-	// on its own after an external restart, not only on the next manual
-	// interaction.
+	// quick-action/local-notebook flow stays live). This timer runs
+	// runPickedKernelHealthCheck() instead, on a clock rather than on cell
+	// execution - both refreshing the tree AND checking, every tick, whether
+	// the kernel behind entry.path is still the one we're attached to (see
+	// that method for why an in-place restart isn't the only way a kernel
+	// can change out from under an external attachment).
 	private pickedKernelSyncTimer: number | null = null;
 	// Disconnects the kernel-restart listener registered by
 	// registerKernelRestartListener() for whatever kernel Elephant Lab is
@@ -900,13 +900,62 @@ class ElephantLabExtension {
 		await this.initializeKernelState(session);
 		this.registerKernelRestartListener(kernel, session);
 		this.pickedKernelSyncTimer = window.setInterval(() => {
-			void this.kernelBridge?.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, session);
+			void this.runPickedKernelHealthCheck(entry, session);
 		}, 5000);
 
 		this.registerTabSyncListener();
 		this.registerTreeInteractionListeners();
 
 		console.log(`Elephant Lab: Attached to kernel ${entry.id} (${entry.label}).`);
+	}
+
+	// Runs every 5s for a kernel-picker attachment (see attachToKernel()).
+	// Covers two ways the kernel behind an external attachment can change
+	// out from under it, neither of which is the in-place same-id restart
+	// registerKernelRestartListener()/KernelBridge's NameError check already
+	// handle:
+	//
+	// 1. The session at entry.path now points to a *different* kernel id.
+	//    Some external clients implement "restart" by shutting the old
+	//    kernel down and starting a fresh one for the session, rather than
+	//    POSTing /api/kernels/<id>/restart - the id changes, so nothing that
+	//    watches the OLD connection (including its statusChanged) ever fires
+	//    at all. Re-resolving entry.path via listKernelEntries() catches
+	//    this; reattaching rebuilds everything (connection, widget manager,
+	//    KernelBridge) against the new id from scratch.
+	// 2. The connection is simply dead - the UpdateTree health-check call
+	//    below either rejects outright, or never settles at all (observed
+	//    for a same-id restart before the concurrent-reinit race was fixed;
+	//    plausible too for a kernel a client shut down without the
+	//    replacement above ever landing, e.g. mid-shutdown). A timeout
+	//    forces a reattach attempt either way rather than polling a
+	//    connection that will never produce another answer.
+	private async runPickedKernelHealthCheck(entry: IKernelEntry, session: IElephantSession) {
+		if (entry.path) {
+			try {
+				const entries = await listKernelEntries(this.app.serviceManager, this.notebook_tracker);
+				const current = entries.find(e => e.path === entry.path);
+				if (current && current.id !== this.attachedKernelId) {
+					console.log(`Elephant Lab: ${entry.path} is now backed by a different kernel (was ${entry.id}, now ${current.id}); reattaching.`);
+					await this.attachToKernel(current);
+					return;
+				}
+			} catch (error) {
+				console.error("Elephant Lab: Failed to check whether the attached kernel was replaced:", error);
+			}
+		}
+
+		const healthCheck = this.kernelBridge?.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, session);
+		if (!healthCheck) {
+			return;
+		}
+		const TIMEOUT = Symbol();
+		const timeout = new Promise(resolve => window.setTimeout(() => resolve(TIMEOUT), 8000));
+		const outcome = await Promise.race([healthCheck, timeout]).catch(() => TIMEOUT);
+		if (outcome === TIMEOUT) {
+			console.log("Elephant Lab: Picked kernel connection is unresponsive; reattaching.");
+			await this.attachToKernel(entry);
+		}
 	}
 
 	private _applyTreeSelection(result: any) {
