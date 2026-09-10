@@ -9,7 +9,8 @@ import {
 	ICommandPalette,
 	WidgetTracker,
 	showDialog,
-	Dialog
+	Dialog,
+	Notification
 } from '@jupyterlab/apputils';
 
 import {
@@ -405,21 +406,24 @@ class ElephantLabExtension {
 	// currently focused already happens to be backed by that same kernel
 	// (the common case - nothing to do beyond what newTab() already does,
 	// and it's the well-exercised path so there's no reason to route around
-	// it); the kernel picker's raw-connection path, if the kernel is still
-	// running on the server but isn't what's currently focused (this is
-	// what fixes the "reload switches an externally-controlled notebook"
-	// case, since an externally-controlled kernel has no local tab to focus
-	// in the first place); and finally the plain newTab() fallback if the
-	// kernel is gone.
+	// it); a not-currently-focused *local* tab backed by that kernel, if its
+	// sessionContext turns out to be ready quickly (see panelReadySoon() -
+	// this reuses that notebook's own ipywidgets manager, same as the quick
+	// action, avoiding the "Error displaying widget: model not found" that
+	// attachToKernel()'s self-contained one produces for a local kernel);
+	// the kernel picker's raw-connection path otherwise, if the kernel is
+	// still running on the server (this is what fixes the "reload switches
+	// an externally-controlled notebook" case, since an externally-controlled
+	// kernel has no local tab to focus in the first place, and is also the
+	// fallback for a local tab whose sessionContext *isn't* ready quickly);
+	// and finally the plain newTab() fallback if the kernel is gone.
 	//
-	// Deliberately does NOT hunt through notebook_tracker for some other,
-	// not-currently-focused local tab backed by kernelId and force newTab()
-	// to target it directly: during restoration, notebook_tracker can
-	// contain panels whose sessionContext has a kernel id already but whose
-	// own initialize() JupyterLab hasn't gotten around to running yet, and
-	// targeting one of those makes newTab() hang forever awaiting
-	// `sessionContext.ready`. Going through attachToKernel()'s raw
-	// KernelConnection instead sidesteps that race entirely.
+	// The not-ready-yet case is real: during restoration, notebook_tracker
+	// can contain panels whose sessionContext has a kernel id already but
+	// whose own initialize() JupyterLab hasn't gotten around to running yet,
+	// and targeting one of those makes newTab() hang forever awaiting
+	// `sessionContext.ready` with no fix in this method ever able to un-hang
+	// it - hence the bounded wait rather than an unconditional one.
 	private async restoreAttachment(kernelId: string, kernelName: string) {
 		await this.notebook_tracker.restored;
 
@@ -431,12 +435,33 @@ class ElephantLabExtension {
 		const entries = await listKernelEntries(this.app.serviceManager, this.notebook_tracker);
 		const entry = entries.find(e => e.id === kernelId);
 		if (entry) {
+			if (entry.origin === 'local') {
+				const panel = this.notebook_tracker.find(p => p.sessionContext.session?.kernel?.id === kernelId);
+				if (panel && await this.panelReadySoon(panel)) {
+					this.app.shell.activateById(panel.id);
+					await this.newTab();
+					return;
+				}
+			}
 			await this.attachToKernel(entry);
 			return;
 		}
 
 		console.log(`Elephant Lab: Previously attached kernel ${kernelId} (${kernelName}) is no longer running; falling back to the active notebook.`);
 		await this.newTab();
+	}
+
+	// True if panel's sessionContext becomes ready within timeoutMs, false
+	// (without waiting any further) otherwise. Used only during restoration
+	// (see restoreAttachment()) to bound how long a not-yet-initialized
+	// panel can block it, since `await sessionContext.ready` on its own was
+	// found to hang indefinitely there for a panel JupyterLab hasn't
+	// finished restoring yet.
+	private panelReadySoon(panel: NotebookPanel, timeoutMs = 3000): Promise<boolean> {
+		return Promise.race([
+			panel.sessionContext.ready.then(() => true),
+			new Promise<boolean>(resolve => window.setTimeout(() => resolve(false), timeoutMs))
+		]);
 	}
 
 	// Function to react on command 'Elephant Lab'
@@ -874,10 +899,13 @@ class ElephantLabExtension {
 	// "fixed" it, consistent with a registration-order race between the two
 	// managers rather than a real, permanent failure.
 	//
-	// Only used here, for an interactive click: restoreAttachment() has its
-	// own documented reason (see there) for deliberately not activating a
-	// not-necessarily-ready local panel during page restoration, so it
-	// always goes through attachToKernel() even for a local entry.
+	// Used for the interactive picker click below and by
+	// runPickedKernelHealthCheck()'s self-heal (a replacement kernel found
+	// there can turn out to be a local one too). Not used by
+	// restoreAttachment(): that method has its own documented reason (see
+	// there) for only activating a local panel once it's bounded-checked
+	// for readiness, since blindly doing so during page restoration risks
+	// the same hang this method doesn't need to guard against.
 	private async attachToPickedEntry(entry: IKernelEntry) {
 		if (entry.origin === 'local') {
 			const panel = this.notebook_tracker.find(p => p.sessionContext.session?.kernel?.id === entry.id);
@@ -964,6 +992,17 @@ class ElephantLabExtension {
 	//    replacement above ever landing, e.g. mid-shutdown). A timeout
 	//    forces a reattach attempt either way rather than polling a
 	//    connection that will never produce another answer.
+	//
+	// Both reattach through attachToPickedEntry() rather than attachToKernel()
+	// directly: the replacement kernel found in case 1 could turn out to now
+	// back a local notebook tab (observed happening this way once, when a
+	// long-idle test kernel got silently replaced), and attachToKernel()'s
+	// self-contained widget manager reproduces "Error displaying widget:
+	// model not found" for a local kernel the same way picking one from the
+	// dialog used to (see attachToPickedEntry()'s doc). Safe to do
+	// unconditionally here, unlike in restoreAttachment(): this runs against
+	// an already-fully-running page, not during restoration, so there's no
+	// not-yet-ready-panel hang risk to guard against.
 	private async runPickedKernelHealthCheck(entry: IKernelEntry, session: IElephantSession) {
 		if (entry.path) {
 			try {
@@ -971,7 +1010,7 @@ class ElephantLabExtension {
 				const current = entries.find(e => e.path === entry.path);
 				if (current && current.id !== this.attachedKernelId) {
 					console.log(`Elephant Lab: ${entry.path} is now backed by a different kernel (was ${entry.id}, now ${current.id}); reattaching.`);
-					await this.attachToKernel(current);
+					await this.attachToPickedEntry(current);
 					return;
 				}
 			} catch (error) {
@@ -988,7 +1027,7 @@ class ElephantLabExtension {
 		const outcome = await Promise.race([healthCheck, timeout]).catch(() => TIMEOUT);
 		if (outcome === TIMEOUT) {
 			console.log("Elephant Lab: Picked kernel connection is unresponsive; reattaching.");
-			await this.attachToKernel(entry);
+			await this.attachToPickedEntry(entry);
 		}
 	}
 
@@ -1401,13 +1440,25 @@ class ElephantLabExtension {
 			// needs to hold - inserting code only makes sense into a notebook
 			// tab that is actually backed by the kernel we're attached to.
 			const currentNotebook = this.notebook_tracker.currentWidget;
-			if (!currentNotebook || currentNotebook.sessionContext.session?.kernel?.id !== this.attachedKernelId) {
-				showDialog({
-					title: 'Incorrect Notebook',
-					body: 'Elephant Lab is not connected to this notebook. Please switch to the notebook Elephant Lab is attached to.',
-					buttons: [Dialog.okButton()]
-				});
-				return;
+			const isCorrectNotebookFocused = !!currentNotebook
+				&& currentNotebook.sessionContext.session?.kernel?.id === this.attachedKernelId;
+
+			if (!isCorrectNotebookFocused) {
+				// Attached to a local notebook, just not the one focused right
+				// now - the fix is switching to it, so say so and stop rather
+				// than falling through to the clipboard path below (that's
+				// only for when there's no local tab to switch to at all).
+				const hasLocalNotebook = !!this.notebook_tracker.find(
+					panel => panel.sessionContext.session?.kernel?.id === this.attachedKernelId
+				);
+				if (hasLocalNotebook) {
+					showDialog({
+						title: 'Incorrect Notebook',
+						body: 'Elephant Lab is not connected to this notebook. Please switch to the notebook Elephant Lab is attached to.',
+						buttons: [Dialog.okButton()]
+					});
+					return;
+				}
 			}
 
 			const result = await this.kernelBridge!.executeCode(PythonCodeKey.InsertCode, this.outarea_neo_tree!, false);
@@ -1426,6 +1477,25 @@ class ElephantLabExtension {
 					}
 
 					if (data.code_to_insert) {
+						if (!isCorrectNotebookFocused) {
+							// Attached to an external/kernel-only kernel (see the
+							// hasLocalNotebook check above) - there is no notebook
+							// tab JupyterLab could ever insert into (e.g. a
+							// notebook open in PyCharm/VS Code), so copy the
+							// generated code to the clipboard instead, as the
+							// next best thing to inserting it directly.
+							const codeToCopy = data.list_creation_code
+								? `${data.list_creation_code}\n${data.code_to_insert}`
+								: data.code_to_insert;
+							await navigator.clipboard.writeText(codeToCopy);
+							Notification.success(
+								'Elephant Lab is attached to an external notebook and cannot insert code directly. '
+								+ 'The code has been copied to your clipboard - paste it into your notebook.',
+								{ autoClose: 5000 }
+							);
+							return;
+						}
+
 						const notebookPanel = this.notebook_tracker.currentWidget;
 						if (notebookPanel) {
 							const notebook = notebookPanel.content;
