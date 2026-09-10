@@ -19,6 +19,7 @@ class ElephantLab:
     from .elephant_lab_tree import ElephantLab_tree
     from .elephant_lab_info import ElephantLab_info
     from .elephant_lab_plot import ElephantLab_plot
+    from .elephant_lab_assistant import create_assistant_comm, close_assistant_comm
 
     # Dealing with the Python kernel's namespace, e.g.,
     # listing all defined variables
@@ -87,6 +88,7 @@ class ElephantLab:
         self.elephant_lab_tree: ElephantLab.ElephantLab_tree = self.ElephantLab_tree(self)
         self.elephant_lab_info: ElephantLab.ElephantLab_info = self.ElephantLab_info(self)
         self.elephant_lab_plot: ElephantLab.ElephantLab_plot = self.ElephantLab_plot(self)
+        ElephantLab.create_assistant_comm()
 
     def set_panel_visibility(self, explore_active: bool, details_active: bool):
         """Propagates whether the explore (plot) and details (info) panels are currently visible."""

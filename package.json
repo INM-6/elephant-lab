@@ -66,6 +66,8 @@
     "@lumino/disposable": "^2.1.0",
     "@lumino/messaging": "^2.0.0",
     "@lumino/widgets": "^2.3.0",
+    "dompurify": "^3.4.15",
+    "marked": "^18.0.12",
     "nouislider": "^15.8.1",
     "plotly.js-dist": "^3.4.0"
   },
@@ -76,6 +78,7 @@
   "devDependencies": {
     "@jupyterlab/builder": "^4.1.0",
     "@playwright/test": "^1.58.2",
+    "@types/dompurify": "^3.0.5",
     "@types/nouislider": "^9.0.10",
     "@types/plotly.js": "^3.0.10",
     "rimraf": "^3.0.2",

@@ -74,6 +74,7 @@ import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
 import { PlotlyFrontend } from './plot';
 import { PlotSettings } from './plot_settings';
+import { Assistant } from './assistant';
 import elephantLabLogo from '../doc/Elephant-Lab-Logo.png';
 
 type PlotSettingsKey = keyof PlotSettings;
@@ -96,6 +97,7 @@ class ElephantLabExtension {
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
 	private outarea_neo_tree: OutputArea | null;
+	private assistant: Assistant | null;
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
 	private settingRegistry: ISettingRegistry;
@@ -128,6 +130,7 @@ class ElephantLabExtension {
 		this.outarea_nodeexplorer_info = null;
 		this.outarea_nodeexplorer_raw = null;
 		this.outarea_neo_tree = null;
+		this.assistant = null;
 		this.output_tabs = null;
 		this.kernelBridge = null;
 		this.plotlyFrontend = null;
@@ -208,6 +211,7 @@ class ElephantLabExtension {
 	private async initializeKernelState(session: ISessionContext) {
 		console.log("Elephant Lab: Initializing kernel state...");
 		this.kernelBridge = new KernelBridge(session);
+		this.assistant?.registerCommTarge(session.session!.kernel!)
 
 		await this.kernelBridge.executeCode(PythonCodeKey.SetupEnv);
 
@@ -1547,9 +1551,17 @@ class ElephantLabExtension {
 		await this.create_raw_plot_options(session, explorer_widget_raw_plot);
 		this._explorerWidget = explorer_widget_raw_plot;
 
+		// ASSISTANT
+		let assistant_panel = new Panel();
+		assistant_panel.title.label = 'Assistant';
+		assistant_panel.node.style.cssText = assistant_panel.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
+		this.assistant = new Assistant();
+		assistant_panel.addWidget(this.assistant.widget_assistant);
+
 		this.widget.addWidget(tree_widget);
 		this.widget.addWidget(explorer_widget_info, { mode: 'split-bottom', ref: tree_widget });
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
+		this.widget.addWidget(assistant_panel, { mode: 'tab-after', ref: explorer_widget_raw_plot })
 	}
 
 	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {

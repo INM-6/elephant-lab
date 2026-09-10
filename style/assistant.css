@@ -1,0 +1,410 @@
+/* =========================================================
+   Root
+   ========================================================= */
+
+.widget-assistant {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    box-sizing: border-box;
+
+    overflow: hidden;
+
+    background: var(--jp-layout-color1);
+    color: var(--jp-ui-font-color1);
+
+    font-family: var(--jp-ui-font-family);
+    font-size: var(--jp-ui-font-size1);
+}
+
+
+/* =========================================================
+   Output
+   ========================================================= */
+
+.widget-assistant__output {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    box-sizing: border-box;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    /*
+     * Leave enough room at the bottom for the
+     * floating composer.
+     */
+    padding: 24px 20px 120px;
+
+    background: var(--jp-layout-color1);
+    color: var(--jp-ui-font-color1);
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 24px;
+
+    scroll-behavior: smooth;
+
+    scrollbar-width: thin;
+}
+
+
+/* =========================================================
+   Messages
+   ========================================================= */
+
+.widget-assistant__message {
+    box-sizing: border-box;
+
+    max-width: min(75%, 720px);
+
+    font-size: 14px;
+    line-height: 1.55;
+
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+
+/* =========================================================
+   User message
+   ========================================================= */
+
+.widget-assistant__message--user {
+    align-self: flex-end;
+
+    padding: 10px 16px;
+
+    background: var(--jp-layout-color2);
+    color: var(--jp-ui-font-color1);
+
+    border-radius: 18px;
+}
+
+
+/* =========================================================
+   Assistant message
+   ========================================================= */
+
+.widget-assistant__message--assistant {
+    align-self: flex-start;
+    max-width: min(80%, 720px);
+    padding: 4px 0;
+    background: transparent;
+    color: var(--jp-ui-font-color1);
+    border-radius: 0;
+
+    white-space: normal;
+}
+
+/* =========================================================
+   Markdown
+   ========================================================= */
+
+.widget-assistant__message--assistant p {
+    margin: 0 0 12px;
+}
+
+.widget-assistant__message--assistant p:last-child {
+    margin-bottom: 0;
+}
+
+.widget-assistant__message--assistant h1,
+.widget-assistant__message--assistant h2,
+.widget-assistant__message--assistant h3,
+.widget-assistant__message--assistant h4,
+.widget-assistant__message--assistant h5,
+.widget-assistant__message--assistant h6 {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    line-height: 1.3;
+}
+
+.widget-assistant__message--assistant h1 {
+    font-size: 1.7em;
+}
+
+.widget-assistant__message--assistant h2 {
+    font-size: 1.4em;
+}
+
+.widget-assistant__message--assistant h3 {
+    font-size: 1.2em;
+}
+
+.widget-assistant__message--assistant ul,
+.widget-assistant__message--assistant ol {
+    margin: 8px 0 12px;
+    padding-left: 24px;
+}
+
+.widget-assistant__message--assistant li {
+    margin: 4px 0;
+}
+
+.widget-assistant__message--assistant strong {
+    font-weight: 700;
+}
+
+.widget-assistant__message--assistant em {
+    font-style: italic;
+}
+
+.widget-assistant__message--assistant a {
+    color: var(--jp-brand-color1);
+    text-decoration: underline;
+}
+
+.widget-assistant__message--assistant blockquote {
+    margin: 12px 0;
+    padding: 8px 16px;
+    border-left: 3px solid var(--jp-border-color2);
+    color: var(--jp-ui-font-color2);
+}
+
+.widget-assistant__message--assistant hr {
+    border: 0;
+    border-top: 1px solid var(--jp-border-color1);
+    margin: 16px 0;
+}
+
+/* Inline code */
+.widget-assistant__message--assistant code {
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: var(--jp-layout-color2);
+    font-family: var(--jp-code-font-family);
+    font-size: 0.9em;
+}
+
+/* Code blocks */
+.widget-assistant__message--assistant pre {
+    margin: 12px 0;
+    padding: 12px 14px;
+    overflow-x: auto;
+    border-radius: 8px;
+    background: var(--jp-layout-color2);
+    font-family: var(--jp-code-font-family);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.widget-assistant__message--assistant pre code {
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
+}
+
+/* Tables */
+.widget-assistant__message--assistant table {
+    width: 100%;
+    margin: 12px 0;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.widget-assistant__message--assistant th,
+.widget-assistant__message--assistant td {
+    padding: 7px 10px;
+    border: 1px solid var(--jp-border-color1);
+    text-align: left;
+}
+
+.widget-assistant__message--assistant th {
+    background: var(--jp-layout-color2);
+    font-weight: 600;
+}
+
+/* Images */
+.widget-assistant__message--assistant img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
+
+/* =========================================================
+   Floating Composer
+   ========================================================= */
+
+.widget-assistant__composer {
+    position: absolute;
+
+    left: 50%;
+    bottom: 20px;
+
+    transform: translateX(-50%);
+
+    z-index: 100;
+
+    display: flex;
+    align-items: flex-end;
+
+    width: min(768px, calc(100% - 32px));
+
+    min-height: 56px;
+
+    box-sizing: border-box;
+
+    padding: 8px 8px 8px 18px;
+
+    background: var(--jp-layout-color1);
+
+    border: 1px solid var(--jp-border-color1);
+
+    border-radius: 28px;
+
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.08),
+        0 6px 20px rgba(0, 0, 0, 0.08);
+
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        background 0.15s ease;
+}
+
+
+.widget-assistant__composer:focus-within {
+    border-color: var(--jp-border-color2);
+
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.08),
+        0 8px 24px rgba(0, 0, 0, 0.10);
+}
+
+
+/* =========================================================
+   Textarea
+   ========================================================= */
+
+.widget-assistant__input {
+    flex: 1 1 auto;
+
+    width: 100%;
+    min-width: 0;
+
+    min-height: 38px;
+    max-height: 200px;
+
+    box-sizing: border-box;
+
+    padding: 8px 8px 8px 0;
+
+    resize: none;
+
+    overflow-y: auto;
+
+    border: 0;
+    outline: none;
+
+    background: transparent;
+    color: var(--jp-ui-font-color1);
+
+    font-family: var(--jp-ui-font-family);
+    font-size: 15px;
+
+    line-height: 22px;
+}
+
+
+.widget-assistant__input::placeholder {
+    color: var(--jp-ui-font-color2);
+    opacity: 0.75;
+}
+
+
+.widget-assistant__input:focus {
+    border: 0;
+    outline: none;
+    box-shadow: none;
+}
+
+
+/* =========================================================
+   Send button
+   ========================================================= */
+
+.widget-assistant__button {
+    flex: 0 0 auto;
+
+    width: 38px;
+    height: 38px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+
+    border: 0;
+    border-radius: 50%;
+
+    background: var(--jp-ui-font-color1);
+    color: var(--jp-layout-color1);
+
+    cursor: pointer;
+
+    transition:
+        transform 0.1s ease,
+        opacity 0.15s ease,
+        background 0.15s ease;
+}
+
+
+.widget-assistant__button:hover:not(:disabled) {
+    transform: scale(1.04);
+}
+
+
+.widget-assistant__button:active:not(:disabled) {
+    transform: scale(0.94);
+}
+
+
+.widget-assistant__button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+
+.widget-assistant__button:focus-visible {
+    outline: 2px solid var(--jp-brand-color1);
+    outline-offset: 3px;
+}
+
+
+/* =========================================================
+   Narrow widget
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+    .widget-assistant__output {
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-bottom: 110px;
+    }
+
+    .widget-assistant__composer {
+        width: calc(100% - 16px);
+        bottom: 8px;
+    }
+
+    .widget-assistant__message {
+        max-width: 90%;
+    }
+}

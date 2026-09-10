@@ -1,4 +1,5 @@
 @import url('base.css');
+@import url('assistant.css');
 
 .elephant-lab-panel-container.p-Panel {
   padding: 0;
