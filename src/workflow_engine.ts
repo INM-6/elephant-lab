@@ -1420,11 +1420,14 @@ try:
     from IPython.display import display
     raw_args = json.loads(r'''${args_json_string}''')
     processed_args = [_prepare_arg(arg) for arg in raw_args]
-    for elephant_lab_res in processed_args:
-        if elephant_lab_res is None:
-            continue
+    elephant_lab_res = processed_args[0] if len(processed_args) > 0 else None
+    elephant_lab_title = processed_args[1] if len(processed_args) > 1 else None
+    elephant_lab_fig_title = processed_args[2] if len(processed_args) > 2 else None
+    if elephant_lab_res is not None:
         _elephant_lab_fig = _elephant_lab_resolve_figure(elephant_lab_res)
-        _elephant_lab_plot_card_open("${item.name}")
+        if _elephant_lab_fig is not None and elephant_lab_fig_title:
+            _elephant_lab_fig.suptitle(elephant_lab_fig_title)
+        _elephant_lab_plot_card_open(elephant_lab_title or "${item.name}")
         display(_elephant_lab_fig if _elephant_lab_fig is not None else elephant_lab_res)
         _elephant_lab_plot_card_close()
         if _elephant_lab_fig is not None:
@@ -2474,6 +2477,8 @@ except Exception:
                                         is_class: false,
                                         parameters: [
                                             { name: "item to plot", default: "" },
+                                            { name: "title", default: "" },
+                                            { name: "figure title", default: "" },
                                         ]
                                     };
                                     const node = LiteGraph.createNode("workflow/elephant_lab_node") as ElephantLabNode;
