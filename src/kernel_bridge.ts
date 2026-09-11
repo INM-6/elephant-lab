@@ -338,7 +338,11 @@ export class KernelBridge {
             for module_name, module in modules_to_scan:
                 for name, func in (inspect.getmembers(module, inspect.isfunction) +
                                 inspect.getmembers(module, inspect.isclass)):
-                    if func.__module__ == module_name:
+                    # Libraries like scipy define their real functions in private submodules
+                    # (e.g. scipy.stats.norm actually lives in scipy.stats._continuous_distns)
+                    # and only re-export them at the public package level - an exact match
+                    # here would miss the entire public API for any library shaped that way.
+                    if func.__module__ == module_name or func.__module__.startswith(module_name + "."):
                         if not func.__name__.startswith("_"):
                             is_class = inspect.isclass(func)
                             _elephant_lab_module_func_dict.setdefault(module_name, []).append(
