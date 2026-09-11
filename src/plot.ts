@@ -1,4 +1,4 @@
-import { KernelMessage, Session } from '@jupyterlab/services';
+import { Kernel, KernelMessage } from '@jupyterlab/services';
 import { OutputArea } from '@jupyterlab/outputarea';
 import 'nouislider/dist/nouislider.css';
 import { PlotContainer } from './plot_container';
@@ -8,18 +8,19 @@ export class PlotlyFrontend {
      * Manages the creation and insertion of Plot Containers.
      *
      */
-    private session: Session.ISessionConnection;
+    private kernel: Kernel.IKernelConnection;
     private plots: Map<string, PlotContainer> = new Map();
     private outputArea: OutputArea | null;
     private is_plot_theme_dark: boolean;
+    private resizeObserver: ResizeObserver;
 
-    constructor(session: Session.ISessionConnection, outputArea: OutputArea | null = null) {
-        this.session = session;
+    constructor(kernel: Kernel.IKernelConnection, outputArea: OutputArea | null = null) {
+        this.kernel = kernel;
         this.outputArea = outputArea;
         this.is_plot_theme_dark = true
 
         // Register the comm target to receive messages from Python
-        this.session.kernel?.registerCommTarget(
+        this.kernel.registerCommTarget(
             'plot_channel',
             (comm, msg) => {
                 comm.onMsg = (msg) => this.handleCommMessage(msg);
@@ -32,8 +33,26 @@ export class PlotlyFrontend {
             }
         };
 
-        const resizeObserver = new ResizeObserver(resizePlots);
-        resizeObserver.observe(outputArea!.node);
+        this.resizeObserver = new ResizeObserver(resizePlots);
+        this.resizeObserver.observe(outputArea!.node);
+    }
+
+    /**
+     * Tears down every plot this instance created (removing their DOM nodes
+     * from `outputArea` - they were appended directly to it, outside the
+     * OutputAreaModel, so nothing else clears them - see PlotContainer) and
+     * disconnects the resize observer. Call this before replacing an
+     * attachment's PlotlyFrontend with a new one (e.g. on a kernel restart):
+     * without it, the old instance's plots simply stay on screen forever,
+     * abandoned, since a fresh PlotlyFrontend starts from an empty `plots`
+     * map and has no way to know about them.
+     */
+    public dispose() {
+        this.resizeObserver.disconnect();
+        for (const plot of this.plots.values()) {
+            plot.destroy();
+        }
+        this.plots.clear();
     }
 
     private handleCommMessage(msg: KernelMessage.ICommMsgMsg) {
