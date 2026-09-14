@@ -136,3 +136,4 @@ yarn.lock
 .vscode/
 
 uv.lock
+config.py
