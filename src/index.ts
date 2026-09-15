@@ -42,7 +42,6 @@ import {
 // In caseof problems, use Simplified
 import {
 	OutputArea,
-	OutputAreaModel
 } from '@jupyterlab/outputarea';
 
 import {
@@ -74,6 +73,7 @@ import '../style/sidebar.css';
 import { KernelBridge } from './kernel_bridge';
 import { PlotlyFrontend } from './plot';
 import { PlotSettings } from './plot_settings';
+import { createOutputArea } from './output_functionalities';
 import elephantLabLogo from '../doc/Elephant-Lab-Logo.png';
 
 type PlotSettingsKey = keyof PlotSettings;
@@ -94,13 +94,15 @@ class ElephantLabExtension {
 	private _updateTimer: number | null = null;
 	private _clickTimer: number | null = null;
 	private outarea_nodeexplorer_info: OutputArea | null;
-	private outarea_nodeexplorer_raw: OutputArea | null;
+	private plots_container: Widget | null;
 	private outarea_neo_tree: OutputArea | null;
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
 	private settingRegistry: ISettingRegistry;
+	private rendermime: IRenderMimeRegistry | null = null;
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
+	// @ts-ignore
 	private plotlyFrontend: PlotlyFrontend | null;
 	private _lastClickedNode: string | null = null;
 	private _explorerWidget: Panel | null = null;
@@ -126,7 +128,7 @@ class ElephantLabExtension {
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
 		this.widget = this.createWidget();
 		this.outarea_nodeexplorer_info = null;
-		this.outarea_nodeexplorer_raw = null;
+		this.plots_container = null;
 		this.outarea_neo_tree = null;
 		this.output_tabs = null;
 		this.kernelBridge = null;
@@ -217,8 +219,8 @@ class ElephantLabExtension {
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
-			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
-			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
+			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.kernelBridge, this.plots_container!);
+			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw);
 			// Notify backend of initial panel active state
 			await this.kernelBridge.executeCode(
 				getPythonCode(PythonCodeKey.SetPanelVisibility, this._explorerWidget?.isVisible ?? false, this._detailsWidget?.isVisible ?? false),
@@ -346,7 +348,8 @@ class ElephantLabExtension {
 			this.output_tabs = null;
 		}
 
-		await this.initializeTab(newPanel.content.rendermime as any);
+		this.rendermime = newPanel.content.rendermime
+		await this.initializeTab();
 		this.myVisTabs.push(this.widget);
 		this.myPanels.push(newPanel);
 		this.attachTab();
@@ -647,7 +650,7 @@ class ElephantLabExtension {
 		this.app.shell.activateById(this.widget.id);
 	} // end of attachTab()
 
-	public async initializeTab(rendermime: IRenderMimeRegistry) {
+	public async initializeTab() {
 		/**
 		  * Initialize a new tab for this extension.
 		  */
@@ -666,7 +669,7 @@ class ElephantLabExtension {
 			return;
 		}
 
-		await this.createWidgets(rendermime, session);
+		await this.createWidgets(session);
 
 	} // end of initializeTab()
 
@@ -1135,16 +1138,6 @@ class ElephantLabExtension {
 
 		const zeroBasedToggle = createSavedToggle('zero_based', 'fa-caret-square-o-left', 'Zero Based', 'Shifts the graphs to start at 0');
 
-		const upscaleButton = createButton('fa-expand-arrows-alt', 'Upscale', 'Replot the graph for the new x range to increase detail', (button: HTMLButtonElement) => {
-			const code = getPythonCode(PythonCodeKey.UpscaleRawPlot, this.plotlyFrontend?.getXRanges());
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-		});
-
-		const resetScaleButton = createButton('fa-undo', 'Reset Scale', 'Reset the x_range to the starting one', (button: HTMLButtonElement) => {
-			const code = getPythonCode(PythonCodeKey.ResetScale);
-			this.kernelBridge!.executeCode(code, this.outarea_nodeexplorer_raw!, false);
-		});
-
 		const normalizeYValuesToggle = createSavedToggle('normalize_y_values', 'fa-compress', 'Normalize Y', 'Normalize the y-values of the plots');
 
 		const optionsModal = document.createElement("div");
@@ -1163,87 +1156,6 @@ class ElephantLabExtension {
 				optionsToggle.setAttribute("aria-pressed", "false");
 			}
 		});*/
-
-		// --- MAX POINTS INPUT ---
-
-		const max_points_id = 'max_points';
-		const full_resolution_id = 'full_resolution';
-
-		const applyMaxPoints = async () => {
-
-			let max_points = 0;
-			max_points = Number(numberInput.value);
-			if (max_points < min_max_points) {
-				numberInput.value = min_max_points.toString();
-				max_points = min_max_points;
-			}
-
-			const fullResolutionChanged =
-				(settings.get(full_resolution_id).composite as boolean) !== fullResolutionCheckbox.checked;
-			this.suppressSettingsChanged = fullResolutionChanged;
-			try {
-				await settings.set(max_points_id, max_points);
-
-				if (fullResolutionChanged) {
-					// Enable the listener before the final change.
-					this.suppressSettingsChanged = false;
-
-					await settings.set(full_resolution_id, fullResolutionCheckbox.checked);
-				}
-			} finally {
-				this.suppressSettingsChanged = false;
-			}
-		};
-
-		const numberLabel = document.createElement('label');
-		numberLabel.innerHTML = `<i class="fa fa-chart-line"></i> Max Points`;
-		numberLabel.classList.add("jp-rawplot-label");
-
-		const min_max_points = 10000;
-		const numberInput = document.createElement('input');
-		numberInput.type = "number";
-		const savedMaxPoints = min_max_points;
-		numberInput.value = savedMaxPoints.toString();
-		numberInput.min = min_max_points.toString();
-		numberInput.step = "10000";
-		numberInput.classList.add("jp-rawplot-input");
-
-		const maxNumberInput = document.createElement("div");
-		maxNumberInput.classList.add("jp-rawplot-row");
-		maxNumberInput.title = "Maximum number of points to be plotted. Increasing this number can increase the detail of the plot, but also increases loading times.";
-
-		const savedFullResolution = false;
-		const fullResolutionCheckbox = document.createElement("input");
-		fullResolutionCheckbox.type = "checkbox";
-		fullResolutionCheckbox.checked = savedFullResolution;
-		numberInput.disabled = fullResolutionCheckbox.checked;
-
-		const fullResolutionLabel = document.createElement("label");
-		fullResolutionLabel.textContent = "Full Resolution";
-		fullResolutionLabel.classList.add("jp-rawplot-label");
-
-		numberInput.addEventListener("change", async () => {
-			await applyMaxPoints();
-		});
-
-		fullResolutionCheckbox.addEventListener("change", async () => {
-			numberInput.disabled = fullResolutionCheckbox.checked;
-			await applyMaxPoints();
-		});
-
-		maxNumberInput.appendChild(numberLabel);
-		maxNumberInput.appendChild(numberInput);
-		maxNumberInput.appendChild(fullResolutionLabel);
-		maxNumberInput.appendChild(fullResolutionCheckbox);
-
-		this.updateSettingsCallbacks.push({
-			ids: [max_points_id, full_resolution_id],
-			callback: (newSettings: PlotSettings) => {
-				numberInput.value = (newSettings.max_points as number).toString();
-				fullResolutionCheckbox.checked = newSettings.full_resolution as boolean;
-				numberInput.disabled = fullResolutionCheckbox.checked;
-			}
-		});
 
 		const createLabeledSelect = (options: {
 			id: PlotSettingsKey;
@@ -1499,7 +1411,6 @@ class ElephantLabExtension {
 			}
 		});
 
-		optionsModal.appendChild(maxNumberInput);
 		optionsModal.appendChild(normalizationMethod);
 		optionsModal.appendChild(colorGrade);
 		optionsModal.appendChild(resetOptionsButton);
@@ -1509,8 +1420,6 @@ class ElephantLabExtension {
 			overlapToggle,
 			zeroBasedToggle,
 			normalizeYValuesToggle,
-			upscaleButton,
-			resetScaleButton,
 			optionsToggle
 		);
 
@@ -1523,12 +1432,13 @@ class ElephantLabExtension {
 		raw_plot_widget.node.prepend(toolbarContainer);
 	}
 
-	public async createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
+	public async createWidgets(session: ISessionContext) {
 		// NEO TREE 
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
 		tree_widget.node.style.cssText = tree_widget.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.outarea_neo_tree = this.createOutputArea(rendermime, tree_widget, ['my-outarea-class'], 'jup_vis_out_id_1', session);
+		this.outarea_neo_tree = createOutputArea(this.rendermime!, ['my-outarea-class'], 'jup_vis_out_id_1');
+		tree_widget.addWidget(this.outarea_neo_tree);
 		this.create_tree_filter(session, tree_widget);
 		this.createTopBar(session);
 
@@ -1536,14 +1446,16 @@ class ElephantLabExtension {
 		let explorer_widget_info = new Panel();
 		explorer_widget_info.title.label = 'Details';
 		explorer_widget_info.node.style.cssText = explorer_widget_info.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.outarea_nodeexplorer_info = this.createOutputArea(rendermime, explorer_widget_info, ['my-outarea-class'], 'jup_vis_out_id_2.1', session);
+		this.outarea_nodeexplorer_info = createOutputArea(this.rendermime!, ['my-outarea-class'], 'jup_vis_out_id_2.1');
+		explorer_widget_info.addWidget(this.outarea_nodeexplorer_info);
 		this._detailsWidget = explorer_widget_info;
 
 		// RAW
 		let explorer_widget_raw_plot = new Panel();
 		explorer_widget_raw_plot.title.label = 'Explore';
 		explorer_widget_raw_plot.node.style.cssText = explorer_widget_raw_plot.node.style.cssText + ' overflow-x: scroll; overflow-y: scroll;';
-		this.outarea_nodeexplorer_raw = this.createOutputArea(rendermime, explorer_widget_raw_plot, ['my-outarea-class'], 'jup_vis_out_id_2.2', session);
+		this.plots_container = new Widget();
+		explorer_widget_raw_plot.addWidget(this.plots_container);
 		await this.create_raw_plot_options(session, explorer_widget_raw_plot);
 		this._explorerWidget = explorer_widget_raw_plot;
 
@@ -1560,30 +1472,6 @@ class ElephantLabExtension {
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
 		let code = getPythonCode(PythonCodeKey.ExpandNeoTree, checked);
 		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
-	}
-
-	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext): OutputArea {
-		/**
-		  * Creates an OutputArea inside 'tab', in which the output of executed pythonCode will displayed
-		  *
-		  * Parameters:
-		  * rendermime: Required for rendering the output
-		  * tab: The tab the OutputArea is created in
-		  * cls: HTML/DOM classes the OutputArea belongs to; used for styling with CSS and possibly DOM manipulation
-				  later on
-		  * id: HTML/DOM id of the OutputArea; used for styling with CSS and possibly DOM manipulation later on
-		  */
-		// Create an OutputArea
-		// OutputAreas are used to display stuff, just like the outputs below every cell
-		let model = new OutputAreaModel({ trusted: true });
-		let outarea = new OutputArea({ rendermime: rendermime as any, model });
-		tab.addWidget(outarea);
-		// Set HTML/DOM id and classes
-		outarea.id = id;
-		for (let currCls of cls) {
-			outarea.addClass(currCls);
-		}
-		return outarea;
 	}
 }; // end of ElephantLabExtension class
 
