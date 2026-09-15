@@ -38,29 +38,32 @@ export class PlotGraph extends PlotContainer {
     private relativeMarkerSizeTimeout: ReturnType<typeof setTimeout> | null = null;
     private annotationDurations: number[] = [];
 
+    private subplotCount(): number {
+        const nGraphs = this.figureDict.data_bundle.nGraphs;
+        return this.isSinglePlot() ? 1 : nGraphs;
+    }
+
     private firstExtendTraceIndex(): number {
         return this.figureDict.data_bundle.nGraphs;
     }
 
     // @ts-ignore
     private extendTraceIndices(): number[] {
-        if (this.isSinglePlot()) {
-            return [this.firstExtendTraceIndex()];
-        } else {
-            return Array.from({ length: this.figureDict.data_bundle.nGraphs }, (_, i) => this.firstExtendTraceIndex() + i);
-        }
+        const first = this.firstExtendTraceIndex();
+        const count = this.subplotCount();
+
+        return Array.from({ length: count }, (_, i) => first + i);
     }
 
     private firstAnnotationTraceIndex(): number {
-        return this.figureDict.data_bundle.nGraphs + (this.isSinglePlot() ? 1 : this.figureDict.data_bundle.nGraphs);
+        return this.firstExtendTraceIndex() + this.subplotCount();
     }
 
     private annotationTraceIndices(): number[] {
-        if (this.isSinglePlot()) {
-            return [this.firstAnnotationTraceIndex()];
-        } else {
-            return Array.from({ length: this.figureDict.data_bundle.nGraphs }, (_, i) => this.firstAnnotationTraceIndex() + i);
-        }
+        const first = this.firstAnnotationTraceIndex();
+        const count = this.subplotCount();
+
+        return Array.from({ length: count }, (_, i) => first + i);
     }
 
     private calcWidthsForAnnotations(durations: number[]): number[] {
@@ -785,7 +788,7 @@ export class PlotGraph extends PlotContainer {
             return 0;
         }
         const heightOfNonCoordinateSystem = 150;
-        const subplot_height = (this.height - heightOfNonCoordinateSystem) / this.figureDict.data_bundle.nGraphs;
+        const subplot_height = (this.height - heightOfNonCoordinateSystem) / (this.shouldOverlap() ? 1 : this.figureDict.data_bundle.nGraphs);
         return subplot_height;
     }
 

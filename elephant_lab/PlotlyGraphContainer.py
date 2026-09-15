@@ -118,40 +118,56 @@ class PlotlyGraphData:
             self.OutputUtils.print_warning(f"Error extracting data for trace '{self.name}': {e}")
             self.x, self.y = None, None
 
+    def _as_float_if_needed(self, values):
+        if isinstance(values, (int, float)):
+            return values
+        return values.astype(float, copy=False)
+
+
     def normalize_x(self, x_values):
         """
         Applies the normalization to the values in-place
-        if the normalization would change something
+        if the normalization would change something.
         """
-        if self.shift_x_to_0 != 0:
-            x_values += self.shift_x_to_0
-        if self.unit_x_conversion_factor != 1:
-            x_values *= self.unit_x_conversion_factor
+        if self.shift_x_to_0 != 0 or self.unit_x_conversion_factor != 1:
+            x_values = self._as_float_if_needed(x_values)
+            if self.shift_x_to_0 != 0:
+                x_values += self.shift_x_to_0
+            if self.unit_x_conversion_factor != 1:
+                x_values *= self.unit_x_conversion_factor
         return x_values
 
     def normalize_y(self, y_values):
         """
         Applies the normalization to the values in-place
-        if the normalization would change something
+        if the normalization would change something.
         """
-        if self.y_normalization_method:
-            y_values = self.y_normalization_method(y_values)
-        else:
-            if self.unit_y_conversion_factor != 1:
+        if (
+            self.y_normalization_method
+            or self.unit_y_conversion_factor != 1
+            or self.y_offset != 0
+        ):
+            y_values = self._as_float_if_needed(y_values)
+            if self.y_normalization_method:
+                y_values = self.y_normalization_method(y_values)
+            elif self.unit_y_conversion_factor != 1:
                 y_values *= self.unit_y_conversion_factor
-        if self.y_offset != 0:
-            y_values += self.y_offset
+            if self.y_offset != 0:
+                y_values += self.y_offset
         return y_values
 
     def un_normalize_x(self, x_values):
         """
         Un normalizes the values in-place
-        if the normalization would change something
+        if the normalization would change something.
         """
-        if self.unit_x_conversion_factor != 1:
-            x_values /= self.unit_x_conversion_factor
-        if self.shift_x_to_0 != 0:
-            x_values -= self.shift_x_to_0
+        if self.unit_x_conversion_factor != 1 or self.shift_x_to_0 != 0:
+            x_values = self._as_float_if_needed(x_values)
+
+            if self.unit_x_conversion_factor != 1:
+                x_values /= self.unit_x_conversion_factor
+            if self.shift_x_to_0 != 0:
+                x_values -= self.shift_x_to_0
         return x_values
 
     def get_normalized_x_y_values(self, min_max_lttb_downsampler, x_range, max_points):
@@ -301,6 +317,7 @@ class PlotlyGraphDataBundle:
     has the ability to normalize them together regarding aspects units.
     """
 
+    MAX_POINTS = 100000
 
     import numpy as np
     from .utils import OutputUtils
@@ -765,11 +782,11 @@ class PlotlyGraphDataBundle:
             'durations': durations,
         }
 
-    def get_normalized_data_for_x_range(self, x_range, max_points=100000):
+    def get_normalized_data_for_x_range(self, x_range):
         """
         Returns the normalized data for for that x_range that actually can change with a different x_range
         """
-        max_points_per_data = 0 if self.is_data_empty else int(max_points / len(self.datas)) 
+        max_points_per_data = 0 if self.is_data_empty else int(PlotlyGraphDataBundle.MAX_POINTS / len(self.datas)) 
 
         x_y_values_list = [
             {'index': i, 'temp': { 'x': d[0].tolist(), 'y': d[1].tolist() }}
@@ -784,11 +801,11 @@ class PlotlyGraphDataBundle:
             'annotation_list_changed': annotation_list is not None
         }
 
-    def to_dict(self, max_points=100000):
+    def to_dict(self):
         """
         Converts the object into a json serializable dict storing all important information to plot it
         """
-        max_points_per_data = 0 if self.is_data_empty else int(max_points / len(self.datas)) 
+        max_points_per_data = 0 if self.is_data_empty else int(PlotlyGraphDataBundle.MAX_POINTS / len(self.datas)) 
 
         data_bundle_dict = {
             "compress": self.compress,
