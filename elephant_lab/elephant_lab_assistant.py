@@ -399,9 +399,17 @@ class ChatCompletions:
 
 comm = None
 chat_completions = None
+elephant_lab_entity = None
 
+def on_selection_changed():
+    try:
+        if comm:
+            comm.send({"type": "selection_changed", "selected_count": len(elephant_lab_entity.get_selected_neo_ids())})
+    except Exception as e:
+        if comm:
+            comm.send({"type": "error", "message": str(e)})
 
-def create_assistant_comm():
+def create_assistant_comm(_elephant_lab_entity):
 
     global comm
     global chat_completions
@@ -427,6 +435,10 @@ def create_assistant_comm():
         lambda msg: handle_comm_message(msg)
     )
 
+    global elephant_lab_entity
+    elephant_lab_entity = _elephant_lab_entity
+    elephant_lab_entity.on_selected_neo_objects_changed.add_listener(on_selection_changed)
+
     return comm
 
 
@@ -441,7 +453,8 @@ def handle_comm_message(msg):
             case "user_message":
                 handle_user_message(
                     data.get("generation"),
-                    data.get("message")
+                    data.get("message"),
+                    data.get("include_selection"),
                 )
 
             case "clear_context":
@@ -464,11 +477,24 @@ def handle_comm_message(msg):
         })
 
 
-def handle_user_message(generation, message):
+def handle_user_message(generation, message, include_selection):
 
-    response = chat_completions.send(
-        message
-    )
+    if include_selection and elephant_lab_entity.has_selected_neo_objects():
+        context = elephant_lab_entity.get_selected_neo_metadata()
+
+        comm.send({
+            "type": "error",
+            "message": context,
+        })
+
+        response = chat_completions.send_with_context(
+            message,
+            context
+        )
+    else:
+        response = chat_completions.send(
+            message
+        )
 
     comm.send({
         "type": "assistant_response",

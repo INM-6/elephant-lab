@@ -20,6 +20,7 @@ class ElephantLab:
     from .elephant_lab_info import ElephantLab_info
     from .elephant_lab_plot import ElephantLab_plot
     from .elephant_lab_assistant import create_assistant_comm, close_assistant_comm
+    from .utils import make_json_serializable
 
     # Dealing with the Python kernel's namespace, e.g.,
     # listing all defined variables
@@ -88,12 +89,15 @@ class ElephantLab:
         self.elephant_lab_tree: ElephantLab.ElephantLab_tree = self.ElephantLab_tree(self)
         self.elephant_lab_info: ElephantLab.ElephantLab_info = self.ElephantLab_info(self)
         self.elephant_lab_plot: ElephantLab.ElephantLab_plot = self.ElephantLab_plot(self)
-        ElephantLab.create_assistant_comm()
+        ElephantLab.create_assistant_comm(self)
 
     def set_panel_visibility(self, explore_active: bool, details_active: bool):
         """Propagates whether the explore (plot) and details (info) panels are currently visible."""
         self.elephant_lab_plot.set_explore_panel_active(explore_active)
         self.elephant_lab_info.set_details_panel_active(details_active)
+
+    def has_selected_neo_objects(self):
+        return any(node._id in self.map_ipytree_node_id_to_neo_obj_hash for node in self.selected_neo_objects)
 
     def get_selected_neo_ids(self):
         """Returns the stable hash IDs of the currently selected neo objects."""
@@ -453,3 +457,144 @@ class ElephantLab:
     def _get_neo_obj_hash_and_node_name_of_selected_nodes(self):
         return {self.get_neo_hash(self.map_ipytree_node_id_to_neo_obj[node._id]): node.name
             for node in self.selected_neo_objects if node._id in self.map_ipytree_node_id_to_neo_obj}
+
+    
+    def get_selected_neo_metadata(self, representation="json"):
+        """
+        Return the wanted representation of the relevant Neo tree.
+
+        For every selected Neo object, include:
+            - all ancestors up to the actual root
+            - the selected object itself
+            - all descendants below the selected object
+
+        The output:
+            - contains no hashes or ipytree IDs
+            - marks actually selected objects
+            - includes variable_name only for actual roots
+            - preserves the tree hierarchy through indentation
+            - contains only lightweight metadata
+            - excludes signal samples, spike times, etc.
+
+        Params
+        -------
+        representation: string (json, markdown, xml)
+
+        Returns
+        -------
+        str
+            Human/LLM-readable representation of the relevant Neo tree.
+        """
+        if representation not in {"json", "markdown", "xml"}:
+            raise ValueError("representation must be 'json', 'markdown', or 'xml'")
+
+        root = self.elephant_lab_tree.ipytree_of_neo_objects
+        selected_nodes = set(self.selected_neo_objects)
+
+        # Keep selected branches and the ancestors needed to explain their location.
+        parent_by_id = {}
+        node_by_id = {}
+
+        def index_tree(node, parent=None):
+            node_by_id[node._id] = node
+            if parent is not None:
+                parent_by_id[node._id] = parent
+            for child in getattr(node, "nodes", []):
+                index_tree(child, node)
+
+        index_tree(root)
+        relevant_ids = set()
+        for selected_node in selected_nodes:
+            if selected_node._id not in node_by_id:
+                continue
+
+            def include_descendants(node):
+                relevant_ids.add(node._id)
+                for child in getattr(node, "nodes", []):
+                    include_descendants(child)
+
+            include_descendants(selected_node)
+            node = selected_node
+            while node is not None:
+                relevant_ids.add(node._id)
+                node = parent_by_id.get(node._id)
+
+        def metadata_for(node, is_root=False):
+            neo_obj = self.map_ipytree_node_id_to_neo_obj.get(node._id)
+            is_neo_object = neo_obj is not None
+
+            metadata = {
+                "kind": "neo_object" if is_neo_object else "collection",
+                "type": neo_obj.__class__.__name__ if is_neo_object else "Collection",
+                "name": getattr(neo_obj, "name", None) or node.name,
+            }
+
+            if is_neo_object:
+                metadata["selected"] = node in selected_nodes
+
+                for attr in ("description", "annotations", "units", "duration"):
+                    value = getattr(neo_obj, attr, None)
+                    if value is not None:
+                        metadata[attr] = ElephantLab.make_json_serializable(value)
+                try:
+                    metadata["length"] = len(neo_obj)
+                except TypeError:
+                    # Object does not implement __len__
+                    pass
+
+            if is_root and node.metadata.get("variable_name"):
+                metadata["variable_name"] = node.metadata["variable_name"]
+
+            children = []
+            for child in getattr(node, "nodes", []):
+                if child._id not in relevant_ids:
+                    continue
+                children.append(metadata_for(child))
+
+            if children:
+                metadata["children"] = children
+
+            return metadata
+
+        tree = [
+            metadata_for(child, is_root=True)
+            for child in getattr(root, "nodes", [])
+            if child._id in relevant_ids
+        ]
+
+        if representation == "json":
+            return self.json.dumps(tree, indent=2, ensure_ascii=True)
+
+        if representation == "xml":
+            import xml.etree.ElementTree as ET
+
+            def append_xml(parent, node):
+                element = ET.SubElement(parent, node["kind"], {
+                    key: str(value)
+                    for key, value in node.items()
+                    if key not in {"children", "kind"}
+                })
+                for child in node.get("children", []):
+                    append_xml(element, child)
+
+            document = ET.Element("neo_tree")
+            for node in tree:
+                append_xml(document, node)
+            return ET.tostring(document, encoding="unicode")
+
+        lines = []
+
+        def append_markdown(node, depth):
+            prefix = "  " * depth + "- "
+            if node["kind"] == "neo_object" and node.get("selected"):
+                prefix += "[SELECTED] "
+            label = node["name"]
+            if node.get("variable_name"):
+                label = f"{node['variable_name']} -> {label}"
+            lines.append(f"{prefix}{label} ({node['type']})")
+            for child in node.get("children", []):
+                append_markdown(child, depth + 1)
+
+        for node in tree:
+            append_markdown(node, 0)
+        return "\n".join(lines)

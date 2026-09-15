@@ -2,6 +2,8 @@
 Shared helper functions used across elephant lab for unit handling, value
 formatting, and downsampling of numeric arrays for display.
 """
+import numpy as np
+from quantities import Quantity
 
 class OutputUtils:
     """Static helper methods for converting units, formatting numbers, and downsampling data."""
@@ -263,3 +265,32 @@ class OutputUtils:
         sampled_y[-1] = y[-1]
 
         return sampled_x, sampled_y
+
+
+def make_json_serializable(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+
+    if isinstance(value, Quantity):
+        return {
+            "value": make_json_serializable(value.magnitude),
+            "units": str(value.units),
+        }
+
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+
+    if isinstance(value, np.generic):
+        return value.item()
+
+    if isinstance(value, dict):
+        return {
+            str(key): make_json_serializable(val)
+            for key, val in value.items()
+        }
+
+    if isinstance(value, (list, tuple)):
+        return [make_json_serializable(item) for item in value]
+
+    # Last resort for arbitrary Neo/custom objects
+    return str(value)

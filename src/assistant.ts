@@ -5,6 +5,7 @@ import { KernelMessage, Kernel } from '@jupyterlab/services';
 import { IComm } from '@jupyterlab/services/lib/kernel/kernel';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { closeIcon, addIcon } from "@jupyterlab/ui-components";
 
 export class Assistant {
     private comm?: IComm;
@@ -13,6 +14,9 @@ export class Assistant {
     private input!: HTMLTextAreaElement;
     private output!: HTMLDivElement;
     private submitButton!: HTMLButtonElement;
+    private selectionContextButton!: HTMLButtonElement;
+    private selectedCount = 0;
+    private includeSelection = false;
 
     // Tracks the currently displayed loading indicator.
     private loadingMessage?: HTMLDivElement;
@@ -56,6 +60,10 @@ export class Assistant {
                 }
                 break;
 
+            case 'selection_changed':
+                this.updateSelectedAdding(data.selected_count as number);
+                break;
+
             default:
                 console.warn(
                     'Unknown plot message type',
@@ -84,6 +92,18 @@ export class Assistant {
         const composer = document.createElement("div");
         composer.className = "widget-assistant__composer";
 
+        const inputRow = document.createElement("div");
+        inputRow.className = "widget-assistant__input-row";
+
+        const actionRow = document.createElement("div");
+        actionRow.className = "widget-assistant__action-row";
+
+        const contextActions = document.createElement("div");
+        contextActions.className = "widget-assistant__context-actions";
+
+        const submitActions = document.createElement("div");
+        submitActions.className = "widget-assistant__submit-actions";
+
         // Textarea
         this.input = document.createElement("textarea");
         this.input.className = "widget-assistant__input";
@@ -105,6 +125,19 @@ export class Assistant {
         // Auto-grow textarea
         this.input.addEventListener("input", () => {
             this.resizeInput();
+        });
+
+        // -------------------------
+        // Selection context button
+        // -------------------------
+
+        this.selectionContextButton = document.createElement("button");
+        this.selectionContextButton.className = "widget-assistant__selection";
+        this.selectionContextButton.type = "button";
+
+        this.selectionContextButton.addEventListener("click", () => {
+            this.includeSelection = !this.includeSelection;
+            this.updateSelectionContextButton();
         });
 
         // -------------------------
@@ -212,9 +245,14 @@ export class Assistant {
             this.handleInput();
         });
 
-        composer.appendChild(this.input);
-        composer.appendChild(this.submitButton);
-        composer.appendChild(clearButton);
+        inputRow.appendChild(this.input);
+        contextActions.appendChild(this.selectionContextButton);
+        submitActions.appendChild(clearButton);
+        submitActions.appendChild(this.submitButton);
+        actionRow.appendChild(contextActions);
+        actionRow.appendChild(submitActions);
+        composer.appendChild(inputRow);
+        composer.appendChild(actionRow);
 
         container.appendChild(this.output);
         container.appendChild(composer);
@@ -222,6 +260,7 @@ export class Assistant {
         this.widget_assistant.node.appendChild(container);
 
         // Initial state
+        this.updateSelectionContextButton();
         this.updateSendButton();
     }
 
@@ -237,6 +276,57 @@ export class Assistant {
         this.input.style.height = `${newHeight}px`;
 
         this.updateSendButton();
+    }
+
+    private updateSelectedAdding(selectedCount: number): void {
+        selectedCount = Math.max(0, selectedCount);
+        if (selectedCount > 0) {
+            if (this.selectedCount === 0) {
+                this.includeSelection = true;
+            }
+        } else {
+            this.includeSelection = false;
+        }
+        this.selectedCount = selectedCount;
+
+        this.updateSelectionContextButton();
+    }
+
+    private updateSelectionContextButton(): void {
+        const hasSelection = this.selectedCount > 0;
+        this.selectionContextButton.hidden = !hasSelection;
+
+        if (!hasSelection) {
+            return;
+        }
+
+        const action = this.includeSelection ? "Remove" : "Add";
+        const icon = this.includeSelection ? closeIcon : addIcon;
+
+        // Clear previous contents.
+        this.selectionContextButton.replaceChildren();
+
+        // Add proper icon.
+        const iconElement = icon.element({
+            className: "widget-assistant__selection-icon"
+        });
+
+        this.selectionContextButton.appendChild(iconElement);
+
+        // Add count/text.
+        const text = document.createElement("span");
+        text.textContent = `${this.selectedCount} selected`;
+        this.selectionContextButton.appendChild(text);
+
+        this.selectionContextButton.setAttribute(
+            "aria-label",
+            `${action} ${this.selectedCount} selected items ${this.includeSelection ? "from" : "to"
+            } context`
+        );
+
+        this.selectionContextButton.title =
+            `${action} selection ${this.includeSelection ? "from" : "to"
+            } context`;
     }
 
     private canSendUserMessage(): boolean {
@@ -325,6 +415,7 @@ export class Assistant {
             type: "user_message",
             generation: requestGeneration,
             message: value,
+            include_selection: this.includeSelection,
         });
     }
 
