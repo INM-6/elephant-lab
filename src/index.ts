@@ -17,13 +17,18 @@ import {
 	IDocumentManager
 } from '@jupyterlab/docmanager';
 
+import { DocumentRegistry } from '@jupyterlab/docregistry';
+
 import { FileDialog } from '@jupyterlab/filebrowser';
 
 import {
+	INotebookModel,
 	INotebookTracker,
 	NotebookActions,
 	NotebookPanel
 } from '@jupyterlab/notebook';
+
+import { ToolbarButton } from '@jupyterlab/ui-components';
 
 import {
 	KernelMessage,
@@ -53,6 +58,8 @@ import {
 	Widget,
 	DockPanel
 } from '@lumino/widgets';
+import { MessageLoop } from '@lumino/messaging';
+import { DisposableDelegate, IDisposable } from '@lumino/disposable';
 
 // Own imports
 // Python Code to execute in the kernel
@@ -100,6 +107,7 @@ class ElephantLabExtension {
 	private _detailsWidget: Panel | null = null;
 	private suppressSettingsChanged: boolean = false;
 	private updateSettingsCallbacks: UpdateSettingsCallback[] = [];
+	private toolbarButtons: ToolbarButton[] = [];
 
 	// Construct a new ElephantLabExtension
 	public constructor(app: JupyterFrontEnd, command_palette: ICommandPalette, notebook_tracker: INotebookTracker,
@@ -116,7 +124,7 @@ class ElephantLabExtension {
 		// Store references to all tabs created by this extension
 		this.myVisTabs = [];
 		// Create SplitPanel, i.e., tab within JupyterLab, with a split view (top part and bottom part)
-		this.widget = new DockPanel({ tabsMovable: false });
+		this.widget = this.createWidget();
 		this.outarea_nodeexplorer_info = null;
 		this.outarea_nodeexplorer_raw = null;
 		this.outarea_neo_tree = null;
@@ -124,6 +132,43 @@ class ElephantLabExtension {
 		this.kernelBridge = null;
 		this.plotlyFrontend = null;
 	}; // end of constructor()
+
+	private createWidget(): DockPanel {
+		const widget = new DockPanel({ tabsMovable: false });
+
+		MessageLoop.installMessageHook(widget, (_handler, msg) => {
+			if (msg.type === 'after-show') {
+				this.topBar?.show();
+				this.toolbarButtons.forEach(b => b.node.classList.add('elephant-lab-open'));
+			} else if (msg.type === 'before-hide' || msg.type === 'before-detach') {
+				this.topBar?.hide();
+				this.toolbarButtons.forEach(b => b.node.classList.remove('elephant-lab-open'));
+			} else if (msg.type === 'close-request') {
+				void this.confirmAndCloseWidget(widget);
+				return false;
+			}
+			return true;
+		});
+
+		widget.disposed.connect(() => {
+			this.clearActiveNotebookBadge();
+		});
+
+		return widget;
+	} // end of createWidget()
+
+	private async confirmAndCloseWidget(widget: DockPanel) {
+		const result = await showDialog({
+			title: 'Close Elephant Lab',
+			body: 'Are you sure you want to close Elephant Lab? This will stop the '
+				+ 'running Elephant Lab instance. If you only want to hide Elephant Lab, '
+				+ 'you can instead hide it by clicking its tab in the sidebar.',
+			buttons: [Dialog.cancelButton(), Dialog.warnButton({ label: 'Close' })]
+		});
+		if (result.button.accept) {
+			widget.dispose();
+		}
+	}
 
 	private async initializeSettings() {
 		const settings = await this.settingRegistry.load('elephant-lab:plugin');
@@ -207,6 +252,49 @@ class ElephantLabExtension {
 		this.command_palette.addItem({ command, category: 'NeuroScience' });
 	} // end of createCommand()
 
+	// Add an "Elephant Lab" button to every notebook's own toolbar, so it can
+	// be launched without going through the CommandPalette.
+	public registerToolbarButton(command: string) {
+		this.app.docRegistry.addWidgetExtension('Notebook', {
+			createNew: (panel: NotebookPanel, _context: DocumentRegistry.IContext<INotebookModel>): IDisposable => {
+				const button = new ToolbarButton({
+					iconClass: 'elephant-lab-toolbar-icon',
+					tooltip: 'Open Elephant Lab',
+					onClick: () => {
+						if (this.widget.isAttached && this.widget.isVisible) {
+							// close() sends a close-request, which our message hook
+							// in createWidget() intercepts to confirm and dispose.
+							this.widget.close();
+							return;
+						}
+						this.app.shell.activateById(panel.id);
+						this.app.commands.execute(command);
+					}
+				});
+				if (!panel.toolbar.insertBefore('spacer', 'elephantLab', button)) {
+					panel.toolbar.addItem('elephantLab', button);
+				}
+				if (this.widget.isAttached && this.widget.isVisible) {
+					button.node.classList.add('elephant-lab-open');
+				}
+				this.toolbarButtons.push(button);
+				return new DisposableDelegate(() => {
+					this.toolbarButtons = this.toolbarButtons.filter(b => b !== button);
+					button.dispose();
+				});
+			}
+		});
+	} // end of registerToolbarButton()
+
+	private clearActiveNotebookBadge() {
+		this.notebook_tracker.forEach(notebookWidget => {
+			if (notebookWidget.title.className.includes('elephant-lab-active-notebook')) {
+				notebookWidget.title.className = notebookWidget.title.className
+					.replace('elephant-lab-active-notebook', '')
+					.trim();
+			}
+		});
+	}
 
 	// Function to react on command 'Elephant Lab'
 	// Called only after the command is clicked from CommandPalette
@@ -232,13 +320,11 @@ class ElephantLabExtension {
 			console.error("Elephant Lab: No active notebook found.");
 			return;
 		}
-		this.notebook_tracker.forEach(notebookWidget => {
-			if (notebookWidget.title.className.includes('elephant-lab-active-notebook')) {
-				notebookWidget.title.className = notebookWidget.title.className
-					.replace('elephant-lab-active-notebook', '')
-					.trim();
-			}
-		});
+		if (this.widget.isDisposed) {
+			this.widget = this.createWidget();
+		}
+
+		this.clearActiveNotebookBadge();
 
 		newPanel.title.className += ' elephant-lab-active-notebook';
 
@@ -656,6 +742,9 @@ class ElephantLabExtension {
 		this.topBar.node.style.marginLeft = 'auto';
 
 		this.app.shell.add(this.topBar, 'top', { rank: 1000 });
+		if (!this.widget.isVisible) {
+			this.topBar.hide();
+		}
 	}
 
 	public create_tree_filter(session: ISessionContext, tree_widget: Panel) {
@@ -1548,6 +1637,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	// this command will open the elephant lab tab
 	const command: string = 'elephant-lab:open';
 	jupy_ext.createCommand(command);
+	jupy_ext.registerToolbarButton(command);
 
 	// Restore from corresponding namespace
 	restorer.restore(widget_tracker, {
