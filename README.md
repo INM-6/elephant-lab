@@ -1,11 +1,11 @@
-<img src="./doc/Elephant-Lab-Logo.png" alt="drawing" width="200"/>
+<img src="https://raw.githubusercontent.com/INM-6/elephant-lab/master/doc/Elephant-Lab-Logo.png" alt="drawing" width="200"/>
 
 # Elephant Lab
 
 
 ***Explore, Visualize, and Analyze Electrophysiology Data - Right in JupyterLab***
 
-Elephant Lab is a JupyterLab extension that brings interactive data exploration to your electrophysiology workflow. It reads datasets in any file format supported by [Neo](https://neo-python.readthedocs.io/) and displays them as an interactive object tree, so you can browse signals, spike trains, and events without writing a single line of code.
+Elephant Lab is a JupyterLab extension that brings interactive data exploration to your electrophysiology workflow. It reads datasets in any file format supported by [Neo](https://neo.readthedocs.io/) and displays them as an interactive object tree, so you can browse signals, spike trains, and events without writing a single line of code.
 
 Select any object in the tree to inspect its metadata in the **Details panel** or explore it visually in the **Explore panel**. When you find something interesting, click **Insert Code** to get the selected object into your Notebook.
 
@@ -24,7 +24,7 @@ Select any object in the tree to inspect its metadata in the **Details panel** o
 
 - Python >= 3.8
 - JupyterLab >= 4.0
-- [Neo](https://neo-python.readthedocs.io/): electrophysiology data model
+- [Neo](https://neo.readthedocs.io/): electrophysiology data model
 - [Elephant](https://elephant.readthedocs.io/): electrophysiology analysis library
 - [Plotly](https://plotly.com/python/): interactive visualizations
 - [nixio](https://github.com/G-Node/nixpy): required for loading `.nix` files
@@ -63,7 +63,7 @@ pip uninstall elephant-lab
 
 ## Demo Notebook
 
-For a step-by-step walkthrough, open the demo notebook: [examples/Elephant_Lab_Demo.ipynb](examples/Elephant_Lab_Demo.ipynb)
+For a step-by-step walkthrough, open the demo notebook: [examples/Elephant_Lab_Demo.ipynb](https://github.com/INM-6/elephant-lab/blob/master/examples/Elephant_Lab_Demo.ipynb)
 
 ## Development Install
 
@@ -110,7 +110,7 @@ You will also need to remove the symlink created by `jupyter labextension develo
 
 ## Testing
 
-End-to-end tests use [Playwright](https://playwright.dev/). See [ui-tests/README.md](./ui-tests/README.md) for details.
+End-to-end tests use [Playwright](https://playwright.dev/). See [ui-tests/README.md](https://github.com/INM-6/elephant-lab/blob/master/ui-tests/README.md) for details.
 
 ## Contributing
 
@@ -127,7 +127,7 @@ Would you like to fix a problem or add a feature? Please open a [pull request](h
 
 ## Acknowledgements
 
-Elephant Lab builds on the [Neo](https://neo-python.readthedocs.io/) electrophysiology data framework and the [Elephant](https://elephant.readthedocs.io/) analysis library.
+Elephant Lab builds on the [Neo](https://neo.readthedocs.io/) electrophysiology data framework and the [Elephant](https://elephant.readthedocs.io/) analysis library.
 
 This project was developed at the [Institute for Advanced Simulation, Computational and Systems Neuroscience (IAS-6)](https://www.fz-juelich.de/en/inm/inm-6), Forschungszentrum Jülich.
 
