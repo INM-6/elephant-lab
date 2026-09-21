@@ -49,7 +49,9 @@
     "install:extension": "jlpm build",
     "watch": "run-p watch:src watch:labextension",
     "watch:src": "tsc -w",
-    "watch:labextension": "jupyter labextension watch ."
+    "watch:labextension": "jupyter labextension watch .",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "@jupyterlab/application": "^4.1.0",
@@ -78,8 +80,10 @@
     "@playwright/test": "^1.58.2",
     "@types/nouislider": "^9.0.10",
     "@types/plotly.js": "^3.0.10",
+    "jsdom": "^29.1.1",
     "rimraf": "^3.0.2",
-    "typescript": "~5.0.2"
+    "typescript": "~5.0.2",
+    "vitest": "^5.0.0"
   },
   "sideEffects": [
     "style/*.css",
