@@ -274,6 +274,11 @@ class ElephantLabExtension {
 			this.output_tabs.dispose();
 			this.output_tabs = null;
 		}
+		if (this.workflowMain) {
+			this.workflowMain.dispose();
+			this.workflowMain = null;
+			this.workflowEngine = null;
+		}
 
 		await this.initializeTab(newPanel.content.rendermime as any);
 		this.myVisTabs.push(this.widget);
