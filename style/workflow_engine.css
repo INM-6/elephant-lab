@@ -59,6 +59,7 @@ body,
 
 .jp-workflowEngine>#workflow-canvas {
     flex: 1 1 auto;
+    min-height: 0;
     border-top: 1px solid var(--jp-border-color1);
     background-color: var(--jp-layout-color0);
 }
