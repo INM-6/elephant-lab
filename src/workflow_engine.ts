@@ -366,7 +366,10 @@ except NameError:
     // Dynamically resizing is important to keep the hitboxes of the Nodes correct
     protected onResize(msg: Widget.ResizeMessage): void {
         super.onResize(msg);
-        if (this.graphCanvas) { this.graphCanvas.resize(); }
+        if (this.graphCanvas && this.canvasElement) {
+            const rect = this.canvasElement.getBoundingClientRect();
+            this.graphCanvas.resize(rect.width, rect.height);
+        }
     }
 
     // hide the graph after hiding the widget -> more memory efficient (?)
