@@ -1,3 +1,14 @@
+"""
+Management of plotting:
+1.a. Gets info what should be plotted
+1.b. Gets info how something should be plotted
+2. Checks if new plotting is necessary
+3. Runs the Pipeline:
+- Notifies Frontend what to delete and update
+- Converts Neo data to Plotly useable data
+- Creates PlotlyFigures
+- Sends the PlotlyFigures to the Frontend
+"""
 class ElephantLab_plot:
     from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
     from .PlotlyGraphFigure import PlotlyGraphFigure
@@ -139,6 +150,16 @@ class ElephantLab_plot:
         ]
 
     def _raw_plot(self):
+        """
+        Called when selection or plot settings change
+
+        1. Checks if new plotting is neccessary
+        2. Runs the Pipeline:
+        - notifies Frontend what to delete and update
+        - Convert Neo data to Plotly useable data
+        - Creates PlotlyFigures
+        - Send the PlotlyFigures to the Frontend
+        """
         if not self._is_panel_active or (not self._selection_changed and not any(v["changed"] for v in self.plots.values())):
             return
         neo_object_dict = None
@@ -283,6 +304,12 @@ class ElephantLab_plot:
         self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
 
     def update_settings(self, **settings):
+        """
+        Gets called once at the beginning, when the saved settings are loaded
+        and then every time the saved settings change
+
+        Updates the saved settings and replots if necessary
+        """
         overlap = settings.get("overlap")
         zero_based = settings.get("zero_based")
         color_grade = settings.get("color_grade")
@@ -323,7 +350,7 @@ class ElephantLab_plot:
             # max_points
             max_points = -1 if full_resolution else max_points # -1 is convention for "full_resolution" in the backend
 
-            # Temporary hard cap beacause Jupyterlab crashes with extremly big datasets
+            # Temporary hard cap because Jupyterlab crashes with extremely big datasets
             hard_cap = 10000000
             if not max_points or max_points == -1 or max_points > hard_cap:
                 max_points = hard_cap
@@ -378,6 +405,9 @@ class ElephantLab_plot:
             self._raw_plot()
 
     def upscale_raw_plot(self, x_ranges):
+        """
+        Replots the plot if the new x_range for it changes its resolution
+        """
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]
@@ -398,6 +428,9 @@ class ElephantLab_plot:
             self._raw_plot()
     
     def reset_scale(self):
+        """
+        Replots the plot to its original x_range
+        """
         reload = False
         for key in self.RawPlotKey:
             plot_dict = self.plots[key]

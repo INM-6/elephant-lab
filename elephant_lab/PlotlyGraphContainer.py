@@ -1,4 +1,14 @@
+"""
+Blueprints for the PlotlyGraphFigure compatible data objects
+
+And Normalization for them
+"""
+
 class PlotlyGraphDataType:
+
+    """
+    Blueprint for the standard data, that will be displayed as a single trace
+    """
 
     from .utils import OutputUtils
 
@@ -20,7 +30,12 @@ class PlotlyGraphDataType:
             setattr(self, key, value)
 
     def extract_data(self, data):
-        """Generic extraction of x, y, mode, and name from various simple data types."""
+        """
+        Generic extraction of x, y, mode, and name from various simple data types.
+
+        Args:
+            data: source to extract from; supports objects with x/y attributes, dicts with x/y keys, a list of (x, y) point tuples, a pandas DataFrame/Series, or None
+        """
         self.x = None
         self.y = None
         if hasattr(data, 'name'):
@@ -75,6 +90,11 @@ class PlotlyGraphDataType:
             self.x, self.y = None, None
 
 class PlotlyGraphDataTypeList():
+
+    """
+    Blueprint for a list of standard data, that can get normalized together
+    """
+
     import numpy as np
     from .utils import OutputUtils
 
@@ -84,6 +104,13 @@ class PlotlyGraphDataTypeList():
         self.extract_data(data, name_fallback)
 
     def extract_data(self, data, name_fallback):
+        """
+        Builds self.data_list of PlotlyGraphDataType traces from data, whether it's a single trace or a list of traces.
+
+        Args:
+            data: None, a single trace (points, dict, object, etc.), or a list of such traces
+            name_fallback: name (or callable producing a name) used for traces that don't already have one
+        """
         if data is None:
             self.is_empty = True
             self.data_list = [PlotlyGraphDataType(None, name_fallback)]
@@ -138,6 +165,14 @@ class PlotlyGraphDataTypeList():
         Filters out all points outside of x_range if x_range is not None
         Decreases number of points if there are to many
         sets: common_units_x, common_units_y(They are None if no common units for x or y could be found), is_downscaled, minX, minY, maxX, maxY, is_default_zero_based, nGraphs, compress, is_empty, is_default_normalized_y
+
+        Args:
+            x_range: (min, max) tuple to filter points to, or None to keep all points
+            offset_traces_on_compress: if True and traces are compressed (>10 graphs), offset each trace's y-values so they stack instead of overlap
+            shift_to_0: if True, shifts each trace's x-values so it starts at 0
+            max_points: max total points across all traces before downsampling kicks in; -1 disables downsampling
+            normalize_y_values: if True, normalizes each trace's y-values
+            normalization_method: method used to normalize y-values when normalize_y_values is True
         """
         #set default
         self.common_units_x = None
@@ -181,8 +216,13 @@ class PlotlyGraphDataTypeList():
                 data.y = y_values
                 data.name = f"{name} (real)"
             i+=1
-            x_values[self.np.isinf(x_values)] = self.np.nan
-            y_values[self.np.isinf(y_values)] = self.np.nan
+            def filter_out_inf(values):
+                if self.np.isinf(values).any():
+                    if not self.np.issubdtype(values.dtype, self.np.floating):
+                        values = values.astype(float)
+                    values[self.np.isinf(values)] = self.np.nan
+            filter_out_inf(x_values)
+            filter_out_inf(y_values)
 
             # Check if x and y are valid
             x_length = len(x_values)
@@ -356,6 +396,10 @@ class PlotlyGraphDataTypeList():
         self.is_default_normalized_y = is_default_normalized_y
 
 class PlotlyGraphAnnotations():
+    """
+    Blueprint for annotations that are going to be displayed as a single event line
+    with text and time information
+    """
     def __init__(self, x, text, unit_indice, units):
         self.x = x
         self.text = text
@@ -363,6 +407,10 @@ class PlotlyGraphAnnotations():
         self.units = units
 
 class PlotlyGraphAnnotationIntervals():
+    """
+    Blueprint for annotations that are going to be displayed as an interval
+    with text and time information
+    """
     def __init__(self, x0, x1, text, unit_indice, units):
         self.x0 = x0
         self.x1 = x1
