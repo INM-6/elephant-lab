@@ -175,6 +175,14 @@ class ElephantLabExtension {
 		});
 		if (result.button.accept) {
 			widget.dispose();
+			// Dispose MainAreaWidget in order to not leave empty tab behind
+			if (this.workflowMain) {
+				this.workflowMain.dispose();
+				this.workflowMain = null;
+				this.workflowEngine = null;
+			}
+			// Allow newTab() to rebuild the UI on the next start
+			this._buildStarted = false;
 		}
 	}
 
@@ -1702,7 +1710,6 @@ class ElephantLabExtension {
 			this._hideWorkflowTab();
 		};
 		this.app.shell.add(this.workflowMain, 'main');
-		this.app.shell.activateById(this.workflowMain.id);
 	}
 
 	// Hides the workflow tab without disposing it, so its graph survives being closed and reopened
