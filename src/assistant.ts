@@ -482,7 +482,52 @@ export class Assistant {
 
         const html = await marked.parse(assistantMessageText);
 
+        // Sanitize the Markdown-generated HTML first.
         assistantMessage.innerHTML = DOMPurify.sanitize(html);
+
+        // Add a copy button to every code block.
+        assistantMessage.querySelectorAll("pre").forEach((pre) => {
+            const code = pre.querySelector("code");
+
+            if (!code) {
+                return;
+            }
+
+            pre.classList.add("widget-assistant__code-block");
+
+            const button = document.createElement("button");
+
+            button.type = "button";
+            button.className = "widget-assistant__code-copy";
+            button.textContent = "Copy";
+            button.setAttribute("aria-label", "Copy code");
+
+            button.addEventListener("click", async () => {
+                try {
+                    await navigator.clipboard.writeText(
+                        code.textContent ?? ""
+                    );
+
+                    button.textContent = "Copied!";
+                    button.classList.add("is-copied");
+
+                    setTimeout(() => {
+                        button.textContent = "Copy";
+                        button.classList.remove("is-copied");
+                    }, 1500);
+                } catch (error) {
+                    console.error("Failed to copy code:", error);
+
+                    button.textContent = "Failed";
+
+                    setTimeout(() => {
+                        button.textContent = "Copy";
+                    }, 1500);
+                }
+            });
+
+            pre.prepend(button);
+        });
 
         this.output.appendChild(assistantMessage);
 

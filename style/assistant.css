@@ -630,3 +630,30 @@
         opacity: 0.7;
     }
 }
+
+.widget-assistant__code-block {
+    position: relative;
+}
+
+.widget-assistant__code-copy {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+
+    padding: 4px 8px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background: #2a2a2a;
+    color: #fff;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.widget-assistant__code-copy:hover {
+    background: #3a3a3a;
+}
+
+.widget-assistant__code-copy.is-copied {
+    background: #2e7d32;
+}

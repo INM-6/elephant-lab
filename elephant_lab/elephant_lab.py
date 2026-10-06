@@ -537,7 +537,7 @@ class ElephantLab:
                     if value is not None:
                         metadata[attr] = ElephantLab.make_json_serializable(value)
                 try:
-                    metadata["length"] = len(neo_obj)
+                    metadata["__len__"] = len(neo_obj)
                 except TypeError:
                     # Object does not implement __len__
                     pass

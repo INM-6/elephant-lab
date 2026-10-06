@@ -1,8 +1,15 @@
 import requests
 import json
 from ipykernel.comm import Comm
-from .config import API_KEY
+import os
 
+try:
+    from .config import API_KEY
+except ImportError:
+    API_KEY = os.getenv("ELEPHANT_LAB_API_KEY")
+
+if not API_KEY:
+    raise ValueError("API_KEY is not configured")
 
 class ChatCompletions:
 
@@ -49,7 +56,9 @@ class ChatCompletions:
 
         self.messages = []
 
+        self.has_initial_system_prompt = False
         if system_prompt is not None:
+            self.has_initial_system_prompt = True
             self.messages.append({
                 "role": "system",
                 "content": system_prompt,
@@ -324,22 +333,13 @@ class ChatCompletions:
         if len(self.messages) <= self.max_messages:
             return
 
-        system_messages = [
-            m for m in self.messages
-            if m.get("role") == "system"
-        ]
-
-        other_messages = [
-            m for m in self.messages
-            if m.get("role") != "system"
-        ]
-
-        remaining = self.max_messages - len(system_messages)
-
-        self.messages = (
-            system_messages[:1]
-            + other_messages[-remaining:]
-        )
+        if self.has_initial_system_prompt:
+            self.messages = (
+                self.messages[:1]
+                + self.messages[-(self.max_messages-1):]
+            )
+        else:
+            self.messages = self.messages[-self.max_messages:]
 
     # =========================================================
     # Conversation management
@@ -350,12 +350,10 @@ class ChatCompletions:
         Clear conversation history while keeping the system prompt.
         """
 
-        system_messages = [
-            m for m in self.messages
-            if m.get("role") == "system"
-        ]
-
-        self.messages = system_messages[:1]
+        if self.has_initial_system_prompt:
+            self.messages = self.messages[:1]
+        else:
+            self.messages = []
 
     def get_messages(self):
         """
