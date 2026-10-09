@@ -39,16 +39,19 @@ def three_spikeTrainRasterPlots() -> PlotlyGraphFigure:
     return PlotlyGraphFigure([spikeTrainRasterPlot1, spikeTrainRasterPlot2, spikeTrainRasterPlot3], overlap_on_compress=False)
 
 def test_plotlyUtils_can_convert_units():
+    """Unit check returns 0 for same, 1 for convertible, -1 for incompatible units."""
     assert OutputUtils.can_convert_units(pq.s, pq.ms)==1
     assert OutputUtils.can_convert_units(pq.ms, pq.s)==1
     assert OutputUtils.can_convert_units(pq.s, pq.V)==-1
     assert OutputUtils.can_convert_units(pq.s, pq.s)==0
 
 def test_plotlyUtils_convert_to_other_units():
+    """Converts values between s and ms."""
     assert np.isclose(OutputUtils.convert_to_other_units(1, pq.s, pq.ms), 1000)
     assert np.isclose(OutputUtils.convert_to_other_units(1000, pq.ms, pq.s), 1)
 
 def test_height(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
+    """Figure height grows with the number of subplots, overlapping uses one."""
     assert none_plotlyGraphFigure.fig.layout.height == 200
     assert three_spikeTrainRasterPlots.fig.layout.height == 800
     spikeTrainRasterPlot1 = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
@@ -57,27 +60,33 @@ def test_height(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
     assert PlotlyGraphFigure([spikeTrainRasterPlot1, spikeTrainRasterPlot2, spikeTrainRasterPlot3], overlap_on_compress=False, overlapping=True).fig.layout.height == 200
 
 def test_None_data(none_plotlyGraphFigure):
+    """Figure without data has an empty range and no y unit."""
     assert isinstance(none_plotlyGraphFigure.data, PlotlyGraphDataTypeList)
     assert none_plotlyGraphFigure.fig is not None
     assert none_plotlyGraphFigure.data.common_units_y is None
     assert np.allclose(none_plotlyGraphFigure.getXRange(), [0,0], atol=1e-6, rtol=1e-3)
 
 def test_is_not_Downscaled(none_plotlyGraphFigure):
+    """Figure without data is not downscaled."""
     assert not none_plotlyGraphFigure.isDownscaled()
 
 def test_legend_visibility(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
+    """Legend is hidden."""
     assert none_plotlyGraphFigure.fig.layout.showlegend == False
     assert three_spikeTrainRasterPlots.fig.layout.showlegend == False
 
 def test_ticklabels(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
+    """x tick labels are hidden on stacked subplots."""
     assert none_plotlyGraphFigure.fig.layout.xaxis.showticklabels == None
     assert three_spikeTrainRasterPlots.fig.layout.xaxis.showticklabels == False
 
 def test_sliders(none_plotlyGraphFigure, three_spikeTrainRasterPlots):
+    """Bottom x axis has a range slider."""
     assert none_plotlyGraphFigure.fig.layout.xaxis.rangeslider != None
     assert three_spikeTrainRasterPlots.fig.layout.xaxis3.rangeslider != None
 
 def test_simple_spiketrain_coords():
+    """Single spike train gives correct x/y range and x values."""
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, overlap_on_compress=False)
     data = plotlyGraphFigure.data
@@ -88,6 +97,7 @@ def test_simple_spiketrain_coords():
     assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0,1,2,3,6,10])
 
 def test_automatic_unit_conversion():
+    """Spike trains in ms are converted to the common unit s."""
     seconds_spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     milliseconds_spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([x * 1000 for x in [0,1,2,3,6,10]] * pq.ms, t_stop=10 * pq.s))
     plotlyGraphFigure = PlotlyGraphFigure([seconds_spikeTrainRasterPlot, milliseconds_spikeTrainRasterPlot], overlap_on_compress=False)
@@ -96,6 +106,7 @@ def test_automatic_unit_conversion():
     assert all(np.allclose(data.x, [0,1,2,3,6,10]) for data in plotlyGraphFigure.fig.data)
 
 def test_shift_to_0():
+    """shift_to_0 moves the first spike to 0."""
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([3,6,10] * pq.s, t_stop=10 * pq.s))
     plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, overlap_on_compress=False, shift_to_0=True)
     assert plotlyGraphFigure.data.minX == 0
@@ -103,6 +114,7 @@ def test_shift_to_0():
     assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0, 3, 7])
 
 def test_custom_x_range():
+    """x_range is clipped to the data and filters the shown spikes."""
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, overlap_on_compress=False, x_range=[-5,4])
     assert not np.allclose(plotlyGraphFigure.getXRange(), [-5,4], atol=1e-6, rtol=1e-3)
@@ -110,6 +122,7 @@ def test_custom_x_range():
     assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0,1,2,3], atol=1e-6, rtol=1e-3)
 
 def test_shift_to_0_and_custom_x_range():
+    """x_range is applied after shifting to 0."""
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([3,6,10] * pq.s, t_stop=10 * pq.s))
     plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, overlap_on_compress=False, shift_to_0=True, x_range=[1,6.5])
     assert plotlyGraphFigure.data.minX == 3
@@ -117,12 +130,14 @@ def test_shift_to_0_and_custom_x_range():
     assert np.allclose(plotlyGraphFigure.fig.data[0].x, [3])
 
 def test_downsampling():
+    """max_points limits the trace to that many points."""
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     plotlyGraphFigure = PlotlyGraphFigure(spikeTrainRasterPlot, overlap_on_compress=False, max_points=3)
     assert len(plotlyGraphFigure.fig.data[0].x) == 3
     assert np.allclose(plotlyGraphFigure.fig.data[0].x, [0,1,10])
 
 def test_filtering():
+    """Traces without data in x_range are dropped."""
     spikeTrainRasterPlot1 = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     spikeTrainRasterPlot2 = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10, 15, 20] * pq.s, t_stop=20 * pq.s))
     spikeTrainRasterPlot3 = SpikeTrainRasterPlot(neo.SpikeTrain([] * pq.s, t_stop=20 * pq.s))
@@ -130,6 +145,7 @@ def test_filtering():
     assert plotlyGraphFigure.nGraphs == 1
 
 def test_offset_traces_on_compress():
+    """Overlapping changes compressed traces only if overlap_on_compress is set."""
     def createPlotlyGraphDataTypeList():
         def createGraphObject():
             class Dummy:
@@ -151,6 +167,7 @@ def test_offset_traces_on_compress():
     assert not np.allclose(plotlyGraphFigure1.fig.data[19].y, plotlyGraphFigure2.fig.data[19].y)
 
 def test_annotations():
+    """Events and epochs add one annotation trace."""
     spikeTrainRasterPlot = SpikeTrainRasterPlot(neo.SpikeTrain([0,1,2,3,6,10] * pq.s, t_stop=10 * pq.s))
     plotlyGraphAnnotations = PlotlyGraphAnnotations(np.array([1,2,3]), np.array(["Test"] * 3), np.array([0] * 3), [pq.s])
     plotlyGraphAnnotationIntervals = PlotlyGraphAnnotationIntervals(np.array([1,2,3]),np.array([1.5,2.2,4]), np.array(["Test"] * 3), np.array([0] * 3), [pq.s])
@@ -164,6 +181,7 @@ def test_annotations():
     assert len(plotlyGraphFigureBothAnnotations.fig.data) == 2
 
 def test_image_sequence():
+    """Image sequence figure has one frame per image with correct shape and names."""
     # Parameters
     num_frames = 20
     height = 30
