@@ -4,6 +4,7 @@ the desired settings
 """
 
 class PlotlyImageSequenceFigure:
+    """Builds a Plotly figure with an animated heatmap subplot per neo ImageSequence, laid out in a grid."""
 
     from .utils import OutputUtils
     import plotly.graph_objects as go
@@ -14,6 +15,14 @@ class PlotlyImageSequenceFigure:
     import math
 
     def __init__(self, image_sequences, title=None, color_scale='Viridis', max_cols=2, name_fallback="Image Sequence"):
+        """
+        Args:
+            image_sequences: a single neo ImageSequence or a list of them, one animated subplot each
+            title: figure title; defaults to "Image Sequences"
+            color_scale: Plotly colorscale used for all heatmaps
+            max_cols: max number of subplot columns before wrapping to a new row
+            name_fallback: name (or callable producing a name) used for sequences without a name, shown on their play button
+        """
         if isinstance(image_sequences, self.ImageSequence):
             image_sequences = [image_sequences]
 
