@@ -133,6 +133,14 @@ class ElephantLab_tree:
         self.elephant_lab_entity.filter_changed = True
         self.update_tree()
 
+    def set_neo_objs_to_show(self, neo_obj_strings):
+        """Shows exactly the given neo types (by lowercase name) in the tree, hides all others, then rebuilds it."""
+        self.NEO_OBJS_TO_SHOW[:] = [
+            self.STRING_TO_NEO_OBJ[s] for s in neo_obj_strings if s in self.STRING_TO_NEO_OBJ
+        ]
+        self.elephant_lab_entity.filter_changed = True
+        self.update_tree()
+
     def cache_stat(self, hash_id: str, stat_name: str, value: float):
         """Caches a computed statistic (e.g. firing rate) for a neo object so select_by_stat can reuse it."""
         if hash_id not in self._stat_cache:
