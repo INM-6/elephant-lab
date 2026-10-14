@@ -21,6 +21,7 @@ class ElephantLab_tree:
     from IPython.display import display
     from neo import Block, Segment, Group, ChannelView, IrregularlySampledSignal, AnalogSignal, SpikeTrain, Epoch, Event, ImageSequence, CircularRegionOfInterest, PolygonRegionOfInterest, RectangularRegionOfInterest
     from neo.core.baseneo import BaseNeo
+    from neo.core.container import Container
     from neo.core.regionofinterest import RegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
     import ipywidgets as widgets
@@ -159,7 +160,12 @@ class ElephantLab_tree:
         tracked_ids = {
             id(v) for v in self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.values()
         }
-        for variable_name, neo_obj in self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.items():
+        # Objects holding data first, then containers (Block, Segment, Group), each alphabetically
+        sorted_neo_objs = sorted(
+            self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.items(),
+            key=lambda item: (isinstance(item[1], self.Container), item[0].lower())
+        )
+        for variable_name, neo_obj in sorted_neo_objs:
             if type(neo_obj) not in self.NEO_OBJS_TO_SHOW:
                 continue
             # Only skip this object if its parent is itself a tracked top-level
