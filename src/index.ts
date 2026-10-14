@@ -1709,7 +1709,6 @@ class ElephantLabExtension {
 		(this.workflowMain as any).onCloseRequest = () => {
 			this._hideWorkflowTab();
 		};
-		this.app.shell.add(this.workflowMain, 'main');
 	}
 
 	// Hides the workflow tab without disposing it, so its graph survives being closed and reopened
