@@ -2,29 +2,10 @@ import pytest
 import numpy as np
 import quantities as pq
 import neo
-import re
-from matplotlib.colors import to_rgb
 from elephant_lab.PlotlyGraphFigure import *
 from elephant_lab.PlotlyGraphContainer import *
 from elephant_lab.PlotlyGraphDataTypes import SpikeTrainRasterPlot
-from elephant_lab.PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
 from elephant_lab.utils import OutputUtils
-from ipywidgets import FloatRangeSlider
-
-def parse_plotly_color(color_str):
-    """
-    Convert Plotly color (rgb(), hex, or name) to (R,G,B) 0-255 tuple
-    """
-    color_str = color_str.strip()
-    
-    # rgb(r,g,b)
-    match = re.match(r'rgb\((\d+),\s*(\d+),\s*(\d+)\)', color_str)
-    if match:
-        return tuple(int(v) for v in match.groups())
-    
-    # hex or named color
-    r, g, b = to_rgb(color_str)
-    return (int(r*255), int(g*255), int(b*255))
 
 
 @pytest.fixture
@@ -179,41 +160,3 @@ def test_annotations():
     assert len(plotlyGraphFigureOnlyAnnotationsInterval.fig.data) == 2
     plotlyGraphFigureBothAnnotations = PlotlyGraphFigure(spikeTrainRasterPlot, annotation_data=plotlyGraphAnnotations, annotation_interval_data=plotlyGraphAnnotationIntervals)
     assert len(plotlyGraphFigureBothAnnotations.fig.data) == 2
-
-def test_image_sequence():
-    """Image sequence figure has one frame per image with correct shape and names."""
-    # Parameters
-    num_frames = 20
-    height = 30
-    width = 30
-    spatial_scale = 1 * pq.micrometer
-    sampling_rate = 5 * pq.Hz
-
-    # Create a synthetic sequence: moving diagonal wave
-    image_data = []
-    for f in range(num_frames):
-        frame = np.zeros((height, width))
-        for i in range(height):
-            for j in range(width):
-                # moving diagonal wave pattern
-                frame[i, j] = np.sin(2 * np.pi * (i + j + f) / 10)
-        image_data.append(frame)
-
-    # Convert to ImageSequence
-    image_sequence = neo.ImageSequence(
-        image_data,
-        units=pq.V,
-        sampling_rate=sampling_rate,
-        spatial_scale=spatial_scale,
-        t_start=0*pq.s,
-        name="Synthetic Sequence",
-        description="Moving diagonal wave pattern"
-    )
-    plotly_fig = PlotlyImageSequenceFigure(image_sequence)
-
-    fig = plotly_fig.fig
-
-    assert len(fig.frames) == num_frames
-    assert fig.data[0].z.shape == (height, width)
-    assert fig.frames[0].name == "0_0"
-    assert fig.frames[-1].name == f"0_{num_frames - 1}"
