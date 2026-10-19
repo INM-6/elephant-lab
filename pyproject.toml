@@ -92,3 +92,10 @@ npm = ["jlpm"]
 
 [tool.jupyter-releaser.options]
 version_cmd = "hatch version"
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# importlib mode keeps the repo root off sys.path, so the installed package is tested
+addopts = "--import-mode=importlib"
+pythonpath = ["tests"]
