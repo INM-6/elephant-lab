@@ -79,10 +79,10 @@ python3 -m venv .venv
 source .venv/bin/activate   # on Windows: .venv\Scripts\activate
 
 # 3. Install the package in development mode
-pip install -e .
+pip install -e ".[dev]"
 
 # 4. Link the extension with JupyterLab
-jupyter labextension develop . --overwrite
+jupyter-builder develop . --overwrite
 
 # 5. Build the TypeScript source
 jlpm build
@@ -106,7 +106,7 @@ Every saved change is rebuilt automatically; refresh the browser to load it.
 pip uninstall elephant-lab
 ```
 
-You will also need to remove the symlink created by `jupyter labextension develop`. Run `jupyter labextension list` to find the `labextensions` folder, then delete the `elephant-lab` symlink inside it.
+You will also need to remove the symlink created by `jupyter-builder develop`. Run `jupyter labextension list` to find the `labextensions` folder, then delete the `elephant-lab` symlink inside it.
 
 ## Testing
 

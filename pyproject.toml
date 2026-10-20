@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.21.0", "jupyterlab>=4.0.0,<5.0.0", "hatch-nodejs-version", "hatch-jupyter-builder>=0.5"]
+requires = ["hatchling>=1.21.0", "jupyterlab>=4.0.0,<5.0.0", "hatch-nodejs-version", "hatch-jupyter-builder>=0.5", "jupyter-builder>=1.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -36,6 +36,9 @@ dependencies = [
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 
 [project.optional-dependencies]
+dev = [
+    "jupyter-builder>=1.0"
+]
 test = [
     "coverage",
     "pytest",
