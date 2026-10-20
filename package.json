@@ -39,8 +39,8 @@
   "scripts": {
     "build": "jlpm build:lib && jlpm build:labextension:dev",
     "build:prod": "jlpm clean && jlpm build:lib && jlpm build:labextension",
-    "build:labextension": "jupyter labextension build .",
-    "build:labextension:dev": "jupyter labextension build --development True .",
+    "build:labextension": "jupyter-builder build .",
+    "build:labextension:dev": "jupyter-builder build --development True .",
     "build:lib": "tsc",
     "clean": "jlpm clean:lib",
     "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
@@ -49,7 +49,7 @@
     "install:extension": "jlpm build",
     "watch": "run-p watch:src watch:labextension",
     "watch:src": "tsc -w",
-    "watch:labextension": "jupyter labextension watch .",
+    "watch:labextension": "jupyter-builder watch .",
     "test": "vitest",
     "test:run": "vitest run"
   },
@@ -76,7 +76,7 @@
     "@lumino/widgets": "^2.3.0"
   },
   "devDependencies": {
-    "@jupyterlab/builder": "^4.1.0",
+    "@jupyter/builder": "^1.2.3",
     "@playwright/test": "^1.58.2",
     "@types/nouislider": "^9.0.10",
     "@types/plotly.js": "^3.0.10",
