@@ -23,16 +23,6 @@
             "title": "Normalize Y",
             "default": false
         },
-        "max_points": {
-            "type": "number",
-            "title": "Max Points",
-            "default": 10000
-        },
-        "full_resolution": {
-            "type": "boolean",
-            "title": "Full Resolution",
-            "default": false
-        },
         "normalization_method": {
             "type": "string",
             "title": "Normalization Method",
