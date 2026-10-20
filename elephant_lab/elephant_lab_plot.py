@@ -10,15 +10,15 @@ Management of plotting:
 - Sends the PlotlyFigures to the Frontend
 """
 class ElephantLab_plot:
-    from .PlotlyImageSequenceFigure import PlotlyImageSequenceFigure
-    from .PlotlyGraphFigure import PlotlyGraphFigure
-    from .PlotlyGraphDataTypes import SpikeTrainRasterPlot, AnalogSignalLFPPlotList, EventAnnotations, EpochIntervals, IrregularlySampledSignalPlotList
+    from .PlotlyGraphDatas import SpikeTrainRasterPlot, AnalogSignalLFPPlotList, EventAnnotation, EpochAnnotation, IrregularlySampledSignalPlotList
+    from .PlotlyImageSequenceDatas import ImageSequencePlot
+    from .PlotlyGraphContainer import PlotlyGraphDataBundle
+    from .PlotlyImageSequenceContainer import PlotlyImageSequenceDataList
 
     from neo import SpikeTrain, AnalogSignal, Event, Epoch, IrregularlySampledSignal, ImageSequence
     from enum import Enum
-    import numpy as np
     from ipywidgets import Output, HTML
-    from IPython.display import clear_output, display
+    from IPython.display import display
     from ipykernel.comm import Comm
 
     from typing import TypedDict, TYPE_CHECKING
@@ -44,19 +44,14 @@ class ElephantLab_plot:
     class DefaultPlotDict(TypedDict):
         is_plotted: bool
         changed: bool
+        data_bundle: "ElephantLab_plot.PlotlyGraphDataBundle"
 
     class RawPlotDict(DefaultPlotDict):
         overlapping: bool
-        og_x_range: list[float] | None
-        x_range: list[float] | None
-        max_points: int
         zero_based: bool
-        is_default_zero_based: bool
-        is_downscaled: bool
-        changes_on_overlap: bool
         normalize_y_values: bool
-        is_default_normalized_y: bool
         normalization_method: str
+        changes_on_overlap: bool
     
     class ImageSequencePlotDict(DefaultPlotDict):
         color_grade: str
@@ -69,6 +64,7 @@ class ElephantLab_plot:
         return {
             "is_plotted": False,
             "changed": False,
+            "data_bundle": None
         }
 
     def __init__(self, elephant_lab_entity: "ElephantLab_plot.ElephantLab"):
@@ -93,15 +89,9 @@ class ElephantLab_plot:
             self.plots[key] = {
                 **self._base_plot_dict(),
                 "overlapping": False,
-                "og_x_range": None,
-                "x_range": None,
-                "max_points": 10000,
                 "zero_based": False,
-                "is_default_zero_based": True,
-                "is_downscaled": False,
                 "changes_on_overlap": True,
                 "normalize_y_values": False,
-                "is_default_normalized_y": True,
                 "normalization_method": "zscore"
             }
         self.plots[self.PLOT_IMGSEQUENCE]= {
@@ -113,34 +103,47 @@ class ElephantLab_plot:
         if isinstance(plot_key, str):
             return plot_key
         return plot_key.value
+    
+    def _enum_key(self, plot_key):
+        if isinstance(plot_key, self.RawPlotKey):
+            return plot_key
+        try:
+            return self.RawPlotKey(plot_key)
+        except ValueError:
+            return plot_key
 
-    def _plot_configs(self):
-        return [
-        (
-            self.RawPlotKey.RAW_ST,
-            self._create_rasterplot,
-            [self.NeoKey.spiketrain],
-            [self.NeoKey.event, self.NeoKey.epoch],
-        ),
-        (
-            self.RawPlotKey.RAW_ANASIG,
-            self._create_lfpplot,
-            [self.NeoKey.analogsignal, self.NeoKey.irregularsignal],
-            [self.NeoKey.event, self.NeoKey.epoch],
-        ),
-        (
-            self.PLOT_IMGSEQUENCE,
-            self._create_image_sequence,
-            [self.NeoKey.imagesequence],
-            [],
-        ),
-        (
-            self.RawPlotKey.RAW_EVENT,
-            self._create_annotation_plot,
-            [self.NeoKey.event, self.NeoKey.epoch],
-            self._keys_that_also_display_events(),
-        )
-    ]
+    def _plot_configs(self, plot_key=None):
+        configs = {
+            self.RawPlotKey.RAW_ST: (
+                "graph",
+                self._create_rasterplot,
+                [self.NeoKey.spiketrain],
+                [self.NeoKey.event, self.NeoKey.epoch],
+            ),
+            self.RawPlotKey.RAW_ANASIG: (
+                "graph",
+                self._create_lfpplot,
+                [self.NeoKey.analogsignal, self.NeoKey.irregularsignal],
+                [self.NeoKey.event, self.NeoKey.epoch],
+            ),
+            self.PLOT_IMGSEQUENCE: (
+                "image_sequence",
+                self._create_image_sequence,
+                [self.NeoKey.imagesequence],
+                [],
+            ),
+            self.RawPlotKey.RAW_EVENT: (
+                "graph",
+                self._create_annotation_plot,
+                [self.NeoKey.event, self.NeoKey.epoch],
+                self._keys_that_also_display_events(),
+            ),
+        }
+
+        if plot_key is None:
+            return configs
+
+        return configs[plot_key]
 
     def _keys_that_also_display_events(self):
         return [
@@ -199,20 +202,13 @@ class ElephantLab_plot:
 
             plot_dict = self.plots[plot_key]
 
-            def remove_x_range():
-                for key in ('og_x_range', 'x_range'):
-                    if key in plot_dict:
-                        plot_dict[key] = None
-
             if plot_key == self.RawPlotKey.RAW_EVENT:
                 if not all(empty_dict[key] for key in self._keys_that_also_display_events()):
-                    remove_x_range()
                     plots_to_remove.add(plot_key)
                     return False
 
             # Case 1: nothing to show → close plot
             if all(empty_dict[k] for k in primary_keys):
-                remove_x_range()
                 plots_to_remove.add(plot_key)
                 return False
 
@@ -221,17 +217,15 @@ class ElephantLab_plot:
             if plot_dict["changed"] or (
                 selection_changed and any(change_dict[k] for k in all_keys)
             ):
-                if selection_changed:
-                    remove_x_range()
                 return True
 
             return False
 
         plot_configs = self._plot_configs()
 
-        for plot_key, method, primary_keys, secondary_keys in plot_configs:
+        for plot_key, (type, method, primary_keys, secondary_keys) in plot_configs.items():
             if should_update(plot_key, primary_keys, secondary_keys):
-                plots_to_update.append((plot_key, method, primary_keys, secondary_keys))
+                plots_to_update.append((plot_key, type, method, primary_keys, secondary_keys))
 
         # -------- only remove the ones that are already plotted --------
         filtered_plots_to_remove = set()
@@ -239,6 +233,7 @@ class ElephantLab_plot:
             plot_dict = self.plots[plot_key]
             if plot_dict['is_plotted']:
                 plot_dict['is_plotted'] = False
+                plot_dict['data_bundle'] = None
                 filtered_plots_to_remove.add(plot_key)
         plots_to_remove = filtered_plots_to_remove
 
@@ -246,19 +241,20 @@ class ElephantLab_plot:
         if plots_to_remove:
             self.comm.send({
                 "type": "plots_remove",
-                "plots": [self._string_key(plot_key) for plot_key in plots_to_remove]
+                "plot_keys": [self._string_key(plot_key) for plot_key in plots_to_remove]
             })
 
         if plots_to_update:
             self.comm.send({
                 "type": "plots_loading",
-                "plots": [self._string_key(plot_key)  for plot_key, *_ in plots_to_update]
+                "plot_keys": [self._string_key(plot_key)  for plot_key, *_ in plots_to_update],
+                "plot_types": [type  for plot_key, type, *_ in plots_to_update],
             })
 
         # -------- compute --------
         updated_figs = {}
 
-        for plot_key, method, primary_keys, secondary_keys in plots_to_update:
+        for plot_key, type, method, primary_keys, secondary_keys in plots_to_update:
             plot_dict = self.plots[plot_key]
 
             all_keys = primary_keys + secondary_keys
@@ -268,23 +264,20 @@ class ElephantLab_plot:
                 for key in all_keys if not empty_dict[key]
             }
 
-            fig: ElephantLab_plot.PlotlyGraphFigure | ElephantLab_plot.PlotlyImageSequenceFigure = method(**plot_kwargs)
+            fig_dict = method(**plot_kwargs)
             plot_dict["is_plotted"] = True
 
             # store JSON for batch send
-            updated_figs[self._string_key(plot_key) ] = fig.to_dict()
+            updated_figs[self._string_key(plot_key) ] = fig_dict
 
             plot_dict["changed"] = False
 
         # -------- send updated figures --------
-        current_update_id = self.update_counter
         if updated_figs:
             self.comm.send({
                 "type": "plots_update",
-                "update_id": current_update_id,
                 "plots": updated_figs
             })
-        self.update_counter += 1
 
     def on_selection_changed(self):
         self._selection_changed = True
@@ -303,6 +296,14 @@ class ElephantLab_plot:
         self.comm = self.Comm(target_name="plot_channel")
         self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
 
+    def get_normalized_data_for_plot_with_x_range(self, plot_key, x_range=None):
+        plot_dict = self.plots[self._enum_key(plot_key)]
+        data_bundle = plot_dict['data_bundle']
+        if data_bundle is not None and self.comm:
+            normalized_x_y_values = data_bundle.get_normalized_data_for_x_range(x_range=x_range)
+            if normalized_x_y_values['x_y_values_list_changed'] or normalized_x_y_values['annotation_list_changed']:
+                self.comm.send({"type": "plot_resample", "plot_key": plot_key, "resample_response": normalized_x_y_values})
+
     def update_settings(self, **settings):
         """
         Gets called once at the beginning, when the saved settings are loaded
@@ -313,8 +314,6 @@ class ElephantLab_plot:
         overlap = settings.get("overlap")
         zero_based = settings.get("zero_based")
         color_grade = settings.get("color_grade")
-        max_points = settings.get("max_points")
-        full_resolution = settings.get("full_resolution")
         normalize_y_values = settings.get("normalize_y_values")
         normalization_method = settings.get("normalization_method")
         
@@ -340,27 +339,7 @@ class ElephantLab_plot:
 
                 if (
                     plot_dict['is_plotted']
-                    and not plot_dict['is_default_zero_based']
-                ):
-                    plot_dict['og_x_range'] = None
-                    plot_dict['x_range'] = None
-                    plot_dict['changed'] = True
-                    reload = True
-
-            # max_points
-            max_points = -1 if full_resolution else max_points # -1 is convention for "full_resolution" in the backend
-
-            # Temporary hard cap because Jupyterlab crashes with extremely big datasets
-            hard_cap = 10000000
-            if not max_points or max_points == -1 or max_points > hard_cap:
-                max_points = hard_cap
-            
-            if max_points is not None and max_points != plot_dict['max_points']:
-                plot_dict['max_points'] = max_points
-
-                if (
-                    plot_dict['is_plotted']
-                    and plot_dict['is_downscaled']
+                    and not plot_dict['data_bundle'].is_default_zero_based
                 ):
                     plot_dict['changed'] = True
                     reload = True
@@ -374,7 +353,7 @@ class ElephantLab_plot:
 
                 if (
                     plot_dict['is_plotted']
-                    and not plot_dict['is_default_normalized_y']
+                    and not plot_dict['data_bundle'].is_default_normalized_y
                 ):
                     plot_dict['changed'] = True
                     reload = True
@@ -404,104 +383,78 @@ class ElephantLab_plot:
         if reload:
             self._raw_plot()
 
-    def upscale_raw_plot(self, x_ranges):
+    def _create_graph_plot(self, plot_key, data_list, annotation_list, title, overlap_on_compress=True):
         """
-        Replots the plot if the new x_range for it changes its resolution
+        Loads the fitting metadata for the plot_key out of the corresponding plot_dict
+        and creates and normalizes the plot data with it.
+        It then saves the resulting metadata regarding the plot and returns a dictionary
+        that stores the plots data.
         """
-        reload = False
-        for key in self.RawPlotKey:
-            plot_dict = self.plots[key]
-            temp_reload = False
-            is_plotted = plot_dict['is_plotted']
-            if not is_plotted or not plot_dict['is_downscaled']:
-                continue
-            previous_x_range = plot_dict['x_range']
-            if key.value not in x_ranges:
-                continue
-            x_range = x_ranges[key.value]
-            if not self.np.allclose(x_range, previous_x_range, atol=1e-6, rtol=1e-3):
-                plot_dict['x_range']=x_range
-                temp_reload = True
-            plot_dict['changed']=temp_reload
-            reload = reload or temp_reload
-        if reload:
-            self._raw_plot()
-    
-    def reset_scale(self):
-        """
-        Replots the plot to its original x_range
-        """
-        reload = False
-        for key in self.RawPlotKey:
-            plot_dict = self.plots[key]
-            is_plotted = plot_dict['is_plotted']
-            if not is_plotted:
-                continue
-            if not self.np.allclose(plot_dict['og_x_range'], plot_dict['x_range'], atol=1e-6, rtol=1e-3):
-                plot_dict['x_range']=plot_dict['og_x_range']
-                plot_dict['changed']=True
-                reload = True
-        if reload:
-            self._raw_plot()
+        plot_dict = self.plots[plot_key]
+        overlapping = plot_dict['overlapping']
+        shift_to_0 = plot_dict['zero_based']
+        normalize_y_values = plot_dict['normalize_y_values']
+        normalization_method = plot_dict['normalization_method']
+        data_bundle = self.PlotlyGraphDataBundle(data_list, annotation_list)
+        data_bundle.normalize(offset_traces_on_compress= not overlapping or not overlap_on_compress, shift_to_0=shift_to_0, normalize_y_values=normalize_y_values, normalization_method=normalization_method)
+        changes_on_overlap = plot_dict['changes_on_overlap']= (not data_bundle.compress or overlap_on_compress) and data_bundle.nGraphs != 1
 
-    def _create_plot_dict_for_raw_plot(self, plot_dict):
-        return {
-            'overlapping': plot_dict['overlapping'],
-            'x_range': plot_dict['x_range'],
-            'max_points': plot_dict['max_points'],
-            'shift_to_0': plot_dict['zero_based'],
-            'normalize_y_values': plot_dict['normalize_y_values'],
-            'normalization_method': plot_dict['normalization_method']
+        fig_dict = {
+            "title": title,
+            "overlapping": overlapping,
+            "changes_on_overlap": changes_on_overlap,
+            "data_bundle": data_bundle.to_dict(),
         }
 
-    def _set_plot_dict_for_raw_plot(self, plot_dict, fig: PlotlyGraphFigure):
-        x_range = fig.getXRange()
-        plot_dict['x_range']=x_range
-        if plot_dict['og_x_range'] is None:
-            plot_dict['og_x_range']=x_range
-        plot_dict['is_default_zero_based']=fig.isDefaultZeroBased()
-        plot_dict['is_downscaled']=fig.isDownscaled()
-        plot_dict['is_default_normalized_y']=fig.isDefaultNormalizedY()
-        plot_dict['changes_on_overlap']=fig.changesOnOverlap()
+        plot_dict['changes_on_overlap'] = changes_on_overlap
+        plot_dict['data_bundle'] = data_bundle
+        return fig_dict
         
     def _create_rasterplot(self, spiketrain=None, event=None, epoch=None):
-        data = [self.SpikeTrainRasterPlot(st, self.elephant_lab_entity.names_for) for st in spiketrain]
-        event_annotations = self.EventAnnotations(event) if event is not None else None
-        epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
-        plot_dict = self.plots[self.RawPlotKey.RAW_ST]
-        kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(data, title="Rasterplots", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
-        self._set_plot_dict_for_raw_plot(plot_dict, fig)
-        return fig
+        data_list = [self.SpikeTrainRasterPlot(st, self.elephant_lab_entity.names_for) for st in spiketrain]
+        annotation_list = (
+            [self.EventAnnotation(e) for e in (event or [])]
+            + [self.EpochAnnotation(e) for e in (epoch or [])]
+        )
+        return self._create_graph_plot(self.RawPlotKey.RAW_ST, data_list, annotation_list, title="Rasterplots", overlap_on_compress=False)
 
     def _create_lfpplot(self, analogsignal=None, irregularsignal=None, event=None, epoch=None):
-        data = None
+        data_list = None
         if analogsignal is not None:
-            data = self.AnalogSignalLFPPlotList(analogsignal, self.elephant_lab_entity.names_for)
+            data_list = self.AnalogSignalLFPPlotList(analogsignal, self.elephant_lab_entity.names_for)
         if irregularsignal is not None:
             irregular_data = self.IrregularlySampledSignalPlotList(irregularsignal, self.elephant_lab_entity.names_for)
-            if data is None:
-                data = irregular_data
+            if data_list is None:
+                data_list = irregular_data
             else:
-                data.concat(irregular_data)
-        event_annotations = self.EventAnnotations(event) if event is not None else None
-        epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
-        plot_dict = self.plots[self.RawPlotKey.RAW_ANASIG]
-        kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(data, title="LFP-Plots", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, **kwargs_plot_dict)
-        self._set_plot_dict_for_raw_plot(plot_dict, fig)
-        return fig
+                data_list.concat(irregular_data)
+        annotation_list = (
+            [self.EventAnnotation(e) for e in (event or [])]
+            + [self.EpochAnnotation(e) for e in (epoch or [])]
+        )
+        return self._create_graph_plot(self.RawPlotKey.RAW_ANASIG, data_list, annotation_list, title="LFP-Plots")
     
     def _create_annotation_plot(self, event=None, epoch=None, spiketrain=None, analogsignal=None, irregularsignal=None):
-        event_annotations = self.EventAnnotations(event) if event is not None else None
-        epoch_intervals = self.EpochIntervals(epoch) if epoch is not None else None
-        plot_dict = self.plots[self.RawPlotKey.RAW_EVENT]
-        kwargs_plot_dict = self._create_plot_dict_for_raw_plot(plot_dict)
-        fig = self.PlotlyGraphFigure(None, title="Plotted Events and Epochs", annotation_data=event_annotations, annotation_interval_data=epoch_intervals, overlap_on_compress=False, **kwargs_plot_dict)
-        self._set_plot_dict_for_raw_plot(plot_dict, fig)
-        return fig
+        annotation_list = (
+            [self.EventAnnotation(e) for e in (event or [])]
+            + [self.EpochAnnotation(e) for e in (epoch or [])]
+        )
+        return self._create_graph_plot(self.RawPlotKey.RAW_EVENT, None, annotation_list, title="Plotted Events and Epochs", overlap_on_compress=False)
 
     def _create_image_sequence(self, imagesequence=None):
+        """
+        Loads the fitting metadata for the imagesequence
+        and creates and normalizes the plot data with it.
+        It then returns a dictionary
+        that stores the plots data.
+        """
         plot_dict = self.plots[self.PLOT_IMGSEQUENCE]
         color_grade = plot_dict['color_grade']
-        return self.PlotlyImageSequenceFigure(image_sequences=imagesequence, color_scale=color_grade, name_fallback=self.elephant_lab_entity.names_for)
+        data_list = self.PlotlyImageSequenceDataList([self.ImageSequencePlot(seq, name_fallback=self.elephant_lab_entity.names_for) for seq in imagesequence])
+        data_list.normalize()
+        fig_dict = {
+            "title": "Image Sequences",
+            "color_grade": color_grade,
+            "data_list": data_list.to_dict()
+        }
+        return fig_dict

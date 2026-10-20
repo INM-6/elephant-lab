@@ -82,6 +82,13 @@
   padding: 8px 0;
 }
 
+.neo-filter-group-separator {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--jp-border-color2);
+}
+
 .unchecked-label,
 .checked-label,
 .workflow-button,

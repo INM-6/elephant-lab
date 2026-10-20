@@ -32,6 +32,7 @@ dependencies = [
     "elephant>=1.1.0",
     "quantities",
     "plotly>4.0",
+    "tsdownsample>=0.1.5.1"
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 
@@ -66,7 +67,10 @@ include = [
     "README.md",
     "LICENSE"
 ]
-exclude = [".github"]
+exclude = [
+    ".github",
+    "doc/adr"
+]
 
 [tool.hatch.build]
 artifacts = ["elephant_lab/labextension"]
