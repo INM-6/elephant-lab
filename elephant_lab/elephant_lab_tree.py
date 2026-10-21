@@ -21,6 +21,7 @@ class ElephantLab_tree:
     from IPython.display import display
     from neo import Block, Segment, Group, ChannelView, IrregularlySampledSignal, AnalogSignal, SpikeTrain, Epoch, Event, ImageSequence, CircularRegionOfInterest, PolygonRegionOfInterest, RectangularRegionOfInterest
     from neo.core.baseneo import BaseNeo
+    from neo.core.container import Container
     from neo.core.regionofinterest import RegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
     import ipywidgets as widgets
@@ -132,6 +133,14 @@ class ElephantLab_tree:
         self.elephant_lab_entity.filter_changed = True
         self.update_tree()
 
+    def set_neo_objs_to_show(self, neo_obj_strings):
+        """Shows exactly the given neo types (by lowercase name) in the tree, hides all others, then rebuilds it."""
+        self.NEO_OBJS_TO_SHOW[:] = [
+            self.STRING_TO_NEO_OBJ[s] for s in neo_obj_strings if s in self.STRING_TO_NEO_OBJ
+        ]
+        self.elephant_lab_entity.filter_changed = True
+        self.update_tree()
+
     def cache_stat(self, hash_id: str, stat_name: str, value: float):
         """Caches a computed statistic (e.g. firing rate) for a neo object so select_by_stat can reuse it."""
         if hash_id not in self._stat_cache:
@@ -159,7 +168,12 @@ class ElephantLab_tree:
         tracked_ids = {
             id(v) for v in self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.values()
         }
-        for variable_name, neo_obj in self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.items():
+        # Objects holding data first, then containers (Block, Segment, Group), each alphabetically
+        sorted_neo_objs = sorted(
+            self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.items(),
+            key=lambda item: (isinstance(item[1], self.Container), item[0].lower())
+        )
+        for variable_name, neo_obj in sorted_neo_objs:
             if type(neo_obj) not in self.NEO_OBJS_TO_SHOW:
                 continue
             # Only skip this object if its parent is itself a tracked top-level

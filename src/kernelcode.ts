@@ -72,6 +72,10 @@ function toggleNeoTreeFilter(checkbox_id: string): string {
 	return `elephant_lab_entity.elephant_lab_tree.show_neo_obj("${checkbox_id}")`
 }
 
+function setNeoTreeFilter(keys: string[]): string {
+	return `elephant_lab_entity.elephant_lab_tree.set_neo_objs_to_show(${JSON.stringify(keys)})`
+}
+
 function expandNeoTree(checked: boolean): string {
 	return `elephant_lab_entity.elephant_lab_tree.expand_neo_tree(${pythonValue(checked)})`
 }
@@ -110,6 +114,7 @@ export enum PythonCodeKey {
 	SetVarName = 'setVarName',
 	SaveSelectedNeoObjects = 'saveSelectedNeoObjects',
 	ToggleNeoTreeFilter = 'toggleNeoTreeFilter',
+	SetNeoTreeFilter = 'setNeoTreeFilter',
 	ExpandNeoTree = 'expandNeoTree',
 	GetIOClass = 'getIOClass',
 	HandleTreeSelection = 'handleTreeSelection',
@@ -133,6 +138,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.SetVarName]: (...args: any[]) => setVarName(args[0], args[1], args[2]),
 	[PythonCodeKey.SaveSelectedNeoObjects]: (...args: any[]) => saveSelectedNeoObjects(args[0]),
 	[PythonCodeKey.ToggleNeoTreeFilter]: (...args: any[]) => toggleNeoTreeFilter(args[0]),
+	[PythonCodeKey.SetNeoTreeFilter]: (...args: any[]) => setNeoTreeFilter(args[0]),
 	[PythonCodeKey.ExpandNeoTree]: (...args: any[]) => expandNeoTree(args[0]),
 	[PythonCodeKey.GetIOClass]: (...args: any[]) => getNeoIOClass(args[0]),
 	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1], args[2]),
