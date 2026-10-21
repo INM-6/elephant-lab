@@ -77,8 +77,6 @@ class ElephantLab:
         self.neo_objs_changed_after_update = False
         self.selected_neo_objects = set()
         self.on_selected_neo_objects_changed: ElephantLab.SimpleEvent = self.SimpleEvent()
-        self.map_ipytree_node_id_to_neo_obj_hash = {}
-        self.map_ipytree_node_id_to_neo_obj = {}
         self.map_neo_obj_hash_to_neo_obj = {}
         self.filter_changed = False
         self.last_known_hashes = []
@@ -96,9 +94,9 @@ class ElephantLab:
     def get_selected_neo_ids(self):
         """Returns the stable hash IDs of the currently selected neo objects."""
         selected_ids = [
-            self.map_ipytree_node_id_to_neo_obj_hash[node._id]
+            node._id
             for node in self.selected_neo_objects
-            if node._id in self.map_ipytree_node_id_to_neo_obj_hash
+            if node._id in self.map_neo_obj_hash_to_neo_obj
         ]
         return selected_ids
     
@@ -349,8 +347,8 @@ class ElephantLab:
                 paths = []
                 objects_for_list = []
                 for node in selected_nodes:
-                    if node._id in self.map_ipytree_node_id_to_neo_obj:
-                        neo_obj = self.map_ipytree_node_id_to_neo_obj[node._id]
+                    if node._id in self.map_neo_obj_hash_to_neo_obj:
+                        neo_obj = self.map_neo_obj_hash_to_neo_obj[node._id]
                         
                         variable_name = node.metadata.get('variable_name', '')
                         path = self._get_obj_path(neo_obj, variable_name=variable_name)
@@ -430,8 +428,8 @@ class ElephantLab:
 
         def walk(node):
             # If node maps to a neo object and is selected
-            if node in selected_nodes and node._id in self.map_ipytree_node_id_to_neo_obj:
-                obj = self.map_ipytree_node_id_to_neo_obj[node._id]
+            if node in selected_nodes and node._id in self.map_neo_obj_hash_to_neo_obj:
+                obj = self.map_neo_obj_hash_to_neo_obj[node._id]
 
                 # Classify
                 for key, cls in neo_class_dict.items():
@@ -443,11 +441,11 @@ class ElephantLab:
             for child in getattr(node, "nodes", []):
                 walk(child)
 
-        walk(self.elephant_lab_tree.ipytree_of_neo_objects)
+        walk(self.elephant_lab_tree.root_node)
 
         return result
         
 
     def _get_neo_obj_hash_and_node_name_of_selected_nodes(self):
-        return {self.get_neo_hash(self.map_ipytree_node_id_to_neo_obj[node._id]): node.name
-            for node in self.selected_neo_objects if node._id in self.map_ipytree_node_id_to_neo_obj}
+        return {self.get_neo_hash(self.map_neo_obj_hash_to_neo_obj[node._id]): node.name
+            for node in self.selected_neo_objects if node._id in self.map_neo_obj_hash_to_neo_obj}

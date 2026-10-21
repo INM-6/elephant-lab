@@ -103,12 +103,12 @@ class ElephantLab_info:
 
         selected_objects_with_node_name = [
             {
-                'obj': self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.get(node._id),
+                'obj': self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(node._id),
                 'node_name': node.name,
                 'variable_name': node.metadata.get('variable_name', '')
             }
             for node in self.elephant_lab_entity.selected_neo_objects
-            if node._id in self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj
+            if node._id in self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj
         ]
 
         if len(selected_objects_with_node_name) <= 1:
@@ -430,9 +430,9 @@ class ElephantLab_info:
 
     def _html_folder_node(self, folder_node) -> str:
         children = [
-            self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[child._id]
+            self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj[child._id]
             for child in folder_node.nodes
-            if child._id in self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj
+            if child._id in self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj
         ]
 
         count = len(children)
