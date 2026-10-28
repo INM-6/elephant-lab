@@ -21,6 +21,7 @@ class ElephantLab_tree:
     from IPython.display import display
     from neo import Block, Segment, Group, ChannelView, IrregularlySampledSignal, AnalogSignal, SpikeTrain, Epoch, Event, ImageSequence, CircularRegionOfInterest, PolygonRegionOfInterest, RectangularRegionOfInterest
     from neo.core.baseneo import BaseNeo
+    from neo.core.container import Container
     from neo.core.regionofinterest import RegionOfInterest
     from neo.core.spiketrainlist import SpikeTrainList
     import ipywidgets as widgets
@@ -111,12 +112,57 @@ class ElephantLab_tree:
         self._node_registry: dict = {}  # hash_id -> SimpleNode, for selection
         self._stat_cache: dict = {}
         self.expand_all = False
+        self.SORT_MODES = ('alphabetical', 'creation', 'datatype')
+        self.sort_mode = 'alphabetical'
+        self.sort_descending = False
+        self._creation_order: dict = {}  # variable name -> (id of bound object, sequence number)
+        self._creation_counter = 0
 
     def expand_neo_tree(self, opened):
         """Sets whether all tree nodes should render expanded by default and rebuilds the tree."""
         self.expand_all = opened
         self.elephant_lab_entity.filter_changed = True
         self.update_tree()
+
+    def set_sort_mode(self, sort_mode, descending=False):
+        """Sets how top-level tree objects are ordered ('alphabetical', 'creation' or 'datatype'), ascending or descending, and rebuilds the tree."""
+        if sort_mode not in self.SORT_MODES:
+            return
+        self.sort_mode = sort_mode
+        self.sort_descending = descending
+        self.elephant_lab_entity.filter_changed = True
+        self.update_tree()
+
+    def _update_creation_order(self):
+        """
+        Assigns a sequence number to every variable that is new or now bound to a
+        different object. Variables appearing in the same update are numbered in
+        the order they were first defined in the notebook namespace.
+        Returns whether any sequence number was assigned.
+        """
+        tracked = self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name
+        for variable_name in list(self._creation_order):
+            if variable_name not in tracked:
+                del self._creation_order[variable_name]
+
+        changed = False
+        namespace_position = {name: i for i, name in enumerate(self.elephant_lab_entity.__main__.__dict__)}
+        for variable_name in sorted(tracked, key=lambda name: namespace_position.get(name, -1)):
+            entry = self._creation_order.get(variable_name)
+            if entry is None or entry[0] != id(tracked[variable_name]):
+                self._creation_counter += 1
+                self._creation_order[variable_name] = (id(tracked[variable_name]), self._creation_counter)
+                changed = True
+        return changed
+
+    def _sorted_neo_objs(self):
+        """Returns (variable name, object) pairs of the tracked top-level objects in the current sort mode."""
+        items = list(self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.items())
+        if self.sort_mode == 'alphabetical':
+            return sorted(items, key=lambda item: item[0].lower(), reverse=self.sort_descending)
+        if self.sort_mode == 'creation':
+            return sorted(items, key=lambda item: self._creation_order[item[0]][1], reverse=self.sort_descending)
+        return sorted(items, key=lambda item: (isinstance(item[1], self.Container), type(item[1]).__name__, item[0].lower()), reverse=self.sort_descending)
 
     def show_neo_obj(self, neo_obj_string):
         """Toggles whether the given neo type (by lowercase name) is shown in the tree, then rebuilds it."""
@@ -129,6 +175,14 @@ class ElephantLab_tree:
             self.NEO_OBJS_TO_SHOW.remove(neo_obj_type)
         else:
             self.NEO_OBJS_TO_SHOW.append(neo_obj_type)
+        self.elephant_lab_entity.filter_changed = True
+        self.update_tree()
+
+    def set_neo_objs_to_show(self, neo_obj_strings):
+        """Shows exactly the given neo types (by lowercase name) in the tree, hides all others, then rebuilds it."""
+        self.NEO_OBJS_TO_SHOW[:] = [
+            self.STRING_TO_NEO_OBJ[s] for s in neo_obj_strings if s in self.STRING_TO_NEO_OBJ
+        ]
         self.elephant_lab_entity.filter_changed = True
         self.update_tree()
 
@@ -145,8 +199,11 @@ class ElephantLab_tree:
         and lists.
         """
         self.elephant_lab_entity.update()
+        creation_order_changed = self._update_creation_order()
         self._stat_cache.clear()
-        if self._tree_widget is None or not self.elephant_lab_entity.neo_objs_changed_after_update:
+        needs_rebuild = self.elephant_lab_entity.neo_objs_changed_after_update \
+            or (creation_order_changed and self.sort_mode == 'creation')
+        if self._tree_widget is None or not needs_rebuild:
             return
 
         # Clear maps
@@ -159,7 +216,7 @@ class ElephantLab_tree:
         tracked_ids = {
             id(v) for v in self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.values()
         }
-        for variable_name, neo_obj in self.elephant_lab_entity.neo_objs_and_lists_of_neo_objs_with_var_name.items():
+        for variable_name, neo_obj in self._sorted_neo_objs():
             if type(neo_obj) not in self.NEO_OBJS_TO_SHOW:
                 continue
             # Only skip this object if its parent is itself a tracked top-level

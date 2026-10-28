@@ -82,6 +82,19 @@
   padding: 8px 0;
 }
 
+.neo-tree-sort-select {
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.neo-tree-sort-select option {
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+}
+
 .neo-filter-group-separator {
   width: 1px;
   align-self: stretch;

@@ -779,6 +779,15 @@ class ElephantLabExtension {
 		];
 		const currentFilterStates = this.getFilterStates();
 
+		const filterLabels: HTMLLabelElement[] = [];
+		let clickTimer: number | undefined;
+		const setLabelChecked = (label: HTMLLabelElement, isChecked: boolean) => {
+			label.dataset.checked = isChecked ? "true" : "false";
+			label.classList.remove('checked-label', 'unchecked-label');
+			label.classList.add(isChecked ? 'checked-label' : 'unchecked-label');
+			this.saveFilterState(label.dataset.key!, isChecked);
+		};
+
 		const filterContainer = document.createElement('div');
 		filterContainer.className = 'neo-filter-container';
 		filterContainer.textContent = " Filter  ";
@@ -807,27 +816,41 @@ class ElephantLabExtension {
 				label.prepend(icon);
 				label.appendChild(document.createTextNode(`  `));
 				label.onclick = () => {
-					const isCurrentlyChecked = label.dataset.checked === "true";
-					const isNowChecked = !isCurrentlyChecked;
-					label.dataset.checked = isNowChecked ? "true" : "false";
-
-					if (isNowChecked) {
-						label.classList.replace('unchecked-label', 'checked-label');
-					} else {
-						label.classList.replace('checked-label', 'unchecked-label');
+					// Delay the toggle so a double-click can cancel it (a dblclick is preceded by two clicks)
+					if (clickTimer !== undefined) {
+						return;
 					}
+					clickTimer = window.setTimeout(() => {
+						clickTimer = undefined;
+						const isNowChecked = label.dataset.checked !== "true";
+						setLabelChecked(label, isNowChecked);
 
-					this.saveFilterState(key, isNowChecked);
-
-					key === "open_all"
-						? this.neo_tree_expand(isNowChecked, session)
-						: this.neo_tree_filter(label.dataset.key!, session);
-
+						key === "open_all"
+							? this.neo_tree_expand(isNowChecked, session)
+							: this.neo_tree_filter(label.dataset.key!, session);
+					}, 250);
 				};
 
-				key == "open_all" ? label.title = `Expand all containers` : label.title = `Hide/Show ${key.charAt(0).toUpperCase() + key.slice(1)}(s)`;
+				// Double-click: show only this type; double-click it again to show all types
+				label.ondblclick = () => {
+					window.clearTimeout(clickTimer);
+					clickTimer = undefined;
+					if (key === "open_all") {
+						return;
+					}
+
+					const typeLabels = filterLabels.filter(l => l.dataset.key !== "open_all");
+					const isAlreadyOnlyOne = typeLabels.every(l => (l.dataset.checked === "true") === (l === label));
+					typeLabels.forEach(l => setLabelChecked(l, isAlreadyOnlyOne || l === label));
+
+					const keysToShow = typeLabels.filter(l => l.dataset.checked === "true").map(l => l.dataset.key!);
+					this.neo_tree_set_filter(keysToShow, session);
+				};
+
+				key == "open_all" ? label.title = `Expand all containers` : label.title = `Hide/Show ${key.charAt(0).toUpperCase() + key.slice(1)}(s) (double-click: show only these)`;
 
 
+				filterLabels.push(label);
 				filterContainer.appendChild(label);
 			});
 		});
@@ -1127,6 +1150,54 @@ class ElephantLabExtension {
 		}
 
 
+		const sortNeoTreeButton = document.createElement('label');
+		sortNeoTreeButton.innerHTML = '<i class="fa fa-sort" aria-hidden="true"></i> ';
+		sortNeoTreeButton.title = 'Sort top-level objects of the neo tree';
+		sortNeoTreeButton.className = 'workflow-button workflow-button-io';
+		const sortNeoTreeSelect = document.createElement('select');
+		sortNeoTreeSelect.className = 'neo-tree-sort-select';
+		([
+			['alphabetical', 'Alphabetical'],
+			['creation', 'Creation Date'],
+			['datatype', 'Data type'],
+		] as const).forEach(([value, text]) => {
+			const option = document.createElement('option');
+			option.value = value;
+			option.textContent = text;
+			sortNeoTreeSelect.appendChild(option);
+		});
+		sortNeoTreeButton.appendChild(sortNeoTreeSelect);
+
+		const sortIcons: Record<string, string> = {
+			alphabetical: 'fa-sort-alpha-asc',
+			creation: 'fa-calendar',
+			datatype: 'fa-cube',
+		};
+		const sortIcon = sortNeoTreeButton.querySelector('i')!;
+		const updateSortIcon = () => {
+			sortIcon.className = `fa ${sortIcons[sortNeoTreeSelect.value]}`;
+		};
+		updateSortIcon();
+
+		let sortDescending = false;
+		const sortDirectionButton = document.createElement('button');
+		sortDirectionButton.title = 'Toggle ascending/descending';
+		sortDirectionButton.className = 'workflow-button workflow-button-io';
+		const updateSortDirection = () => {
+			sortDirectionButton.innerHTML = `<i class="fa fa-sort-amount-${sortDescending ? 'desc' : 'asc'}" aria-hidden="true"></i>`;
+		};
+		updateSortDirection();
+
+		sortNeoTreeSelect.onchange = () => {
+			updateSortIcon();
+			this.neo_tree_sort(sortNeoTreeSelect.value, sortDescending, session);
+		};
+		sortDirectionButton.onclick = () => {
+			sortDescending = !sortDescending;
+			updateSortDirection();
+			this.neo_tree_sort(sortNeoTreeSelect.value, sortDescending, session);
+		};
+
 		// Annotation filter row
 		const annoFilterRow = document.createElement('div');
 		annoFilterRow.style.cssText = 'display:flex;gap:4px;align-items:center;padding-top:6px;width:100%;';
@@ -1179,6 +1250,8 @@ class ElephantLabExtension {
 		filterContainer.appendChild(saveNeoObjectsButton);
 		filterContainer.appendChild(insertCodeButton);
 		filterContainer.appendChild(createGroupButton);
+		filterContainer.appendChild(sortNeoTreeButton);
+    filterContainer.appendChild(sortDirectionButton);
 
 		tree_widget.node.prepend(filterContainer);
 	}
@@ -1564,8 +1637,18 @@ class ElephantLabExtension {
 		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 	}
 
+	public neo_tree_set_filter(keys: string[], session: ISessionContext) {
+		let code = getPythonCode(PythonCodeKey.SetNeoTreeFilter, keys);
+		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
+	}
+
 	public neo_tree_expand(checked: boolean, session: ISessionContext) {
 		let code = getPythonCode(PythonCodeKey.ExpandNeoTree, checked);
+		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
+	}
+
+	public neo_tree_sort(sortMode: string, descending: boolean, session: ISessionContext) {
+		let code = getPythonCode(PythonCodeKey.SetNeoTreeSortMode, sortMode, descending);
 		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 	}
 }; // end of ElephantLabExtension class

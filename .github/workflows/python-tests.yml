@@ -1,0 +1,52 @@
+name: Python Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: ['*']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # yarn.lock is not committed, so yarn must be allowed to create it on CI
+  YARN_ENABLE_IMMUTABLE_INSTALLS: false
+  PIP_DISABLE_PIP_VERSION_CHECK: 1
+
+jobs:
+  pytest:
+    name: pytest (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      # Python + Node.js, needed because installing the package builds the labextension
+      - name: Base setup
+        uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
+        with:
+          python_version: ${{ matrix.python-version }}
+
+      - name: Install the package with test dependencies
+        run: python -m pip install ".[test]"
+
+      - name: Run pytest
+        # Run outside the checkout so the installed package is tested, not the source tree.
+        # Test options (import mode, pythonpath) come from pyproject.toml.
+        working-directory: ${{ runner.temp }}
+        run: >
+          python -m pytest ${{ github.workspace }}/tests
+          --cov=elephant_lab --cov-report=term --cov-report=xml:${{ github.workspace }}/coverage.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-py${{ matrix.python-version }}
+          path: coverage.xml
