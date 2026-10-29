@@ -109,6 +109,7 @@ class ElephantLab_tree:
         
         self._tree_widget = None  # ipywidgets.HTML
         self._node_registry: dict = {}  # hash_id -> SimpleNode, for selection
+        self._selected_ids: set = set()  # ids rendered as selected while building the tree html
         self._stat_cache: dict = {}
         self.expand_all = False
 
@@ -154,6 +155,11 @@ class ElephantLab_tree:
         self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.clear()
         self._node_registry.clear()
 
+        # The rebuilt html replaces the selection highlighting done in the frontend,
+        # so the current selection is rendered into the html
+        selected_neo_objects = self.elephant_lab_entity.selected_neo_objects
+        self._selected_ids = {node._id for node in selected_neo_objects}
+
         nodes_html = []
         top_level_simple_nodes = []
         tracked_ids = {
@@ -178,6 +184,13 @@ class ElephantLab_tree:
 
         self._root_node.nodes = top_level_simple_nodes
 
+        # Replace the selected nodes by the rebuilt ones and drop nodes that are no longer in the tree
+        selected_neo_objects.clear()
+        selected_neo_objects.update(
+            self._node_registry[node_id] for node_id in self._selected_ids if node_id in self._node_registry
+        )
+        selection_changed = len(selected_neo_objects) != len(self._selected_ids)
+
         self._tree_widget.value = f'''
         <style>
         .jup-tree {{ font-family: var(--jp-ui-font-family); font-size: var(--jp-ui-font-size1); line-height: 1.5; }}
@@ -193,6 +206,9 @@ class ElephantLab_tree:
         </style>
         <div class="jup-tree">{"".join(nodes_html)}</div>
         '''
+
+        if selection_changed:
+            self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
 
     def _build_node_html(self, neo_obj, variable_name='', list_index=None, ancestors=frozenset()):
         hash_id = self.elephant_lab_entity.get_neo_hash(neo_obj, hash_name='sha1')
@@ -249,8 +265,10 @@ class ElephantLab_tree:
             toggle = '<span class="jup-toggle-empty"></span>'
             children_div = ''
 
+        selected_class = ' jup-selected' if hash_id in self._selected_ids else ''
+
         html = f'''<div class="jup-node">
-            <div class="jup-row" data-node-id="{hash_id}">
+            <div class="jup-row{selected_class}" data-node-id="{hash_id}">
                 {toggle}
                 <i class="fa fa-{icon}"></i>
                 {label}
@@ -320,9 +338,10 @@ class ElephantLab_tree:
         arrow = '<i class="fa fa-minus"></i>' if auto_open else '<i class="fa fa-plus"></i>'
 
         open_class = ' jup-open' if auto_open else ''
+        selected_class = ' jup-selected' if f"folder-{attr_name}-{id(attr_list)}" in self._selected_ids else ''
 
         html = f'''<div class="jup-node">
-        <div class="jup-row" data-node-id="folder-{attr_name}-{id(attr_list)}">
+        <div class="jup-row{selected_class}" data-node-id="folder-{attr_name}-{id(attr_list)}">
             <span class="jup-toggle">{arrow}</span>
             <i class="fa fa-folder"></i>
             {label}
