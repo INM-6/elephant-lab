@@ -34,9 +34,8 @@ class ElephantLab_tree:
     if TYPE_CHECKING:
         from .elephant_lab import ElephantLab  # only for type hints
         
-    # Current workaround to keep compatibility
     @property
-    def ipytree_of_neo_objects(self):
+    def root_node(self):
         return self._root_node
     
     def __init__(self, elephant_lab_entity: "ElephantLab_tree.ElephantLab"):
@@ -150,8 +149,7 @@ class ElephantLab_tree:
             return
 
         # Clear maps
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.clear()
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.clear()
+        self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj.clear()
         self._node_registry.clear()
 
         nodes_html = []
@@ -197,8 +195,6 @@ class ElephantLab_tree:
     def _build_node_html(self, neo_obj, variable_name='', list_index=None, ancestors=frozenset()):
         hash_id = self.elephant_lab_entity.get_neo_hash(neo_obj, hash_name='sha1')
         self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj[hash_id] = neo_obj
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[hash_id] = neo_obj
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash[hash_id] = hash_id
 
         class_name = neo_obj.__class__.__name__
         icon = self.NEO_ABBREVIATIONS.get(class_name, {}).get('icon', 'circle')
@@ -409,7 +405,7 @@ class ElephantLab_tree:
                 node._id: obj
                 for node in source
                 if not node._id.startswith('folder-')
-                and (obj := self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.get(node._id)) is not None
+                and (obj := self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(node._id)) is not None
                 and not isinstance(obj, (self.Block, self.Segment, self.Group))
             }
 
