@@ -23,13 +23,13 @@ const setup_env =
 from elephant_lab.elephant_lab import ElephantLab
 elephant_lab_entity = ElephantLab()`;
 
-// Call to the function that initializes the ipytree widget with an empty tree
+// Call to the function that initializes the neo tree widget with an empty tree
 const create_tree = `elephant_lab_entity.elephant_lab_tree.create_tree()`;
 
 // Call to the function that shows metadata info of selected nodes in Info-tab of the node-explorer Dockpanel
 const create_details_panel = `elephant_lab_entity.elephant_lab_info.create_details_panel()`;
 
-// Call to the function that updates the ipytree tree view of the neo hierarchy
+// Call to the function that updates the tree view of the neo hierarchy
 const update_tree = `elephant_lab_entity.elephant_lab_tree.update_tree()`;
 
 const createExplorerRawPlot = 'elephant_lab_entity.elephant_lab_plot.create_explorer_raw_plot()'
