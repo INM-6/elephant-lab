@@ -109,7 +109,7 @@ def test_plotly_graph_data_bundle_normalizes_annotations_and_serializes_data():
 		pq.s,
 		np.array([0, 0, 1]),
 	)
-	bundle = PlotlyGraphDataBundle(PlotlyGraphDataList(trace), [annotation])
+	bundle = PlotlyGraphDataBundle(PlotlyGraphDataList(trace), [annotation], max_points=10)
 	bundle.normalize(False, False, False, 'minmax')
 
 	annotations = bundle.get_normalized_annotations(None)
@@ -117,7 +117,7 @@ def test_plotly_graph_data_bundle_normalizes_annotations_and_serializes_data():
 	assert annotations['durations'].tolist() == [0, 1]
 	assert annotations['texts'].tolist() == ['first<br>second', 'third']
 
-	result = bundle.get_normalized_data_for_x_range([0, 1.5], max_points=10)
+	result = bundle.get_normalized_data_for_x_range([0, 1.5])
 	assert result['x_y_values_list_changed'] is True
 	assert result['annotation_list_changed'] is True
 	serialized = bundle.to_dict()
