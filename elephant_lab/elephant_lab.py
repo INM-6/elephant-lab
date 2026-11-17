@@ -492,11 +492,15 @@ class ElephantLab:
         result = {key: [] for key in neo_class_dict}
 
         selected_nodes = self.selected_neo_objects
+        found_selected_node_ids = set()
 
         def walk(node):
             # If node maps to a neo object and is selected
             if node in selected_nodes and node._id in self.map_neo_obj_hash_to_neo_obj:
+                if node._id in found_selected_node_ids:
+                    return
                 obj = self.map_neo_obj_hash_to_neo_obj[node._id]
+                found_selected_node_ids.add(node._id)
 
                 # Classify
                 for key, cls in neo_class_dict.items():
