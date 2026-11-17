@@ -365,8 +365,15 @@ class ElephantLab_tree:
         self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
         return True
 
-    def handle_selection(self, node_id, multi_select=False, select_children=True):
-        """Called from TypeScript when user clicks a node."""
+    def handle_selection(self, node_id, multi_select=False, select_children=True, select=None):
+        """
+        Called from TypeScript when user clicks a node.
+
+        select: True/False to explicitly select/deselect the node, None to toggle it.
+        The same neo object can appear several times in the tree (e.g. a spiketrain in a
+        segment and in a group) and all occurrences share the same node id, so the frontend
+        passes the intended state instead of relying on a toggle of the shared selection.
+        """
         if node_id not in self._node_registry:
             return
 
@@ -375,7 +382,10 @@ class ElephantLab_tree:
         if not multi_select:
             self.elephant_lab_entity.selected_neo_objects.clear()
 
-        if clicked_node in self.elephant_lab_entity.selected_neo_objects:
+        if select is None:
+            select = clicked_node not in self.elephant_lab_entity.selected_neo_objects
+
+        if not select:
             self.elephant_lab_entity.selected_neo_objects.discard(clicked_node)
             if select_children:
                 def deselect_recurse(node):
