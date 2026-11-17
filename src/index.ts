@@ -7,10 +7,10 @@ import {
 
 import {
 	ICommandPalette,
-	ISessionContext,
 	WidgetTracker,
 	showDialog,
-	Dialog
+	Dialog,
+	Notification
 } from '@jupyterlab/apputils';
 
 import {
@@ -71,9 +71,11 @@ import {
 import '../style/index.css';
 import '../style/base.css'
 import '../style/sidebar.css';
-import { KernelBridge } from './kernel_bridge';
+import { KernelBridge, IElephantSession } from './kernel_bridge';
 import { PlotlyFrontend } from './plot';
 import { PlotSettings } from './plot_settings';
+import { AttachedKernelSession, IKernelEntry, listKernelEntries, openKernelPicker } from './kernel_picker';
+import { createAttachedWidgetManager, IAttachedWidgetManager } from './ipywidgets_support';
 import elephantLabLogo from '../doc/Elephant-Lab-Logo.png';
 
 type PlotSettingsKey = keyof PlotSettings;
@@ -99,9 +101,41 @@ class ElephantLabExtension {
 	private output_tabs: DockPanel | null;
 	private docManager: IDocumentManager;
 	private settingRegistry: ISettingRegistry;
+	private rendermime: IRenderMimeRegistry;
 	private kernelBridge: KernelBridge | null;
 	private topBar: Widget | null = null;
 	private plotlyFrontend: PlotlyFrontend | null;
+	// The kernel id/name Elephant Lab is currently attached to, however it
+	// got there (the active-notebook quick action or the kernel picker).
+	// Used to tell whether the notebook currently in the foreground is the
+	// one Elephant Lab is watching, and to restore the same attachment
+	// after a page reload (see restoreAttachment()).
+	private attachedKernelId: string | null = null;
+	private attachedKernelName: string | null = null;
+	// The Kernel.IKernelConnection attachToKernel() opened via
+	// serviceManager.kernels.connectTo(). Unlike a notebook's kernel
+	// connection (owned by its NotebookPanel/sessionContext), this one is
+	// ours alone - disposed on the next switch so we don't accumulate one
+	// open websocket per kernel the picker was ever pointed at.
+	private pickedKernelConnection: Kernel.IKernelConnection | null = null;
+	// The ipywidgets manager built for pickedKernelConnection - see
+	// ipywidgets_support.ts for why this is needed at all. Its rendermime
+	// clone (not this.rendermime) is what gets passed to initializeTab() in
+	// attachToKernel().
+	private pickedWidgetManager: IAttachedWidgetManager | null = null;
+	// A kernel attached via the picker has no notebook tab, so there's no
+	// NotebookActions.executed signal to refresh the tree on (that's how the
+	// quick-action/local-notebook flow stays live). This timer runs
+	// runPickedKernelHealthCheck() instead, on a clock rather than on cell
+	// execution - both refreshing the tree AND checking, every tick, whether
+	// the kernel behind entry.path is still the one we're attached to (see
+	// that method for why an in-place restart isn't the only way a kernel
+	// can change out from under an external attachment).
+	private pickedKernelSyncTimer: number | null = null;
+	// Disconnects the kernel-restart listener registered by
+	// registerKernelRestartListener() for whatever kernel Elephant Lab is
+	// currently attached to. Re-set on every attach (see disposePickedKernelConnection()).
+	private kernelRestartListenerCleanup: (() => void) | null = null;
 	private _lastClickedNode: string | null = null;
 	private _explorerWidget: Panel | null = null;
 	private _detailsWidget: Panel | null = null;
@@ -119,6 +153,7 @@ class ElephantLabExtension {
 		this.widget_tracker = widget_tracker;
 		this.docManager = docManager;
 		this.settingRegistry = settingRegistry;
+		this.rendermime = rendermime;
 		// Store references to all tabs containing notebooks
 		this.myPanels = [];
 		// Store references to all tabs created by this extension
@@ -205,9 +240,21 @@ class ElephantLabExtension {
 	// Define utility functions
 	/******************************************************************************************************************/
 	// Create OutputAreas where Python-Code can be executed
-	private async initializeKernelState(session: ISessionContext) {
+	private async initializeKernelState(session: IElephantSession) {
 		console.log("Elephant Lab: Initializing kernel state...");
-		this.kernelBridge = new KernelBridge(session);
+		this.kernelBridge = new KernelBridge(session, () => {
+			console.log("Elephant Lab: Kernel state was lost (likely restarted by another client); re-initializing automatically.");
+			return this.reinitializeKernelState(session);
+		});
+		this.attachedKernelId = session.session?.kernel?.id ?? null;
+		this.attachedKernelName = session.session?.kernel?.name ?? null;
+		// WidgetTracker only captures getRestoreArgs() once, when a widget is
+		// first add()-ed - switching kernels on an already-tracked widget
+		// (e.g. via attachToKernel()) doesn't re-trigger that capture on its
+		// own. Without this explicit save(), a page reload would restore
+		// whatever was attached the first time the panel opened, not the
+		// current attachment - defeating restoreAttachment() entirely.
+		void this.widget_tracker.save(this.widget);
 
 		await this.kernelBridge.executeCode(PythonCodeKey.SetupEnv);
 
@@ -217,7 +264,14 @@ class ElephantLabExtension {
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateTree, this.outarea_neo_tree!);
 			await this.kernelBridge.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateDetailsPanel, this.outarea_nodeexplorer_info!);
-			this.plotlyFrontend = new PlotlyFrontend(session.session!, this.outarea_nodeexplorer_raw!);
+			// Re-initializing (e.g. after a kernel restart) constructs a fresh
+			// PlotlyFrontend against the same, still-live outputArea - dispose
+			// the previous one first so its plots (DOM nodes it appended
+			// directly into outputArea.node, outside the OutputAreaModel that
+			// executeCode()'s own outputArea.model.clear() knows how to clear)
+			// and its ResizeObserver don't linger as stale, orphaned graphics.
+			this.plotlyFrontend?.dispose();
+			this.plotlyFrontend = new PlotlyFrontend(session.session!.kernel!, this.outarea_nodeexplorer_raw!);
 			await this.kernelBridge.executeCode(PythonCodeKey.CreateExplorerRaw, this.outarea_nodeexplorer_raw!);
 			// Notify backend of initial panel active state
 			await this.kernelBridge.executeCode(
@@ -232,6 +286,39 @@ class ElephantLabExtension {
 			console.error("Elephant Lab: FAILED to initialize kernel state:", error);
 		}
 	}
+
+	// Guarded wrapper around initializeKernelState(), shared by every trigger
+	// that can decide a restart happened and Elephant Lab needs to re-sync:
+	// KernelBridge's onKernelStateLost callback (kernel_bridge.ts - a restart
+	// nothing else here observed), registerKernelRestartListener's
+	// statusChanged 'idle' handler, and sessionContext.kernelChanged below.
+	// Confirmed via live testing that for a single plain in-place kernel
+	// restart (Kernel > Restart Kernel), the statusChanged 'idle' transition
+	// AND kernelChanged both fire - contrary to kernelChanged's own doc
+	// suggesting it's only for a wholesale kernel replacement - which without
+	// this guard ran initializeKernelState() twice concurrently against the
+	// same kernel (visible as a duplicated "Initializing kernel state..." /
+	// "Environment setup complete." pair in the console for one restart).
+	// That, in turn, is what left stale plot graphics behind and could hang
+	// the next execution: two racing SetupEnv/CreateTree/.../CreateExplorerRaw
+	// sequences interleaving their requestExecute calls against one kernel.
+	// A trigger that arrives while another is already in flight is simply
+	// skipped - the in-flight run already re-syncs everything a skipped one
+	// would have.
+	private isReinitializingKernelState = false;
+
+	private async reinitializeKernelState(session: IElephantSession) {
+		if (this.isReinitializingKernelState) {
+			return;
+		}
+		this.isReinitializingKernelState = true;
+		try {
+			await this.initializeKernelState(session);
+		} finally {
+			this.isReinitializingKernelState = false;
+		}
+	}
+
 	// Command on which to execute Elephant Lab
 	public createCommand(command: string) {
 		/**
@@ -243,9 +330,16 @@ class ElephantLabExtension {
 		// Add the specified command to the commands known by JupyterLab
 		this.app.commands.addCommand(command, {
 			label: 'Elephant Lab',
-			execute: () => {
+			execute: args => {
+				// On restore after a page reload, the layout restorer passes back
+				// whatever getRestoreArgs() last recorded (see restoreAttachment()).
+				// A manual invocation (command palette, toolbar button) passes none.
+				const kernelId = (args?.kernelId as string) || null;
+				if (kernelId) {
+					return this.restoreAttachment(kernelId, (args?.kernelName as string) || '');
+				}
 				// The newTab function that contains the main code is called from the command
-				this.newTab();
+				return this.newTab();
 			}
 		});
 		// Add the command to the CommandPalette, to make it available on click
@@ -296,6 +390,80 @@ class ElephantLabExtension {
 		});
 	}
 
+	// The args getRestoreArgs()/restoreAttachment() pass through the
+	// 'elephant-lab:open' command so a page reload can restore the same
+	// attachment (see restore Layout wiring in activate()), rather than
+	// always falling back to whatever notebook happens to be focused.
+	public getRestoreArgs(): { kernelId: string; kernelName: string } {
+		return {
+			kernelId: this.attachedKernelId ?? '',
+			kernelName: this.attachedKernelName ?? '',
+		};
+	}
+
+	// Restores Elephant Lab's attachment to kernelId after a page reload.
+	// Tries, in order: the plain newTab() quick-action path, if the notebook
+	// currently focused already happens to be backed by that same kernel
+	// (the common case - nothing to do beyond what newTab() already does,
+	// and it's the well-exercised path so there's no reason to route around
+	// it); a not-currently-focused *local* tab backed by that kernel, if its
+	// sessionContext turns out to be ready quickly (see panelReadySoon() -
+	// this reuses that notebook's own ipywidgets manager, same as the quick
+	// action, avoiding the "Error displaying widget: model not found" that
+	// attachToKernel()'s self-contained one produces for a local kernel);
+	// the kernel picker's raw-connection path otherwise, if the kernel is
+	// still running on the server (this is what fixes the "reload switches
+	// an externally-controlled notebook" case, since an externally-controlled
+	// kernel has no local tab to focus in the first place, and is also the
+	// fallback for a local tab whose sessionContext *isn't* ready quickly);
+	// and finally the plain newTab() fallback if the kernel is gone.
+	//
+	// The not-ready-yet case is real: during restoration, notebook_tracker
+	// can contain panels whose sessionContext has a kernel id already but
+	// whose own initialize() JupyterLab hasn't gotten around to running yet,
+	// and targeting one of those makes newTab() hang forever awaiting
+	// `sessionContext.ready` with no fix in this method ever able to un-hang
+	// it - hence the bounded wait rather than an unconditional one.
+	private async restoreAttachment(kernelId: string, kernelName: string) {
+		await this.notebook_tracker.restored;
+
+		if (this.notebook_tracker.currentWidget?.sessionContext.session?.kernel?.id === kernelId) {
+			await this.newTab();
+			return;
+		}
+
+		const entries = await listKernelEntries(this.app.serviceManager, this.notebook_tracker);
+		const entry = entries.find(e => e.id === kernelId);
+		if (entry) {
+			if (entry.origin === 'local') {
+				const panel = this.notebook_tracker.find(p => p.sessionContext.session?.kernel?.id === kernelId);
+				if (panel && await this.panelReadySoon(panel)) {
+					this.app.shell.activateById(panel.id);
+					await this.newTab();
+					return;
+				}
+			}
+			await this.attachToKernel(entry);
+			return;
+		}
+
+		console.log(`Elephant Lab: Previously attached kernel ${kernelId} (${kernelName}) is no longer running; falling back to the active notebook.`);
+		await this.newTab();
+	}
+
+	// True if panel's sessionContext becomes ready within timeoutMs, false
+	// (without waiting any further) otherwise. Used only during restoration
+	// (see restoreAttachment()) to bound how long a not-yet-initialized
+	// panel can block it, since `await sessionContext.ready` on its own was
+	// found to hang indefinitely there for a panel JupyterLab hasn't
+	// finished restoring yet.
+	private panelReadySoon(panel: NotebookPanel, timeoutMs = 3000): Promise<boolean> {
+		return Promise.race([
+			panel.sessionContext.ready.then(() => true),
+			new Promise<boolean>(resolve => window.setTimeout(() => resolve(false), timeoutMs))
+		]);
+	}
+
 	// Function to react on command 'Elephant Lab'
 	// Called only after the command is clicked from CommandPalette
 	public async newTab(force: boolean = false) {
@@ -336,6 +504,8 @@ class ElephantLabExtension {
 
 		console.log("Elephant Lab: Creating new Elephant Lab instance.");
 
+		this.disposePickedKernelConnection();
+
 		// Clear the panel before adding new widgets
 		const oldWidgets = Array.from(this.widget.widgets());
 		for (const w of oldWidgets) {
@@ -346,16 +516,82 @@ class ElephantLabExtension {
 			this.output_tabs = null;
 		}
 
-		await this.initializeTab(newPanel.content.rendermime as any);
+		const initialSession = newPanel.sessionContext;
+		await this.initializeTab(newPanel.content.rendermime as any, initialSession);
 		this.myVisTabs.push(this.widget);
 		this.myPanels.push(newPanel);
 		this.attachTab();
 
-		const initialSession = newPanel.sessionContext;
 		await initialSession.ready;
 		await this.initializeKernelState(initialSession);
+		if (initialSession.session?.kernel) {
+			this.registerKernelRestartListener(initialSession.session.kernel, initialSession);
+		}
 
-		// Keep backend in sync when the user switches between Details and Explore tabs
+		this.registerTabSyncListener();
+		this.registerTreeInteractionListeners();
+
+		// Listener for cell execution
+		NotebookActions.executed.connect((sender, exec_data) => {
+			if (exec_data.notebook !== newPanel.content) {
+				return;
+			}
+			console.log("Elephant Lab: Cell executed, updating plots.");
+
+			if (this._updateTimer) {
+				window.clearTimeout(this._updateTimer);
+			}
+
+			this._updateTimer = window.setTimeout(async () => {
+				await Promise.all([
+					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, initialSession),
+				]);
+			}, 500);
+		});
+
+		// Listener for a wholesale kernel change (e.g. Change Kernel). Also
+		// fires for a plain in-place restart of the *same* kernel id
+		// (confirmed via live testing - the doc on registerKernelRestartListener()
+		// used to assume otherwise), alongside that listener's own
+		// statusChanged-based detection; reinitializeKernelState()'s guard is
+		// what keeps those two triggers from racing each other for one
+		// restart. Waits for the new kernel to be ready, then re-initializes
+		// against it. registerKernelRestartListener() is called unconditionally
+		// (not gated by that guard) since it's idempotent - safe, and
+		// necessary, to re-run every time in case `newKernel` is a genuinely
+		// different connection than the one it was last attached to.
+		newPanel.sessionContext.kernelChanged.connect(async (sender, args) => {
+			console.log("Elephant Lab: Kernel has changed.");
+			const newKernel = args.newValue;
+			if (newKernel) {
+				const waitForIdle = new Promise<void>(resolve => {
+					if (newKernel.status === 'idle') {
+						resolve();
+						return;
+					}
+					const listener = (kernel: Kernel.IKernelConnection, status: KernelMessage.Status) => {
+						if (status === 'idle') {
+							newKernel.statusChanged.disconnect(listener);
+							resolve();
+						}
+					};
+					newKernel.statusChanged.connect(listener);
+				});
+				await waitForIdle;
+				console.log("Elephant Lab: New kernel is idle and ready; re-initializing state.");
+				this.registerKernelRestartListener(newKernel, initialSession);
+				await this.reinitializeKernelState(initialSession);
+			}
+		});
+
+		console.log("Elephant Lab: Event listeners registered.");
+	}
+
+	// Keeps the backend in sync when the user switches between the Details
+	// and Explore tabs. Shared by newTab() and attachToKernel() since neither
+	// this nor its captured state (this.kernelBridge, this._detailsWidget,
+	// this._explorerWidget) depends on how Elephant Lab got attached to a kernel.
+	private registerTabSyncListener() {
 		for (const tabBar of this.widget.tabBars()) {
 			const hasOurPanels = Array.from(tabBar.titles).some(
 				t => t.owner === this._detailsWidget || t.owner === this._explorerWidget
@@ -373,8 +609,14 @@ class ElephantLabExtension {
 				break;
 			}
 		}
+	}
 
-		// Handle HTML tree interactions (expand/collapse + selection)
+	// Handle HTML tree interactions (expand/collapse + selection) and Details
+	// panel stat clicks. Shared by newTab() and attachToKernel() - purely a
+	// function of this.outarea_neo_tree / this.outarea_nodeexplorer_info /
+	// this.kernelBridge, none of which depend on how Elephant Lab got
+	// attached to a kernel.
+	private registerTreeInteractionListeners() {
 		// All clicks go through a 250ms timer so dblclick can cancel before any Python call fires.
 		this.outarea_neo_tree!.node.addEventListener('click', (e) => {
 			const target = e.target as HTMLElement;
@@ -550,52 +792,253 @@ class ElephantLabExtension {
 				const result = await this.kernelBridge!.executeCode(code, null, false);
 				this._applyTreeSelection(result);
 			}
-
 		});
+	}
 
+	/**
+	 * Attaches Elephant Lab to an arbitrary kernel running on the Jupyter
+	 * server, selected via the kernel picker - as opposed to newTab(), which
+	 * always attaches to the currently focused notebook widget. This covers
+	 * kernels that JupyterLab itself never opened as a notebook tab, e.g. a
+	 * notebook opened against the same jupyter_server from VS Code or
+	 * PyCharm, or a kernel started directly against /api/kernels.
+	 *
+	 * Cell-execution auto-refresh and kernel-restart recovery (registered in
+	 * newTab() via NotebookActions.executed / sessionContext.kernelChanged)
+	 * are notebook-tab features and are intentionally not replicated here:
+	 * JupyterLab has no visibility into cells executed by another client, so
+	 * there is nothing for it to listen to. The tree still refreshes on the
+	 * next explicit interaction (e.g. reopening Elephant Lab).
+	 */
+	// Disposes the kernel connection opened by a previous attachToKernel()
+	// call, if any. Called before switching to a new target (another picked
+	// kernel, or back to a notebook via the quick action) so repeated
+	// switches don't leave one open websocket per kernel ever visited.
+	//
+	// Also disposes the previous attachment's PlotlyFrontend here (not just
+	// on a same-kernel restart - see initializeKernelState(), which needed
+	// its own dispose() call for that case). Switching kernels doesn't show
+	// stale plots the way a restart did, since the old Explore panel's DOM
+	// is thrown away right after this runs anyway - but PlotlyFrontend's
+	// ResizeObserver keeps observing that now-detached DOM node until
+	// something disconnects it, which without this call was never anything.
+	private disposePickedKernelConnection() {
+		this.kernelRestartListenerCleanup?.();
+		this.kernelRestartListenerCleanup = null;
+		if (this.pickedKernelSyncTimer !== null) {
+			window.clearInterval(this.pickedKernelSyncTimer);
+			this.pickedKernelSyncTimer = null;
+		}
+		if (this.pickedWidgetManager) {
+			this.pickedWidgetManager.dispose();
+			this.pickedWidgetManager = null;
+		}
+		if (this.pickedKernelConnection && !this.pickedKernelConnection.isDisposed) {
+			this.pickedKernelConnection.dispose();
+		}
+		this.pickedKernelConnection = null;
+		this.plotlyFrontend?.dispose();
+		this.plotlyFrontend = null;
+	}
 
-		// Listener for cell execution
-		NotebookActions.executed.connect((sender, exec_data) => {
-			if (exec_data.notebook !== newPanel.content) {
+	// Recognizes a same-id kernel restart (Kernel > Restart Kernel, or an
+	// autorestart after a crash): the connection's status walks
+	// 'restarting'/'autorestarting' then back to 'idle', with no change to
+	// the kernel id itself, so nothing else here (attachedKernelId, the
+	// notebook's own sessionContext) ever notices anything happened. But the
+	// restart wipes the kernel's Python state - elephant_lab_entity and
+	// everything else SetupEnv defined - and without this, Elephant Lab kept
+	// showing stale tree/details/explore state until the user re-attached by
+	// hand. Re-running initializeKernelState() (via reinitializeKernelState(),
+	// which also guards against sessionContext.kernelChanged firing for the
+	// very same restart - see its doc) puts it back in sync automatically,
+	// the same way switching away and back already did.
+	// Handles the case where the SAME connection we're watching is the one
+	// that requested the restart (KernelConnection.restart() sets its own
+	// status to 'restarting' synchronously), or a genuine crash-triggered
+	// autorestart (the kernel itself broadcasts an 'autorestarting' status
+	// over iopub to every connected client). Confirmed by testing that this
+	// does NOT fire for a restart requested by a *different* client (e.g.
+	// VS Code/PyCharm calling POST /api/kernels/<id>/restart directly) - our
+	// connection sees no status or connection-status change at all in that
+	// case, so initializeKernelState()'s self-healing check in KernelBridge
+	// (see kernel_bridge.ts) is what actually covers that scenario.
+	//
+	// Idempotent: always detaches whatever listener it last attached before
+	// attaching a new one, so calling it again for a kernel already being
+	// watched (e.g. from sessionContext.kernelChanged, which fires on every
+	// restart alongside this listener's own statusChanged - see there) can't
+	// accumulate duplicate listeners that would each independently trigger a
+	// re-init on the next restart.
+	private registerKernelRestartListener(kernel: Kernel.IKernelConnection, session: IElephantSession) {
+		this.kernelRestartListenerCleanup?.();
+		let sawRestart = false;
+		const onStatusChanged = (_kernel: Kernel.IKernelConnection, status: KernelMessage.Status) => {
+			if (status === 'restarting' || status === 'autorestarting') {
+				sawRestart = true;
+				console.log("Elephant Lab: Kernel is restarting.");
+			} else if (status === 'idle' && sawRestart) {
+				sawRestart = false;
+				console.log("Elephant Lab: Kernel restart complete; re-initializing Elephant Lab state.");
+				void this.reinitializeKernelState(session);
+			} else if (status === 'dead') {
+				sawRestart = false;
+			}
+		};
+		kernel.statusChanged.connect(onStatusChanged);
+		this.kernelRestartListenerCleanup = () => {
+			kernel.statusChanged.disconnect(onStatusChanged);
+		};
+	}
+
+	// Attaches to an entry picked interactively from the kernel picker,
+	// routing a 'local' entry through the plain newTab() quick-action path
+	// instead of attachToKernel() below.
+	//
+	// A local notebook already has its own ipywidgets manager - registered
+	// by @jupyter-widgets/jupyterlab-manager against that notebook's own
+	// rendermime, the same one newTab() passes to initializeTab(). But
+	// attachToKernel() always builds a second, independent manager via
+	// createAttachedWidgetManager() (see ipywidgets_support.ts), meant for
+	// kernels that have no notebook and therefore no existing manager to
+	// reuse. Attaching to a *local* entry through attachToKernel() left two
+	// managers both listening for the same kernel's widget comms, and
+	// whichever one didn't end up owning a given widget's model rendered
+	// "Error displaying widget: model not found" for it - confirmed by
+	// testing that reattaching to the very same notebook immediately after
+	// "fixed" it, consistent with a registration-order race between the two
+	// managers rather than a real, permanent failure.
+	//
+	// Used for the interactive picker click below and by
+	// runPickedKernelHealthCheck()'s self-heal (a replacement kernel found
+	// there can turn out to be a local one too). Not used by
+	// restoreAttachment(): that method has its own documented reason (see
+	// there) for only activating a local panel once it's bounded-checked
+	// for readiness, since blindly doing so during page restoration risks
+	// the same hang this method doesn't need to guard against.
+	private async attachToPickedEntry(entry: IKernelEntry) {
+		if (entry.origin === 'local') {
+			const panel = this.notebook_tracker.find(p => p.sessionContext.session?.kernel?.id === entry.id);
+			if (panel) {
+				this.app.shell.activateById(panel.id);
+				await this.newTab(true);
 				return;
 			}
-			console.log("Elephant Lab: Cell executed, updating plots.");
+		}
+		await this.attachToKernel(entry);
+	}
 
-			if (this._updateTimer) {
-				window.clearTimeout(this._updateTimer);
-			}
+	public async attachToKernel(entry: IKernelEntry) {
+		if (this.widget.isDisposed) {
+			this.widget = this.createWidget();
+		}
 
-			this._updateTimer = window.setTimeout(async () => {
-				await Promise.all([
-					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, initialSession),
-				]);
-			}, 500);
-		});
-
-		// Listener for changed Kernel, waits for Kernel to be ready
-		newPanel.sessionContext.kernelChanged.connect(async (sender, args) => {
-			console.log("Elephant Lab: Kernel has changed (restarted).");
-			const newKernel = args.newValue;
-			if (newKernel) {
-				const waitForIdle = new Promise<void>(resolve => {
-					if (newKernel.status === 'idle') {
-						resolve();
-						return;
-					}
-					const listener = (kernel: Kernel.IKernelConnection, status: KernelMessage.Status) => {
-						if (status === 'idle') {
-							newKernel.statusChanged.disconnect(listener);
-							resolve();
-						}
-					};
-					newKernel.statusChanged.connect(listener);
-				});
-				await waitForIdle;
-				console.log("Elephant Lab: New kernel is idle and ready. Re-initializing state.");
+		this.clearActiveNotebookBadge();
+		// If the picked kernel also happens to back a notebook tab that's
+		// open locally, badge it too, consistent with the quick-action flow.
+		this.notebook_tracker.forEach(notebookWidget => {
+			if (notebookWidget.sessionContext.session?.kernel?.id === entry.id) {
+				notebookWidget.title.className += ' elephant-lab-active-notebook';
 			}
 		});
 
-		console.log("Elephant Lab: Event listeners registered.");
+		this.disposePickedKernelConnection();
+
+		// Clear the panel before adding new widgets
+		const oldWidgets = Array.from(this.widget.widgets());
+		for (const w of oldWidgets) {
+			w.dispose();
+		}
+		if (this.output_tabs) {
+			this.output_tabs.dispose();
+			this.output_tabs = null;
+		}
+
+		const kernel = this.app.serviceManager.kernels.connectTo({ model: { id: entry.id, name: entry.name } });
+		this.pickedKernelConnection = kernel;
+		const session = new AttachedKernelSession(kernel, entry.label);
+
+		// A real notebook gets an ipywidgets manager for free, attached to its
+		// own rendermime clone by JupyterLab's ipywidgets extension. This
+		// kernel has no notebook, so build the same thing ourselves - without
+		// it, the Neo Tree and Details panels (both ipywidgets-based) would
+		// render nothing but a permanent "Loading widget..." placeholder.
+		this.pickedWidgetManager = createAttachedWidgetManager(kernel, this.rendermime);
+
+		await this.initializeTab(this.pickedWidgetManager.rendermime, session);
+		this.myVisTabs.push(this.widget);
+		this.attachTab();
+
+		await this.initializeKernelState(session);
+		this.registerKernelRestartListener(kernel, session);
+		this.pickedKernelSyncTimer = window.setInterval(() => {
+			void this.runPickedKernelHealthCheck(entry, session);
+		}, 5000);
+
+		this.registerTabSyncListener();
+		this.registerTreeInteractionListeners();
+
+		console.log(`Elephant Lab: Attached to kernel ${entry.id} (${entry.label}).`);
+	}
+
+	// Runs every 5s for a kernel-picker attachment (see attachToKernel()).
+	// Covers two ways the kernel behind an external attachment can change
+	// out from under it, neither of which is the in-place same-id restart
+	// registerKernelRestartListener()/KernelBridge's NameError check already
+	// handle:
+	//
+	// 1. The session at entry.path now points to a *different* kernel id.
+	//    Some external clients implement "restart" by shutting the old
+	//    kernel down and starting a fresh one for the session, rather than
+	//    POSTing /api/kernels/<id>/restart - the id changes, so nothing that
+	//    watches the OLD connection (including its statusChanged) ever fires
+	//    at all. Re-resolving entry.path via listKernelEntries() catches
+	//    this; reattaching rebuilds everything (connection, widget manager,
+	//    KernelBridge) against the new id from scratch.
+	// 2. The connection is simply dead - the UpdateTree health-check call
+	//    below either rejects outright, or never settles at all (observed
+	//    for a same-id restart before the concurrent-reinit race was fixed;
+	//    plausible too for a kernel a client shut down without the
+	//    replacement above ever landing, e.g. mid-shutdown). A timeout
+	//    forces a reattach attempt either way rather than polling a
+	//    connection that will never produce another answer.
+	//
+	// Both reattach through attachToPickedEntry() rather than attachToKernel()
+	// directly: the replacement kernel found in case 1 could turn out to now
+	// back a local notebook tab (observed happening this way once, when a
+	// long-idle test kernel got silently replaced), and attachToKernel()'s
+	// self-contained widget manager reproduces "Error displaying widget:
+	// model not found" for a local kernel the same way picking one from the
+	// dialog used to (see attachToPickedEntry()'s doc). Safe to do
+	// unconditionally here, unlike in restoreAttachment(): this runs against
+	// an already-fully-running page, not during restoration, so there's no
+	// not-yet-ready-panel hang risk to guard against.
+	private async runPickedKernelHealthCheck(entry: IKernelEntry, session: IElephantSession) {
+		if (entry.path) {
+			try {
+				const entries = await listKernelEntries(this.app.serviceManager, this.notebook_tracker);
+				const current = entries.find(e => e.path === entry.path);
+				if (current && current.id !== this.attachedKernelId) {
+					console.log(`Elephant Lab: ${entry.path} is now backed by a different kernel (was ${entry.id}, now ${current.id}); reattaching.`);
+					await this.attachToPickedEntry(current);
+					return;
+				}
+			} catch (error) {
+				console.error("Elephant Lab: Failed to check whether the attached kernel was replaced:", error);
+			}
+		}
+
+		const healthCheck = this.kernelBridge?.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, session);
+		if (!healthCheck) {
+			return;
+		}
+		const TIMEOUT = Symbol();
+		const timeout = new Promise(resolve => window.setTimeout(() => resolve(TIMEOUT), 8000));
+		const outcome = await Promise.race([healthCheck, timeout]).catch(() => TIMEOUT);
+		if (outcome === TIMEOUT) {
+			console.log("Elephant Lab: Picked kernel connection is unresponsive; reattaching.");
+			await this.attachToPickedEntry(entry);
+		}
 	}
 
 	private _applyTreeSelection(result: any) {
@@ -647,7 +1090,7 @@ class ElephantLabExtension {
 		this.app.shell.activateById(this.widget.id);
 	} // end of attachTab()
 
-	public async initializeTab(rendermime: IRenderMimeRegistry) {
+	public async initializeTab(rendermime: IRenderMimeRegistry, session: IElephantSession) {
 		/**
 		  * Initialize a new tab for this extension.
 		  */
@@ -660,11 +1103,6 @@ class ElephantLabExtension {
 		this.widget.title.iconClass = 'elephant-trunk-icon';
 		// Adds the x to close the tab?
 		this.widget.title.closable = true;
-		const session = this.notebook_tracker.currentWidget?.sessionContext;
-		if (!session) {
-			console.error("Elephant Lab: No notebook session found during UI initialization!");
-			return;
-		}
 
 		await this.createWidgets(rendermime, session);
 
@@ -681,33 +1119,66 @@ class ElephantLabExtension {
 		sessionStorage.setItem('elephant-lab-filter-states', JSON.stringify(states));
 	}
 
-	public createTopBar(session: ISessionContext) {
+	public createTopBar(session: IElephantSession) {
 		if (this.topBar) {
 			this.topBar.dispose();
 		}
 
-		const currentFilename = session.path.split('/').pop() || "Unknown Notebook";
+		// What Elephant Lab is actually attached to right now - a notebook
+		// path when reached via the quick action (or a kernel-picker entry
+		// that resolved to a session path), or a kernel id/name fallback when
+		// attached via the picker to a kernel with no matching session.
+		const attachedLabel = document.createElement('span');
+		attachedLabel.className = 'elephant-lab-attached-label';
+		attachedLabel.style.marginRight = '8px';
+		attachedLabel.title = 'The kernel Elephant Lab is currently attached to';
+		const setAttachedLabel = (path: string) => {
+			attachedLabel.innerHTML = `<i class="fa fa-link" aria-hidden="true"></i> ${path.split('/').pop() || path}`;
+		};
+		setAttachedLabel(session.path);
+		session.propertyChanged.connect((sender, prop) => {
+			if (prop === 'path') {
+				setAttachedLabel(sender.path);
+			}
+		});
 
+		// Split button: the wide part is the quick action (attaches to
+		// whatever notebook is currently focused in JupyterLab); the narrow
+		// caret opens the full kernel picker. Joined into one control to
+		// save toolbar space. The label is a constant "Attach to" rather
+		// than naming a notebook - it used to name whichever notebook was
+		// currently focused, which read as a *state* (easily mistaken for
+		// "this is what Elephant Lab is attached to", i.e. confusable with
+		// attachedLabel above) rather than the *action* clicking it performs.
 		const switchNotebookButton = document.createElement('button');
-		switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${currentFilename}`;
-		switchNotebookButton.title = 'Switch Elephant Lab to current active notebook';
-		switchNotebookButton.className = 'workflow-button workflow-button-io';
-		switchNotebookButton.style.marginRight = '5px';
+		switchNotebookButton.innerHTML = '<i class="fa fa-exchange" aria-hidden="true"></i> Attach to';
+		switchNotebookButton.title = 'Attach Elephant Lab to the currently active notebook';
+		switchNotebookButton.className = 'workflow-button workflow-button-io elephant-lab-topbar-button elephant-lab-split-main';
 		switchNotebookButton.onclick = () => {
 			this.newTab(true);
 		};
 
-		session.propertyChanged.connect((sender, prop) => {
-			if (prop === 'path') {
-				const newFilename = sender.path.split('/').pop() || "Unknown Notebook";
-				switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${newFilename}`;
+		const browseKernelsButton = document.createElement('button');
+		browseKernelsButton.innerHTML = '<i class="fa fa-caret-down" aria-hidden="true"></i>';
+		browseKernelsButton.title = 'Attach Elephant Lab to any kernel running on this Jupyter server '
+			+ '(including ones opened from VS Code, PyCharm, or another external client)';
+		browseKernelsButton.className = 'workflow-button workflow-button-io elephant-lab-topbar-button elephant-lab-split-arrow';
+		browseKernelsButton.onclick = async () => {
+			const entry = await openKernelPicker(this.app.serviceManager, this.notebook_tracker);
+			if (entry) {
+				await this.attachToPickedEntry(entry);
 			}
-		});
+		};
+
+		const switcherContainer = document.createElement('div');
+		switcherContainer.className = 'elephant-lab-split-button';
+		switcherContainer.appendChild(switchNotebookButton);
+		switcherContainer.appendChild(browseKernelsButton);
 
 		const infoButton = document.createElement('button');
 		infoButton.innerHTML = '<i class="fa fa-info-circle" aria-hidden="true"></i> Elephant Lab';
 		infoButton.title = 'About Elephant Lab';
-		infoButton.className = 'workflow-button workflow-button-io';
+		infoButton.className = 'workflow-button workflow-button-io elephant-lab-topbar-button';
 		infoButton.onclick = async () => {
 			const result = await this.kernelBridge!.executeCode(PythonCodeKey.Version);
 
@@ -733,7 +1204,8 @@ class ElephantLabExtension {
 		container.style.display = 'flex';
 		container.style.alignItems = 'center';
 		container.style.padding = '2px';
-		container.appendChild(switchNotebookButton);
+		container.appendChild(attachedLabel);
+		container.appendChild(switcherContainer);
 		container.appendChild(infoButton);
 
 		this.topBar = new Widget();
@@ -747,7 +1219,7 @@ class ElephantLabExtension {
 		}
 	}
 
-	public create_tree_filter(session: ISessionContext, tree_widget: Panel) {
+	public create_tree_filter(session: IElephantSession, tree_widget: Panel) {
 		const neo_obj_filter_dict = {
 			"block": "cube",
 			"segment": "columns",
@@ -972,14 +1444,31 @@ class ElephantLabExtension {
 		insertCodeButton.title = 'Insert selected neo objects into current notebook';
 		insertCodeButton.className = 'workflow-button workflow-button-io';
 		insertCodeButton.onclick = async () => {
+			// Compare kernel ids rather than session paths: when Elephant Lab
+			// is attached via the kernel picker there may be no local
+			// notebook path to compare against at all, but the check still
+			// needs to hold - inserting code only makes sense into a notebook
+			// tab that is actually backed by the kernel we're attached to.
 			const currentNotebook = this.notebook_tracker.currentWidget;
-			if (!currentNotebook || currentNotebook.sessionContext.path !== session.path) {
-				showDialog({
-					title: 'Incorrect Notebook',
-					body: 'Elephant Lab is not connected to this notebook. Please switch to the notebook Elephant Lab is attached to.',
-					buttons: [Dialog.okButton()]
-				});
-				return;
+			const isCorrectNotebookFocused = !!currentNotebook
+				&& currentNotebook.sessionContext.session?.kernel?.id === this.attachedKernelId;
+
+			if (!isCorrectNotebookFocused) {
+				// Attached to a local notebook, just not the one focused right
+				// now - the fix is switching to it, so say so and stop rather
+				// than falling through to the clipboard path below (that's
+				// only for when there's no local tab to switch to at all).
+				const hasLocalNotebook = !!this.notebook_tracker.find(
+					panel => panel.sessionContext.session?.kernel?.id === this.attachedKernelId
+				);
+				if (hasLocalNotebook) {
+					showDialog({
+						title: 'Incorrect Notebook',
+						body: 'Elephant Lab is not connected to this notebook. Please switch to the notebook Elephant Lab is attached to.',
+						buttons: [Dialog.okButton()]
+					});
+					return;
+				}
 			}
 
 			const result = await this.kernelBridge!.executeCode(PythonCodeKey.InsertCode, this.outarea_neo_tree!, false);
@@ -998,6 +1487,25 @@ class ElephantLabExtension {
 					}
 
 					if (data.code_to_insert) {
+						if (!isCorrectNotebookFocused) {
+							// Attached to an external/kernel-only kernel (see the
+							// hasLocalNotebook check above) - there is no notebook
+							// tab JupyterLab could ever insert into (e.g. a
+							// notebook open in PyCharm/VS Code), so copy the
+							// generated code to the clipboard instead, as the
+							// next best thing to inserting it directly.
+							const codeToCopy = data.list_creation_code
+								? `${data.list_creation_code}\n${data.code_to_insert}`
+								: data.code_to_insert;
+							await navigator.clipboard.writeText(codeToCopy);
+							Notification.success(
+								'Elephant Lab is attached to an external notebook and cannot insert code directly. '
+								+ 'The code has been copied to your clipboard.',
+								{ autoClose: 5000 }
+							);
+							return;
+						}
+
 						const notebookPanel = this.notebook_tracker.currentWidget;
 						if (notebookPanel) {
 							const notebook = notebookPanel.content;
@@ -1085,7 +1593,7 @@ class ElephantLabExtension {
 		tree_widget.node.prepend(filterContainer);
 	}
 
-	public async create_raw_plot_options(session: ISessionContext, raw_plot_widget: Panel) {
+	public async create_raw_plot_options(session: IElephantSession, raw_plot_widget: Panel) {
 		const settings = await this.settingRegistry.load('elephant-lab:plugin');
 
 		const buttonContainer = document.createElement("div");
@@ -1523,7 +2031,7 @@ class ElephantLabExtension {
 		raw_plot_widget.node.prepend(toolbarContainer);
 	}
 
-	public async createWidgets(rendermime: IRenderMimeRegistry, session: ISessionContext) {
+	public async createWidgets(rendermime: IRenderMimeRegistry, session: IElephantSession) {
 		// NEO TREE 
 		let tree_widget = new Panel();
 		tree_widget.title.label = 'Neo Tree';
@@ -1552,17 +2060,17 @@ class ElephantLabExtension {
 		this.widget.addWidget(explorer_widget_raw_plot, { mode: 'tab-after', ref: explorer_widget_info });
 	}
 
-	public neo_tree_filter(checkbox_id: string, session: ISessionContext) {
+	public neo_tree_filter(checkbox_id: string, session: IElephantSession) {
 		let code = getPythonCode(PythonCodeKey.ToggleNeoTreeFilter, checkbox_id);
 		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 	}
 
-	public neo_tree_expand(checked: boolean, session: ISessionContext) {
+	public neo_tree_expand(checked: boolean, session: IElephantSession) {
 		let code = getPythonCode(PythonCodeKey.ExpandNeoTree, checked);
 		this.kernelBridge!.executeCode(code, this.outarea_neo_tree!, false);
 	}
 
-	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: ISessionContext): OutputArea {
+	public createOutputArea(rendermime: IRenderMimeRegistry, tab: Panel, cls: string[], id: string, session: IElephantSession): OutputArea {
 		/**
 		  * Creates an OutputArea inside 'tab', in which the output of executed pythonCode will displayed
 		  *
@@ -1625,6 +2133,7 @@ function activate(app: JupyterFrontEnd, command_palette: ICommandPalette, notebo
 	// Restore from corresponding namespace
 	restorer.restore(widget_tracker, {
 		command,
+		args: () => jupy_ext.getRestoreArgs(),
 		name: widget => 'elephant-lab:' + widget.id
 	});
 

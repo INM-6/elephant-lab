@@ -1,5 +1,5 @@
-import { ISessionContext } from '@jupyterlab/apputils';
-import { KernelMessage } from '@jupyterlab/services';
+import { Kernel, KernelMessage } from '@jupyterlab/services';
+import { ISignal } from '@lumino/signaling';
 
 // Python Code to execute in the kernel
 import {
@@ -16,11 +16,65 @@ export interface IExecutionResult {
     outputs: any[];
 }
 
-export class KernelBridge {
-    private session: ISessionContext;
+/**
+ * The subset of `ISessionContext` that `KernelBridge` (and the rest of the
+ * Elephant Lab UI) actually relies on. A real notebook `ISessionContext`
+ * satisfies this structurally, but so does a lightweight wrapper around a
+ * `Kernel.IKernelConnection` obtained for a kernel that was never opened as
+ * a notebook tab in JupyterLab (e.g. one picked via the kernel picker).
+ */
+export interface IElephantSession {
+    readonly session: { kernel: Kernel.IKernelConnection | null | undefined } | null;
+    readonly path: string;
+    readonly ready: Promise<void>;
+    readonly propertyChanged: ISignal<any, 'path' | 'name' | 'type'>;
+}
 
-    constructor(session: ISessionContext) {
+/**
+ * True if `outputs` (in the shape `KernelBridge.executeCode()` collects
+ * them) contains the NameError that a wiped kernel Python state produces -
+ * i.e. `elephant_lab_entity`, the object `SetupEnv` defines and everything
+ * else depends on, is undefined. See `KernelBridge`'s constructor doc for
+ * why this - not a proactive status signal - is how an externally-triggered
+ * kernel restart gets detected at all.
+ *
+ * Pure and standalone (not a method) so it can be unit tested against plain
+ * fixture output arrays, without constructing a `KernelBridge` or a fake
+ * kernel connection.
+ */
+export function indicatesKernelStateLost(outputs: any[]): boolean {
+    return outputs.some(
+        output =>
+            output.output_type === 'error' &&
+            output.ename === 'NameError' &&
+            typeof output.evalue === 'string' &&
+            output.evalue.includes('elephant_lab_entity')
+    );
+}
+
+export class KernelBridge {
+    private session: IElephantSession;
+    private onKernelStateLost?: () => void;
+    private notifiedKernelStateLost = false;
+
+    /**
+     * @param onKernelStateLost Called (at most once per KernelBridge
+     * instance) if a call to executeCode() comes back with a NameError for
+     * `elephant_lab_entity` - the object SetupEnv defines, and everything
+     * else here depends on. That specific error means the kernel's Python
+     * state was wiped since we last ran SetupEnv, almost always because the
+     * kernel was restarted. We can't rely on detecting a restart proactively
+     * for a kernel someone else (VS Code, PyCharm, a console) restarted:
+     * `Kernel.IKernelConnection.statusChanged` only reports 'restarting' for
+     * a restart *this* connection itself requested, or a crash-triggered
+     * autorestart the kernel broadcasts to everyone - a plain
+     * `POST /api/kernels/<id>/restart` from another client produces no
+     * signal at all on a passive connection like this one. Detecting the
+     * resulting NameError here instead works regardless of what caused it.
+     */
+    constructor(session: IElephantSession, onKernelStateLost?: () => void) {
         this.session = session;
+        this.onKernelStateLost = onKernelStateLost;
     }
 
     public async getNeoIOClass(filename: string): Promise<string | null> {
@@ -49,7 +103,7 @@ export class KernelBridge {
      * @returns A promise that resolves to an IExecutionResult object, containing the result key
      * and an array of output messages. Returns null if the session is not available.
      */
-    public async executeCode(pythonCode: PythonCodeKey | string, outputArea: OutputArea | null = null, showOutput = true, executeCode = true, session: ISessionContext | null = null): Promise<IExecutionResult | null> {
+    public async executeCode(pythonCode: PythonCodeKey | string, outputArea: OutputArea | null = null, showOutput = true, executeCode = true, session: IElephantSession | null = null): Promise<IExecutionResult | null> {
         if (!session) {
             session = this.session;
         }
@@ -124,7 +178,19 @@ export class KernelBridge {
             this.handleOutputs(result.outputs, outputArea, showOutput);
         }
 
+        if (pythonCode !== PythonCodeKey.SetupEnv && indicatesKernelStateLost(outputs)) {
+            this.notifyKernelStateLost();
+        }
+
         return result;
+    }
+
+    private notifyKernelStateLost() {
+        if (this.notifiedKernelStateLost) {
+            return;
+        }
+        this.notifiedKernelStateLost = true;
+        this.onKernelStateLost?.();
     }
 
     private handleOutputs(outputs: any[], outputArea: OutputArea | null, showOutput: boolean) {
