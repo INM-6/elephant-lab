@@ -110,7 +110,18 @@ You will also need to remove the symlink created by `jupyter-builder develop`. R
 
 ## Testing
 
-End-to-end tests use [Playwright](https://playwright.dev/). See [ui-tests/README.md](https://github.com/INM-6/elephant-lab/blob/master/ui-tests/README.md) for details.
+Python tests use [pytest](https://docs.pytest.org/):
+
+```bash
+pip install -e ".[test]"
+pytest
+```
+
+TypeScript tests use [Vitest](https://vitest.dev/):
+
+```bash
+jlpm test:run
+```
 
 ## Contributing
 
@@ -123,7 +134,7 @@ Would you like to fix a problem or add a feature? Please open a [pull request](h
 
 **Main authors:** [Tobias Michels](https://github.com/tomichels), [Jan Nolten](https://github.com/JanNolten), [Maximilian Kramer](https://github.com/ojoenlanuca), [Björn Müller](https://github.com/muellerbjoern)
 
-**Contributors:** [Moritz Kern](https://github.com/Moritz-Alexander-Kern), [Michael Denker](https://github.com/mdenker)
+**Contributors:** [Moritz Kern](https://github.com/Moritz-Alexander-Kern), [Michael Denker](https://github.com/mdenker), [Harris Jos](https://github.com/CozySocksAlways)
 
 ## Acknowledgements
 
