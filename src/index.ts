@@ -1151,14 +1151,14 @@ class ElephantLabExtension {
 
 
 		const sortNeoTreeButton = document.createElement('label');
-		sortNeoTreeButton.innerHTML = '<i class="fa fa-sort" aria-hidden="true"></i> ';
+		sortNeoTreeButton.innerHTML = '<i class="fa fa-sort" aria-hidden="true"></i>';
 		sortNeoTreeButton.title = 'Sort top-level objects of the neo tree';
-		sortNeoTreeButton.className = 'workflow-button workflow-button-io';
+		sortNeoTreeButton.className = 'workflow-button workflow-button-io neo-tree-sort-button';
 		const sortNeoTreeSelect = document.createElement('select');
 		sortNeoTreeSelect.className = 'neo-tree-sort-select';
 		([
 			['alphabetical', 'Alphabetical'],
-			['creation', 'Creation Date'],
+			['creation', 'Time'],
 			['datatype', 'Data type'],
 		] as const).forEach(([value, text]) => {
 			const option = document.createElement('option');
@@ -1176,6 +1176,8 @@ class ElephantLabExtension {
 		const sortIcon = sortNeoTreeButton.querySelector('i')!;
 		const updateSortIcon = () => {
 			sortIcon.className = `fa ${sortIcons[sortNeoTreeSelect.value]}`;
+			const selected = sortNeoTreeSelect.selectedOptions[0];
+			sortNeoTreeButton.title = `Sort top-level objects of the neo tree (${selected ? selected.textContent : ''})`;
 		};
 		updateSortIcon();
 
@@ -1251,7 +1253,7 @@ class ElephantLabExtension {
 		filterContainer.appendChild(insertCodeButton);
 		filterContainer.appendChild(createGroupButton);
 		filterContainer.appendChild(sortNeoTreeButton);
-    filterContainer.appendChild(sortDirectionButton);
+		filterContainer.appendChild(sortDirectionButton);
 
 		tree_widget.node.prepend(filterContainer);
 	}
