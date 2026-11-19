@@ -17,9 +17,9 @@ def build_tree(lab):
 
 
 def selected(lab):
-    return {lab.map_ipytree_node_id_to_neo_obj[n._id].name
+    return {lab.map_neo_obj_hash_to_neo_obj[n._id].name
             for n in lab.selected_neo_objects
-            if n._id in lab.map_ipytree_node_id_to_neo_obj}
+            if n._id in lab.map_neo_obj_hash_to_neo_obj}
 
 
 def result_ids(capsys):
@@ -33,7 +33,7 @@ def test_update_tree_renders_top_level_variables(lab, tree, kernel_ns, block):
     kernel_ns(blk=block, st=make_spiketrain([1]))
     build_tree(lab)
 
-    top_level = tree.ipytree_of_neo_objects.nodes
+    top_level = tree.root_node.nodes
     assert sorted(n.metadata["variable_name"] for n in top_level) == ["blk", "st"]
     html = tree._tree_widget.value
     assert "jup-tree" in html
@@ -50,7 +50,7 @@ def test_children_of_tracked_parent_are_not_top_level(lab, tree, kernel_ns, bloc
     seg = block.segments[0]
     kernel_ns(blk=block, seg=seg)
     build_tree(lab)
-    assert [n.metadata["variable_name"] for n in tree.ipytree_of_neo_objects.nodes] == ["blk"]
+    assert [n.metadata["variable_name"] for n in tree.root_node.nodes] == ["blk"]
 
 
 def test_show_neo_obj_toggles_type_filter(lab, tree, kernel_ns, block):

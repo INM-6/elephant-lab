@@ -23,13 +23,13 @@ const setup_env =
 from elephant_lab.elephant_lab import ElephantLab
 elephant_lab_entity = ElephantLab()`;
 
-// Call to the function that initializes the ipytree widget with an empty tree
+// Call to the function that initializes the neo tree widget with an empty tree
 const create_tree = `elephant_lab_entity.elephant_lab_tree.create_tree()`;
 
 // Call to the function that shows metadata info of selected nodes in Info-tab of the node-explorer Dockpanel
 const create_details_panel = `elephant_lab_entity.elephant_lab_info.create_details_panel()`;
 
-// Call to the function that updates the ipytree tree view of the neo hierarchy
+// Call to the function that updates the tree view of the neo hierarchy
 const update_tree = `elephant_lab_entity.elephant_lab_tree.update_tree()`;
 
 const createExplorerRawPlot = 'elephant_lab_entity.elephant_lab_plot.create_explorer_raw_plot()'
@@ -64,12 +64,6 @@ function updatePlotSettings(settings: PlotSettings): string {
 	return `elephant_lab_entity.elephant_lab_plot.update_settings(${args.join(", ")})`;
 }
 
-function upscaleRawPlot(x_ranges: string): string {
-	return `elephant_lab_entity.elephant_lab_plot.upscale_raw_plot(${x_ranges})`
-}
-
-const resetScale = `elephant_lab_entity.elephant_lab_plot.reset_scale()`;
-
 function setPanelVisibility(exploreActive: boolean, detailsActive: boolean): string {
 	return `elephant_lab_entity.set_panel_visibility(${pythonValue(exploreActive)}, ${pythonValue(detailsActive)})`;
 }
@@ -82,8 +76,8 @@ function expandNeoTree(checked: boolean): string {
 	return `elephant_lab_entity.elephant_lab_tree.expand_neo_tree(${pythonValue(checked)})`
 }
 
-function handleTreeSelection(nodeId: string, multiSelectPy: string, selectChildrenPy: string = 'True'): string {
-	return `elephant_lab_entity.elephant_lab_tree.handle_selection('${nodeId}', ${multiSelectPy}, ${selectChildrenPy})`;
+function handleTreeSelection(nodeId: string, multiSelectPy: string, selectChildrenPy: string = 'True', selectPy: string = 'None'): string {
+	return `elephant_lab_entity.elephant_lab_tree.handle_selection('${nodeId}', ${multiSelectPy}, ${selectChildrenPy}, ${selectPy})`;
 }
 
 function handleSelectionRange(idsJson: string, withChildren: boolean = false): string {
@@ -92,6 +86,14 @@ function handleSelectionRange(idsJson: string, withChildren: boolean = false): s
 
 function selectByAnnotationFilter(expression: string): string {
 	return `elephant_lab_entity.elephant_lab_tree.select_by_annotation_filter(${JSON.stringify(expression)})`;
+}
+
+function createGroupFromSelection(name: string): string {
+	return `elephant_lab_entity.create_group_from_selection(${JSON.stringify(name)})`;
+}
+
+function getNormalizedDataForPlotWithXRange(plotKey: string, xRange?: [number, number]): string {
+	return `elephant_lab_entity.elephant_lab_plot.get_normalized_data_for_plot_with_x_range('${plotKey}', ${xRange ? `[${xRange.join(', ')}]` : 'None'})`;
 }
 
 // Make all strings publicly available in a dict
@@ -107,16 +109,16 @@ export enum PythonCodeKey {
 	InsertCode = 'insertCode',
 	SetVarName = 'setVarName',
 	SaveSelectedNeoObjects = 'saveSelectedNeoObjects',
-	UpscaleRawPlot = 'upscaleRawPlot',
-	ResetScale = 'resetScale',
 	ToggleNeoTreeFilter = 'toggleNeoTreeFilter',
 	ExpandNeoTree = 'expandNeoTree',
 	GetIOClass = 'getIOClass',
 	HandleTreeSelection = 'handleTreeSelection',
 	HandleSelectionRange = 'handleSelectionRange',
 	SelectByAnnotationFilter = 'selectByAnnotationFilter',
+	CreateGroupFromSelection = 'createGroupFromSelection',
 	SetPanelVisibility = 'setPanelVisibility',
 	UpdatePlotSettings = 'updatePlotSettings',
+	GetNormalizedDataForPlotWithXRange = 'getNormalizedDataForPlotWithXRange',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -130,16 +132,16 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.InsertCode]: insertCode,
 	[PythonCodeKey.SetVarName]: (...args: any[]) => setVarName(args[0], args[1], args[2]),
 	[PythonCodeKey.SaveSelectedNeoObjects]: (...args: any[]) => saveSelectedNeoObjects(args[0]),
-	[PythonCodeKey.UpscaleRawPlot]: (...args: any[]) => upscaleRawPlot(args[0]),
-	[PythonCodeKey.ResetScale]: resetScale,
 	[PythonCodeKey.ToggleNeoTreeFilter]: (...args: any[]) => toggleNeoTreeFilter(args[0]),
 	[PythonCodeKey.ExpandNeoTree]: (...args: any[]) => expandNeoTree(args[0]),
 	[PythonCodeKey.GetIOClass]: (...args: any[]) => getNeoIOClass(args[0]),
-	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1], args[2]),
+	[PythonCodeKey.HandleTreeSelection]: (...args: any[]) => handleTreeSelection(args[0], args[1], args[2], args[3]),
 	[PythonCodeKey.HandleSelectionRange]: (...args: any[]) => handleSelectionRange(args[0], args[1]),
 	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
+	[PythonCodeKey.CreateGroupFromSelection]: (...args: any[]) => createGroupFromSelection(args[0]),
 	[PythonCodeKey.SetPanelVisibility]: (...args: any[]) => setPanelVisibility(args[0], args[1]),
 	[PythonCodeKey.UpdatePlotSettings]: (...args: any[]) => updatePlotSettings(args[0]),
+	[PythonCodeKey.GetNormalizedDataForPlotWithXRange]: (...args: any[]) => getNormalizedDataForPlotWithXRange(args[0], args[1]),
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {

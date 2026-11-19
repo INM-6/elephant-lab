@@ -34,9 +34,8 @@ class ElephantLab_tree:
     if TYPE_CHECKING:
         from .elephant_lab import ElephantLab  # only for type hints
         
-    # Current workaround to keep compatibility
     @property
-    def ipytree_of_neo_objects(self):
+    def root_node(self):
         return self._root_node
     
     def __init__(self, elephant_lab_entity: "ElephantLab_tree.ElephantLab"):
@@ -109,6 +108,7 @@ class ElephantLab_tree:
         
         self._tree_widget = None  # ipywidgets.HTML
         self._node_registry: dict = {}  # hash_id -> SimpleNode, for selection
+        self._selected_ids: set = set()  # ids rendered as selected while building the tree html
         self._stat_cache: dict = {}
         self.expand_all = False
 
@@ -150,9 +150,13 @@ class ElephantLab_tree:
             return
 
         # Clear maps
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.clear()
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.clear()
+        self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj.clear()
         self._node_registry.clear()
+
+        # The rebuilt html replaces the selection highlighting done in the frontend,
+        # so the current selection is rendered into the html
+        selected_neo_objects = self.elephant_lab_entity.selected_neo_objects
+        self._selected_ids = {node._id for node in selected_neo_objects}
 
         nodes_html = []
         top_level_simple_nodes = []
@@ -178,6 +182,13 @@ class ElephantLab_tree:
 
         self._root_node.nodes = top_level_simple_nodes
 
+        # Replace the selected nodes by the rebuilt ones and drop nodes that are no longer in the tree
+        selected_neo_objects.clear()
+        selected_neo_objects.update(
+            self._node_registry[node_id] for node_id in self._selected_ids if node_id in self._node_registry
+        )
+        selection_changed = len(selected_neo_objects) != len(self._selected_ids)
+
         self._tree_widget.value = f'''
         <style>
         .jup-tree {{ font-family: var(--jp-ui-font-family); font-size: var(--jp-ui-font-size1); line-height: 1.5; }}
@@ -194,14 +205,18 @@ class ElephantLab_tree:
         <div class="jup-tree">{"".join(nodes_html)}</div>
         '''
 
-    def _build_node_html(self, neo_obj, variable_name='', list_index=None):
+        if selection_changed:
+            self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
+
+    def _build_node_html(self, neo_obj, variable_name='', list_index=None, ancestors=frozenset()):
         hash_id = self.elephant_lab_entity.get_neo_hash(neo_obj, hash_name='sha1')
         self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj[hash_id] = neo_obj
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[hash_id] = neo_obj
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash[hash_id] = hash_id
 
         class_name = neo_obj.__class__.__name__
         icon = self.NEO_ABBREVIATIONS.get(class_name, {}).get('icon', 'circle')
+
+        obj_key = id(neo_obj)
+        is_cyclic_ref = obj_key in ancestors
 
         if list_index is not None:
             name_part = f"<b>#{list_index}</b>" + (f" → <b>{neo_obj.name}</b>" if hasattr(neo_obj, 'name') and neo_obj.name else "")
@@ -224,8 +239,13 @@ class ElephantLab_tree:
         )
         
         label = f"<span style='{self.NODE_STYLE}'>{name_part}</span> <i style='{self.SECOND_STYLE}'>({class_name})</i> <small style='{self.SECOND_STYLE}'>[{hash_id[:4]}]</small>"
+        if is_cyclic_ref:
+            label += ' <i class="fa fa-exclamation-triangle" title="Circular group reference — not expanded"></i>'
 
-        children_html, child_simple_nodes = self._build_children_html(neo_obj)
+        if is_cyclic_ref:
+            children_html, child_simple_nodes = '', []
+        else:
+            children_html, child_simple_nodes = self._build_children_html(neo_obj, ancestors | {obj_key})
         has_children = bool(children_html)
         
         simple_node.nodes = child_simple_nodes
@@ -241,8 +261,10 @@ class ElephantLab_tree:
             toggle = '<span class="jup-toggle-empty"></span>'
             children_div = ''
 
+        selected_class = ' jup-selected' if hash_id in self._selected_ids else ''
+
         html = f'''<div class="jup-node">
-            <div class="jup-row" data-node-id="{hash_id}">
+            <div class="jup-row{selected_class}" data-node-id="{hash_id}">
                 {toggle}
                 <i class="fa fa-{icon}"></i>
                 {label}
@@ -252,10 +274,11 @@ class ElephantLab_tree:
 
         return html, simple_node
 
-    def _build_children_html(self, neo_obj):
+    def _build_children_html(self, neo_obj, ancestors=frozenset()):
         NEO_CONTAINER_ATTRIBUTES = [
             'segments', 'analogsignals', 'spiketrains', 'events',
-            'epochs', 'channel_indexes', 'irregularlysampledsignals', 'imagesequences'
+            'epochs', 'channel_indexes', 'irregularlysampledsignals', 'imagesequences',
+            'channelviews', 'regionsofinterest', 'groups'
         ]
         parts = []
         all_child_nodes = []
@@ -273,7 +296,7 @@ class ElephantLab_tree:
                 if not attr_list or len(attr_list) == 0:
                     continue
 
-                folder_html, folder_node, _ = self._build_folder_html(attr_name, attr_list)
+                folder_html, folder_node, _ = self._build_folder_html(attr_name, attr_list, ancestors)
                 parts.append(folder_html)
                 all_child_nodes.append(folder_node)
 
@@ -281,16 +304,18 @@ class ElephantLab_tree:
             for i, child in enumerate(neo_obj):
                 if type(child) not in self.NEO_OBJS_TO_SHOW:
                     continue
-                child_html, child_node = self._build_node_html(child, list_index=i)
+                child_html, child_node = self._build_node_html(child, list_index=i, ancestors=ancestors)
                 parts.append(child_html)
                 all_child_nodes.append(child_node)
 
         return ''.join(parts), all_child_nodes
 
-    def _build_folder_html(self, attr_name, attr_list):
+    def _build_folder_html(self, attr_name, attr_list, ancestors=frozenset()):
         cap = attr_name.capitalize()
         if attr_name == 'irregularlysampledsignals': cap = 'IrregularlySampledSignals'
         elif attr_name == 'channel_indexes': cap = 'Channel Indexes'
+        elif attr_name == 'channelviews': cap = 'ChannelViews'
+        elif attr_name == 'regionsofinterest': cap = 'RegionsOfInterest'
 
         label = f"<span style='{self.NODE_STYLE}'>{cap}</span> <b style='{self.CS}'>[{len(attr_list)}]</b>"
 
@@ -299,7 +324,7 @@ class ElephantLab_tree:
         for i, child in enumerate(attr_list):
             if type(child) not in self.NEO_OBJS_TO_SHOW:
                 continue
-            child_html, child_node = self._build_node_html(child, list_index=i)
+            child_html, child_node = self._build_node_html(child, list_index=i, ancestors=ancestors)
             children_parts.append(child_html)
             child_nodes.append(child_node)
 
@@ -309,9 +334,10 @@ class ElephantLab_tree:
         arrow = '<i class="fa fa-minus"></i>' if auto_open else '<i class="fa fa-plus"></i>'
 
         open_class = ' jup-open' if auto_open else ''
+        selected_class = ' jup-selected' if f"folder-{attr_name}-{id(attr_list)}" in self._selected_ids else ''
 
         html = f'''<div class="jup-node">
-        <div class="jup-row" data-node-id="folder-{attr_name}-{id(attr_list)}">
+        <div class="jup-row{selected_class}" data-node-id="folder-{attr_name}-{id(attr_list)}">
             <span class="jup-toggle">{arrow}</span>
             <i class="fa fa-folder"></i>
             {label}
@@ -329,8 +355,25 @@ class ElephantLab_tree:
 
         return html, folder_node, child_nodes
             
-    def handle_selection(self, node_id, multi_select=False, select_children=True):
-        """Called from TypeScript when user clicks a node."""
+    def select_node_by_hash(self, hash_id):
+        """Selects a single node by its hash id, replacing the current selection."""
+        node = self._node_registry.get(hash_id)
+        if not node:
+            return False
+        self.elephant_lab_entity.selected_neo_objects.clear()
+        self.elephant_lab_entity.selected_neo_objects.add(node)
+        self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
+        return True
+
+    def handle_selection(self, node_id, multi_select=False, select_children=True, select=None):
+        """
+        Called from TypeScript when user clicks a node.
+
+        select: True/False to explicitly select/deselect the node, None to toggle it.
+        The same neo object can appear several times in the tree (e.g. a spiketrain in a
+        segment and in a group) and all occurrences share the same node id, so the frontend
+        passes the intended state instead of relying on a toggle of the shared selection.
+        """
         if node_id not in self._node_registry:
             return
 
@@ -339,7 +382,10 @@ class ElephantLab_tree:
         if not multi_select:
             self.elephant_lab_entity.selected_neo_objects.clear()
 
-        if clicked_node in self.elephant_lab_entity.selected_neo_objects:
+        if select is None:
+            select = clicked_node not in self.elephant_lab_entity.selected_neo_objects
+
+        if not select:
             self.elephant_lab_entity.selected_neo_objects.discard(clicked_node)
             if select_children:
                 def deselect_recurse(node):
@@ -381,14 +427,23 @@ class ElephantLab_tree:
         self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
 
     def _get_candidates(self) -> dict:
+        # Block/Segment/Group are organizational containers, not data. Filtering
+        # by stat or annotation should only ever match actual data objects
+        def data_candidates(source):
+            return {
+                node._id: obj
+                for node in source
+                if not node._id.startswith('folder-')
+                and (obj := self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(node._id)) is not None
+                and not isinstance(obj, (self.Block, self.Segment, self.Group))
+            }
+
         selected = self.elephant_lab_entity.selected_neo_objects
-        source = selected if selected else self._node_registry.values()
-        return {
-            node._id: self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[node._id]
-            for node in source
-            if not node._id.startswith('folder-')
-            and node._id in self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj
-        }
+        if selected:
+            candidates = data_candidates(selected)
+            if candidates:
+                return candidates
+        return data_candidates(self._node_registry.values())
 
     def select_by_stat(self, filter_type: str, filter_data: dict):
         """

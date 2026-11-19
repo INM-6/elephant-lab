@@ -34,7 +34,7 @@ def updated_plots(comm):
 
 
 def removed_plots(comm):
-    return [key for m in comm.messages if m["type"] == "plots_remove" for key in m["plots"]]
+    return [key for m in comm.messages if m["type"] == "plots_remove" for key in m["plot_keys"]]
 
 
 @pytest.fixture
@@ -52,8 +52,8 @@ def test_selecting_spiketrains_sends_raster_plot(lab, active, comm, block, kerne
     assert comm.types() == ["plots_loading", "plots_update"]
     assert updated_plots(comm) == ["raw_st"]
     figure = comm.messages[-1]["plots"]["raw_st"]
-    assert len(figure["data"]) == 2
-    np.testing.assert_allclose(plotly_array(figure["data"][0]["x"]), [1, 2, 3, 4])
+    assert figure["data_bundle"]["nGraphs"] == 2
+    np.testing.assert_allclose(plotly_array(figure["data_bundle"]["plotly_graph_data_list"][0]["temp"]["x"]), [1, 2, 3, 4])
     assert active.plots[active.RawPlotKey.RAW_ST]["is_plotted"]
 
 
@@ -97,27 +97,6 @@ def test_settings_change_replots_only_plotted_figures(lab, active, comm, block, 
     active.update_settings(overlap=True)
     assert all(active.plots[k]["overlapping"] for k in active.RawPlotKey)
     assert updated_plots(comm) == ["raw_st"]
-
-
-def test_zoom_on_downscaled_plot_replots_with_new_range(lab, active, comm, kernel_ns):
-    """Zooming a downsampled plot replots the range, reset restores the original range."""
-    st = make_spiketrain(np.linspace(0, 9, 200), t_stop=10, name="dense")
-    show(lab, kernel_ns, st=st)
-    active.update_settings(max_points=50)
-    select(lab, st)
-    raw_st = active.plots[active.RawPlotKey.RAW_ST]
-    assert raw_st["is_downscaled"]
-    comm.messages.clear()
-
-    active.upscale_raw_plot({"raw_st": [2.0, 3.0]})
-    assert updated_plots(comm) == ["raw_st"]
-    x = plotly_array(comm.messages[-1]["plots"]["raw_st"]["data"][0]["x"])
-    assert min(x) >= 2.0 and max(x) <= 3.0
-
-    comm.messages.clear()
-    active.reset_scale()
-    assert updated_plots(comm) == ["raw_st"]
-    assert raw_st["x_range"] == raw_st["og_x_range"]
 
 
 def test_image_sequence_plot(lab, active, comm, kernel_ns):

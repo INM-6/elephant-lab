@@ -79,10 +79,10 @@ python3 -m venv .venv
 source .venv/bin/activate   # on Windows: .venv\Scripts\activate
 
 # 3. Install the package in development mode
-pip install -e .
+pip install -e ".[dev]"
 
 # 4. Link the extension with JupyterLab
-jupyter labextension develop . --overwrite
+jupyter-builder develop . --overwrite
 
 # 5. Build the TypeScript source
 jlpm build
@@ -106,11 +106,22 @@ Every saved change is rebuilt automatically; refresh the browser to load it.
 pip uninstall elephant-lab
 ```
 
-You will also need to remove the symlink created by `jupyter labextension develop`. Run `jupyter labextension list` to find the `labextensions` folder, then delete the `elephant-lab` symlink inside it.
+You will also need to remove the symlink created by `jupyter-builder develop`. Run `jupyter labextension list` to find the `labextensions` folder, then delete the `elephant-lab` symlink inside it.
 
 ## Testing
 
-End-to-end tests use [Playwright](https://playwright.dev/). See [ui-tests/README.md](https://github.com/INM-6/elephant-lab/blob/master/ui-tests/README.md) for details.
+Python tests use [pytest](https://docs.pytest.org/):
+
+```bash
+pip install -e ".[test]"
+pytest
+```
+
+TypeScript tests use [Vitest](https://vitest.dev/):
+
+```bash
+jlpm test:run
+```
 
 ## Contributing
 
@@ -123,7 +134,7 @@ Would you like to fix a problem or add a feature? Please open a [pull request](h
 
 **Main authors:** [Tobias Michels](https://github.com/tomichels), [Jan Nolten](https://github.com/JanNolten), [Maximilian Kramer](https://github.com/ojoenlanuca), [Björn Müller](https://github.com/muellerbjoern)
 
-**Contributors:** [Moritz Kern](https://github.com/Moritz-Alexander-Kern), [Michael Denker](https://github.com/mdenker)
+**Contributors:** [Moritz Kern](https://github.com/Moritz-Alexander-Kern), [Michael Denker](https://github.com/mdenker), [Harris Jos](https://github.com/CozySocksAlways)
 
 ## Acknowledgements
 
