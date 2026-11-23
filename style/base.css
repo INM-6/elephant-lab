@@ -82,6 +82,29 @@
   padding: 8px 0;
 }
 
+.neo-tree-sort-button {
+  position: relative;
+  margin-left: auto; /* push sort + direction buttons to the far right */
+}
+
+/* Invisible overlay over the sort icon: only the icon is shown in the toolbar,
+   the option labels appear in the opened dropdown. */
+.neo-tree-sort-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.neo-tree-sort-select option {
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+}
+
 .neo-filter-group-separator {
   width: 1px;
   align-self: stretch;
