@@ -1,0 +1,40 @@
+name: TypeScript Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: ['*']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # yarn.lock is not committed, so yarn must be allowed to create it on CI
+  YARN_ENABLE_IMMUTABLE_INSTALLS: false
+
+jobs:
+  vitest:
+    name: vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install JupyterLab (provides jlpm)
+        run: python -m pip install "jupyterlab>=4.0.0,<5"
+
+      - name: Install JS dependencies
+        run: jlpm install
+
+      - name: Run Vitest
+        run: jlpm test:run

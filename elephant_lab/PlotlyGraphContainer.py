@@ -317,13 +317,12 @@ class PlotlyGraphDataBundle:
     has the ability to normalize them together regarding aspects units.
     """
 
-    MAX_POINTS = 100000
-
     import numpy as np
     from .utils import OutputUtils
     from tsdownsample import MinMaxLTTBDownsampler
 
-    def __init__(self, data_list, annotation_list=None):
+    def __init__(self, data_list, annotation_list=None, max_points=None):
+        self.max_points = max_points if max_points is not None else 100000
         self.last_full_sampled_x_range = None
         if isinstance(data_list, PlotlyGraphDataBundle):
             self.data_list = data_list.data_list
@@ -786,7 +785,7 @@ class PlotlyGraphDataBundle:
         """
         Returns the normalized data for for that x_range that actually can change with a different x_range
         """
-        max_points_per_data = 0 if self.is_data_empty else int(PlotlyGraphDataBundle.MAX_POINTS / len(self.datas)) 
+        max_points_per_data = 0 if self.is_data_empty else int(self.max_points / len(self.datas)) 
 
         x_y_values_list = [
             {'index': i, 'temp': { 'x': d[0].tolist(), 'y': d[1].tolist() }}
@@ -805,7 +804,7 @@ class PlotlyGraphDataBundle:
         """
         Converts the object into a json serializable dict storing all important information to plot it
         """
-        max_points_per_data = 0 if self.is_data_empty else int(PlotlyGraphDataBundle.MAX_POINTS / len(self.datas)) 
+        max_points_per_data = 0 if self.is_data_empty else int(self.max_points / len(self.datas)) 
 
         data_bundle_dict = {
             "compress": self.compress,

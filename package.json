@@ -1,6 +1,6 @@
 {
   "name": "elephant-lab",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A JupyterLab extension for interactive exploration, analysis and visualization of electrophysiological data.",
   "keywords": [
     "jupyter",
@@ -83,6 +83,7 @@
     "jsdom": "^29.1.1",
     "rimraf": "^3.0.2",
     "typescript": "~5.0.2",
+    "vite": "^8.3.8",
     "vitest": "^5.0.0"
   },
   "sideEffects": [

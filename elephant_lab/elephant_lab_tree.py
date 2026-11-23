@@ -35,9 +35,8 @@ class ElephantLab_tree:
     if TYPE_CHECKING:
         from .elephant_lab import ElephantLab  # only for type hints
         
-    # Current workaround to keep compatibility
     @property
-    def ipytree_of_neo_objects(self):
+    def root_node(self):
         return self._root_node
     
     def __init__(self, elephant_lab_entity: "ElephantLab_tree.ElephantLab"):
@@ -110,6 +109,7 @@ class ElephantLab_tree:
         
         self._tree_widget = None  # ipywidgets.HTML
         self._node_registry: dict = {}  # hash_id -> SimpleNode, for selection
+        self._selected_ids: set = set()  # ids rendered as selected while building the tree html
         self._stat_cache: dict = {}
         self.expand_all = False
         self.SORT_MODES = ('alphabetical', 'creation', 'datatype')
@@ -207,9 +207,13 @@ class ElephantLab_tree:
             return
 
         # Clear maps
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash.clear()
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.clear()
+        self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj.clear()
         self._node_registry.clear()
+
+        # The rebuilt html replaces the selection highlighting done in the frontend,
+        # so the current selection is rendered into the html
+        selected_neo_objects = self.elephant_lab_entity.selected_neo_objects
+        self._selected_ids = {node._id for node in selected_neo_objects}
 
         nodes_html = []
         top_level_simple_nodes = []
@@ -235,6 +239,13 @@ class ElephantLab_tree:
 
         self._root_node.nodes = top_level_simple_nodes
 
+        # Replace the selected nodes by the rebuilt ones and drop nodes that are no longer in the tree
+        selected_neo_objects.clear()
+        selected_neo_objects.update(
+            self._node_registry[node_id] for node_id in self._selected_ids if node_id in self._node_registry
+        )
+        selection_changed = len(selected_neo_objects) != len(self._selected_ids)
+
         self._tree_widget.value = f'''
         <style>
         .jup-tree {{ font-family: var(--jp-ui-font-family); font-size: var(--jp-ui-font-size1); line-height: 1.5; }}
@@ -251,11 +262,12 @@ class ElephantLab_tree:
         <div class="jup-tree">{"".join(nodes_html)}</div>
         '''
 
+        if selection_changed:
+            self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
+
     def _build_node_html(self, neo_obj, variable_name='', list_index=None, ancestors=frozenset()):
         hash_id = self.elephant_lab_entity.get_neo_hash(neo_obj, hash_name='sha1')
         self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj[hash_id] = neo_obj
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj[hash_id] = neo_obj
-        self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj_hash[hash_id] = hash_id
 
         class_name = neo_obj.__class__.__name__
         icon = self.NEO_ABBREVIATIONS.get(class_name, {}).get('icon', 'circle')
@@ -306,8 +318,10 @@ class ElephantLab_tree:
             toggle = '<span class="jup-toggle-empty"></span>'
             children_div = ''
 
+        selected_class = ' jup-selected' if hash_id in self._selected_ids else ''
+
         html = f'''<div class="jup-node">
-            <div class="jup-row" data-node-id="{hash_id}">
+            <div class="jup-row{selected_class}" data-node-id="{hash_id}">
                 {toggle}
                 <i class="fa fa-{icon}"></i>
                 {label}
@@ -377,9 +391,10 @@ class ElephantLab_tree:
         arrow = '<i class="fa fa-minus"></i>' if auto_open else '<i class="fa fa-plus"></i>'
 
         open_class = ' jup-open' if auto_open else ''
+        selected_class = ' jup-selected' if f"folder-{attr_name}-{id(attr_list)}" in self._selected_ids else ''
 
         html = f'''<div class="jup-node">
-        <div class="jup-row" data-node-id="folder-{attr_name}-{id(attr_list)}">
+        <div class="jup-row{selected_class}" data-node-id="folder-{attr_name}-{id(attr_list)}">
             <span class="jup-toggle">{arrow}</span>
             <i class="fa fa-folder"></i>
             {label}
@@ -407,8 +422,15 @@ class ElephantLab_tree:
         self.elephant_lab_entity.on_selected_neo_objects_changed.fire()
         return True
 
-    def handle_selection(self, node_id, multi_select=False, select_children=True):
-        """Called from TypeScript when user clicks a node."""
+    def handle_selection(self, node_id, multi_select=False, select_children=True, select=None):
+        """
+        Called from TypeScript when user clicks a node.
+
+        select: True/False to explicitly select/deselect the node, None to toggle it.
+        The same neo object can appear several times in the tree (e.g. a spiketrain in a
+        segment and in a group) and all occurrences share the same node id, so the frontend
+        passes the intended state instead of relying on a toggle of the shared selection.
+        """
         if node_id not in self._node_registry:
             return
 
@@ -417,7 +439,10 @@ class ElephantLab_tree:
         if not multi_select:
             self.elephant_lab_entity.selected_neo_objects.clear()
 
-        if clicked_node in self.elephant_lab_entity.selected_neo_objects:
+        if select is None:
+            select = clicked_node not in self.elephant_lab_entity.selected_neo_objects
+
+        if not select:
             self.elephant_lab_entity.selected_neo_objects.discard(clicked_node)
             if select_children:
                 def deselect_recurse(node):
@@ -466,7 +491,7 @@ class ElephantLab_tree:
                 node._id: obj
                 for node in source
                 if not node._id.startswith('folder-')
-                and (obj := self.elephant_lab_entity.map_ipytree_node_id_to_neo_obj.get(node._id)) is not None
+                and (obj := self.elephant_lab_entity.map_neo_obj_hash_to_neo_obj.get(node._id)) is not None
                 and not isinstance(obj, (self.Block, self.Segment, self.Group))
             }
 

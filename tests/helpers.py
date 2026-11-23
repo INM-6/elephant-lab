@@ -18,7 +18,7 @@ def make_analogsignal(n_samples=100, n_channels=2, rate=1000, name=None, **annot
 
 def node_id_of(lab, neo_obj):
     """Returns the tree node id that belongs to neo_obj."""
-    for node_id, obj in lab.map_ipytree_node_id_to_neo_obj.items():
+    for node_id, obj in lab.map_neo_obj_hash_to_neo_obj.items():
         if obj is neo_obj:
             return node_id
     raise KeyError(f"{neo_obj!r} is not part of the tree")

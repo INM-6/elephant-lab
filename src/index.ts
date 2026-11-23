@@ -429,7 +429,7 @@ class ElephantLabExtension {
 
 						const rangeIds: string[] = [];
 						for (let i = start; i <= end; i++) {
-							allRows[i].classList.add('jup-selected');
+							this._setNodeSelected(ids[i], true);
 							rangeIds.push(ids[i]);
 						}
 
@@ -439,8 +439,11 @@ class ElephantLabExtension {
 					}
 				} else if (isCtrl) {
 					// Ctrl+Click: toggle parent only
-					row.classList.toggle('jup-selected');
-					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True', 'False');
+					// The same neo object can appear multiple times in the tree (e.g. in a segment and a group),
+					// so all its rows are updated and the intended state is passed to python explicitly
+					const isNowSelected = !row.classList.contains('jup-selected');
+					this._setNodeSelected(nodeId, isNowSelected);
+					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True', 'False', isNowSelected ? 'True' : 'False');
 					this.kernelBridge!.executeCode(code, null, false);
 					this._lastClickedNode = nodeId;
 				} else {
@@ -448,8 +451,8 @@ class ElephantLabExtension {
 					this.outarea_neo_tree!.node
 						.querySelectorAll('.jup-row.jup-selected')
 						.forEach(el => el.classList.remove('jup-selected'));
-					row.classList.add('jup-selected');
-					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'False');
+					this._setNodeSelected(nodeId, true);
+					const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'False', 'True');
 					this.kernelBridge!.executeCode(code, null, false);
 					this._lastClickedNode = nodeId;
 				}
@@ -493,13 +496,8 @@ class ElephantLabExtension {
 
 					const rangeIds: string[] = [];
 					for (let i = start; i <= end; i++) {
-						allRows[i].classList.add('jup-selected');
+						this._setNodeAndChildrenSelected(allRows[i], true);
 						rangeIds.push(ids[i]);
-						const childContainer = allRows[i].nextElementSibling as HTMLElement;
-						if (childContainer?.classList.contains('jup-children')) {
-							childContainer.querySelectorAll('.jup-row[data-node-id]')
-								.forEach(el => el.classList.add('jup-selected'));
-						}
 					}
 
 					const idsJson = JSON.stringify(rangeIds);
@@ -508,16 +506,9 @@ class ElephantLabExtension {
 				}
 			} else if (isCtrl) {
 				// Ctrl+Double-Click: toggle parent + all children recursively
-				row.classList.toggle('jup-selected');
-				const isNowSelected = row.classList.contains('jup-selected');
-				const childContainer = row.nextElementSibling as HTMLElement;
-				if (childContainer?.classList.contains('jup-children')) {
-					childContainer.querySelectorAll('.jup-row[data-node-id]')
-						.forEach(el => isNowSelected
-							? el.classList.add('jup-selected')
-							: el.classList.remove('jup-selected'));
-				}
-				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True', 'True');
+				const isNowSelected = !row.classList.contains('jup-selected');
+				this._setNodeAndChildrenSelected(row, isNowSelected);
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'True', 'True', isNowSelected ? 'True' : 'False');
 				this.kernelBridge!.executeCode(code, null, false);
 				this._lastClickedNode = nodeId;
 			} else {
@@ -525,13 +516,8 @@ class ElephantLabExtension {
 				this.outarea_neo_tree!.node
 					.querySelectorAll('.jup-row.jup-selected')
 					.forEach(el => el.classList.remove('jup-selected'));
-				row.classList.add('jup-selected');
-				const childContainer = row.nextElementSibling as HTMLElement;
-				if (childContainer?.classList.contains('jup-children')) {
-					childContainer.querySelectorAll('.jup-row[data-node-id]')
-						.forEach(el => el.classList.add('jup-selected'));
-				}
-				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'True');
+				this._setNodeAndChildrenSelected(row, true);
+				const code = getPythonCode(PythonCodeKey.HandleTreeSelection, nodeId, 'False', 'True', 'True');
 				this.kernelBridge!.executeCode(code, null, false);
 				this._lastClickedNode = nodeId;
 			}
@@ -601,6 +587,23 @@ class ElephantLabExtension {
 		console.log("Elephant Lab: Event listeners registered.");
 	}
 
+	// Sets the selection highlight on every row of the given node. A neo object that is
+	// contained in multiple places (e.g. a segment and a group) has one row per occurrence
+	private _setNodeSelected(nodeId: string, selected: boolean) {
+		this.outarea_neo_tree!.node
+			.querySelectorAll(`.jup-row[data-node-id="${CSS.escape(nodeId)}"]`)
+			.forEach(el => el.classList.toggle('jup-selected', selected));
+	}
+
+	private _setNodeAndChildrenSelected(row: HTMLElement, selected: boolean) {
+		this._setNodeSelected(row.getAttribute('data-node-id')!, selected);
+		const childContainer = row.nextElementSibling as HTMLElement;
+		if (childContainer?.classList.contains('jup-children')) {
+			childContainer.querySelectorAll('.jup-row[data-node-id]')
+				.forEach(el => this._setNodeSelected(el.getAttribute('data-node-id')!, selected));
+		}
+	}
+
 	private _applyTreeSelection(result: any) {
 		if (!result?.resultKey) return;
 		const selectedIds: string[] = JSON.parse(result.resultKey);
@@ -610,9 +613,9 @@ class ElephantLabExtension {
 			.forEach(el => el.classList.remove('jup-selected'));
 
 		selectedIds.forEach(id => {
-			const row = this.outarea_neo_tree!.node
-				.querySelector(`.jup-row[data-node-id="${id}"]`) as HTMLElement;
-			if (row) {
+			const rows = this.outarea_neo_tree!.node
+				.querySelectorAll(`.jup-row[data-node-id="${CSS.escape(id)}"]`) as NodeListOf<HTMLElement>;
+			rows.forEach(row => {
 				row.classList.add('jup-selected');
 				let parent = row.parentElement;
 				while (parent) {
@@ -624,7 +627,7 @@ class ElephantLabExtension {
 					}
 					parent = parent.parentElement;
 				}
-			}
+			});
 		});
 
 		if (selectedIds.length > 0) {
