@@ -80,6 +80,10 @@ function expandNeoTree(checked: boolean): string {
 	return `elephant_lab_entity.elephant_lab_tree.expand_neo_tree(${pythonValue(checked)})`
 }
 
+function setNeoTreeSortMode(sortMode: string, descending: boolean): string {
+	return `elephant_lab_entity.elephant_lab_tree.set_sort_mode(${pythonValue(sortMode)}, ${pythonValue(descending)})`
+}
+
 function handleTreeSelection(nodeId: string, multiSelectPy: string, selectChildrenPy: string = 'True', selectPy: string = 'None'): string {
 	return `elephant_lab_entity.elephant_lab_tree.handle_selection('${nodeId}', ${multiSelectPy}, ${selectChildrenPy}, ${selectPy})`;
 }
