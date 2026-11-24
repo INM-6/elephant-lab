@@ -404,6 +404,8 @@ class PlotlyGraphDataBundle:
                 x_length = len(x_values)
                 y_length = len(y_values)
 
+                i+=1
+
                 if x_values is None or y_values is None or x_length != y_length:
                     self.OutputUtils.print_warning(f"Skipping trace '{data.name}' because x or y data is missing or empty or not the same length.")
                     continue
@@ -416,12 +418,11 @@ class PlotlyGraphDataBundle:
                     imag_data = PlotlyGraphData(data)
                     imag_data.name = f"{name} (imag)"
                     imag_data.y = np.imag(y_values)
-                    self.datas.insert(i+1, imag_data)
+                    self.datas.insert(i, imag_data)
                     n_datas += 1
                     y_values = np.real(y_values)
                     y_values = y_values
                     data.name = f"{name} (real)"
-                i+=1
                 finite_mask = np.isfinite(x_values)
 
                 if not np.all(finite_mask):
