@@ -93,6 +93,10 @@ export abstract class PlotContainer {
         this.loading.style.pointerEvents = 'none';
     }
 
+    public isLoading() {
+        return this.loading.style.opacity === '1';
+    }
+
     /**
      * Renders the figure out of the figDict
      *

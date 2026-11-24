@@ -78,6 +78,12 @@ export class PlotlyFrontend {
                 break;
             default:
                 console.warn('Unknown plot message type', data.type, data.message);
+                for (const [key, plot] of this.plots) {
+                    if (!plot.isLoading()) continue;
+
+                    plot.destroy();
+                    this.plots.delete(key);
+                }
         }
     }
 
