@@ -170,3 +170,13 @@ def test_select_by_annotation_filter_rejects_function_calls(lab, tree, three_tra
     """Calls other than max()/min() are not evaluated."""
     tree.select_by_annotation_filter("__import__('os')")
     assert selected(lab) == set()
+
+
+def test_tree_labels_are_html_escaped(lab, tree, kernel_ns):
+    """Object names come from data files, so they are shown as text and never interpreted as HTML."""
+    st = make_spiketrain([1], name="<b>unit</b> & co")
+    kernel_ns(st=st)
+    build_tree(lab)
+    html = tree._tree_widget.value
+    assert "<b>unit</b>" not in html
+    assert "&lt;b&gt;unit&lt;/b&gt; &amp; co" in html
