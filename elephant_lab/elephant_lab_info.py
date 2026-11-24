@@ -635,7 +635,12 @@ class ElephantLab_info:
         table_data = [header]
 
         def make_row(i):
-            row = [i, self._fmt(times[i].magnitude), self._fmt(durations[i].magnitude), labels[i]]
+            row = [
+                i,
+                self._fmt(times[i].magnitude),
+                self._fmt(durations[i].magnitude),
+                labels[i] if labels is not None and i < len(labels) else ''
+            ]
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')
@@ -752,7 +757,7 @@ class ElephantLab_info:
         table_data = [header]
 
         def make_row(i):
-            row = [i, self._fmt(times[i].magnitude), labels[i]]
+            row = [i, self._fmt(times[i].magnitude), labels[i] if labels is not None and i < len(labels) else '']
             for k in aa_keys:
                 v = aa[k]
                 row.append(self._format_array_annotation_value(v[i]) if i < len(v) else '')

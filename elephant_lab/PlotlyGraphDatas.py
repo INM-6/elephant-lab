@@ -80,13 +80,45 @@ class IrregularlySampledSignalPlotList(PlotlyGraphDataList):
 
 
 class EventAnnotation(PlotlyGraphAnnotation):
+    import numpy as np
+
     """Point annotations built from a list of neo Events, one label per event time."""
 
     def __init__(self, event):
-        super().__init__(event.times.magnitude, event.labels, event.times.units)
+        labels = event.labels
+        n_times = len(event.times.magnitude)
+
+        np = EventAnnotation.np
+
+        if labels is None:
+            labels = np.full(n_times, '', dtype=str)
+        else:
+            labels = np.asarray(labels, dtype=str)
+            labels = np.pad(
+                labels[:n_times],
+                (0, max(0, n_times - len(labels))),
+                constant_values=''
+            )
+
+        super().__init__(event.times.magnitude, labels, event.times.units)
 
 class EpochAnnotation(PlotlyGraphAnnotation):
+    import numpy as np
     """Interval annotations built from a list of neo Epochs, one labeled x0-x1 span per epoch entry."""
     
     def __init__(self, epoch):
-        super().__init__(epoch.times.magnitude, epoch.labels, epoch.times.units, epoch.durations.magnitude)
+        labels = epoch.labels
+        n_times = len(epoch.times.magnitude)
+
+        np = EpochAnnotation.np
+
+        if labels is None:
+            labels = np.full(n_times, '', dtype=str)
+        else:
+            labels = np.asarray(labels, dtype=str)
+            labels = np.pad(
+                labels[:n_times],
+                (0, max(0, n_times - len(labels))),
+                constant_values=''
+            )
+        super().__init__(epoch.times.magnitude, labels, epoch.times.units, epoch.durations.magnitude)
