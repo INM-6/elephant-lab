@@ -40,20 +40,23 @@ const getVars = `elephant_lab_entity.elephant_lab_util.getVars()`;
 
 const insertCode = `elephant_lab_entity.insert_selected_neo_objects()`;
 
+// File names, IO class names etc. can contain quotes or other special characters (and file names
+// can come from untrusted datasets), so every string is passed as an escaped Python string literal
+// via pythonValue() and never pasted between quotes directly.
 function setVarName(ioClass: string, filePath: string, varName: string): string {
 	if (ioClass) {
-		return `elephant_lab_entity.elephant_lab_util.setVarNameIOClass('${ioClass}','${filePath}', '${varName}')`;
+		return `elephant_lab_entity.elephant_lab_util.setVarNameIOClass(${pythonValue(ioClass)}, ${pythonValue(filePath)}, ${pythonValue(varName)})`;
 	} else {
-		return `elephant_lab_entity.elephant_lab_util.setVarNameNotIOClass('${filePath}', '${varName}')`;
+		return `elephant_lab_entity.elephant_lab_util.setVarNameNotIOClass(${pythonValue(filePath)}, ${pythonValue(varName)})`;
 	}
 }
 
 function getNeoIOClass(filename: string): string {
-	return `elephant_lab_entity.elephant_lab_util.getNeoIOClass('${filename}')`;
+	return `elephant_lab_entity.elephant_lab_util.getNeoIOClass(${pythonValue(filename)})`;
 }
 
 function saveSelectedNeoObjects(filePath: string): string {
-	return `elephant_lab_entity.save_selected_neo_objects('${filePath}')`;
+	return `elephant_lab_entity.save_selected_neo_objects(${pythonValue(filePath)})`;
 }
 
 function updatePlotSettings(settings: PlotSettings): string {
@@ -69,7 +72,7 @@ function setPanelVisibility(exploreActive: boolean, detailsActive: boolean): str
 }
 
 function toggleNeoTreeFilter(checkbox_id: string): string {
-	return `elephant_lab_entity.elephant_lab_tree.show_neo_obj("${checkbox_id}")`
+	return `elephant_lab_entity.elephant_lab_tree.show_neo_obj(${pythonValue(checkbox_id)})`
 }
 
 function expandNeoTree(checked: boolean): string {
@@ -77,7 +80,7 @@ function expandNeoTree(checked: boolean): string {
 }
 
 function handleTreeSelection(nodeId: string, multiSelectPy: string, selectChildrenPy: string = 'True', selectPy: string = 'None'): string {
-	return `elephant_lab_entity.elephant_lab_tree.handle_selection('${nodeId}', ${multiSelectPy}, ${selectChildrenPy}, ${selectPy})`;
+	return `elephant_lab_entity.elephant_lab_tree.handle_selection(${pythonValue(nodeId)}, ${multiSelectPy}, ${selectChildrenPy}, ${selectPy})`;
 }
 
 function handleSelectionRange(idsJson: string, withChildren: boolean = false): string {
@@ -93,7 +96,7 @@ function createGroupFromSelection(name: string): string {
 }
 
 function getNormalizedDataForPlotWithXRange(plotKey: string, xRange?: [number, number]): string {
-	return `elephant_lab_entity.elephant_lab_plot.get_normalized_data_for_plot_with_x_range('${plotKey}', ${xRange ? `[${xRange.join(', ')}]` : 'None'})`;
+	return `elephant_lab_entity.elephant_lab_plot.get_normalized_data_for_plot_with_x_range(${pythonValue(plotKey)}, ${xRange ? `[${xRange.join(', ')}]` : 'None'})`;
 }
 
 // Make all strings publicly available in a dict
