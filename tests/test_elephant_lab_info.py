@@ -53,9 +53,9 @@ def make_imagesequence():
     (make_imagesequence(), "3 frames × 4 rows × 5 cols"),
 ])
 def test_neo_object_dispatch(info, obj, expected):
-    """Each object type is rendered by its own detail view."""
+    """Each object type is rendered by its own detail view, with the node name shown as escaped text."""
     html = info._html_neo_object(obj, "<b>node</b> name")
-    assert html.startswith("<h3>node name</h3>")
+    assert html.startswith("<h3>&lt;b&gt;node&lt;/b&gt; name</h3>")
     assert expected in html
 
 
@@ -90,3 +90,16 @@ def test_analogsignal_overview(lab, info, rendered, kernel_ns):
     assert "Total Channels:</span><span class=\"val\">3" in html
     assert selectable_value(html, "duration", "Duration Min") == pytest.approx(0.1)
     assert selectable_value(html, "duration", "Duration Max") == pytest.approx(0.5)
+
+def test_details_text_is_html_escaped(lab, kernel_ns, info, rendered):
+    """Names, descriptions and annotations come from data files, so they are shown as text, not as HTML."""
+    st = make_spiketrain([1, 2], name="<b>unit</b>", note="<i>a & b</i>")
+    st.description = "<u>desc</u>"
+    build_tree_and_select(lab, kernel_ns, st, st=st)
+    info.pretty_print_of_selected_neo_objects()
+    html = rendered[-1]
+    for raw in ("<b>unit</b>", "<i>a & b</i>", "<u>desc</u>"):
+        assert raw not in html
+    assert "&lt;b&gt;unit&lt;/b&gt;" in html
+    assert "&lt;i&gt;a &amp; b&lt;/i&gt;" in html
+    assert "&lt;u&gt;desc&lt;/u&gt;" in html
