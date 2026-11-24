@@ -18,6 +18,7 @@ class ElephantLab_info:
     from collections import Counter, defaultdict
     from io import StringIO
     import re
+    import html as html_lib
 
     from typing import TYPE_CHECKING
 
@@ -147,14 +148,18 @@ class ElephantLab_info:
         from IPython.display import display, HTML
         display(HTML(self._CSS + f'<div class="jup-info">{html_body}</div>'))
 
+    def _esc(self, value) -> str:
+        """Escapes any value for safe insertion as HTML text. Names, annotations etc. come from data files."""
+        return self.html_lib.escape(str(value))
+
     def _h3(self, text: str) -> str:
-        return f'<h3>{text}</h3>'
+        return f'<h3>{self._esc(text)}</h3>'
 
     def _kv(self, key: str, value) -> str:
-        return f'<div class="kv-row"><span class="key">{key}:</span><span class="val">{value}</span></div>'
+        return f'<div class="kv-row"><span class="key">{self._esc(key)}:</span><span class="val">{self._esc(value)}</span></div>'
 
     def _tag(self, text: str) -> str:
-        return f'<span class="tag">{text}</span>'
+        return f'<span class="tag">{self._esc(text)}</span>'
 
     def _kv_selectable(self, key: str, value, filter_type: str, filter_data: dict) -> str:
         import json
@@ -163,11 +168,11 @@ class ElephantLab_info:
         except:
             data_attr = filter_data
         return f'''<div class="kv-row">
-            <span class="key">{key}:</span>
+            <span class="key">{self._esc(key)}:</span>
             <span class="val selectable-stat"
-                data-filter-type="{filter_type}"
+                data-filter-type="{self._esc(filter_type)}"
                 data-filter="{data_attr}"
-                title="Click to select matching objects">{value}</span>
+                title="Click to select matching objects">{self._esc(value)}</span>
         </div>'''
     
     def _section(self, *content) -> str:
@@ -178,12 +183,12 @@ class ElephantLab_info:
             return ''
         header = data[0]
         rows = data[1:]
-        th = ''.join(f'<th>{col}</th>' for col in header)
+        th = ''.join(f'<th>{self._esc(col)}</th>' for col in header)
         rows_html = ''
         for row in rows:
             is_ellipsis = all(str(c) == '...' for c in row)
             tds = ''.join(
-                f'<td class="dim">{c}</td>' if is_ellipsis else f'<td>{c}</td>'
+                f'<td class="dim">{self._esc(c)}</td>' if is_ellipsis else f'<td>{self._esc(c)}</td>'
                 for c in row
             )
             rows_html += f'<tr>{tds}</tr>'
@@ -447,21 +452,19 @@ class ElephantLab_info:
 
     # Single object detail view
     def _html_neo_object(self, neo_obj, node_name: str) -> str:
-        clean_name = self.re.sub(r'<[^>]+>', '', node_name)
-        header_parts = []
-        header_parts.append(self._h3(clean_name))
-        header = ''.join(header_parts)
+        # _h3 escapes the name, so names containing '<' or '>' are shown literally
+        header = self._h3(node_name)
 
         if isinstance(neo_obj, self.Container):
             return header + self._html_container(neo_obj)
         if isinstance(neo_obj, self.SpikeTrainList):
             return header + self._html_spiketrainlist(neo_obj)
         if isinstance(neo_obj, self.CircularRegionOfInterest):
-            return header + self._section(f'Circular ROI — center: {neo_obj.center}, radius: {neo_obj.radius}')
+            return header + self._section(self._esc(f'Circular ROI — center: {neo_obj.center}, radius: {neo_obj.radius}'))
         if isinstance(neo_obj, self.PolygonRegionOfInterest):
-            return header + self._section(f'Polygon ROI — vertices: {neo_obj.vertices}')
+            return header + self._section(self._esc(f'Polygon ROI — vertices: {neo_obj.vertices}'))
         if isinstance(neo_obj, self.RectangularRegionOfInterest):
-            return header + self._section(f'Rectangular ROI — center: ({neo_obj.x},{neo_obj.y}), width: {neo_obj.width}, height: {neo_obj.height}')
+            return header + self._section(self._esc(f'Rectangular ROI — center: ({neo_obj.x},{neo_obj.y}), width: {neo_obj.width}, height: {neo_obj.height}'))
         if isinstance(neo_obj, list):
             return header + self._html_list(neo_obj)
         if neo_obj.__class__.__name__ == 'ObjectList':
@@ -479,8 +482,8 @@ class ElephantLab_info:
         if isinstance(neo_obj, self.Event):
             return header + self._html_event(neo_obj)
         if isinstance(neo_obj, self.BaseNeo):
-            return header + self._section(str(neo_obj))
-        return header + self._section(f'Object of type {type(neo_obj)} could not be rendered.')
+            return header + self._section(self._esc(neo_obj))
+        return header + self._section(self._esc(f'Object of type {type(neo_obj)} could not be rendered.'))
 
     def _html_container(self, neo_obj) -> str:
         parts = []

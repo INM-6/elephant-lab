@@ -695,7 +695,14 @@ class ElephantLabExtension {
 		const currentFilename = session.path.split('/').pop() || "Unknown Notebook";
 
 		const switchNotebookButton = document.createElement('button');
-		switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${currentFilename}`;
+		// The file name is set as text (never as HTML), since file names can contain '<' etc.
+		const setSwitchNotebookLabel = (filename: string) => {
+			const icon = document.createElement('i');
+			icon.className = 'fa fa-exchange';
+			icon.setAttribute('aria-hidden', 'true');
+			switchNotebookButton.replaceChildren(icon, document.createTextNode(` ${filename}`));
+		};
+		setSwitchNotebookLabel(currentFilename);
 		switchNotebookButton.title = 'Switch Elephant Lab to current active notebook';
 		switchNotebookButton.className = 'workflow-button workflow-button-io';
 		switchNotebookButton.style.marginRight = '5px';
@@ -706,7 +713,7 @@ class ElephantLabExtension {
 		session.propertyChanged.connect((sender, prop) => {
 			if (prop === 'path') {
 				const newFilename = sender.path.split('/').pop() || "Unknown Notebook";
-				switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${newFilename}`;
+				setSwitchNotebookLabel(newFilename);
 			}
 		});
 

@@ -27,6 +27,7 @@ class ElephantLab_tree:
     import json
     import ast
     import re
+    import html as html_lib
 
 
     from typing import TYPE_CHECKING
@@ -218,12 +219,16 @@ class ElephantLab_tree:
         obj_key = id(neo_obj)
         is_cyclic_ref = obj_key in ancestors
 
+        # Names come from data files and the notebook, so they are escaped before being put into the HTML
+        esc = self.html_lib.escape
+        obj_name = esc(str(neo_obj.name)) if hasattr(neo_obj, 'name') and neo_obj.name else ""
+        var_name = esc(str(variable_name)) if variable_name else ""
         if list_index is not None:
-            name_part = f"<b>#{list_index}</b>" + (f" → <b>{neo_obj.name}</b>" if hasattr(neo_obj, 'name') and neo_obj.name else "")
-        elif hasattr(neo_obj, 'name') and neo_obj.name:
-            name_part = f"<b>{variable_name}</b> → <b>{neo_obj.name}</b>" if variable_name and variable_name != neo_obj.name else neo_obj.name
+            name_part = f"<b>#{list_index}</b>" + (f" → <b>{obj_name}</b>" if obj_name else "")
+        elif obj_name:
+            name_part = f"<b>{var_name}</b> → <b>{obj_name}</b>" if variable_name and variable_name != neo_obj.name else obj_name
         else:
-            name_part = variable_name or class_name
+            name_part = var_name or class_name
 
         if list_index is not None:
             plain_name = f"#{list_index}" + (f" → {neo_obj.name}" if hasattr(neo_obj, 'name') and neo_obj.name else "")
