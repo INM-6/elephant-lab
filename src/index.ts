@@ -85,14 +85,8 @@ interface UpdateSettingsCallback {
 	callback: (plotSettings: PlotSettings) => void;
 }
 
-class ElephantLabExtension implements IDisposable {
-	get isDisposed(): boolean {
-		return this._isDisposed;
-	}
-
+class ElephantLabExtension {
 	// declaring members of the class
-	private _isDisposed = false;
-	private _isDisposing = false;
 	private app: JupyterFrontEnd;
 	private command_palette: ICommandPalette;
 	private notebook_tracker: INotebookTracker;
@@ -1612,29 +1606,6 @@ class ElephantLabExtension implements IDisposable {
 		}
 		return outarea;
 	}
-
-	async disposeAsync(): Promise<void> {
-		if (this._isDisposed || this._isDisposing) {
-			return;
-		}
-
-		this._isDisposing = true;
-
-		try {
-			console.log('Disposing ElephantLabExtension...');
-			await this.kernelBridge?.executeCode(getPythonCode(PythonCodeKey.Dispose));
-
-		} finally {
-			this._isDisposed = true;
-			this._isDisposing = false;
-		}
-	}
-
-	dispose(): void {
-		// Synchronous fallback for Lumino
-		void this.disposeAsync();
-	}
-
 }; // end of ElephantLabExtension class
 
 /*
