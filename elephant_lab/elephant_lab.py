@@ -598,3 +598,12 @@ class ElephantLab:
         for node in tree:
             append_markdown(node, 0)
         return "\n".join(lines)
+
+    def dispose(self):
+        """
+        Clean up resources and listeners when the ElephantLab instance is no longer needed.
+        """
+        #self.elephant_lab_tree.dispose()
+        #self.elephant_lab_info.dispose()
+        #self.elephant_lab_plot.dispose()
+        ElephantLab.close_assistant_comm(self)

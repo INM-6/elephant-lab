@@ -75,6 +75,8 @@ import { KernelBridge } from './kernel_bridge';
 import { PlotlyFrontend } from './plot';
 import { PlotSettings } from './plot_settings';
 import { Assistant } from './assistant';
+import { parseAssistantConfiguration } from './assistant_config';
+import type { AssistantConfiguration } from './assistant_config';
 import elephantLabLogo from '../doc/Elephant-Lab-Logo.png';
 
 type PlotSettingsKey = keyof PlotSettings;
@@ -83,8 +85,14 @@ interface UpdateSettingsCallback {
 	callback: (plotSettings: PlotSettings) => void;
 }
 
-class ElephantLabExtension {
+class ElephantLabExtension implements IDisposable {
+	get isDisposed(): boolean {
+		return this._isDisposed;
+	}
+
 	// declaring members of the class
+	private _isDisposed = false;
+	private _isDisposing = false;
 	private app: JupyterFrontEnd;
 	private command_palette: ICommandPalette;
 	private notebook_tracker: INotebookTracker;
@@ -201,6 +209,13 @@ class ElephantLabExtension {
 			}
 		});
 		await applySettings();
+
+		this.assistant?.initializeConfiguration(
+			parseAssistantConfiguration(settings.get('assistant').composite),
+			async (configuration: AssistantConfiguration) => {
+				await settings.set('assistant', configuration);
+			}
+		);
 	}
 
 
@@ -211,7 +226,7 @@ class ElephantLabExtension {
 	private async initializeKernelState(session: ISessionContext) {
 		console.log("Elephant Lab: Initializing kernel state...");
 		this.kernelBridge = new KernelBridge(session);
-		this.assistant?.registerCommTarge(session.session!.kernel!)
+		this.assistant?.registerCommTarget(session.session!.kernel!)
 
 		await this.kernelBridge.executeCode(PythonCodeKey.SetupEnv);
 
@@ -1597,6 +1612,29 @@ class ElephantLabExtension {
 		}
 		return outarea;
 	}
+
+	async disposeAsync(): Promise<void> {
+		if (this._isDisposed || this._isDisposing) {
+			return;
+		}
+
+		this._isDisposing = true;
+
+		try {
+			console.log('Disposing ElephantLabExtension...');
+			await this.kernelBridge?.executeCode(getPythonCode(PythonCodeKey.Dispose));
+
+		} finally {
+			this._isDisposed = true;
+			this._isDisposing = false;
+		}
+	}
+
+	dispose(): void {
+		// Synchronous fallback for Lumino
+		void this.disposeAsync();
+	}
+
 }; // end of ElephantLabExtension class
 
 /*

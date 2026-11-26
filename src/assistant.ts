@@ -6,10 +6,32 @@ import { IComm } from '@jupyterlab/services/lib/kernel/kernel';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { closeIcon, addIcon } from "@jupyterlab/ui-components";
+import type {
+    AssistantConfiguration,
+    AssistantConfigurationField,
+    AssistantFieldSetting
+} from './assistant_config';
+import { ASSISTANT_CONFIGURATION_FIELDS } from './assistant_config';
 
 export class Assistant {
     private comm?: IComm;
     public widget_assistant: Widget;
+
+    private settingsPanel!: HTMLDivElement;
+    private settingsError!: HTMLDivElement;
+    private settingsButton!: HTMLButtonElement;
+    private saveSettingsButton!: HTMLButtonElement;
+    private composer!: HTMLDivElement;
+    private settingsInputs!: Record<AssistantConfigurationField, {
+        source: HTMLSelectElement;
+        value: HTMLInputElement;
+    }>;
+    private configuration?: AssistantConfiguration;
+    private saveConfiguration?: (configuration: AssistantConfiguration) => Promise<void>;
+    private pendingConfigurationResponse?: {
+        resolve: () => void;
+        reject: (error: Error) => void;
+    };
 
     private input!: HTMLTextAreaElement;
     private output!: HTMLDivElement;
@@ -37,7 +59,7 @@ export class Assistant {
         this.createUI();
     }
 
-    public registerCommTarge(kernel: Kernel.IKernelConnection) {
+    public registerCommTarget(kernel: Kernel.IKernelConnection) {
         // Register the comm target to receive messages from Python
         kernel.registerCommTarget(
             'assistant_channel',
@@ -48,20 +70,48 @@ export class Assistant {
         );
     }
 
+    public initializeConfiguration(
+        configuration: AssistantConfiguration,
+        saveConfiguration: (configuration: AssistantConfiguration) => Promise<void>
+    ): void {
+        this.saveConfiguration = saveConfiguration;
+        this.populateSettings(configuration);
+
+        this.openSettings();
+    }
+
     private handleCommMessage(msg: KernelMessage.ICommMsgMsg) {
         const data = msg.content.data;
 
         switch (data.type) {
+            case 'configuration_result':
+                if (data.ok === true) {
+                    this.pendingConfigurationResponse?.resolve();
+                } else {
+                    this.configuration = undefined;
+                    this.pendingConfigurationResponse?.reject(
+                        new Error(String(data.message || 'Assistant configuration failed.'))
+                    );
+                }
+                this.pendingConfigurationResponse = undefined;
+                break;
+
             case 'assistant_response':
                 // Ignore responses belonging to a conversation that
                 // was cleared while the request was running.
                 if (data.generation === this.contextGeneration) {
-                    this.handleResponse(data.message as string);
+                    if (typeof data.message === 'string') {
+                        this.handleResponse(data.message);
+                    } else {
+                        this.handleResponse('The assistant returned an invalid response.');
+                    }
                 }
                 break;
 
             case 'selection_changed':
-                this.updateSelectedAdding(data.selected_count as number);
+                if (typeof data.selected_count === 'number') {
+                    this.updateSelectedAdding(data.selected_count);
+                }
                 break;
 
             default:
@@ -77,6 +127,16 @@ export class Assistant {
         const container = document.createElement("div");
         container.className = "widget-assistant";
 
+        const header = document.createElement("div");
+        header.className = "widget-assistant__header";
+
+        this.settingsButton = document.createElement("button");
+        this.settingsButton.className = "widget-assistant__settings-button";
+        this.settingsButton.type = "button";
+        this.settingsButton.textContent = "Settings";
+        this.settingsButton.addEventListener("click", () => this.openSettings());
+        header.appendChild(this.settingsButton);
+
         // -------------------------
         // Output
         // -------------------------
@@ -89,8 +149,8 @@ export class Assistant {
         // Composer
         // -------------------------
 
-        const composer = document.createElement("div");
-        composer.className = "widget-assistant__composer";
+        this.composer = document.createElement("div");
+        this.composer.className = "widget-assistant__composer";
 
         const inputRow = document.createElement("div");
         inputRow.className = "widget-assistant__input-row";
@@ -251,17 +311,226 @@ export class Assistant {
         submitActions.appendChild(this.submitButton);
         actionRow.appendChild(contextActions);
         actionRow.appendChild(submitActions);
-        composer.appendChild(inputRow);
-        composer.appendChild(actionRow);
+        this.composer.appendChild(inputRow);
+        this.composer.appendChild(actionRow);
 
+        this.settingsPanel = this.createSettingsPanel();
+        this.output.hidden = true;
+        this.composer.hidden = true;
+        this.settingsPanel.hidden = true;
+
+        container.appendChild(header);
         container.appendChild(this.output);
-        container.appendChild(composer);
+        container.appendChild(this.composer);
+        container.appendChild(this.settingsPanel);
 
         this.widget_assistant.node.appendChild(container);
 
         // Initial state
         this.updateSelectionContextButton();
         this.updateSendButton();
+    }
+
+    private createSettingsPanel(): HTMLDivElement {
+        const panel = document.createElement("div");
+        panel.className = "widget-assistant__settings-panel";
+
+        const heading = document.createElement("h2");
+        heading.textContent = "Assistant connection";
+        panel.appendChild(heading);
+
+        const description = document.createElement("p");
+        description.textContent =
+            "Choose whether each field is a direct value or the name of an environment variable. " +
+            "Settings are saved in JupyterLab; use environment variables for secrets.";
+        panel.appendChild(description);
+
+        this.settingsInputs = {
+            apiUrl: this.createSettingsField(panel, "API URL", "https://example.com/v1", false),
+            apiKey: this.createSettingsField(panel, "API key", "API key or environment variable name", true),
+            model: this.createSettingsField(panel, "Model", "Model name or environment variable name", false),
+        };
+
+        this.settingsError = document.createElement("div");
+        this.settingsError.className = "widget-assistant__settings-error";
+        this.settingsError.setAttribute("role", "alert");
+        panel.appendChild(this.settingsError);
+
+        const actions = document.createElement("div");
+        actions.className = "widget-assistant__settings-actions";
+
+        const cancelButton = document.createElement("button");
+        cancelButton.type = "button";
+        cancelButton.className = "widget-assistant__settings-cancel";
+        cancelButton.textContent = "Cancel";
+        cancelButton.addEventListener("click", () => this.closeSettings());
+
+        this.saveSettingsButton = document.createElement("button");
+        this.saveSettingsButton.type = "button";
+        this.saveSettingsButton.className = "widget-assistant__settings-save";
+        this.saveSettingsButton.textContent = "Save and start";
+        this.saveSettingsButton.addEventListener("click", () => {
+            void this.saveSettings();
+        });
+
+        actions.appendChild(cancelButton);
+        actions.appendChild(this.saveSettingsButton);
+        panel.appendChild(actions);
+
+        return panel;
+    }
+
+    private createSettingsField(
+        panel: HTMLDivElement,
+        labelText: string,
+        placeholder: string,
+        isSecret: boolean
+    ): { source: HTMLSelectElement; value: HTMLInputElement } {
+        const row = document.createElement("label");
+        row.className = "widget-assistant__settings-field";
+
+        const label = document.createElement("span");
+        label.textContent = labelText;
+
+        const source = document.createElement("select");
+        source.setAttribute("aria-label", `${labelText} source`);
+
+        const directOption = document.createElement("option");
+        directOption.value = "value";
+        directOption.textContent = "Direct value";
+        const environmentOption = document.createElement("option");
+        environmentOption.value = "environment";
+        environmentOption.textContent = "Environment variable";
+        source.append(directOption, environmentOption);
+
+        const value = document.createElement("input");
+        value.type = isSecret ? "password" : "text";
+        value.autocomplete = "off";
+        value.placeholder = placeholder;
+        value.setAttribute("aria-label", labelText);
+
+        source.addEventListener("change", () => {
+            value.type = isSecret && source.value === "value" ? "password" : "text";
+            value.placeholder = source.value === "environment"
+                ? `Environment variable name for ${labelText}`
+                : placeholder;
+        });
+
+        row.append(label, source, value);
+        panel.appendChild(row);
+        return { source, value };
+    }
+
+    private populateSettings(configuration: AssistantConfiguration): void {
+        ASSISTANT_CONFIGURATION_FIELDS.forEach((field) => {
+            const input = this.settingsInputs[field];
+            input.source.value = configuration[field].source;
+            input.value.value = configuration[field].value;
+            input.source.dispatchEvent(new Event("change"));
+        });
+    }
+
+    private readSettings(): AssistantConfiguration {
+        const readField = (field: AssistantConfigurationField): AssistantFieldSetting => {
+            const input = this.settingsInputs[field];
+            const source = input.source.value;
+            if (source !== 'value' && source !== 'environment') {
+                throw new Error(`Invalid source selected for ${field}.`);
+            }
+            return {
+                source,
+                value: input.value.value.trim(),
+            };
+        };
+        return {
+            apiUrl: readField("apiUrl"),
+            apiKey: readField("apiKey"),
+            model: readField("model"),
+        };
+    }
+
+    private hasConfiguration(configuration: AssistantConfiguration): boolean {
+        return ASSISTANT_CONFIGURATION_FIELDS
+            .every((field) => configuration[field].value.trim().length > 0);
+    }
+
+    private openSettings(populate = true): void {
+        if (populate && this.configuration) {
+            this.populateSettings(this.configuration);
+        }
+        this.settingsError.textContent = "";
+        this.settingsPanel.hidden = false;
+        this.output.hidden = true;
+        this.composer.hidden = true;
+        this.settingsButton.hidden = true;
+    }
+
+    private closeSettings(): void {
+        if (!this.configuration) {
+            return;
+        }
+        this.settingsPanel.hidden = true;
+        this.output.hidden = false;
+        this.composer.hidden = false;
+        this.settingsButton.hidden = false;
+    }
+
+    private async saveSettings(): Promise<void> {
+        try {
+            const configuration = this.readSettings();
+            if (!this.hasConfiguration(configuration)) {
+                this.settingsError.textContent = "Enter a value or environment variable name for each field.";
+                return;
+            }
+            await this.applyConfiguration(configuration, true);
+        } catch (error) {
+            this.settingsError.textContent = error instanceof Error
+                ? error.message
+                : String(error);
+        }
+    }
+
+    private async applyConfiguration(
+        configuration: AssistantConfiguration,
+        persist = false
+    ): Promise<void> {
+        this.settingsError.textContent = "";
+        this.saveSettingsButton.disabled = true;
+
+        try {
+            const comm = this.comm;
+            if (!comm) {
+                throw new Error("The assistant is not connected to the active Jupyter kernel.");
+            }
+
+            await new Promise<void>((resolve, reject) => {
+                this.pendingConfigurationResponse = { resolve, reject };
+                comm.send({
+                    type: "configure",
+                    configuration,
+                });
+            });
+
+            this.configuration = configuration;
+            if (persist) {
+                if (!this.saveConfiguration) {
+                    throw new Error("Assistant settings storage is not available.");
+                }
+                await this.saveConfiguration(configuration);
+            }
+            this.contextGeneration++;
+            this.output.replaceChildren();
+            this.removeLoadingIndicator();
+            this.updateSendButton();
+            this.closeSettings();
+        } catch (error) {
+            this.settingsError.textContent = error instanceof Error
+                ? error.message
+                : String(error);
+            this.openSettings(false);
+        } finally {
+            this.saveSettingsButton.disabled = false;
+        }
     }
 
     private resizeInput(): void {

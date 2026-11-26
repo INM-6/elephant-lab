@@ -76,6 +76,69 @@
                 "mrybm",
                 "mygbm"
             ]
+        },
+        "assistant": {
+            "type": "object",
+            "title": "Assistant Connection",
+            "description": "Connection details for the specialized chatbot.",
+            "default": {
+                "apiUrl": {
+                    "source": "value",
+                    "value": ""
+                },
+                "apiKey": {
+                    "source": "value",
+                    "value": ""
+                },
+                "model": {
+                    "source": "value",
+                    "value": ""
+                }
+            },
+            "properties": {
+                "apiUrl": {
+                    "type": "object",
+                    "properties": {
+                        "source": {
+                            "type": "string",
+                            "enum": ["value", "environment"],
+                            "default": "value"
+                        },
+                        "value": {
+                            "type": "string",
+                            "default": ""
+                        }
+                    }
+                },
+                "apiKey": {
+                    "type": "object",
+                    "properties": {
+                        "source": {
+                            "type": "string",
+                            "enum": ["value", "environment"],
+                            "default": "value"
+                        },
+                        "value": {
+                            "type": "string",
+                            "default": ""
+                        }
+                    }
+                },
+                "model": {
+                    "type": "object",
+                    "properties": {
+                        "source": {
+                            "type": "string",
+                            "enum": ["value", "environment"],
+                            "default": "value"
+                        },
+                        "value": {
+                            "type": "string",
+                            "default": ""
+                        }
+                    }
+                }
+            }
         }
     }
 }

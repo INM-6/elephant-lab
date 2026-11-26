@@ -40,6 +40,8 @@ const getVars = `elephant_lab_entity.elephant_lab_util.getVars()`;
 
 const insertCode = `elephant_lab_entity.insert_selected_neo_objects()`;
 
+const dispose = `elephant_lab_entity.dispose()`;
+
 function setVarName(ioClass: string, filePath: string, varName: string): string {
 	if (ioClass) {
 		return `elephant_lab_entity.elephant_lab_util.setVarNameIOClass('${ioClass}','${filePath}', '${varName}')`;
@@ -117,6 +119,7 @@ export enum PythonCodeKey {
 	SelectByAnnotationFilter = 'selectByAnnotationFilter',
 	SetPanelVisibility = 'setPanelVisibility',
 	UpdatePlotSettings = 'updatePlotSettings',
+	Dispose = 'dispose',
 }
 
 const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> = {
@@ -140,6 +143,7 @@ const pythonCode: Record<PythonCodeKey, string | ((...args: any[]) => string)> =
 	[PythonCodeKey.SelectByAnnotationFilter]: (...args: any[]) => selectByAnnotationFilter(args[0]),
 	[PythonCodeKey.SetPanelVisibility]: (...args: any[]) => setPanelVisibility(args[0], args[1]),
 	[PythonCodeKey.UpdatePlotSettings]: (...args: any[]) => updatePlotSettings(args[0]),
+	[PythonCodeKey.Dispose]: dispose,
 };
 
 export function getPythonCode(key: PythonCodeKey, ...args: any[]): string {

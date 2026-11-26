@@ -2,6 +2,7 @@ from ipykernel.comm import Comm
 import asyncio
 import traceback
 
+from .assistant.config import AssistantConfiguration
 from .assistant.main_agent import (
     initialize,
     reset_session,
@@ -15,7 +16,6 @@ from .assistant.main_agent import (
 
 comm = None
 elephant_lab_entity = None
-has_initialized_agent = False
 
 def on_selection_changed():
     try:
@@ -51,6 +51,9 @@ async def handle_comm_message(msg):
 
         match data.get("type"):
 
+            case "configure":
+                await configure_assistant(data.get("configuration"))
+
             case "user_message":
                 await handle_user_message(
                     data.get("generation"),
@@ -70,13 +73,31 @@ async def handle_comm_message(msg):
                     ),
                 })
 
-    except Exception as e:
-        error_details = traceback.format_exc()
-
+    except Exception as error:
+        traceback.print_exc()
         comm.send({
             "type": "error",
-            "message": error_details,
+            "message": str(error),
         })
+
+
+async def configure_assistant(settings):
+    try:
+        configuration = AssistantConfiguration.from_settings(settings)
+        await shutdown()
+        await initialize(elephant_lab_entity, configuration)
+    except Exception as error:
+        comm.send({
+            "type": "configuration_result",
+            "ok": False,
+            "message": str(traceback.format_exc()),
+        })
+        return
+
+    comm.send({
+        "type": "configuration_result",
+        "ok": True,
+    })
 
 
 async def handle_user_message(generation, message, include_selection):
@@ -86,11 +107,6 @@ async def handle_user_message(generation, message, include_selection):
             You may also get the context of the surrounding objects of the selected objects."
             These are only so you can understand the context and the ones marked as selected should be prioritized."""
     try:
-        global has_initialized_agent
-        if not has_initialized_agent:
-            await initialize(elephant_lab_entity)
-            has_initialized_agent = True
-
         # Run with conversation history.
         result = await run_agent(message)
 
@@ -100,12 +116,10 @@ async def handle_user_message(generation, message, include_selection):
             "message": result.final_output,
         })
     except Exception as e:
-        error_details = traceback.format_exc()
-
         comm.send({
             "type": "assistant_response",
             "generation": generation,
-            "message": error_details,
+            "message": str(traceback.format_exc()),
         })
 
 

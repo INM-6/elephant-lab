@@ -14,9 +14,7 @@ from agents.mcp import MCPServerStdio, create_static_tool_filter
 from openai import AsyncOpenAI
 
 from .config import (
-    API_BASE,
-    CHAT_COMPLETION_MODEL,
-    API_KEY,
+    AssistantConfiguration,
     PATH_TO_MCP_SERVER,
     MAX_AGENT_RUNS,
     MCP_SERVER_TIMEOUT,
@@ -28,12 +26,14 @@ set_tracing_disabled(True)
 agent: Optional[Agent] = None
 session: Optional[SQLiteSession] = None
 
-_mcp_servers:list[Optional[MCPServerStdio]] = None
 _exit_stack: Optional[AsyncExitStack] = None
 _client: Optional[AsyncOpenAI] = None
 
 
-async def initialize(elephant_lab_entity=None) -> Agent:
+async def initialize(
+    elephant_lab_entity,
+    configuration: AssistantConfiguration,
+) -> Agent:
     """
     Initialize the OpenAI client, start the MCP server,
     and create the agent.
@@ -41,18 +41,18 @@ async def initialize(elephant_lab_entity=None) -> Agent:
     Safe to call multiple times; subsequent calls reuse
     the existing initialized agent.
     """
-    global agent, _mcp_servers, _exit_stack, _client
+    global agent, _exit_stack, _client
 
     if agent is not None:
         return agent
 
     _client = AsyncOpenAI(
-        base_url=API_BASE,
-        api_key=API_KEY,
+        base_url=configuration.api_base,
+        api_key=configuration.api_key,
     )
 
     model = OpenAIChatCompletionsModel(
-        model=CHAT_COMPLETION_MODEL,
+        model=configuration.model,
         openai_client=_client,
     )
 
@@ -90,7 +90,8 @@ async def initialize(elephant_lab_entity=None) -> Agent:
                             PATH_TO_MCP_SERVER,
                         ],
                         "env": {
-                            "ELEPHANT_LAB_API_KEY": API_KEY,
+                            "ELEPHANT_LAB_API_BASE": configuration.api_base,
+                            "ELEPHANT_LAB_API_KEY": configuration.api_key,
                         },
                     },
                 )
@@ -183,7 +184,6 @@ async def initialize(elephant_lab_entity=None) -> Agent:
 
     # Keep the MCP server running beyond this function's return.
     _exit_stack = stack
-    _mcp_servers = mcp_servers
     agent = new_agent
 
     return agent
@@ -220,7 +220,9 @@ async def run_agent(
     Returns:
         The result returned by Runner.run().
     """
-    current_agent = await initialize()
+    current_agent = agent
+    if current_agent is None:
+        raise ValueError("Configure the assistant API URL, API key, and model first.")
 
     if use_session:
         global session
@@ -255,14 +257,13 @@ async def shutdown() -> None:
 
     Call this when your application is shutting down.
     """
-    global agent, session, _mcp_servers, _exit_stack, _client
+    global agent, session, _exit_stack, _client
 
     try:
         if _exit_stack is not None:
             await _exit_stack.aclose()
     finally:
         _exit_stack = None
-        _mcp_servers = None
         agent = None
         session = None
 
