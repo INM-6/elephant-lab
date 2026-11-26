@@ -33,6 +33,16 @@ dependencies = [
     "quantities",
     "plotly>4.0",
     "requests>=2.34.2",
+    "fastmcp>=4.1.0",
+    "openai>=2.54.0,<3",
+    "openai-agents>=0.20.0,<0.21.0",
+    "llama-index>=0.14.24",
+    "llama-index-llms-openai-like>=0.8.0",
+    "llama-index-core>=0.14.24",
+    "llama-index-embeddings-openai>=0.6.0,<0.7",
+    "jupyter-collaboration",
+    "jupyter-mcp-tools",
+    "jupyter-mcp-sandboxes>=0.2.7",
 ]
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 
