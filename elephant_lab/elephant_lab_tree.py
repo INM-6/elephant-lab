@@ -580,6 +580,31 @@ class ElephantLab_tree:
 
     def create_tree(self):
         """Creates and displays the empty HTML widget that the neo tree is rendered into."""
-        self._tree_widget = self.widgets.HTML(value='')
-        self._tree_widget.layout.width = '100%'
-        ElephantLab_tree.display(self._tree_widget)
+        tree_widget = self.widgets.HTML(value='')
+        self._tree_widget = tree_widget
+        try:
+            tree_widget.layout.width = '100%'
+            ElephantLab_tree.display(tree_widget)
+        except BaseException:
+            self._tree_widget = None
+            try:
+                tree_widget.close()
+            except BaseException:
+                import traceback
+                traceback.print_exc()
+            raise
+
+    def dispose(self):
+        cleanup_errors = []
+        if self._tree_widget is not None:
+            try:
+                self._tree_widget.close()
+            except Exception as error:
+                cleanup_errors.append(error)
+            self._tree_widget = None
+        self._node_registry.clear()
+        self._stat_cache.clear()
+        self._root_node.nodes.clear()
+        if cleanup_errors:
+            details = "; ".join(str(error) for error in cleanup_errors)
+            raise RuntimeError(f"Tree widget cleanup failed: {details}") from cleanup_errors[0]

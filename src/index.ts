@@ -58,7 +58,7 @@ import {
 	Widget,
 	DockPanel
 } from '@lumino/widgets';
-import { MessageLoop } from '@lumino/messaging';
+import { IMessageHandler, Message, MessageLoop } from '@lumino/messaging';
 import { DisposableDelegate, IDisposable } from '@lumino/disposable';
 
 // Own imports
@@ -85,6 +85,31 @@ interface UpdateSettingsCallback {
 	callback: (plotSettings: PlotSettings) => void;
 }
 
+class CleanupTimeoutError extends Error {}
+
+async function waitForCleanup<T>(
+	promise: Promise<T>,
+	timeoutMs: number,
+	description: string
+): Promise<T> {
+	let timer: number | undefined;
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<T>((_resolve, reject) => {
+				timer = window.setTimeout(
+					() => reject(new CleanupTimeoutError(`${description} timed out.`)),
+					timeoutMs
+				);
+			})
+		]);
+	} finally {
+		if (timer !== undefined) {
+			window.clearTimeout(timer);
+		}
+	}
+}
+
 class ElephantLabExtension implements IDisposable {
 	get isDisposed(): boolean {
 		return this._isDisposed;
@@ -93,6 +118,11 @@ class ElephantLabExtension implements IDisposable {
 	// declaring members of the class
 	private _isDisposed = false;
 	private _isDisposing = false;
+	private _disposePromise: Promise<void> | null = null;
+	private _eventAbortController: AbortController | null = null;
+	private _signalDisconnectors: Array<() => void> = [];
+	private _settingsDisconnect: (() => void) | null = null;
+	private _topBarSessionDisconnect: (() => void) | null = null;
 	private app: JupyterFrontEnd;
 	private command_palette: ICommandPalette;
 	private notebook_tracker: INotebookTracker;
@@ -102,6 +132,7 @@ class ElephantLabExtension implements IDisposable {
 	private widget: DockPanel;
 	private _updateTimer: number | null = null;
 	private _clickTimer: number | null = null;
+	private _instanceTimers = new Set<number>();
 	private outarea_nodeexplorer_info: OutputArea | null;
 	private outarea_nodeexplorer_raw: OutputArea | null;
 	private outarea_neo_tree: OutputArea | null;
@@ -147,7 +178,7 @@ class ElephantLabExtension implements IDisposable {
 	private createWidget(): DockPanel {
 		const widget = new DockPanel({ tabsMovable: false });
 
-		MessageLoop.installMessageHook(widget, (_handler, msg) => {
+		const messageHook = (_handler: IMessageHandler, msg: Message) => {
 			if (msg.type === 'after-show') {
 				this.topBar?.show();
 				this.toolbarButtons.forEach(b => b.node.classList.add('elephant-lab-open'));
@@ -155,14 +186,21 @@ class ElephantLabExtension implements IDisposable {
 				this.topBar?.hide();
 				this.toolbarButtons.forEach(b => b.node.classList.remove('elephant-lab-open'));
 			} else if (msg.type === 'close-request') {
-				void this.confirmAndCloseWidget(widget);
+				void this.confirmAndCloseWidget(widget).catch(error => {
+					console.error('Failed to close Elephant Lab widget:', error);
+				});
 				return false;
 			}
 			return true;
-		});
+		};
+		MessageLoop.installMessageHook(widget, messageHook);
 
 		widget.disposed.connect(() => {
+			MessageLoop.removeMessageHook(widget, messageHook);
 			this.clearActiveNotebookBadge();
+			void this.disposeAsync().catch(error => {
+				console.error('Elephant Lab cleanup after widget disposal failed:', error);
+			});
 		});
 
 		return widget;
@@ -172,11 +210,17 @@ class ElephantLabExtension implements IDisposable {
 		const result = await showDialog({
 			title: 'Close Elephant Lab',
 			body: 'Are you sure you want to close Elephant Lab? This will stop the '
-				+ 'running Elephant Lab instance. If you only want to hide Elephant Lab, '
-				+ 'you can instead hide it by clicking its tab in the sidebar.',
+				+ 'running Elephant Lab instance. If its notebook kernel is busy, the active '
+				+ 'cell may be interrupted so cleanup can proceed. If you only want to hide '
+				+ 'Elephant Lab, you can instead hide it by clicking its tab in the sidebar.',
 			buttons: [Dialog.cancelButton(), Dialog.warnButton({ label: 'Close' })]
 		});
 		if (result.button.accept) {
+			try {
+				await this.disposeAsync();
+			} catch (error) {
+				console.error('Elephant Lab cleanup failed:', error);
+			}
 			widget.dispose();
 		}
 	}
@@ -203,11 +247,18 @@ class ElephantLabExtension implements IDisposable {
 		}
 
 		// Listen for changes
-		settings.changed.connect(async () => {
+		const settingsChanged = () => {
 			if (!this.suppressSettingsChanged) {
-				await applySettings();
+				void applySettings().catch(error => {
+					console.error('Failed to apply Elephant Lab plot settings:', error);
+				});
 			}
-		});
+		};
+		settings.changed.connect(settingsChanged);
+		this._settingsDisconnect = () => {
+			settings.changed.disconnect(settingsChanged);
+			this._settingsDisconnect = null;
+		};
 		await applySettings();
 
 		this.assistant?.initializeConfiguration(
@@ -315,6 +366,13 @@ class ElephantLabExtension implements IDisposable {
 		});
 	}
 
+	private eventListenerOptions(): AddEventListenerOptions {
+		if (!this._eventAbortController) {
+			throw new Error("Elephant Lab event listeners require an active instance.");
+		}
+		return { signal: this._eventAbortController.signal };
+	}
+
 	// Function to react on command 'Elephant Lab'
 	// Called only after the command is clicked from CommandPalette
 	public async newTab(force: boolean = false) {
@@ -332,6 +390,14 @@ class ElephantLabExtension implements IDisposable {
 		console.log("Elephant Lab: newTab() started.");
 		await this.notebook_tracker.restored;
 		console.log("Elephant Lab: Notebook tracker restored.");
+		if (this._isDisposing && this._disposePromise) {
+			try {
+				await this._disposePromise;
+			} catch (error) {
+				console.error('Cannot open Elephant Lab while cleanup is failing:', error);
+				return;
+			}
+		}
 
 		// Only execute Elephant Lab if a Notebook is currently open
 		const newPanel = this.notebook_tracker.currentWidget;
@@ -352,8 +418,30 @@ class ElephantLabExtension implements IDisposable {
 			this.app.shell.activateById(this.widget.id);
 			return;
 		}
+		if (force && this.kernelBridge?.isKernelBusy()) {
+			const result = await showDialog({
+				title: 'Switch Elephant Lab notebook',
+				body: 'The current notebook kernel is busy. Switching may interrupt its active cell '
+					+ 'if cleanup cannot run after the grace period.',
+				buttons: [Dialog.cancelButton(), Dialog.warnButton({ label: 'Switch' })]
+			});
+			if (!result.button.accept) {
+				return;
+			}
+		}
 
 		console.log("Elephant Lab: Creating new Elephant Lab instance.");
+
+		try {
+			await this.disposeAsync();
+		} catch (error) {
+			console.error('Cannot start a new Elephant Lab instance before cleanup succeeds:', error);
+			return;
+		}
+		this._isDisposed = false;
+		this._isDisposing = false;
+		this._disposePromise = null;
+		this._eventAbortController = new AbortController();
 
 		// Clear the panel before adding new widgets
 		const oldWidgets = Array.from(this.widget.widgets());
@@ -380,14 +468,18 @@ class ElephantLabExtension implements IDisposable {
 				t => t.owner === this._detailsWidget || t.owner === this._explorerWidget
 			);
 			if (hasOurPanels) {
-				tabBar.currentChanged.connect((_sender, args) => {
+				const currentChanged = (_sender: unknown, args: { currentTitle: { owner: Widget } | null }) => {
 					const curr = args.currentTitle?.owner;
 					if (this.kernelBridge) {
-						this.kernelBridge.executeCode(
+						void this.kernelBridge.executeCode(
 							getPythonCode(PythonCodeKey.SetPanelVisibility, curr === this._explorerWidget, curr === this._detailsWidget),
 							null, false
-						);
+						).catch(error => console.error('Failed to update Elephant Lab panel visibility:', error));
 					}
+				};
+				tabBar.currentChanged.connect(currentChanged);
+				this._signalDisconnectors.push(() => {
+					tabBar.currentChanged.disconnect(currentChanged);
 				});
 				break;
 			}
@@ -574,7 +666,7 @@ class ElephantLabExtension implements IDisposable {
 
 
 		// Listener for cell execution
-		NotebookActions.executed.connect((sender, exec_data) => {
+		const notebookExecuted = (sender: unknown, exec_data: { notebook: unknown }) => {
 			if (exec_data.notebook !== newPanel.content) {
 				return;
 			}
@@ -589,29 +681,36 @@ class ElephantLabExtension implements IDisposable {
 					this.kernelBridge!.executeCode(PythonCodeKey.UpdateTree, this.outarea_neo_tree!, false, true, initialSession),
 				]);
 			}, 500);
+		};
+		NotebookActions.executed.connect(notebookExecuted);
+		this._signalDisconnectors.push(() => {
+			NotebookActions.executed.disconnect(notebookExecuted);
 		});
 
 		// Listener for changed Kernel, waits for Kernel to be ready
-		newPanel.sessionContext.kernelChanged.connect(async (sender, args) => {
+		const kernelChanged = (sender: unknown, args: { newValue: Kernel.IKernelConnection | null }) => {
 			console.log("Elephant Lab: Kernel has changed (restarted).");
 			const newKernel = args.newValue;
 			if (newKernel) {
-				const waitForIdle = new Promise<void>(resolve => {
-					if (newKernel.status === 'idle') {
-						resolve();
-						return;
+				const listener = (_kernel: Kernel.IKernelConnection, status: KernelMessage.Status) => {
+					if (status === 'idle') {
+						newKernel.statusChanged.disconnect(listener);
+						console.log("Elephant Lab: New kernel is idle and ready. Re-initializing state.");
 					}
-					const listener = (kernel: Kernel.IKernelConnection, status: KernelMessage.Status) => {
-						if (status === 'idle') {
-							newKernel.statusChanged.disconnect(listener);
-							resolve();
-						}
-					};
+				};
+				if (newKernel.status === 'idle') {
+					console.log("Elephant Lab: New kernel is idle and ready. Re-initializing state.");
+				} else {
 					newKernel.statusChanged.connect(listener);
-				});
-				await waitForIdle;
-				console.log("Elephant Lab: New kernel is idle and ready. Re-initializing state.");
+					this._signalDisconnectors.push(() => {
+						newKernel.statusChanged.disconnect(listener);
+					});
+				}
 			}
+		};
+		newPanel.sessionContext.kernelChanged.connect(kernelChanged);
+		this._signalDisconnectors.push(() => {
+			newPanel.sessionContext.kernelChanged.disconnect(kernelChanged);
 		});
 
 		console.log("Elephant Lab: Event listeners registered.");
@@ -701,6 +800,7 @@ class ElephantLabExtension implements IDisposable {
 	}
 
 	public createTopBar(session: ISessionContext) {
+		this._topBarSessionDisconnect?.();
 		if (this.topBar) {
 			this.topBar.dispose();
 		}
@@ -716,12 +816,17 @@ class ElephantLabExtension implements IDisposable {
 			this.newTab(true);
 		};
 
-		session.propertyChanged.connect((sender, prop) => {
+		const propertyChanged = (sender: ISessionContext, prop: string) => {
 			if (prop === 'path') {
 				const newFilename = sender.path.split('/').pop() || "Unknown Notebook";
 				switchNotebookButton.innerHTML = `<i class="fa fa-exchange" aria-hidden="true"></i> ${newFilename}`;
 			}
-		});
+		};
+		session.propertyChanged.connect(propertyChanged);
+		this._topBarSessionDisconnect = () => {
+			session.propertyChanged.disconnect(propertyChanged);
+			this._topBarSessionDisconnect = null;
+		};
 
 		const infoButton = document.createElement('button');
 		infoButton.innerHTML = '<i class="fa fa-info-circle" aria-hidden="true"></i> Elephant Lab';
@@ -858,16 +963,28 @@ class ElephantLabExtension implements IDisposable {
 				const acceptBtn = dialogNode?.querySelector('.jp-Dialog-button.jp-mod-accept') as HTMLElement | null;
 				acceptBtn?.click();
 			};
-			setTimeout(() => {
+			const dialogTimer = window.setTimeout(() => {
+				this._instanceTimers.delete(dialogTimer);
+				if (this._isDisposing || this._isDisposed) {
+					return;
+				}
 				dialogNode = document.querySelector('.jp-Dialog');
 				if (dialogNode) {
-					dialogNode.addEventListener('dblclick', stopDblClick, true);
+					dialogNode.addEventListener(
+						'dblclick',
+						stopDblClick,
+						{ capture: true, signal: this.eventListenerOptions().signal }
+					);
 				}
 			}, 0);
+			this._instanceTimers.add(dialogTimer);
 
 			dialogPromise.then(result => {
 				if (dialogNode) {
 					dialogNode.removeEventListener('dblclick', stopDblClick, true);
+				}
+				if (this._isDisposing || this._isDisposed) {
+					return;
 				}
 				if (result.button.accept && result.value && result.value.length > 0) {
 					const selectedFile = result.value[0];
@@ -1413,7 +1530,7 @@ class ElephantLabExtension implements IDisposable {
 				if (!clickedInsideButton && !clickedInsidePanel) {
 					panel.style.display = "none";
 				}
-			});
+			}, this.eventListenerOptions());
 
 			document.addEventListener("keydown", (event) => {
 
@@ -1422,7 +1539,7 @@ class ElephantLabExtension implements IDisposable {
 					panel.style.display = "none";
 
 				}
-			});
+			}, this.eventListenerOptions());
 
 			wrapper.appendChild(button);
 			wrapper.appendChild(panel);
@@ -1604,7 +1721,17 @@ class ElephantLabExtension implements IDisposable {
 		// OutputAreas are used to display stuff, just like the outputs below every cell
 		let model = new OutputAreaModel({ trusted: true });
 		let outarea = new OutputArea({ rendermime: rendermime as any, model });
-		tab.addWidget(outarea);
+		outarea.disposed.connect(() => model.dispose());
+		try {
+			tab.addWidget(outarea);
+		} catch (error) {
+			try {
+				outarea.dispose();
+			} catch (cleanupError) {
+				console.error('Failed to dispose a partially initialized output area:', cleanupError);
+			}
+			throw error;
+		}
 		// Set HTML/DOM id and classes
 		outarea.id = id;
 		for (let currCls of cls) {
@@ -1613,26 +1740,207 @@ class ElephantLabExtension implements IDisposable {
 		return outarea;
 	}
 
-	async disposeAsync(): Promise<void> {
-		if (this._isDisposed || this._isDisposing) {
-			return;
+	disposeAsync(): Promise<void> {
+		if (this._disposePromise) {
+			return this._disposePromise;
+		}
+		if (this._isDisposed) {
+			return Promise.resolve();
 		}
 
 		this._isDisposing = true;
-
-		try {
-			console.log('Disposing ElephantLabExtension...');
-			await this.kernelBridge?.executeCode(getPythonCode(PythonCodeKey.Dispose));
-
-		} finally {
+		this._disposePromise = this.disposeResources().finally(() => {
 			this._isDisposed = true;
 			this._isDisposing = false;
+		});
+		return this._disposePromise;
+	}
+
+	private async disposePythonEntity(bridge: KernelBridge): Promise<void> {
+		let disposalStarted = false;
+		const executeDispose = () => bridge.executeCode(
+			PythonCodeKey.Dispose,
+			null,
+			true,
+			true,
+			null,
+			true,
+			() => { disposalStarted = true; }
+		);
+		const assertSucceeded = (result: Awaited<ReturnType<typeof executeDispose>>) => {
+			if (result === null) {
+				throw new Error("The Python kernel is unavailable; Elephant Lab cleanup did not run.");
+			}
+			const executionError = result.outputs.find(output => output.output_type === 'error');
+			if (executionError) {
+				throw new Error(`Python cleanup failed: ${executionError.evalue || 'kernel execution error'}`);
+			}
+		};
+		const interruptAndRetry = async (label: string) => {
+			for (let attempt = 0; attempt < 2; attempt++) {
+				try {
+					await waitForCleanup(
+						bridge.interrupt(),
+						5_000,
+						`Kernel interrupt ${attempt + 1}`
+					);
+				} catch (error) {
+					console.error(`Failed to interrupt the kernel during ${label}:`, error);
+				}
+				try {
+					const retry = executeDispose();
+					assertSucceeded(
+						await waitForCleanup(retry, 30_000, `${label} retry ${attempt + 1}`)
+					);
+					return;
+				} catch (error) {
+					if (attempt === 1) {
+						throw error;
+					}
+					if (!(error instanceof CleanupTimeoutError)) {
+						const retry = executeDispose();
+						assertSucceeded(
+							await waitForCleanup(retry, 30_000, `${label} follow-up`)
+						);
+						return;
+					}
+					console.error(`Elephant Lab cleanup retry ${attempt + 1} failed:`, error);
+				}
+			}
+		};
+		const firstRequest = executeDispose();
+		try {
+			assertSucceeded(await waitForCleanup(firstRequest, 5_000, 'Python cleanup'));
+			return;
+		} catch (error) {
+			if (!(error instanceof CleanupTimeoutError)) {
+				throw error;
+			}
+		}
+
+		if (!disposalStarted) {
+			await interruptAndRetry('Python cleanup after interrupt');
+			return;
+		}
+
+		try {
+			assertSucceeded(await waitForCleanup(firstRequest, 30_000, 'Python resource shutdown'));
+		} catch (error) {
+			if (!(error instanceof CleanupTimeoutError)) {
+				throw error;
+			}
+			await interruptAndRetry('Python resource shutdown');
+		}
+	}
+
+	private async disposeResources(): Promise<void> {
+		console.log('Disposing ElephantLabExtension...');
+		if (this._updateTimer !== null) {
+			window.clearTimeout(this._updateTimer);
+			this._updateTimer = null;
+		}
+		if (this._clickTimer !== null) {
+			window.clearTimeout(this._clickTimer);
+			this._clickTimer = null;
+		}
+		this._instanceTimers.forEach(timer => window.clearTimeout(timer));
+		this._instanceTimers.clear();
+
+		const cleanupErrors: unknown[] = [];
+		try {
+			this._eventAbortController?.abort();
+		} catch (error) {
+			cleanupErrors.push(error);
+		}
+		this._eventAbortController = null;
+		const disconnectors = [
+			this._settingsDisconnect,
+			this._topBarSessionDisconnect,
+			...this._signalDisconnectors.splice(0)
+		];
+		for (const disconnect of disconnectors) {
+			if (!disconnect) {
+				continue;
+			}
+			try {
+				disconnect();
+			} catch (error) {
+				cleanupErrors.push(error);
+			}
+		}
+
+		const bridge = this.kernelBridge;
+		bridge?.beginDisposal();
+		if (bridge) {
+			try {
+				await this.disposePythonEntity(bridge);
+			} catch (error) {
+				cleanupErrors.push(error);
+			}
+			try {
+				bridge.dispose();
+			} catch (error) {
+				cleanupErrors.push(error);
+			}
+		}
+
+		const assistant = this.assistant;
+		const plotlyFrontend = this.plotlyFrontend;
+		this.assistant = null;
+		this.plotlyFrontend = null;
+		this.kernelBridge = null;
+		this.outarea_nodeexplorer_info = null;
+		this.outarea_nodeexplorer_raw = null;
+		this.outarea_neo_tree = null;
+		this._explorerWidget = null;
+		this._detailsWidget = null;
+		this.updateSettingsCallbacks = [];
+		this._lastClickedNode = null;
+		this.myPanels = [];
+		this.myVisTabs = [];
+
+		for (const cleanup of [
+			assistant?.dispose(),
+			plotlyFrontend?.dispose()
+		]) {
+			if (!cleanup) {
+				continue;
+			}
+			try {
+				await waitForCleanup(cleanup, 5_000, 'Frontend resource cleanup');
+			} catch (error) {
+				cleanupErrors.push(error);
+			}
+		}
+
+		if (this.topBar) {
+			try {
+				this.topBar.dispose();
+			} catch (error) {
+				cleanupErrors.push(error);
+			}
+			this.topBar = null;
+		}
+		if (this.output_tabs) {
+			try {
+				this.output_tabs.dispose();
+			} catch (error) {
+				cleanupErrors.push(error);
+			}
+			this.output_tabs = null;
+		}
+		if (cleanupErrors.length > 0) {
+			const message = cleanupErrors
+				.map(error => error instanceof Error ? error.message : String(error))
+				.join('; ');
+			throw new Error(`Elephant Lab cleanup encountered errors: ${message}`);
 		}
 	}
 
 	dispose(): void {
-		// Synchronous fallback for Lumino
-		void this.disposeAsync();
+		void this.disposeAsync().catch(error => {
+			console.error('Elephant Lab cleanup failed:', error);
+		});
 	}
 
 }; // end of ElephantLabExtension class

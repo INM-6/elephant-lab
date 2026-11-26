@@ -1,5 +1,5 @@
 import { ISessionContext } from '@jupyterlab/apputils';
-import { KernelMessage } from '@jupyterlab/services';
+import { Kernel, KernelMessage } from '@jupyterlab/services';
 
 // Python Code to execute in the kernel
 import {
@@ -16,25 +16,94 @@ export interface IExecutionResult {
     outputs: any[];
 }
 
+type ExecuteFuture = Kernel.IShellFuture<
+    KernelMessage.IExecuteRequestMsg,
+    KernelMessage.IExecuteReplyMsg
+>;
+
 export class KernelBridge {
     private session: ISessionContext;
+    private isDisposing = false;
+    private futures = new Set<ExecuteFuture>();
 
     constructor(session: ISessionContext) {
         this.session = session;
     }
 
+    public beginDisposal(): void {
+        this.isDisposing = true;
+    }
+
+    public async interrupt(): Promise<void> {
+        const kernel = this.session.session?.kernel;
+        if (!kernel) {
+            throw new Error("Cannot interrupt the kernel because the session is unavailable.");
+        }
+        await kernel.interrupt();
+    }
+
+    public isKernelBusy(): boolean {
+        return this.session.session?.kernel?.status === 'busy';
+    }
+
+    public dispose(): void {
+        this.isDisposing = true;
+        const cleanupErrors: unknown[] = [];
+        for (const future of this.futures) {
+            try {
+                future.dispose();
+            } catch (error) {
+                cleanupErrors.push(error);
+            }
+        }
+        this.futures.clear();
+        if (cleanupErrors.length > 0) {
+            const details = cleanupErrors
+                .map(error => error instanceof Error ? error.message : String(error))
+                .join('; ');
+            throw new Error(`Kernel request cleanup encountered errors: ${details}`);
+        }
+    }
+
+    private trackFuture(future: ExecuteFuture): ExecuteFuture {
+        this.futures.add(future);
+        void future.done.then(
+            () => this.futures.delete(future),
+            () => this.futures.delete(future)
+        );
+        return future;
+    }
+
     public async getNeoIOClass(filename: string): Promise<string | null> {
+        if (this.isDisposing) {
+            console.warn("Ignoring IO class lookup because Elephant Lab is disposing.");
+            return null;
+        }
         if (!this.session || !this.session.session) { return null; }
         const code = getPythonCode(PythonCodeKey.GetIOClass, filename);
         let msg_content: string = "";
-        const future = this.session.session.kernel!.requestExecute({ code });
+        const future = this.trackFuture(
+            this.session.session.kernel!.requestExecute({ code })
+        );
         future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
             if (KernelMessage.isStreamMsg(msg)) {
                 if (msg.content.name === 'stdout') { msg_content += msg.content.text; }
                 else { console.warn("Kernel STDERR:", msg.content.text); }
             }
         };
-        await future.done;
+        try {
+            await future.done;
+        } catch (error) {
+            if (this.isDisposing) {
+                console.warn("IO class lookup was canceled during Elephant Lab cleanup.", error);
+                return null;
+            }
+            throw error;
+        }
+        if (this.isDisposing) {
+            console.info("Discarding IO class lookup result during Elephant Lab cleanup.");
+            return null;
+        }
         try { return JSON.parse(msg_content.trim()); }
         catch (e) { console.error("Failed to parse io class from kernel:", e, msg_content); return null; }
     }
@@ -49,7 +118,19 @@ export class KernelBridge {
      * @returns A promise that resolves to an IExecutionResult object, containing the result key
      * and an array of output messages. Returns null if the session is not available.
      */
-    public async executeCode(pythonCode: PythonCodeKey | string, outputArea: OutputArea | null = null, showOutput = true, executeCode = true, session: ISessionContext | null = null): Promise<IExecutionResult | null> {
+    public async executeCode(
+        pythonCode: PythonCodeKey | string,
+        outputArea: OutputArea | null = null,
+        showOutput = true,
+        executeCode = true,
+        session: ISessionContext | null = null,
+        duringDisposal = false,
+        onExecutionStart?: () => void
+    ): Promise<IExecutionResult | null> {
+        if (this.isDisposing && !duringDisposal) {
+            console.warn("Ignoring kernel request because Elephant Lab is disposing.");
+            return null;
+        }
         if (!session) {
             session = this.session;
         }
@@ -75,13 +156,18 @@ export class KernelBridge {
             codeToRun = `print(${JSON.stringify(code)})`;
         }
 
-        const future = session.session.kernel!.requestExecute({ code: codeToRun, store_history: false });
+        const future = this.trackFuture(
+            session.session.kernel!.requestExecute({ code: codeToRun, store_history: false })
+        );
 
         let resultKey: string | null = null;
         const outputs: any[] = [];
 
         future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
             const msg_type = msg.header.msg_type;
+            if (msg_type === 'execute_input') {
+                onExecutionStart?.();
+            }
             if (KernelMessage.isStreamMsg(msg)) {
                 if (msg.content.name === 'stdout') {
                     const text = msg.content.text;
@@ -116,7 +202,19 @@ export class KernelBridge {
             }
         };
 
-        await future.done;
+        try {
+            await future.done;
+        } catch (error) {
+            if (this.isDisposing && !duringDisposal) {
+                console.warn("Kernel request was canceled during Elephant Lab cleanup.", error);
+                return null;
+            }
+            throw error;
+        }
+        if (this.isDisposing && !duringDisposal) {
+            console.info("Discarding kernel request result during Elephant Lab cleanup.");
+            return null;
+        }
 
         let result: IExecutionResult = { resultKey: resultKey ? resultKey : null, outputs };
 

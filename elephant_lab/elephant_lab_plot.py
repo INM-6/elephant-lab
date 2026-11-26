@@ -87,6 +87,7 @@ class ElephantLab_plot:
         self.comm: "ElephantLab_plot.Comm" = None
         self._is_panel_active = False
         self._selection_changed = False
+        self._is_disposed = False
 
         #Setting extra options for each plot (also needs to be set with an empty dict if no extra option is wanted)
         for key in self.RawPlotKey:
@@ -287,6 +288,8 @@ class ElephantLab_plot:
         self.update_counter += 1
 
     def on_selection_changed(self):
+        if self._is_disposed:
+            return
         self._selection_changed = True
         try:
             self._raw_plot()
@@ -300,8 +303,56 @@ class ElephantLab_plot:
             self._raw_plot()
 
     def create_explorer_raw_plot(self):
-        self.comm = self.Comm(target_name="plot_channel")
-        self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(self.on_selection_changed)
+        if self._is_disposed:
+            raise RuntimeError("Cannot create a plot comm after the plot manager is disposed.")
+        if self.comm is not None:
+            return
+        comm = self.Comm(target_name="plot_channel")
+        self.comm = comm
+        try:
+            comm.on_close(lambda _msg: self.dispose())
+            self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(
+                self.on_selection_changed
+            )
+        except BaseException:
+            self.comm = None
+            try:
+                self.elephant_lab_entity.on_selected_neo_objects_changed.remove_listener(
+                    self.on_selection_changed
+                )
+            except BaseException:
+                import traceback
+                traceback.print_exc()
+            try:
+                comm.close()
+            except BaseException:
+                import traceback
+                traceback.print_exc()
+            raise
+
+    def dispose(self):
+        if self._is_disposed:
+            return
+        self._is_disposed = True
+        cleanup_errors = []
+        try:
+            self.elephant_lab_entity.on_selected_neo_objects_changed.remove_listener(
+                self.on_selection_changed
+            )
+        except Exception as error:
+            cleanup_errors.append(error)
+        current_comm = self.comm
+        self.comm = None
+        if current_comm is not None:
+            try:
+                current_comm.close()
+            except Exception as error:
+                cleanup_errors.append(error)
+        self.previous_neo_object_dict.clear()
+        self.plots.clear()
+        if cleanup_errors:
+            details = "; ".join(str(error) for error in cleanup_errors)
+            raise RuntimeError(f"Plot manager cleanup failed: {details}") from cleanup_errors[0]
 
     def update_settings(self, **settings):
         """

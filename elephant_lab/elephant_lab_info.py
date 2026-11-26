@@ -57,19 +57,63 @@ class ElephantLab_info:
         self._is_panel_active = False
         self._pending_info_update = False
         self._output_node_info = None
+        self._selection_listener = None
 
     def create_details_panel(self):
         """Creates the output widget for the details panel and wires it to update whenever selection changes."""
         def on_selected_change_info():
+            if self._output_node_info is None:
+                return
             if not self._is_panel_active:
                 self._pending_info_update = True
                 return
             self._render_info()
 
+        self._selection_listener = on_selected_change_info
         output_node_info = self.Output()
         self._output_node_info = output_node_info
-        self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(on_selected_change_info)
-        ElephantLab_info.display(output_node_info)
+        try:
+            self.elephant_lab_entity.on_selected_neo_objects_changed.add_listener(
+                self._selection_listener
+            )
+            ElephantLab_info.display(output_node_info)
+        except BaseException:
+            try:
+                self.elephant_lab_entity.on_selected_neo_objects_changed.remove_listener(
+                    self._selection_listener
+                )
+            except BaseException:
+                import traceback
+                traceback.print_exc()
+            self._selection_listener = None
+            self._output_node_info = None
+            try:
+                output_node_info.close()
+            except BaseException:
+                import traceback
+                traceback.print_exc()
+            raise
+
+    def dispose(self):
+        cleanup_errors = []
+        if self._selection_listener is not None:
+            try:
+                self.elephant_lab_entity.on_selected_neo_objects_changed.remove_listener(
+                    self._selection_listener
+                )
+            except Exception as error:
+                cleanup_errors.append(error)
+            self._selection_listener = None
+        if self._output_node_info is not None:
+            try:
+                self._output_node_info.close()
+            except Exception as error:
+                cleanup_errors.append(error)
+            self._output_node_info = None
+        self._pending_info_update = False
+        if cleanup_errors:
+            details = "; ".join(str(error) for error in cleanup_errors)
+            raise RuntimeError(f"Info panel cleanup failed: {details}") from cleanup_errors[0]
 
     def _render_info(self):
         with self._output_node_info:

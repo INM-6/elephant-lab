@@ -1,5 +1,6 @@
-import { KernelMessage, Session } from '@jupyterlab/services';
+import { Kernel, KernelMessage, Session } from '@jupyterlab/services';
 import { OutputArea } from '@jupyterlab/outputarea';
+import { IComm } from '@jupyterlab/services/lib/kernel/kernel';
 import 'nouislider/dist/nouislider.css';
 import { PlotContainer } from './plot_container';
 
@@ -12,19 +13,19 @@ export class PlotlyFrontend {
     private plots: Map<string, PlotContainer> = new Map();
     private outputArea: OutputArea | null;
     private is_plot_theme_dark: boolean;
+    private resizeObserver?: ResizeObserver;
+    private targetKernel?: Kernel.IKernelConnection;
+    private commTarget?: (
+        comm: IComm,
+        msg: KernelMessage.ICommOpenMsg
+    ) => void;
+    private comm?: IComm;
+    private isDisposed = false;
 
     constructor(session: Session.ISessionConnection, outputArea: OutputArea | null = null) {
         this.session = session;
         this.outputArea = outputArea;
         this.is_plot_theme_dark = true
-
-        // Register the comm target to receive messages from Python
-        this.session.kernel?.registerCommTarget(
-            'plot_channel',
-            (comm, msg) => {
-                comm.onMsg = (msg) => this.handleCommMessage(msg);
-            }
-        );
 
         const resizePlots = () => {
             for (const plot of this.plots.values()) {
@@ -32,11 +33,45 @@ export class PlotlyFrontend {
             }
         };
 
-        const resizeObserver = new ResizeObserver(resizePlots);
-        resizeObserver.observe(outputArea!.node);
+        if (outputArea) {
+            const resizeObserver = new ResizeObserver(resizePlots);
+            try {
+                resizeObserver.observe(outputArea.node);
+                this.resizeObserver = resizeObserver;
+            } catch (error) {
+                resizeObserver.disconnect();
+                throw error;
+            }
+        }
+
+        const kernel = this.session.kernel;
+        if (kernel) {
+            this.targetKernel = kernel;
+            this.commTarget = (comm) => {
+                this.comm = comm;
+                comm.onMsg = (msg) => this.handleCommMessage(msg);
+                comm.onClose = () => {
+                    if (this.comm === comm) {
+                        this.comm = undefined;
+                    }
+                };
+            };
+            try {
+                kernel.registerCommTarget('plot_channel', this.commTarget);
+            } catch (error) {
+                this.resizeObserver?.disconnect();
+                this.resizeObserver = undefined;
+                this.targetKernel = undefined;
+                this.commTarget = undefined;
+                throw error;
+            }
+        }
     }
 
     private handleCommMessage(msg: KernelMessage.ICommMsgMsg) {
+        if (this.isDisposed) {
+            return;
+        }
         const data = msg.content.data;
 
         switch (data.type) {
@@ -69,7 +104,7 @@ export class PlotlyFrontend {
         plotKeys.forEach((key) => {
             const state = this.plots.get(key);
             if (state) {
-                state.destroy()
+                state.dispose()
                 this.plots.delete(key);
             }
         });
@@ -119,5 +154,55 @@ export class PlotlyFrontend {
 
         const json = JSON.stringify(result).replace(/\bnull\b/g, "None");
         return json;
+    }
+
+    public async dispose(): Promise<void> {
+        if (this.isDisposed) {
+            return;
+        }
+        this.isDisposed = true;
+        const cleanupErrors: unknown[] = [];
+        try {
+            this.resizeObserver?.disconnect();
+        } catch (error) {
+            cleanupErrors.push(error);
+        }
+        this.resizeObserver = undefined;
+
+        if (this.targetKernel && this.commTarget) {
+            try {
+                this.targetKernel.removeCommTarget('plot_channel', this.commTarget);
+            } catch (error) {
+                cleanupErrors.push(error);
+            }
+        }
+        this.targetKernel = undefined;
+        this.commTarget = undefined;
+
+        for (const plot of this.plots.values()) {
+            try {
+                plot.dispose();
+            } catch (error) {
+                cleanupErrors.push(error);
+            }
+        }
+        this.plots.clear();
+
+        const comm = this.comm;
+        this.comm = undefined;
+        if (comm) {
+            try {
+                const closeFuture = comm.close();
+                await closeFuture.done;
+            } catch (error) {
+                cleanupErrors.push(error);
+            }
+        }
+        if (cleanupErrors.length > 0) {
+            const details = cleanupErrors
+                .map(error => error instanceof Error ? error.message : String(error))
+                .join('; ');
+            throw new Error(`Plot frontend cleanup encountered errors: ${details}`);
+        }
     }
 }

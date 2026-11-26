@@ -61,11 +61,12 @@ class ElephantLab:
 
         def remove_listener(self, fn):
             """Unregister a callback function."""
-            self._listeners.remove(fn)
+            if fn in self._listeners:
+                self._listeners.remove(fn)
 
         def fire(self):
             """Call all registered callbacks."""
-            for fn in self._listeners:
+            for fn in tuple(self._listeners):
                 fn()
 
     def __init__(self):
@@ -89,6 +90,8 @@ class ElephantLab:
         self.elephant_lab_tree: ElephantLab.ElephantLab_tree = self.ElephantLab_tree(self)
         self.elephant_lab_info: ElephantLab.ElephantLab_info = self.ElephantLab_info(self)
         self.elephant_lab_plot: ElephantLab.ElephantLab_plot = self.ElephantLab_plot(self)
+        self._dispose_task = None
+        self._is_disposed = False
         ElephantLab.create_assistant_comm(self)
 
     def set_panel_visibility(self, explore_active: bool, details_active: bool):
@@ -599,11 +602,34 @@ class ElephantLab:
             append_markdown(node, 0)
         return "\n".join(lines)
 
-    def dispose(self):
-        """
-        Clean up resources and listeners when the ElephantLab instance is no longer needed.
-        """
-        #self.elephant_lab_tree.dispose()
-        #self.elephant_lab_info.dispose()
-        #self.elephant_lab_plot.dispose()
-        ElephantLab.close_assistant_comm(self)
+    async def dispose(self):
+        """Close all resources owned by this Elephant Lab instance."""
+        import asyncio
+
+        if self._dispose_task is None:
+            self._dispose_task = asyncio.create_task(self._dispose_resources())
+        await asyncio.shield(self._dispose_task)
+
+    async def _dispose_resources(self):
+        cleanup_errors = []
+
+        for component in (
+            self.elephant_lab_plot,
+            self.elephant_lab_info,
+            self.elephant_lab_tree,
+        ):
+            try:
+                component.dispose()
+            except Exception as error:
+                cleanup_errors.append(error)
+
+        try:
+            await ElephantLab.close_assistant_comm()
+        except Exception as error:
+            cleanup_errors.append(error)
+        finally:
+            self._is_disposed = True
+
+        if cleanup_errors:
+            details = "; ".join(str(error) for error in cleanup_errors)
+            raise RuntimeError(f"Elephant Lab cleanup failed: {details}") from cleanup_errors[0]

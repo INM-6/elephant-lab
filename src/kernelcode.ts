@@ -19,7 +19,9 @@ function pythonValue(value: unknown): string {
 // Create an object of the Visualization class
 // It is used to access and visualize the neo objects
 const setup_env =
-	`# only available in conda env MyElephantLabClone; ipympl was additionally installed to this env
+	`if "elephant_lab_entity" in globals() and hasattr(elephant_lab_entity, "dispose"):
+    await elephant_lab_entity.dispose()
+# only available in conda env MyElephantLabClone; ipympl was additionally installed to this env
 from elephant_lab.elephant_lab import ElephantLab
 elephant_lab_entity = ElephantLab()`;
 
@@ -40,7 +42,7 @@ const getVars = `elephant_lab_entity.elephant_lab_util.getVars()`;
 
 const insertCode = `elephant_lab_entity.insert_selected_neo_objects()`;
 
-const dispose = `elephant_lab_entity.dispose()`;
+const dispose = `await elephant_lab_entity.dispose()`;
 
 function setVarName(ioClass: string, filePath: string, varName: string): string {
 	if (ioClass) {

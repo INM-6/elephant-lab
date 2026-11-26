@@ -15,6 +15,13 @@ import { ASSISTANT_CONFIGURATION_FIELDS } from './assistant_config';
 
 export class Assistant {
     private comm?: IComm;
+    private targetKernel?: Kernel.IKernelConnection;
+    private commTarget?: (
+        comm: IComm,
+        msg: KernelMessage.ICommOpenMsg
+    ) => void;
+    private isDisposed = false;
+    private timers = new Set<number>();
     public widget_assistant: Widget;
 
     private settingsPanel!: HTMLDivElement;
@@ -60,14 +67,62 @@ export class Assistant {
     }
 
     public registerCommTarget(kernel: Kernel.IKernelConnection) {
-        // Register the comm target to receive messages from Python
-        kernel.registerCommTarget(
-            'assistant_channel',
-            (comm, msg) => {
-                this.comm = comm;
-                comm.onMsg = (msg) => this.handleCommMessage(msg);
+        this.disposeCommTarget();
+        this.targetKernel = kernel;
+        this.commTarget = (comm) => {
+            this.comm = comm;
+            comm.onMsg = (msg) => this.handleCommMessage(msg);
+            comm.onClose = () => {
+                if (this.comm === comm) {
+                    this.comm = undefined;
+                }
+            };
+        };
+        kernel.registerCommTarget('assistant_channel', this.commTarget);
+    }
+
+    private disposeCommTarget(): void {
+        try {
+            if (this.targetKernel && this.commTarget) {
+                this.targetKernel.removeCommTarget('assistant_channel', this.commTarget);
             }
+        } finally {
+            this.targetKernel = undefined;
+            this.commTarget = undefined;
+        }
+    }
+
+    public async dispose(): Promise<void> {
+        const cleanupErrors: unknown[] = [];
+        this.isDisposed = true;
+        this.timers.forEach(timer => window.clearTimeout(timer));
+        this.timers.clear();
+        this.pendingConfigurationResponse?.reject(
+            new Error("The assistant was disposed before configuration completed.")
         );
+        this.pendingConfigurationResponse = undefined;
+        try {
+            this.disposeCommTarget();
+        } catch (error) {
+            cleanupErrors.push(error);
+        }
+
+        const comm = this.comm;
+        this.comm = undefined;
+        if (comm) {
+            try {
+                const closeFuture = comm.close();
+                await closeFuture.done;
+            } catch (error) {
+                cleanupErrors.push(error);
+            }
+        }
+        if (cleanupErrors.length > 0) {
+            const details = cleanupErrors
+                .map(error => error instanceof Error ? error.message : String(error))
+                .join('; ');
+            throw new Error(`Assistant frontend cleanup encountered errors: ${details}`);
+        }
     }
 
     public initializeConfiguration(
@@ -81,6 +136,9 @@ export class Assistant {
     }
 
     private handleCommMessage(msg: KernelMessage.ICommMsgMsg) {
+        if (this.isDisposed) {
+            return;
+        }
         const data = msg.content.data;
 
         switch (data.type) {
@@ -632,6 +690,9 @@ export class Assistant {
 
 
     private handleInput(): void {
+        if (this.isDisposed) {
+            return;
+        }
         if (!this.canSendUserMessage()) {
             return;
         }
@@ -740,6 +801,9 @@ export class Assistant {
     private async handleResponse(
         assistantMessageText: string
     ): Promise<void> {
+        if (this.isDisposed) {
+            return;
+        }
         // Remove the loading indicator before displaying
         // the actual assistant response.
         this.removeLoadingIndicator();
@@ -750,6 +814,9 @@ export class Assistant {
             "widget-assistant__message widget-assistant__message--assistant";
 
         const html = await marked.parse(assistantMessageText);
+        if (this.isDisposed) {
+            return;
+        }
 
         // Sanitize the Markdown-generated HTML first.
         assistantMessage.innerHTML = DOMPurify.sanitize(html);
@@ -777,19 +844,25 @@ export class Assistant {
                         code.textContent ?? ""
                     );
 
+                    if (this.isDisposed) {
+                        return;
+                    }
                     button.textContent = "Copied!";
                     button.classList.add("is-copied");
 
-                    setTimeout(() => {
+                    this.scheduleTimeout(() => {
                         button.textContent = "Copy";
                         button.classList.remove("is-copied");
                     }, 1500);
                 } catch (error) {
+                    if (this.isDisposed) {
+                        return;
+                    }
                     console.error("Failed to copy code:", error);
 
                     button.textContent = "Failed";
 
-                    setTimeout(() => {
+                    this.scheduleTimeout(() => {
                         button.textContent = "Copy";
                     }, 1500);
                 }
@@ -806,5 +879,15 @@ export class Assistant {
 
         // Re-enable sending.
         this.updateSendButton();
+    }
+
+    private scheduleTimeout(callback: () => void, delayMs: number): void {
+        const timer = window.setTimeout(() => {
+            this.timers.delete(timer);
+            if (!this.isDisposed) {
+                callback();
+            }
+        }, delayMs);
+        this.timers.add(timer);
     }
 }

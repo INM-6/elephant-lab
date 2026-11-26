@@ -15,7 +15,9 @@ export class PlotContainer {
     private updateId: number;
     private hasFrames: boolean;
     private slider?: HTMLElement;
+    private sliderInstance?: ReturnType<typeof noUiSlider.create>;
     private ticklabel_limit?: number;
+    private isDisposed = false;
 
     constructor(outputArea: OutputArea | null) {
         const wrapper = document.createElement('div');
@@ -69,6 +71,7 @@ export class PlotContainer {
     }
 
     showLoading() {
+        if (this.isDisposed) return;
         const gd = this.container as any;
         if (!gd || !gd.data || gd.data.length === 0) {
             // Get the current JupyterLab theme background color
@@ -88,6 +91,7 @@ export class PlotContainer {
     }
 
     hideLoading() {
+        if (this.isDisposed) return;
         this.loading.style.opacity = '0';
         this.loading.style.pointerEvents = 'none';
     }
@@ -100,6 +104,7 @@ export class PlotContainer {
     }
 
     render(figJson: any, updateId: number, is_plot_theme_dark: boolean) {
+        if (this.isDisposed) return;
         const currentId = updateId;
         const gd = this.container as any;
         if (!gd) return;
@@ -110,7 +115,7 @@ export class PlotContainer {
         }
 
         Plotly.react(this.container, figJson.data, figJson.layout).then((gd) => {
-            if (this.updateId !== currentId) return;
+            if (this.isDisposed || this.updateId !== currentId) return;
 
             if (figJson.frames) {
                 this.hasFrames = true;
@@ -138,16 +143,19 @@ export class PlotContainer {
     }
 
     addYRangeSlider(minY: number, maxY: number) {
-        let sliderInstance;
+        let sliderInstance = this.sliderInstance;
 
         // If slider already exists → reuse it
         if (this.slider) {
-            sliderInstance = (this.slider as any).noUiSlider;
             if (!sliderInstance) return;
 
             const currentRange = sliderInstance.options.range;
-            const currentMin = currentRange.min;
-            const currentMax = currentRange.max;
+            const currentMin = Array.isArray(currentRange.min)
+                ? currentRange.min[0]
+                : currentRange.min;
+            const currentMax = Array.isArray(currentRange.max)
+                ? currentRange.max[0]
+                : currentRange.max;
 
             const EPSILON = 1e-6;
 
@@ -162,11 +170,13 @@ export class PlotContainer {
                         min: minY,
                         max: maxY
                     }
-                });
+                }, true);
             } else {
-                const values = sliderInstance.get(); // returns [min, max] as strings
-                minY = Number(values[0]);
-                maxY = Number(values[1]);
+                const values = sliderInstance.get();
+                if (Array.isArray(values)) {
+                    minY = Number(values[0]);
+                    maxY = Number(values[1]);
+                }
             }
         } else {
             // --- Create slider (only once) ---
@@ -190,8 +200,9 @@ export class PlotContainer {
                     max: maxY
                 }
             });
+            this.sliderInstance = sliderInstance;
 
-            sliderInstance.on('update', (values) => {
+            sliderInstance.on('update', (values: (string | number)[]) => {
                 const gd = this.container as any;
                 if (!gd || !gd.data) return;
 
@@ -221,15 +232,20 @@ export class PlotContainer {
 
     removeYRangeSlider() {
         if (!this.slider) return;
-        this.slider.remove()
+        this.sliderInstance?.destroy();
+        this.sliderInstance = undefined;
+        this.slider.remove();
         this.slider = undefined
     }
 
     resize() {
-        Plotly.Plots.resize(this.container);
+        if (!this.isDisposed) {
+            Plotly.Plots.resize(this.container);
+        }
     }
 
     setTheme(is_dark: boolean) {
+        if (this.isDisposed) return;
         const gd = this.container as any;
         if (!gd || !gd.data) return;
 
@@ -267,7 +283,10 @@ export class PlotContainer {
         return gd?.layout?.xaxis?.range;
     }
 
-    destroy() {
+    dispose() {
+        if (this.isDisposed) return;
+        this.isDisposed = true;
+        this.removeYRangeSlider();
         Plotly.purge(this.container);
         this.wrapper.remove();
     }
